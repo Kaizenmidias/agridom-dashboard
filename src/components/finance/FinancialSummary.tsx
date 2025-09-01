@@ -2,24 +2,28 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, TrendingDown, DollarSign, Banknote, Receipt } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Banknote, Receipt, Clock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 interface FinancialSummaryProps {
   totalIncome: number;
   totalExpenses: number;
+  totalReceivable?: number;
   previousIncome?: number;
   previousExpenses?: number;
+  previousReceivable?: number;
   period?: string;
   className?: string;
-  onCardClick?: (type: 'income' | 'expenses' | 'balance') => void;
+  onCardClick?: (type: 'income' | 'expenses' | 'balance' | 'receivable') => void;
 }
 
 const FinancialSummary: React.FC<FinancialSummaryProps> = ({
   totalIncome,
   totalExpenses,
+  totalReceivable = 0,
   previousIncome,
   previousExpenses,
+  previousReceivable,
   period = '',
   className = '',
   onCardClick
@@ -39,6 +43,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
   const incomeChange = getPercentChange(totalIncome, previousIncome);
   const expensesChange = getPercentChange(totalExpenses, previousExpenses);
   const balanceChange = getPercentChange(balance, previousBalance);
+  const receivableChange = getPercentChange(totalReceivable, previousReceivable);
   
   const container = {
     hidden: { opacity: 0 },
@@ -60,7 +65,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
       variants={container}
       initial="hidden"
       animate="show"
-      className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 ${className}`}
+      className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 ${className}`}
     >
       <motion.div variants={item}>
         <Card 
@@ -133,6 +138,45 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
                   <TrendingDown className="h-3 w-3 md:h-4 md:w-4 mr-1" />
                 ) : null}
                 {expensesChange > 0 ? '+' : ''}{expensesChange.toFixed(1)}%
+                {!isMobile && " em relação ao período anterior"}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+      
+      <motion.div variants={item}>
+        <Card 
+          className={`bg-white dark:bg-[#1D2530] hover:shadow-md transition-shadow ${onCardClick ? 'cursor-pointer' : ''}`} 
+          onClick={() => onCardClick && onCardClick('receivable')}
+        >
+          <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+            <CardTitle className="text-base md:text-lg flex items-center">
+              <Clock className="h-4 w-4 md:h-5 md:w-5 mr-1.5 md:mr-2 text-orange-500" />
+              A Receber
+            </CardTitle>
+            <CardDescription className="text-xs md:text-sm">
+              {period ? `Pendente para ${period}` : 'Valores pendentes'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+            <p className="text-xl md:text-2xl font-bold text-orange-600">{totalReceivable.toLocaleString('pt-BR', {
+              style: 'currency',
+              currency: 'BRL',
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0
+            })}</p>
+            
+            {receivableChange !== null && (
+              <p className={`text-xs md:text-sm flex items-center ${
+                receivableChange < 0 ? 'text-green-600' : receivableChange > 0 ? 'text-orange-600' : 'text-muted-foreground'
+              }`}>
+                {receivableChange > 0 ? (
+                  <TrendingUp className="h-3 w-3 md:h-4 md:w-4 mr-1" />
+                ) : receivableChange < 0 ? (
+                  <TrendingDown className="h-3 w-3 md:h-4 md:w-4 mr-1" />
+                ) : null}
+                {receivableChange > 0 ? '+' : ''}{receivableChange.toFixed(1)}%
                 {!isMobile && " em relação ao período anterior"}
               </p>
             )}

@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, User, DollarSign, Clock } from 'lucide-react';
+import { Plus, Calendar, User, DollarSign, Clock, Edit, Trash2 } from 'lucide-react';
 import { NovoProjetoDialog } from '@/components/novo-projeto-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 const ProjetosPage = () => {
-  const projetos = [
+  const { toast } = useToast();
+  const [projetos, setProjetos] = useState([
     {
       id: 1,
       nome: "Site Institucional - TechCorp",
@@ -14,6 +16,8 @@ const ProjetosPage = () => {
       status: "Em Andamento",
       prazo: "2024-02-15",
       valor: "R$ 15.000,00",
+      valorNumerico: 15000,
+      valorPago: 10000,
       progresso: 75,
       tipo: "Website"
     },
@@ -24,6 +28,8 @@ const ProjetosPage = () => {
       status: "Finalizado",
       prazo: "2024-01-30",
       valor: "R$ 25.000,00",
+      valorNumerico: 25000,
+      valorPago: 25000,
       progresso: 100,
       tipo: "E-commerce"
     },
@@ -34,10 +40,20 @@ const ProjetosPage = () => {
       status: "Em Andamento",
       prazo: "2024-03-01",
       valor: "R$ 8.500,00",
+      valorNumerico: 8500,
+      valorPago: 3000,
       progresso: 30,
       tipo: "Landing Page"
     }
-  ];
+  ]);
+
+  const handleDeleteProject = (id: number) => {
+    setProjetos(projetos.filter(projeto => projeto.id !== id));
+    toast({
+      title: "Projeto excluído",
+      description: "O projeto foi removido com sucesso.",
+    });
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -156,9 +172,22 @@ const ProjetosPage = () => {
                   </div>
                 </div>
                 
-                <div className="ml-6">
-                  <Button variant="outline">
-                    Ver Detalhes
+                <div className="ml-6 flex gap-2">
+                  <NovoProjetoDialog projeto={projeto} setProjetos={setProjetos} projetos={projetos}>
+                    <Button variant="outline" size="sm">
+                      <Edit className="h-4 w-4 mr-1" />
+                      Editar
+                    </Button>
+                  </NovoProjetoDialog>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleDeleteProject(projeto.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Excluir
                   </Button>
                 </div>
               </div>

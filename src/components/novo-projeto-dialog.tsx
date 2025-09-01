@@ -30,95 +30,119 @@ import { pt } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 
-interface NovoProjetoDialogProps {
-  children: React.ReactNode
+interface Projeto {
+  id: number;
+  nome: string;
+  cliente: string;
+  status: string;
+  prazo: string;
+  valor: string;
+  valorNumerico: number;
+  valorPago: number;
+  progresso: number;
+  tipo: string;
 }
 
-export function NovoProjetoDialog({ children }: NovoProjetoDialogProps) {
+interface NovoProjetoDialogProps {
+  children: React.ReactNode;
+  projeto?: Projeto;
+  setProjetos?: React.Dispatch<React.SetStateAction<Projeto[]>>;
+  projetos?: Projeto[];
+}
+
+export function NovoProjetoDialog({ children, projeto, setProjetos, projetos }: NovoProjetoDialogProps) {
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
-  const [projeto, setProjeto] = useState({
-    nome: "",
-    cliente: "",
-    tipo: "",
+  const isEditing = !!projeto
+  
+  const [projetoForm, setProjetoForm] = useState({
+    nome: projeto?.nome || "",
+    cliente: projeto?.cliente || "",
+    tipo: projeto?.tipo || "",
     descricao: "",
-    valor: "",
-    valorPago: "",
-    dataEntrega: undefined as Date | undefined,
-    status: "Planejamento"
+    valor: projeto?.valor?.replace(/[R$.\s]/g, '').replace(',', '.') || "",
+    valorPago: projeto?.valorPago?.toString() || "",
+    dataEntrega: projeto?.prazo ? new Date(projeto.prazo) : undefined as Date | undefined,
+    status: projeto?.status || "Em Andamento"
   })
 
   const resetForm = () => {
-    setProjeto({
-      nome: "",
-      cliente: "",
-      tipo: "",
-      descricao: "",
-      valor: "",
-      valorPago: "",
-      dataEntrega: undefined,
-      status: "Planejamento"
-    })
+    if (!isEditing) {
+      setProjetoForm({
+        nome: "",
+        cliente: "",
+        tipo: "",
+        descricao: "",
+        valor: "",
+        valorPago: "",
+        dataEntrega: undefined,
+        status: "Em Andamento"
+      })
+    }
   }
 
-  const handleSave = () => {
-    // Validação básica
-    if (!projeto.nome || !projeto.cliente || !projeto.tipo || !projeto.valor) {
-      toast({
-        title: "Erro",
-        description: "Preencha todos os campos obrigatórios",
-        variant: "destructive"
-      })
-      return
-    }
-
-    // Validar valores
-    const valor = parseFloat(projeto.valor.replace(/[^\d,]/g, '').replace(',', '.'))
-    const valorPago = projeto.valorPago ? parseFloat(projeto.valorPago.replace(/[^\d,]/g, '').replace(',', '.')) : 0
-
-    if (isNaN(valor) || valor <= 0) {
-      toast({
-        title: "Erro",
-        description: "Valor do projeto deve ser um número válido",
-        variant: "destructive"
-      })
-      return
-    }
-
-    if (valorPago > valor) {
-      toast({
-        title: "Erro",
-        description: "Valor pago não pode ser maior que o valor total",
-        variant: "destructive"
-      })
-      return
-    }
-
-    // Simular salvamento
-    console.log("Novo projeto:", projeto)
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
     
-    toast({
-      title: "Projeto criado",
-      description: `O projeto "${projeto.nome}" foi criado com sucesso`
-    })
-    
-    resetForm()
+    if (!projetoForm.nome || !projetoForm.cliente || !projetoForm.tipo || !projetoForm.valor || !projetoForm.dataEntrega) {
+      toast({
+        title: "Erro",
+        description: "Por favor, preencha todos os campos obrigatórios.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const valorNumerico = parseFloat(projetoForm.valor.replace(/[R$.\s]/g, '').replace(',', '.'))
+    const valorPagoNumerico = parseFloat(projetoForm.valorPago || "0")
+
+    if (isEditing && setProjetos && projetos) {
+      // Editar projeto existente
+      const projetosAtualizados = projetos.map(p => 
+        p.id === projeto.id 
+          ? {
+              ...p,
+              nome: projetoForm.nome,
+              cliente: projetoForm.cliente,
+              tipo: projetoForm.tipo,
+              valor: valorNumerico.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+              valorNumerico,
+              valorPago: valorPagoNumerico,
+              prazo: projetoForm.dataEntrega!.toISOString().split('T')[0],
+              status: projetoForm.status
+            }
+          : p
+      )
+      setProjetos(projetosAtualizados)
+      
+      toast({
+        title: "Projeto atualizado",
+        description: `O projeto "${projetoForm.nome}" foi atualizado com sucesso.`,
+      })
+    } else {
+      // Criar novo projeto
+      toast({
+        title: "Projeto criado",
+        description: `O projeto "${projetoForm.nome}" foi criado com sucesso.`,
+      })
+    }
+
     setOpen(false)
+    resetForm()
   }
 
   const formatCurrency = (value: string) => {
-    const number = value.replace(/[^\d]/g, '')
-    if (!number) return ''
-    const formatted = new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(parseInt(number) / 100)
-    return formatted
+    const numbers = value.replace(/\D/g, '')
+    const amount = parseFloat(numbers) / 100
+    return amount.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
   }
 
   const handleValueChange = (field: 'valor' | 'valorPago', value: string) => {
     const formatted = formatCurrency(value)
-    setProjeto(prev => ({ ...prev, [field]: formatted }))
+    setProjetoForm(prev => ({ ...prev, [field]: formatted }))
   }
 
   return (
@@ -126,171 +150,142 @@ export function NovoProjetoDialog({ children }: NovoProjetoDialogProps) {
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-background">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Novo Projeto</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Projeto' : 'Novo Projeto'}</DialogTitle>
           <DialogDescription>
-            Preencha as informações do novo projeto de web design
+            {isEditing ? 'Edite as informações do projeto abaixo.' : 'Preencha as informações do novo projeto abaixo.'}
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-6 py-4">
-          {/* Informações Básicas */}
+        <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="nome">Nome do Projeto *</Label>
               <Input
                 id="nome"
-                value={projeto.nome}
-                onChange={(e) => setProjeto(prev => ({ ...prev, nome: e.target.value }))}
-                placeholder="Ex: Site Institucional"
+                value={projetoForm.nome}
+                onChange={(e) => setProjetoForm(prev => ({ ...prev, nome: e.target.value }))}
+                placeholder="Digite o nome do projeto"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="cliente">Cliente *</Label>
               <Input
                 id="cliente"
-                value={projeto.cliente}
-                onChange={(e) => setProjeto(prev => ({ ...prev, cliente: e.target.value }))}
-                placeholder="Ex: Empresa XYZ"
+                value={projetoForm.cliente}
+                onChange={(e) => setProjetoForm(prev => ({ ...prev, cliente: e.target.value }))}
+                placeholder="Nome do cliente"
               />
             </div>
           </div>
 
-          {/* Tipo e Status */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="tipo">Tipo de Projeto *</Label>
-              <Select value={projeto.tipo} onValueChange={(value) => setProjeto(prev => ({ ...prev, tipo: value }))}>
+              <Select 
+                value={projetoForm.tipo} 
+                onValueChange={(value) => setProjetoForm(prev => ({ ...prev, tipo: value }))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
-                <SelectContent className="bg-background">
-                  <SelectItem value="website">Website Institucional</SelectItem>
-                  <SelectItem value="ecommerce">E-commerce</SelectItem>
-                  <SelectItem value="landing">Landing Page</SelectItem>
+                <SelectContent>
+                  <SelectItem value="Website Institucional">Website Institucional</SelectItem>
+                  <SelectItem value="E-commerce">E-commerce</SelectItem>
+                  <SelectItem value="Landing Page">Landing Page</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select value={projeto.status} onValueChange={(value) => setProjeto(prev => ({ ...prev, status: value }))}>
+              <Select 
+                value={projetoForm.status} 
+                onValueChange={(value) => setProjetoForm(prev => ({ ...prev, status: value }))}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-background">
-                  <SelectItem value="Planejamento">Planejamento</SelectItem>
+                <SelectContent>
                   <SelectItem value="Em Andamento">Em Andamento</SelectItem>
-                  <SelectItem value="Revisão">Revisão</SelectItem>
                   <SelectItem value="Finalizado">Finalizado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {/* Descrição */}
           <div className="space-y-2">
             <Label htmlFor="descricao">Descrição</Label>
             <Textarea
               id="descricao"
-              value={projeto.descricao}
-              onChange={(e) => setProjeto(prev => ({ ...prev, descricao: e.target.value }))}
-              placeholder="Descreva os detalhes do projeto..."
-              rows={3}
+              value={projetoForm.descricao}
+              onChange={(e) => setProjetoForm(prev => ({ ...prev, descricao: e.target.value }))}
+              placeholder="Descreva o projeto..."
             />
           </div>
 
-          {/* Valores */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="valor">Valor Total *</Label>
+              <Label htmlFor="valor">Valor do Projeto *</Label>
               <Input
                 id="valor"
-                value={projeto.valor}
+                value={projetoForm.valor}
                 onChange={(e) => handleValueChange('valor', e.target.value)}
-                placeholder="R$ 0,00"
+                placeholder="0,00"
+                type="text"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="valorPago">Valor Pago</Label>
               <Input
                 id="valorPago"
-                value={projeto.valorPago}
+                value={projetoForm.valorPago}
                 onChange={(e) => handleValueChange('valorPago', e.target.value)}
-                placeholder="R$ 0,00"
+                placeholder="0,00"
+                type="text"
               />
             </div>
           </div>
 
-          {/* Data de Entrega */}
           <div className="space-y-2">
-            <Label>Data de Entrega</Label>
+            <Label>Data de Entrega *</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
-                  variant="outline"
+                  variant={"outline"}
                   className={cn(
                     "w-full justify-start text-left font-normal",
-                    !projeto.dataEntrega && "text-muted-foreground"
+                    !projetoForm.dataEntrega && "text-muted-foreground"
                   )}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {projeto.dataEntrega ? (
-                    format(projeto.dataEntrega, "dd/MM/yyyy", { locale: pt })
-                  ) : (
-                    <span>Selecionar data</span>
-                  )}
+                  <CalendarIcon />
+                  {projetoForm.dataEntrega ? format(projetoForm.dataEntrega, "PPP", { locale: pt }) : <span>Selecione uma data</span>}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 bg-background" align="start">
+              <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={projeto.dataEntrega}
-                  onSelect={(date) => setProjeto(prev => ({ ...prev, dataEntrega: date }))}
-                  disabled={(date) => date < new Date()}
+                  selected={projetoForm.dataEntrega}
+                  onSelect={(date) => setProjetoForm(prev => ({ ...prev, dataEntrega: date }))}
+                  disabled={(date) =>
+                    date < new Date()
+                  }
                   initialFocus
+                  className={cn("p-3 pointer-events-auto")}
                 />
               </PopoverContent>
             </Popover>
           </div>
 
-          {/* Resumo */}
-          {projeto.valor && (
-            <div className="p-4 bg-muted rounded-lg">
-              <h4 className="font-medium mb-2">Resumo Financeiro</h4>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span>Valor Total:</span>
-                  <span className="font-medium">{projeto.valor}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Valor Pago:</span>
-                  <span className="font-medium">{projeto.valorPago || "R$ 0,00"}</span>
-                </div>
-                <div className="flex justify-between border-t pt-1">
-                  <span>Saldo Restante:</span>
-                  <span className="font-medium text-orange-600">
-                    {formatCurrency(
-                      ((parseFloat(projeto.valor.replace(/[^\d,]/g, '').replace(',', '.')) || 0) * 100 - 
-                       (parseFloat(projeto.valorPago?.replace(/[^\d,]/g, '').replace(',', '.')) || 0) * 100).toString()
-                    )}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Botões de Ação */}
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button variant="outline" onClick={() => setOpen(false)}>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave}>
-              <Plus className="h-4 w-4 mr-2" />
-              Criar Projeto
+            <Button type="submit" className="w-full">
+              {isEditing ? 'Atualizar Projeto' : 'Criar Projeto'}
             </Button>
           </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   )

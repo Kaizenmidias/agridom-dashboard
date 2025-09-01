@@ -12,17 +12,26 @@ const DashboardWithFilter: React.FC = () => {
     return `${now.getFullYear()}-${now.getMonth()}`;
   });
 
+  // Dados dos projetos simulados para calcular valores a receber
+  const projetos = [
+    { valor: 15000, valorPago: 10000 }, // 5000 a receber
+    { valor: 25000, valorPago: 25000 }, // 0 a receber
+    { valor: 8500, valorPago: 3000 }    // 5500 a receber
+  ];
+
   // Dados financeiros simulados
   const currentMonthData = {
     revenue: 78500,
     expenses: 44200,
-    profit: 34300
+    profit: 34300,
+    receivable: projetos.reduce((acc, projeto) => acc + (projeto.valor - projeto.valorPago), 0)
   };
 
   const previousMonthData = {
     revenue: 68800,
     expenses: 39900,
-    profit: 28900
+    profit: 28900,
+    receivable: 8000
   };
 
   // Dados do gráfico por período - simulando dados diferentes para cada mês
@@ -112,8 +121,10 @@ const DashboardWithFilter: React.FC = () => {
       <FinancialSummary
         totalIncome={currentMonthData.revenue}
         totalExpenses={currentMonthData.expenses}
+        totalReceivable={currentMonthData.receivable}
         previousIncome={previousMonthData.revenue}
         previousExpenses={previousMonthData.expenses}
+        previousReceivable={previousMonthData.receivable}
         period={formatPeriod()}
       />
 
