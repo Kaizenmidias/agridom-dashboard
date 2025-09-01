@@ -41,11 +41,15 @@ export function NovaDespesaDialog({ children }: NovaDespesaDialogProps) {
 
   const formatCurrency = (value: string) => {
     const numericValue = value.replace(/\D/g, '');
-    const formattedValue = (parseInt(numericValue) / 100).toLocaleString('pt-BR', {
+    if (!numericValue) return '';
+    
+    const amount = parseInt(numericValue) / 100;
+    return amount.toLocaleString('pt-BR', {
       style: 'currency',
       currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     });
-    return formattedValue;
   };
 
   const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {

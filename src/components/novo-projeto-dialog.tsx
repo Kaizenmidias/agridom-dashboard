@@ -29,6 +29,7 @@ import { format } from "date-fns"
 import { pt } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { formatCurrencyMask, parseCurrencyValue } from "@/utils/currency-mask"
 
 interface Projeto {
   id: number;
@@ -60,8 +61,8 @@ export function NovoProjetoDialog({ children, projeto, setProjetos, projetos }: 
     cliente: projeto?.cliente || "",
     tipo: projeto?.tipo || "",
     descricao: "",
-    valor: projeto?.valor?.replace(/[R$.\s]/g, '').replace(',', '.') || "",
-    valorPago: projeto?.valorPago?.toString() || "",
+    valor: projeto?.valorNumerico ? formatCurrencyMask((projeto.valorNumerico * 100).toString()) : "",
+    valorPago: projeto?.valorPago ? formatCurrencyMask((projeto.valorPago * 100).toString()) : "",
     dataEntrega: projeto?.prazo ? new Date(projeto.prazo) : undefined as Date | undefined,
     status: projeto?.status || "Em Andamento"
   })
@@ -93,8 +94,8 @@ export function NovoProjetoDialog({ children, projeto, setProjetos, projetos }: 
       return
     }
 
-    const valorNumerico = parseFloat(projetoForm.valor.replace(/[R$.\s]/g, '').replace(',', '.'))
-    const valorPagoNumerico = parseFloat(projetoForm.valorPago || "0")
+    const valorNumerico = parseCurrencyValue(projetoForm.valor)
+    const valorPagoNumerico = parseCurrencyValue(projetoForm.valorPago)
 
     if (isEditing && setProjetos && projetos) {
       // Editar projeto existente
@@ -131,17 +132,8 @@ export function NovoProjetoDialog({ children, projeto, setProjetos, projetos }: 
     resetForm()
   }
 
-  const formatCurrency = (value: string) => {
-    const numbers = value.replace(/\D/g, '')
-    const amount = parseFloat(numbers) / 100
-    return amount.toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })
-  }
-
   const handleValueChange = (field: 'valor' | 'valorPago', value: string) => {
-    const formatted = formatCurrency(value)
+    const formatted = formatCurrencyMask(value)
     setProjetoForm(prev => ({ ...prev, [field]: formatted }))
   }
 
@@ -259,7 +251,7 @@ export function NovoProjetoDialog({ children, projeto, setProjetos, projetos }: 
                   )}
                 >
                   <CalendarIcon />
-                  {projetoForm.dataEntrega ? format(projetoForm.dataEntrega, "PPP", { locale: pt }) : <span>Selecione uma data</span>}
+                  {projetoForm.dataEntrega ? format(projetoForm.dataEntrega, "dd 'de' MMMM 'de' yyyy", { locale: pt }) : <span>Selecione uma data</span>}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
