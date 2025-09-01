@@ -49,9 +49,6 @@ export function AppSidebar() {
           <div className="h-8 w-8 bg-primary rounded-lg text-primary-foreground flex items-center justify-center text-sm font-bold">
             K
           </div>
-          {!isCollapsed && (
-            <span className="ml-3 text-lg font-bold text-foreground">Kaizen</span>
-          )}
         </div>
 
         <SidebarGroup>

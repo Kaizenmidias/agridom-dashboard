@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, TrendingDown, TrendingUp, DollarSign, Calendar } from 'lucide-react';
+import { NovaDespesaDialog } from '@/components/nova-despesa-dialog';
 
 const DespesasPage = () => {
   const despesas = [
@@ -81,10 +82,12 @@ const DespesasPage = () => {
           <h1 className="text-3xl font-bold text-foreground">Despesas</h1>
           <p className="text-muted-foreground">Controle e monitore todas as despesas da empresa</p>
         </div>
-        <Button className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Nova Despesa
-        </Button>
+        <NovaDespesaDialog>
+          <Button className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Nova Despesa
+          </Button>
+        </NovaDespesaDialog>
       </div>
 
       {/* Resumo Financeiro */}

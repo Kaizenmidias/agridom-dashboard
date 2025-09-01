@@ -120,9 +120,9 @@ const ProjetosPage = () => {
       </div>
 
       {/* Lista de Projetos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="flex gap-6 overflow-x-auto pb-4">
         {projetos.map((projeto) => (
-          <Card key={projeto.id} className="hover:shadow-lg transition-shadow">
+          <Card key={projeto.id} className="min-w-[300px] max-w-[300px] hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>

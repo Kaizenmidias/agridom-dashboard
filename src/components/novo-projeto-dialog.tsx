@@ -169,9 +169,6 @@ export function NovoProjetoDialog({ children }: NovoProjetoDialogProps) {
                   <SelectItem value="website">Website Institucional</SelectItem>
                   <SelectItem value="ecommerce">E-commerce</SelectItem>
                   <SelectItem value="landing">Landing Page</SelectItem>
-                  <SelectItem value="sistema">Sistema Web</SelectItem>
-                  <SelectItem value="app">Aplicativo</SelectItem>
-                  <SelectItem value="marketing">Marketing Digital</SelectItem>
                 </SelectContent>
               </Select>
             </div>

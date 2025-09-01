@@ -66,7 +66,7 @@ const DashboardWithFilter: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
-            Visão geral das métricas da Kaizen Web Design
+            Visão geral das métricas do sistema
           </p>
         </div>
         
@@ -93,7 +93,7 @@ const DashboardWithFilter: React.FC = () => {
       {/* Gráfico de Faturamento por Categoria */}
       <Card>
         <CardHeader>
-          <CardTitle>Faturamento por Categoria de Projeto</CardTitle>
+          <CardTitle>Faturamento do Mês Atual</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[400px]">
