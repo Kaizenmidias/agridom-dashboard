@@ -53,14 +53,11 @@ const Navbar = () => {
   };
 
   const navItems = [
-    { title: 'Tableau de bord', path: '/', icon: Home },
-    { title: 'Parcelles', path: '/parcelles', icon: MapPin },
-    { title: 'Cultures', path: '/cultures', icon: Sprout },
-    { title: 'Inventaire', path: '/inventaire', icon: Package },
-    { title: 'Finances', path: '/finances', icon: Wallet },
-    { title: 'Statistiques', path: '/statistiques', icon: BarChart2 },
-    { title: 'Rapports', path: '/rapports', icon: FileText },
-    { title: 'Paramètres', path: '/parametres', icon: Settings },
+    { title: 'Dashboard', path: '/', icon: Home },
+    { title: 'Projetos', path: '/projetos', icon: FileText },
+    { title: 'Despesas', path: '/despesas', icon: Wallet },
+    { title: 'CRM', path: '/crm', icon: Users },
+    { title: 'Usuários', path: '/usuarios', icon: Settings },
   ];
 
   const isActive = (path: string) => {
@@ -90,8 +87,8 @@ const Navbar = () => {
       >
         <div className="p-4 border-b border-border flex items-center justify-between">
           <Link to="/" className="flex items-center space-x-2">
-            <Sprout className="h-6 w-6 text-agri-primary" />
-            <span className="text-lg font-bold text-foreground">Agri Dom</span>
+            <div className="h-6 w-6 bg-blue-600 rounded text-white flex items-center justify-center text-sm font-bold">K</div>
+            <span className="text-lg font-bold text-foreground">Kaizen</span>
           </Link>
           <button 
             onClick={toggleTheme} 

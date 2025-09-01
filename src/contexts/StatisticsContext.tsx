@@ -27,7 +27,7 @@ export interface EnvironmentalData {
   current: number;
   target: number;
   trend: string;
-  status: 'Atteint' | 'En progrès' | 'En retard';
+  status: 'Atingido' | 'Em progresso' | 'Atrasado';
 }
 
 interface StatisticsContextType {
@@ -87,52 +87,52 @@ export const useStatistics = () => {
 
 // Données initiales
 const initialYieldData: YieldData[] = [
-  { name: 'Canne à Sucre', current: 85, previous: 75, unit: 't/ha' },
-  { name: 'Banane', current: 32, previous: 30, unit: 't/ha' },
-  { name: 'Ananas', current: 45, previous: 48, unit: 't/ha' },
-  { name: 'Igname', current: 18, previous: 15, unit: 't/ha' },
-  { name: 'Madère', current: 22, previous: 20, unit: 't/ha' }
+  { name: 'Sites Desenvolvidos', current: 12, previous: 8, unit: 'sites' },
+  { name: 'Campanhas Ativas', current: 25, previous: 22, unit: 'campanhas' },
+  { name: 'Projetos em Andamento', current: 18, previous: 15, unit: 'projetos' },
+  { name: 'Clientes Ativos', current: 45, previous: 38, unit: 'clientes' },
+  { name: 'Leads Convertidos', current: 32, previous: 28, unit: 'leads' }
 ];
 
 const initialProfitabilityData: FinancialData[] = [
-  { name: 'Parcelle Nord', profitability: 1250, size: 12.5, crop: 'Canne à Sucre' },
-  { name: 'Parcelle Est', profitability: 980, size: 8.3, crop: 'Banane' },
-  { name: 'Parcelle Sud', profitability: 1580, size: 15.7, crop: 'Ananas' },
-  { name: 'Parcelle Ouest', profitability: 850, size: 10.2, crop: 'Igname' },
-  { name: 'Parcelle Centrale', profitability: 920, size: 6.8, crop: 'Madère' }
+  { name: 'Projeto Alpha', profitability: 15000, size: 3.5, crop: 'E-commerce' },
+  { name: 'Projeto Beta', profitability: 8500, size: 2.0, crop: 'Landing Page' },
+  { name: 'Projeto Gamma', profitability: 22000, size: 5.2, crop: 'Sistema Web' },
+  { name: 'Projeto Delta', profitability: 12000, size: 2.8, crop: 'Marketing Digital' },
+  { name: 'Projeto Epsilon', profitability: 18500, size: 4.1, crop: 'Aplicativo' }
 ];
 
 const initialCostData: CostData[] = [
-  { name: 'Semences', value: 1800, color: '#4CAF50' },
-  { name: 'Fertilisants', value: 2200, color: '#8D6E63' },
-  { name: 'Phyto', value: 1500, color: '#FFC107' },
-  { name: 'Carburant', value: 1200, color: '#2196F3' },
-  { name: 'Main d\'œuvre', value: 3500, color: '#673AB7' },
-  { name: 'Mécanisation', value: 2800, color: '#E91E63' },
-  { name: 'Divers', value: 900, color: '#9E9E9E' }
+  { name: 'Hospedagem', value: 2800, color: '#4CAF50' },
+  { name: 'Licenças Software', value: 4200, color: '#8D6E63' },
+  { name: 'Marketing', value: 6500, color: '#FFC107' },
+  { name: 'Freelancers', value: 8200, color: '#2196F3' },
+  { name: 'Salários', value: 25000, color: '#673AB7' },
+  { name: 'Escritório', value: 4800, color: '#E91E63' },
+  { name: 'Diversos', value: 1900, color: '#9E9E9E' }
 ];
 
 const initialRevenueData = [
-  { month: 'Jan', revenue: 28500, expenses: 20100, profit: 8400 },
-  { month: 'Fév', revenue: 30200, expenses: 21800, profit: 8400 },
-  { month: 'Mar', revenue: 32800, expenses: 22400, profit: 10400 },
-  { month: 'Avr', revenue: 35500, expenses: 23100, profit: 12400 },
-  { month: 'Mai', revenue: 38200, expenses: 23500, profit: 14700 },
-  { month: 'Juin', revenue: 37800, expenses: 22900, profit: 14900 },
-  { month: 'Juil', revenue: 42500, expenses: 24200, profit: 18300 },
-  { month: 'Août', revenue: 44800, expenses: 25300, profit: 19500 },
-  { month: 'Sep', revenue: 40200, expenses: 24800, profit: 15400 },
-  { month: 'Oct', revenue: 38200, expenses: 23100, profit: 15100 },
-  { month: 'Nov', revenue: 36500, expenses: 22500, profit: 14000 },
-  { month: 'Déc', revenue: 41200, expenses: 25800, profit: 15400 }
+  { month: 'Jan', revenue: 48500, expenses: 32100, profit: 16400 },
+  { month: 'Fev', revenue: 52200, expenses: 35800, profit: 16400 },
+  { month: 'Mar', revenue: 58800, expenses: 38400, profit: 20400 },
+  { month: 'Abr', revenue: 65500, expenses: 41100, profit: 24400 },
+  { month: 'Mai', revenue: 72200, expenses: 43500, profit: 28700 },
+  { month: 'Jun', revenue: 68800, expenses: 39900, profit: 28900 },
+  { month: 'Jul', revenue: 78500, expenses: 44200, profit: 34300 },
+  { month: 'Ago', revenue: 84800, expenses: 47300, profit: 37500 },
+  { month: 'Set', revenue: 76200, expenses: 46800, profit: 29400 },
+  { month: 'Out', revenue: 71200, expenses: 43100, profit: 28100 },
+  { month: 'Nov', revenue: 68500, expenses: 42500, profit: 26000 },
+  { month: 'Dez', revenue: 82200, expenses: 48800, profit: 33400 }
 ];
 
 const initialEnvironmentalIndicators: EnvironmentalData[] = [
-  { indicator: 'Émissions CO2 (t/ha)', current: 2.8, target: 2.5, trend: '-5%', status: 'En progrès' },
-  { indicator: 'Consommation d\'eau (m³/ha)', current: 350, target: 320, trend: '-8%', status: 'Atteint' },
-  { indicator: 'Utilisation d\'intrants (kg/ha)', current: 180, target: 150, trend: '-12%', status: 'En progrès' },
-  { indicator: 'Surface en agriculture bio (%)', current: 15, target: 25, trend: '+5%', status: 'En progrès' },
-  { indicator: 'Biodiversité (espèces/ha)', current: 12, target: 15, trend: '+12%', status: 'Atteint' }
+  { indicator: 'Taxa de Conversão (%)', current: 8.5, target: 10.0, trend: '+12%', status: 'Em progresso' },
+  { indicator: 'Tempo Médio de Projeto (dias)', current: 45, target: 40, trend: '-8%', status: 'Atingido' },
+  { indicator: 'Satisfação do Cliente (%)', current: 92, target: 95, trend: '+5%', status: 'Em progresso' },
+  { indicator: 'ROI das Campanhas (%)', current: 285, target: 300, trend: '+15%', status: 'Em progresso' },
+  { indicator: 'Retenção de Clientes (%)', current: 78, target: 80, trend: '+8%', status: 'Atingido' }
 ];
 
 export const StatisticsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
