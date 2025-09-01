@@ -1,5 +1,6 @@
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -86,6 +87,7 @@ const App = () => {
                   </main>
                 </div>
               </SidebarProvider>
+              <Toaster />
             </TooltipProvider>
           </BrowserRouter>
         </CRMProvider>

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Home, FileText, Wallet, Users, Settings } from "lucide-react"
+import { Home, FileText, Wallet, Users, Settings, User } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 
 import {
@@ -14,6 +14,9 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { ThemeToggle } from "./theme-toggle"
+import { UserProfileDialog } from "./user-profile-dialog"
+import { Button } from "@/components/ui/button"
 
 const items = [
   { title: "Dashboard", url: "/", icon: Home },
@@ -71,18 +74,28 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* User section at bottom */}
-        <div className="mt-auto p-4 border-t border-border">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium">KZ</span>
-            </div>
-            {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">Kaizen Admin</p>
-                <p className="text-xs text-muted-foreground truncate">admin@kaizen.com</p>
-              </div>
-            )}
+        <div className="mt-auto p-4 border-t border-border space-y-3">
+          {/* Theme Toggle */}
+          <div className="flex justify-center">
+            <ThemeToggle />
           </div>
+          
+          {/* User Profile */}
+          <UserProfileDialog>
+            <Button variant="ghost" className="w-full justify-start p-2">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                  <span className="text-sm font-medium text-primary">KZ</span>
+                </div>
+                {!isCollapsed && (
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-medium truncate">Kaizen Admin</p>
+                    <p className="text-xs text-muted-foreground truncate">admin@kaizen.com</p>
+                  </div>
+                )}
+              </div>
+            </Button>
+          </UserProfileDialog>
         </div>
       </SidebarContent>
     </Sidebar>

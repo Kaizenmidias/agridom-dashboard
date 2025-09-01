@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Calendar, User, DollarSign, Clock } from 'lucide-react';
+import { NovoProjetoDialog } from '@/components/novo-projeto-dialog';
 
 const ProjetosPage = () => {
   const projetos = [
@@ -54,10 +55,12 @@ const ProjetosPage = () => {
           <h1 className="text-3xl font-bold text-foreground">Projetos</h1>
           <p className="text-muted-foreground">Gerencie todos os seus projetos de web design</p>
         </div>
-        <Button className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Projeto
-        </Button>
+        <NovoProjetoDialog>
+          <Button className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Projeto
+          </Button>
+        </NovoProjetoDialog>
       </div>
 
       {/* Estatísticas Rápidas */}
