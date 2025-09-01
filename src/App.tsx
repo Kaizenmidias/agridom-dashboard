@@ -1,14 +1,14 @@
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
-import ParcelsPage from "./pages/ParcelsPage";
-import ParcelsDetailsPage from "./pages/ParcelsDetailsPage";
-import CropsPage from "./pages/CropsPage";
-import InventoryPage from "./pages/InventoryPage";
-import FinancePage from "./pages/FinancePage";
-import StatsPage from "./pages/StatsPage";
+import ProjetosPage from "./pages/ProjetosPage";
+import DespesasPage from "./pages/DespesasPage";
+import CRMPage from "./pages/CRMPage";
+import UsuariosPage from "./pages/UsuariosPage";
 import NotFound from "./pages/NotFound";
 import { useEffect } from "react";
 import { CRMProvider } from "./contexts/CRMContext";
@@ -16,18 +16,13 @@ import { StatisticsProvider } from "./contexts/StatisticsContext";
 import { AppSettingsProvider } from "./contexts/AppSettingsContext";
 import { trackPageView } from "./utils/analytics";
 
-// Define routes configuration with redirects
+// Define routes configuration
 const routes = [
   { path: "/", element: <Index /> },
-  { path: "/parcelles", element: <ParcelsPage /> },
-  { path: "/parcelles/:id", element: <ParcelsDetailsPage /> },
-  { path: "/cultures", element: <CropsPage /> },
-  { path: "/inventaire", element: <InventoryPage /> },
-  { path: "/finances", element: <FinancePage /> },
-  { path: "/statistiques", element: <StatisticsProvider><StatsPage /></StatisticsProvider> },
-  { path: "/rapports", element: <Navigate to="/statistiques" replace /> },
-  { path: "/parametres", element: <Navigate to="/" replace /> },
-  { path: "/dashboard", element: <Navigate to="/" replace /> },
+  { path: "/projetos", element: <ProjetosPage /> },
+  { path: "/despesas", element: <DespesasPage /> },
+  { path: "/crm", element: <CRMPage /> },
+  { path: "/usuarios", element: <UsuariosPage /> },
   { path: "*", element: <NotFound /> }
 ];
 
@@ -45,12 +40,14 @@ const queryClient = new QueryClient({
 
 // Router change handler component
 const RouterChangeHandler = () => {
+  const location = useLocation();
+  
   useEffect(() => {
     // Scroll to top on route change
     window.scrollTo(0, 0);
     
     // Track page view for analytics
-    const currentPath = window.location.pathname;
+    const currentPath = location.pathname;
     const pageName = currentPath === '/' ? 'dashboard' : currentPath.replace(/^\//, '');
     trackPageView(pageName);
   }, [location.pathname]);
@@ -58,7 +55,7 @@ const RouterChangeHandler = () => {
   return null;
 };
 
-// Application main component with properly nested providers
+// Application main component with sidebar layout
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -66,16 +63,29 @@ const App = () => {
         <CRMProvider>
           <BrowserRouter>
             <TooltipProvider>
-              <RouterChangeHandler />
-              <Routes>
-                {routes.map((route) => (
-                  <Route 
-                    key={route.path} 
-                    path={route.path} 
-                    element={route.element} 
-                  />
-                ))}
-              </Routes>
+              <SidebarProvider>
+                <div className="min-h-screen flex w-full">
+                  <AppSidebar />
+                  <main className="flex-1">
+                    <header className="h-12 flex items-center border-b px-4">
+                      <SidebarTrigger />
+                      <h1 className="ml-4 font-semibold">Kaizen - Web Design</h1>
+                    </header>
+                    <div className="flex-1">
+                      <RouterChangeHandler />
+                      <Routes>
+                        {routes.map((route) => (
+                          <Route 
+                            key={route.path} 
+                            path={route.path} 
+                            element={route.element} 
+                          />
+                        ))}
+                      </Routes>
+                    </div>
+                  </main>
+                </div>
+              </SidebarProvider>
             </TooltipProvider>
           </BrowserRouter>
         </CRMProvider>
