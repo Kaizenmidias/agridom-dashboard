@@ -64,7 +64,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
     >
       <motion.div variants={item}>
         <Card 
-          className={`bg-white hover:shadow-md transition-shadow ${onCardClick ? 'cursor-pointer' : ''}`} 
+          className={`bg-white dark:bg-[#1D2530] hover:shadow-md transition-shadow ${onCardClick ? 'cursor-pointer' : ''}`} 
           onClick={() => onCardClick && onCardClick('income')}
         >
           <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
@@ -103,7 +103,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
       
       <motion.div variants={item}>
         <Card 
-          className={`bg-white hover:shadow-md transition-shadow ${onCardClick ? 'cursor-pointer' : ''}`} 
+          className={`bg-white dark:bg-[#1D2530] hover:shadow-md transition-shadow ${onCardClick ? 'cursor-pointer' : ''}`} 
           onClick={() => onCardClick && onCardClick('expenses')}
         >
           <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
@@ -142,7 +142,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
       
       <motion.div variants={item} className="sm:col-span-2 lg:col-span-1">
         <Card 
-          className={`bg-white hover:shadow-md transition-shadow ${onCardClick ? 'cursor-pointer' : ''}`}
+          className={`bg-white dark:bg-[#1D2530] hover:shadow-md transition-shadow ${onCardClick ? 'cursor-pointer' : ''}`}
           onClick={() => onCardClick && onCardClick('balance')}
         >
           <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">

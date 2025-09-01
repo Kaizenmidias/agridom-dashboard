@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-import { DateRange } from 'react-day-picker';
-import { addDays, format, startOfMonth, endOfMonth } from 'date-fns';
+import { addDays, format, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import FinancialSummary from '@/components/finance/FinancialSummary';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const DashboardWithFilter: React.FC = () => {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfMonth(new Date()),
-    to: endOfMonth(new Date()),
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${now.getMonth()}`;
   });
 
   // Dados financeiros simulados
@@ -26,58 +25,86 @@ const DashboardWithFilter: React.FC = () => {
     profit: 28900
   };
 
-  // Dados do gráfico por categoria
-  const chartData = [
-    { name: 'E-commerce', value: 28500, color: '#4CAF50' },
-    { name: 'Landing Pages', value: 15200, color: '#2196F3' },
-    { name: 'Sistemas Web', value: 22000, color: '#FF9800' },
-    { name: 'Marketing Digital', value: 8800, color: '#9C27B0' },
-    { name: 'Aplicativos', value: 4000, color: '#F44336' }
-  ];
-
-  const formatPeriod = () => {
-    if (!dateRange?.from || !dateRange?.to) return 'o período selecionado';
-    
-    const isSameMonth = dateRange.from.getMonth() === dateRange.to.getMonth() && 
-                       dateRange.from.getFullYear() === dateRange.to.getFullYear();
-    
-    if (isSameMonth) {
-      return format(dateRange.from, 'MMMM yyyy', { locale: pt });
+  // Dados do gráfico por período - simulando dados diferentes para cada mês
+  const getChartDataForPeriod = (period: string) => {
+    if (period === 'year') {
+      return [
+        { name: 'Jan', value: 48500 },
+        { name: 'Fev', value: 52200 },
+        { name: 'Mar', value: 58800 },
+        { name: 'Abr', value: 65500 },
+        { name: 'Mai', value: 72200 },
+        { name: 'Jun', value: 68800 },
+        { name: 'Jul', value: 78500 },
+        { name: 'Ago', value: 84800 },
+        { name: 'Set', value: 76200 },
+        { name: 'Out', value: 71200 },
+        { name: 'Nov', value: 68500 },
+        { name: 'Dez', value: 82200 }
+      ];
+    } else {
+      // Dados semanais para o mês selecionado
+      const [year, month] = period.split('-');
+      const monthName = format(new Date(parseInt(year), parseInt(month)), 'MMMM', { locale: pt });
+      return [
+        { name: `${monthName} S1`, value: Math.floor(Math.random() * 20000) + 15000 },
+        { name: `${monthName} S2`, value: Math.floor(Math.random() * 20000) + 15000 },
+        { name: `${monthName} S3`, value: Math.floor(Math.random() * 20000) + 15000 },
+        { name: `${monthName} S4`, value: Math.floor(Math.random() * 20000) + 15000 }
+      ];
     }
-    
-    return `${format(dateRange.from, 'dd/MM/yyyy', { locale: pt })} - ${format(dateRange.to, 'dd/MM/yyyy', { locale: pt })}`;
   };
 
-  const presets = [
-    { label: "Este mês", days: 0 },
-    { label: "Últimos 30 dias", days: 30 },
-    { label: "Últimos 90 dias", days: 90 },
-    { label: "Este ano", days: 365 }
-  ];
+  const chartData = getChartDataForPeriod(selectedPeriod);
 
-  const customPresets = presets.map(preset => ({
-    label: preset.label,
-    days: preset.days
-  }));
+  const formatPeriod = () => {
+    if (selectedPeriod === 'year') {
+      return `ano de ${new Date().getFullYear()}`;
+    }
+    const [year, month] = selectedPeriod.split('-');
+    return format(new Date(parseInt(year), parseInt(month)), 'MMMM yyyy', { locale: pt });
+  };
+
+  const getPeriodOptions = () => {
+    const options = [];
+    const currentYear = new Date().getFullYear();
+    
+    // Adicionar opção "Este ano"
+    options.push({ value: 'year', label: 'Este ano' });
+    
+    // Adicionar meses do ano atual
+    for (let month = 0; month < 12; month++) {
+      const date = new Date(currentYear, month);
+      const value = `${currentYear}-${month}`;
+      const label = format(date, 'MMMM yyyy', { locale: pt });
+      options.push({ value, label });
+    }
+    
+    return options;
+  };
 
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
             Visão geral das métricas do sistema
           </p>
         </div>
         
         <div className="w-full md:w-auto">
-          <DatePickerWithRange
-            date={dateRange}
-            setDate={setDateRange}
-            placeholderText="Selecionar período"
-            presets={customPresets}
-            className="w-full md:w-auto"
-          />
+          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+            <SelectTrigger className="w-full md:w-auto min-w-[200px]">
+              <SelectValue placeholder="Selecionar período" />
+            </SelectTrigger>
+            <SelectContent>
+              {getPeriodOptions().map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -90,10 +117,10 @@ const DashboardWithFilter: React.FC = () => {
         period={formatPeriod()}
       />
 
-      {/* Gráfico de Faturamento por Categoria */}
+      {/* Gráfico de Relatório */}
       <Card>
         <CardHeader>
-          <CardTitle>Faturamento do Mês Atual</CardTitle>
+          <CardTitle>Relatório</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[400px]">
