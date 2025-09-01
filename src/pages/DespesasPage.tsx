@@ -9,8 +9,7 @@ const DespesasPage = () => {
   const despesas = [
     {
       id: 1,
-      descricao: "Licença Adobe Creative Suite",
-      categoria: "Software",
+      nome: "Licença Adobe Creative Suite",
       valor: "R$ 180,00",
       data: "2024-01-15",
       tipo: "Recorrente",
@@ -18,8 +17,7 @@ const DespesasPage = () => {
     },
     {
       id: 2,
-      descricao: "Hospedagem de Sites - Hostgator",
-      categoria: "Infraestrutura",
+      nome: "Hospedagem de Sites - Hostgator",
       valor: "R$ 25,90",
       data: "2024-01-10",
       tipo: "Mensal",
@@ -27,8 +25,7 @@ const DespesasPage = () => {
     },
     {
       id: 3,
-      descricao: "Domínio cliente-exemplo.com",
-      categoria: "Domínios",
+      nome: "Domínio cliente-exemplo.com",
       valor: "R$ 40,00",
       data: "2024-01-08",
       tipo: "Anual",
@@ -36,8 +33,7 @@ const DespesasPage = () => {
     },
     {
       id: 4,
-      descricao: "Internet - Vivo Fibra",
-      categoria: "Internet",
+      nome: "Internet - Vivo Fibra",
       valor: "R$ 120,00",
       data: "2024-01-05",
       tipo: "Mensal",
@@ -45,8 +41,7 @@ const DespesasPage = () => {
     },
     {
       id: 5,
-      descricao: "Material de Marketing",
-      categoria: "Marketing",
+      nome: "Material de Marketing",
       valor: "R$ 350,00",
       data: "2024-01-20",
       tipo: "Eventual",
@@ -54,13 +49,6 @@ const DespesasPage = () => {
     }
   ];
 
-  const categorias = [
-    { nome: "Software", total: "R$ 180,00", cor: "bg-blue-100 text-blue-800" },
-    { nome: "Infraestrutura", total: "R$ 25,90", cor: "bg-green-100 text-green-800" },
-    { nome: "Domínios", total: "R$ 40,00", cor: "bg-purple-100 text-purple-800" },
-    { nome: "Internet", total: "R$ 120,00", cor: "bg-orange-100 text-orange-800" },
-    { nome: "Marketing", total: "R$ 350,00", cor: "bg-pink-100 text-pink-800" }
-  ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -146,9 +134,9 @@ const DespesasPage = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Lista de Despesas */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-1">
           <Card>
             <CardHeader>
               <CardTitle>Despesas Recentes</CardTitle>
@@ -163,9 +151,9 @@ const DespesasPage = () => {
                         <DollarSign className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="font-medium">{despesa.descricao}</p>
+                        <p className="font-medium">{despesa.nome}</p>
                         <p className="text-sm text-muted-foreground">
-                          {despesa.categoria} • {new Date(despesa.data).toLocaleDateString('pt-BR')}
+                          {new Date(despesa.data).toLocaleDateString('pt-BR')}
                         </p>
                       </div>
                     </div>
@@ -182,29 +170,8 @@ const DespesasPage = () => {
           </Card>
         </div>
 
-        {/* Categorias */}
+        {/* Ações Rápidas */}
         <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Despesas por Categoria</CardTitle>
-              <CardDescription>Distribuição dos gastos por categoria</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {categorias.map((categoria, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Badge className={categoria.cor}>
-                        {categoria.nome}
-                      </Badge>
-                    </div>
-                    <span className="font-medium">{categoria.total}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
           <Card className="mt-4">
             <CardHeader>
               <CardTitle>Ações Rápidas</CardTitle>

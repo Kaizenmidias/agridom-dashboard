@@ -120,7 +120,7 @@ const ProjetosPage = () => {
       </div>
 
       {/* Lista de Projetos */}
-      <div className="flex gap-6 overflow-x-auto pb-4">
+      <div className="flex gap-6 overflow-x-auto pb-4 min-h-[400px]">
         {projetos.map((projeto) => (
           <Card key={projeto.id} className="min-w-[300px] max-w-[300px] hover:shadow-lg transition-shadow">
             <CardHeader>

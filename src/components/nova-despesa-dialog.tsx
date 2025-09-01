@@ -11,8 +11,7 @@ import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 
 const despesaSchema = z.object({
-  descricao: z.string().min(1, 'Descrição é obrigatória'),
-  categoria: z.string().min(1, 'Categoria é obrigatória'),
+  nome: z.string().min(1, 'Nome é obrigatório'),
   valor: z.string().min(1, 'Valor é obrigatório'),
   data: z.string().min(1, 'Data é obrigatória'),
   tipoCobranca: z.string().min(1, 'Tipo de cobrança é obrigatório'),
@@ -59,7 +58,7 @@ export function NovaDespesaDialog({ children }: NovaDespesaDialogProps) {
     
     toast({
       title: "Despesa cadastrada!",
-      description: `A despesa "${data.descricao}" foi cadastrada com sucesso.`,
+      description: `A despesa "${data.nome}" foi cadastrada com sucesso.`,
     });
 
     reset();
@@ -82,42 +81,17 @@ export function NovaDespesaDialog({ children }: NovaDespesaDialogProps) {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="descricao">Descrição *</Label>
+              <Label htmlFor="nome">Nome *</Label>
               <Input
-                id="descricao"
+                id="nome"
                 placeholder="Ex: Licença Adobe Creative Suite"
-                {...register('descricao')}
+                {...register('nome')}
               />
-              {errors.descricao && (
-                <p className="text-sm text-destructive">{errors.descricao.message}</p>
+              {errors.nome && (
+                <p className="text-sm text-destructive">{errors.nome.message}</p>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="categoria">Categoria *</Label>
-              <Select onValueChange={(value) => setValue('categoria', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Software">Software</SelectItem>
-                  <SelectItem value="Infraestrutura">Infraestrutura</SelectItem>
-                  <SelectItem value="Domínios">Domínios</SelectItem>
-                  <SelectItem value="Internet">Internet</SelectItem>
-                  <SelectItem value="Marketing">Marketing</SelectItem>
-                  <SelectItem value="Escritório">Escritório</SelectItem>
-                  <SelectItem value="Alimentação">Alimentação</SelectItem>
-                  <SelectItem value="Transporte">Transporte</SelectItem>
-                  <SelectItem value="Outros">Outros</SelectItem>
-                </SelectContent>
-              </Select>
-              {errors.categoria && (
-                <p className="text-sm text-destructive">{errors.categoria.message}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="valor">Valor *</Label>
               <Input
@@ -130,7 +104,9 @@ export function NovaDespesaDialog({ children }: NovaDespesaDialogProps) {
                 <p className="text-sm text-destructive">{errors.valor.message}</p>
               )}
             </div>
+          </div>
 
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="data">Data *</Label>
               <Input
