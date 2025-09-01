@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, TrendingDown, TrendingUp, DollarSign, Calendar } from 'lucide-react';
+import { Plus, TrendingDown, TrendingUp, DollarSign, Calendar, Edit, Trash2 } from 'lucide-react';
 import { NovaDespesaDialog } from '@/components/nova-despesa-dialog';
 
 const DespesasPage = () => {
@@ -157,11 +157,21 @@ const DespesasPage = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right space-x-2">
-                      <Badge className={getStatusColor(despesa.status)}>
-                        {despesa.status}
-                      </Badge>
-                      <p className="font-semibold">{despesa.valor}</p>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right space-x-2">
+                        <Badge className={getStatusColor(despesa.status)}>
+                          {despesa.status}
+                        </Badge>
+                        <p className="font-semibold">{despesa.valor}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="outline">
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}

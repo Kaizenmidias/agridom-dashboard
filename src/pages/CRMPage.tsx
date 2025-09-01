@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Phone, Mail, Calendar, TrendingUp, Users, Target } from 'lucide-react';
+import { Plus, Mail, Calendar, TrendingUp, Users, Target, Edit, Trash2, MessageCircle } from 'lucide-react';
 
 const CRMPage = () => {
   const clientes = [
@@ -184,20 +184,39 @@ const CRMPage = () => {
                         <p className="font-medium">{cliente.nome}</p>
                         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                           <Mail className="h-3 w-3" />
-                          <span>{cliente.email}</span>
+                          <a href={`mailto:${cliente.email}`} className="hover:text-primary underline">
+                            {cliente.email}
+                          </a>
                         </div>
                         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                          <Phone className="h-3 w-3" />
-                          <span>{cliente.telefone}</span>
+                          <MessageCircle className="h-3 w-3" />
+                          <a 
+                            href={`https://wa.me/55${cliente.telefone.replace(/\D/g, '')}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="hover:text-primary underline"
+                          >
+                            {cliente.telefone}
+                          </a>
                         </div>
                       </div>
                     </div>
-                    <div className="text-right space-y-1">
-                      <Badge className={getStatusColor(cliente.status)}>
-                        {cliente.status}
-                      </Badge>
-                      <p className="text-sm font-medium text-green-600">{cliente.valorProjetos}</p>
-                      <p className="text-xs text-muted-foreground">{cliente.projetos} projeto(s)</p>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right space-y-1">
+                        <Badge className={getStatusColor(cliente.status)}>
+                          {cliente.status}
+                        </Badge>
+                        <p className="text-sm font-medium text-green-600">{cliente.valorProjetos}</p>
+                        <p className="text-xs text-muted-foreground">{cliente.projetos} projeto(s)</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="outline">
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
