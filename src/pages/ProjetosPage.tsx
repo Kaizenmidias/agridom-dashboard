@@ -29,12 +29,12 @@ const ProjetosPage = () => {
     },
     {
       id: 3,
-      nome: "Landing Page - StartupX",
+      nome: "App Mobile - StartupX",
       cliente: "StartupX Innovation",
-      status: "Planejamento",
+      status: "Em Andamento",
       prazo: "2024-03-01",
       valor: "R$ 8.500,00",
-      progresso: 20,
+      progresso: 30,
       tipo: "Landing Page"
     }
   ];
@@ -43,7 +43,6 @@ const ProjetosPage = () => {
     switch (status) {
       case 'Em Andamento': return 'bg-blue-100 text-blue-800';
       case 'Finalizado': return 'bg-green-100 text-green-800';
-      case 'Planejamento': return 'bg-yellow-100 text-yellow-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -64,7 +63,7 @@ const ProjetosPage = () => {
       </div>
 
       {/* Estatísticas Rápidas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -73,7 +72,7 @@ const ProjetosPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Em Andamento</p>
-                <p className="text-xl font-bold">1</p>
+                <p className="text-xl font-bold">2</p>
               </div>
             </div>
           </CardContent>
@@ -86,19 +85,6 @@ const ProjetosPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Finalizados</p>
-                <p className="text-xl font-bold">1</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <User className="h-4 w-4 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Planejamento</p>
                 <p className="text-xl font-bold">1</p>
               </div>
             </div>
@@ -120,52 +106,61 @@ const ProjetosPage = () => {
       </div>
 
       {/* Lista de Projetos */}
-      <div className="flex gap-6 overflow-x-auto pb-4 min-h-[400px]">
+      <div className="space-y-4">
         {projetos.map((projeto) => (
-          <Card key={projeto.id} className="min-w-[300px] max-w-[300px] hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{projeto.nome}</CardTitle>
-                  <CardDescription className="flex items-center gap-1 mt-1">
-                    <User className="h-3 w-3" />
-                    {projeto.cliente}
-                  </CardDescription>
-                </div>
-                <Badge className={getStatusColor(projeto.status)}>
-                  {projeto.status}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Tipo:</span>
-                  <span className="font-medium">{projeto.tipo}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Prazo:</span>
-                  <span className="font-medium">{new Date(projeto.prazo).toLocaleDateString('pt-BR')}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Valor:</span>
-                  <span className="font-medium text-green-600">{projeto.valor}</span>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Progresso:</span>
-                    <span className="font-medium">{projeto.progresso}%</span>
+          <Card key={projeto.id} className="hover:shadow-lg transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-6 flex-1">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-semibold">{projeto.nome}</h3>
+                      <Badge className={getStatusColor(projeto.status)}>
+                        {projeto.status}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground flex items-center gap-1">
+                      <User className="h-4 w-4" />
+                      {projeto.cliente}
+                    </p>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-primary h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${projeto.progresso}%` }}
-                    ></div>
+                  
+                  <div className="flex items-center space-x-8">
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Tipo</p>
+                      <p className="font-medium">{projeto.tipo}</p>
+                    </div>
+                    
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Prazo</p>
+                      <p className="font-medium">{new Date(projeto.prazo).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                    
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Valor</p>
+                      <p className="font-medium text-green-600">{projeto.valor}</p>
+                    </div>
+                    
+                    <div className="text-center min-w-[120px]">
+                      <p className="text-sm text-muted-foreground">Progresso</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-primary h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${projeto.progresso}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium">{projeto.progresso}%</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <Button variant="outline" className="w-full mt-4">
-                  Ver Detalhes
-                </Button>
+                
+                <div className="ml-6">
+                  <Button variant="outline">
+                    Ver Detalhes
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
