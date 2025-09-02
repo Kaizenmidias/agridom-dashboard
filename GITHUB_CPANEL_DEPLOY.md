@@ -84,7 +84,24 @@ git add .
 git commit -m "Initial commit: AgriDom Dashboard"
 ```
 
-### 3. Criar Repositório no GitHub
+### 3. Conectar ao GitHub
+
+#### ⚠️ Problema Resolvido: Repository Not Found
+
+Se você encontrou o erro "remote: Repository not found", isso significa que o repositório não existe no GitHub. Aqui estão as soluções:
+
+#### Opção A: Usar o repositório original (RECOMENDADO)
+```bash
+# Remover remote incorreto (se existir)
+git remote remove origin
+
+# Conectar ao repositório original
+git remote add origin https://github.com/tiagoo4000/agri-dom-5238.git
+git branch -M main
+git push -u origin main
+```
+
+#### Opção B: Criar Novo Repositório
 
 1. Acesse [GitHub](https://github.com)
 2. Clique em "New repository"
@@ -97,8 +114,55 @@ git commit -m "Initial commit: AgriDom Dashboard"
 4. Após criar, conecte o repositório local:
 
 ```bash
+# Remover remote atual (se existir)
+git remote remove origin
+
+# Conectar ao novo repositório
 git remote add origin https://github.com/SEU_USUARIO/agridom-dashboard.git
 git branch -M main
+git push -u origin main
+```
+
+#### Opção C: Conectar ao kaizenmidias
+
+1. **Se você tem acesso ao repositório do kaizenmidias:**
+
+```bash
+# Conectar ao repositório do kaizenmidias
+git remote add origin https://github.com/kaizenmidias/agridom-dashboard.git
+git branch -M main
+git push -u origin main
+```
+
+2. **Se você vai fazer fork do repositório:**
+
+```bash
+# Primeiro, faça fork no GitHub do repositório kaizenmidias/agridom-dashboard
+# Depois conecte ao seu fork
+git remote add origin https://github.com/SEU_USUARIO/agridom-dashboard.git
+git remote add upstream https://github.com/kaizenmidias/agridom-dashboard.git
+git branch -M main
+git push -u origin main
+```
+
+3. **Para colaboradores do kaizenmidias:**
+
+```bash
+# Clone o repositório existente
+git clone https://github.com/kaizenmidias/agridom-dashboard.git
+cd agridom-dashboard
+
+# Ou se já tem o projeto local, adicione como remote
+git remote add origin https://github.com/kaizenmidias/agridom-dashboard.git
+```
+
+#### Opção D: Solicitar criação do repositório kaizenmidias
+```bash
+# Se você precisa especificamente do repositório kaizenmidias/agridom-dashboard:
+# 1. Contate o usuário kaizenmidias para criar o repositório
+# 2. Ou peça acesso de colaborador a um repositório existente
+# 3. Depois conecte normalmente:
+git remote add origin https://github.com/kaizenmidias/agridom-dashboard.git
 git push -u origin main
 ```
 

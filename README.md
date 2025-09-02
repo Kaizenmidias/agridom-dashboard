@@ -165,6 +165,10 @@ npm run build:cpanel
 
 ### Opção 2: Deploy Automático via GitHub
 
+#### ⚠️ Solução para "Repository not found"
+
+Se você encontrou o erro "remote: Repository not found", siga estas etapas:
+
 ```bash
 # Inicializar repositório Git (Windows)
 init-git.bat
@@ -176,12 +180,38 @@ git commit -m "Initial commit: AgriDom Dashboard"
 git branch -M main
 ```
 
-1. Crie um repositório no [GitHub](https://github.com/new)
-2. Conecte o repositório local:
+1. **Remover remote incorreto e conectar ao repositório original:**
    ```bash
+   # Remover remote atual
+   git remote remove origin
+   
+   # Conectar ao repositório original que funciona
+   git remote add origin https://github.com/tiagoo4000/agri-dom-5238.git
+   git push -u origin main
+   ```
+
+2. **Alternativas de repositório:**
+   
+   **Opção A: Usar repositório original (RECOMENDADO)**
+   ```bash
+   git remote add origin https://github.com/tiagoo4000/agri-dom-5238.git
+   git push -u origin main
+   ```
+   
+   **Opção B: Criar seu próprio repositório**
+   ```bash
+   # 1. Criar repositório no GitHub (via web)
+   # 2. Conectar ao novo repositório
    git remote add origin https://github.com/SEU_USUARIO/agridom-dashboard.git
    git push -u origin main
    ```
+   
+   **Opção C: Solicitar criação do repositório kaizenmidias**
+   ```bash
+   # Contate kaizenmidias para criar o repositório primeiro
+   # Depois conecte normalmente
+   ```
+
 3. Configure deploy automático seguindo `GITHUB_CPANEL_DEPLOY.md`
 
 ### Deploy no cPanel
