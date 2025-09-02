@@ -52,7 +52,7 @@ export const ChartConfig = ({
   };
 
   return (
-    <div className={`bg-white rounded-xl border overflow-hidden relative ${className}`}>
+    <div className={`bg-white dark:bg-[#1D2530] rounded-xl border overflow-hidden relative ${className}`}>
       <div className="p-4 border-b flex justify-between items-center">
         <div>
           {onTitleChange ? (
@@ -93,7 +93,7 @@ export const ChartConfig = ({
         {children}
         
         {showConfig && (
-          <div className="absolute inset-0 bg-white/90 backdrop-blur-sm p-4 flex flex-col animate-fade-in">
+          <div className="absolute inset-0 bg-white/90 dark:bg-[#1D2530]/90 backdrop-blur-sm p-4 flex flex-col animate-fade-in">
             <div className="flex justify-between items-center mb-4">
               <h4 className="font-medium">Configuration du graphique</h4>
               <button 

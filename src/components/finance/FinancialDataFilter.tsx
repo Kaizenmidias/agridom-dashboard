@@ -7,7 +7,7 @@ import { Calendar, Filter, RefreshCw, X } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { pt } from 'date-fns/locale';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 interface FinancialDataFilterProps {
@@ -137,9 +137,9 @@ const FinancialDataFilter: React.FC<FinancialDataFilterProps> = ({
         <div className="mt-2 md:mt-3 text-xs md:text-sm flex items-center">
           <Calendar className="h-3 w-3 mr-1 text-muted-foreground" />
           <span className="text-muted-foreground">
-            {format(dateRange.from, 'dd/MM/yyyy', { locale: fr })} 
-            {" au "} 
-            {format(dateRange.to, 'dd/MM/yyyy', { locale: fr })}
+            {format(dateRange.from, 'dd/MM/yyyy', { locale: pt })} 
+            {" a "} 
+            {format(dateRange.to, 'dd/MM/yyyy', { locale: pt })}
           </span>
         </div>
       )}

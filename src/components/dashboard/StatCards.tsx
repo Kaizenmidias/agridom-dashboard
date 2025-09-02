@@ -36,7 +36,7 @@ const StatCards: React.FC<StatCardsProps> = ({
 }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-6">
-      <div className="stat-card bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
+      <div className="stat-card bg-white dark:bg-[#1D2530] rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
         <div className="flex flex-row items-center justify-between">
           <div>
             <p className="text-gray-500 font-medium text-sm mb-1">Revenu mensuel</p>
@@ -63,7 +63,7 @@ const StatCards: React.FC<StatCardsProps> = ({
         </div>
       </div>
       
-      <div className="stat-card bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
+      <div className="stat-card bg-white dark:bg-[#1D2530] rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
         <div className="flex flex-row items-center justify-between">
           <div>
             <p className="text-gray-500 font-medium text-sm mb-1">Superficie cultivée</p>
@@ -89,7 +89,7 @@ const StatCards: React.FC<StatCardsProps> = ({
         </div>
       </div>
       
-      <div className="stat-card bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
+      <div className="stat-card bg-white dark:bg-[#1D2530] rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
         <div className="flex flex-row items-center justify-between">
           <div>
             <p className="text-gray-500 font-medium text-sm mb-1">Rendement moyen</p>

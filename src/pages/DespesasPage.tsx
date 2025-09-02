@@ -1,67 +1,85 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Plus, TrendingDown, TrendingUp, DollarSign, Calendar, Edit, Trash2 } from 'lucide-react';
+
+import { Plus, TrendingDown, TrendingUp, DollarSign, Calendar, Edit, Trash2, Loader2 } from 'lucide-react';
 import { NovaDespesaDialog } from '@/components/nova-despesa-dialog';
+import { EditarDespesaDialog } from '@/components/editar-despesa-dialog';
+import { EditableTable, Column } from '@/components/ui/editable-table';
+import { getExpenses, deleteExpense, updateExpense } from '@/api/crud';
+import { Expense } from '@/types/database';
+import { useToast } from '@/hooks/use-toast';
+import { calculateMonthlyAmount } from '@/utils/billing-calculations';
 
 const DespesasPage = () => {
-  const despesas = [
-    {
-      id: 1,
-      nome: "Licença Adobe Creative Suite",
-      valor: "R$ 180,00",
-      data: "2024-01-15",
-      tipo: "Recorrente",
-      status: "Pago"
-    },
-    {
-      id: 2,
-      nome: "Hospedagem de Sites - Hostgator",
-      valor: "R$ 25,90",
-      data: "2024-01-10",
-      tipo: "Mensal",
-      status: "Pago"
-    },
-    {
-      id: 3,
-      nome: "Domínio cliente-exemplo.com",
-      valor: "R$ 40,00",
-      data: "2024-01-08",
-      tipo: "Anual",
-      status: "Pendente"
-    },
-    {
-      id: 4,
-      nome: "Internet - Vivo Fibra",
-      valor: "R$ 120,00",
-      data: "2024-01-05",
-      tipo: "Mensal",
-      status: "Pago"
-    },
-    {
-      id: 5,
-      nome: "Material de Marketing",
-      valor: "R$ 350,00",
-      data: "2024-01-20",
-      tipo: "Eventual",
-      status: "Pago"
-    }
-  ];
+  const [despesas, setDespesas] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const { toast } = useToast();
 
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Pago': return 'bg-green-100 text-green-800';
-      case 'Pendente': return 'bg-yellow-100 text-yellow-800';
-      case 'Vencido': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const fetchDespesas = async () => {
+    try {
+      setLoading(true);
+      const data = await getExpenses();
+      setDespesas(data);
+    } catch (error) {
+      console.error('Erro ao carregar despesas:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar as despesas.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchDespesas();
+  }, []);
+
+  const handleDeleteExpense = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta despesa?')) {
+      return;
+    }
+
+    try {
+      await deleteExpense(id);
+      toast({
+        title: "Sucesso",
+        description: "Despesa excluída com sucesso.",
+      });
+      fetchDespesas(); // Recarregar a lista
+    } catch (error) {
+      console.error('Erro ao excluir despesa:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir a despesa.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditExpense = (expense: Expense) => {
+    setEditingExpense(expense);
+    setEditDialogOpen(true);
+  };
+
+
   const totalDespesas = despesas.reduce((acc, despesa) => {
-    return acc + parseFloat(despesa.valor.replace('R$ ', '').replace(',', '.'));
+    const monthlyAmount = calculateMonthlyAmount(
+      Number(despesa.amount) || 0,
+      despesa.billing_type || 'unica',
+      despesa.date,
+      new Date().getFullYear(),
+      new Date().getMonth() + 1
+    );
+    return acc + (Number(monthlyAmount) || 0);
   }, 0);
+
+  const despesasPagas = despesas.filter(d => d.status === 'paid').length;
+  const despesasPendentes = despesas.filter(d => d.status === 'pending').length;
 
   return (
     <div className="p-6 space-y-6">
@@ -70,7 +88,7 @@ const DespesasPage = () => {
           <h1 className="text-3xl font-bold text-foreground">Despesas</h1>
           <p className="text-muted-foreground">Controle e monitore todas as despesas da empresa</p>
         </div>
-        <NovaDespesaDialog>
+        <NovaDespesaDialog onExpenseCreated={fetchDespesas}>
           <Button className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Nova Despesa
@@ -79,7 +97,7 @@ const DespesasPage = () => {
       </div>
 
       {/* Resumo Financeiro */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -88,20 +106,7 @@ const DespesasPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total do Mês</p>
-                <p className="text-xl font-bold text-red-600">R$ {totalDespesas.toFixed(2).replace('.', ',')}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <Calendar className="h-4 w-4 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Pendentes</p>
-                <p className="text-xl font-bold">1</p>
+                <p className="text-xl font-bold text-red-600">{totalDespesas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
               </div>
             </div>
           </CardContent>
@@ -114,92 +119,69 @@ const DespesasPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Pagas</p>
-                <p className="text-xl font-bold">4</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <DollarSign className="h-4 w-4 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Economia</p>
-                <p className="text-xl font-bold text-green-600">-5%</p>
+                <p className="text-xl font-bold">{despesasPagas}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lista de Despesas */}
-        <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>Despesas Recentes</CardTitle>
-              <CardDescription>Últimas despesas registradas no sistema</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {despesas.map((despesa) => (
-                  <div key={despesa.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50">
-                    <div className="flex items-center space-x-4">
-                      <div className="p-2 bg-muted rounded-lg">
-                        <DollarSign className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{despesa.nome}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(despesa.data).toLocaleDateString('pt-BR')}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-right space-x-2">
-                        <Badge className={getStatusColor(despesa.status)}>
-                          {despesa.status}
-                        </Badge>
-                        <p className="font-semibold">{despesa.valor}</p>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="outline">
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Ações Rápidas */}
-        <div>
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle>Ações Rápidas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full">
-                Exportar Relatório
-              </Button>
-              <Button variant="outline" className="w-full">
-                Configurar Alertas
-              </Button>
-              <Button variant="outline" className="w-full">
-                Ver Estatísticas
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      {/* Tabela de Despesas */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Lista de Despesas</CardTitle>
+          <CardDescription>Todas as despesas registradas no sistema</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span className="ml-2">Carregando despesas...</span>
+            </div>
+          ) : (
+            <EditableTable
+              data={despesas.map(despesa => ({
+                ...despesa,
+                date: new Date(despesa.date).toLocaleDateString('pt-BR'),
+                amount: `R$ ${despesa.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                billing_type: despesa.billing_type === 'unica' ? 'Única' : 
+                             despesa.billing_type === 'semanal' ? 'Semanal' : 
+                             despesa.billing_type === 'mensal' ? 'Mensal' : 'Anual'
+              }))}
+              columns={[
+                { id: 'description', header: 'Descrição', accessorKey: 'description', isEditable: false },
+                { id: 'amount', header: 'Valor', accessorKey: 'amount', isEditable: false },
+                { id: 'category', header: 'Categoria', accessorKey: 'category', isEditable: false },
+                { id: 'billing_type', header: 'Tipo de Cobrança', accessorKey: 'billing_type', isEditable: false },
+                { id: 'date', header: 'Data', accessorKey: 'date', isEditable: false }
+              ]}
+              onUpdate={() => {}}
+              onDelete={(rowIndex) => {
+                const despesa = despesas[rowIndex];
+                handleDeleteExpense(despesa.id);
+              }}
+              actions={[
+                {
+                  icon: <Edit className="h-4 w-4" />,
+                  label: 'Editar',
+                  onClick: (rowIndex) => {
+                    const despesa = despesas[rowIndex];
+                    handleEditExpense(despesa);
+                  }
+                }
+              ]}
+              className="mt-4"
+            />
+          )}
+        </CardContent>
+      </Card>
+      
+      <EditarDespesaDialog
+        expense={editingExpense}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onExpenseUpdated={fetchDespesas}
+      />
     </div>
   );
 };

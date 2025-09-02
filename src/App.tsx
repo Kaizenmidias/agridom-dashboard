@@ -7,24 +7,37 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
 import ProjetosPage from "./pages/ProjetosPage";
+import BriefingsPage from "./pages/BriefingsPage";
+import { CodesPage } from "./pages/CodesPage";
 import DespesasPage from "./pages/DespesasPage";
 import CRMPage from "./pages/CRMPage";
 import UsuariosPage from "./pages/UsuariosPage";
+import LoginPage from "./pages/LoginPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
+import ProtectedRoute from "./components/ProtectedRoute";
 import { useEffect } from "react";
 import { CRMProvider } from "./contexts/CRMContext";
 import { StatisticsProvider } from "./contexts/StatisticsContext";
 import { AppSettingsProvider } from "./contexts/AppSettingsContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+
 import { trackPageView } from "./utils/analytics";
 
 // Define routes configuration
 const routes = [
-  { path: "/", element: <Index /> },
-  { path: "/projetos", element: <ProjetosPage /> },
-  { path: "/despesas", element: <DespesasPage /> },
-  { path: "/crm", element: <CRMPage /> },
-  { path: "/usuarios", element: <UsuariosPage /> },
-  { path: "*", element: <NotFound /> }
+  { path: "/login", element: <LoginPage />, protected: false },
+  { path: "/forgot-password", element: <ForgotPasswordPage />, protected: false },
+  { path: "/reset-password", element: <ResetPasswordPage />, protected: false },
+  { path: "/", element: <Index />, protected: true, permission: "can_access_dashboard" },
+  { path: "/projetos", element: <ProjetosPage />, protected: true, permission: "can_access_projects" },
+  { path: "/briefings", element: <BriefingsPage />, protected: true, permission: "can_access_briefings" },
+  { path: "/codigos", element: <CodesPage />, protected: true, permission: "can_access_codes" },
+  { path: "/despesas", element: <DespesasPage />, protected: true, permission: "can_access_expenses" },
+  { path: "/crm", element: <CRMPage />, protected: true, permission: "can_access_crm" },
+  { path: "/usuarios", element: <UsuariosPage />, protected: true, permission: "can_access_users" },
+  { path: "*", element: <NotFound />, protected: false }
 ];
 
 // Create query client with enhanced configuration
@@ -56,42 +69,91 @@ const RouterChangeHandler = () => {
   return null;
 };
 
+// Layout component that conditionally shows sidebar
+const AppLayout = () => {
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+  
+  // Don't show sidebar on login page or when not authenticated
+  const showSidebar = isAuthenticated && location.pathname !== '/login';
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+  
+  if (!showSidebar) {
+    return (
+      <div className="min-h-screen w-full">
+        <RouterChangeHandler />
+        <Routes>
+          {routes.map((route) => (
+            <Route 
+              key={route.path} 
+              path={route.path} 
+              element={route.protected ? (
+                <ProtectedRoute>{route.element}</ProtectedRoute>
+              ) : (
+                route.element
+              )} 
+            />
+          ))}
+        </Routes>
+      </div>
+    );
+  }
+  
+  return (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <AppSidebar />
+        <main className="flex-1">
+          <header className="h-12 flex items-center border-b px-4">
+            <SidebarTrigger />
+          </header>
+          <div className="flex-1">
+            <RouterChangeHandler />
+            <Routes>
+              {routes.map((route) => (
+                <Route 
+                  key={route.path} 
+                  path={route.path} 
+                  element={route.protected ? (
+                    <ProtectedRoute requiredPermission={route.permission}>{route.element}</ProtectedRoute>
+                  ) : (
+                    route.element
+                  )} 
+                />
+              ))}
+            </Routes>
+          </div>
+        </main>
+      </div>
+    </SidebarProvider>
+  );
+};
+
 // Application main component with sidebar layout
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppSettingsProvider>
-        <CRMProvider>
-          <BrowserRouter>
-            <TooltipProvider>
-              <SidebarProvider>
-                <div className="min-h-screen flex w-full">
-                  <AppSidebar />
-                  <main className="flex-1">
-                    <header className="h-12 flex items-center border-b px-4">
-                      <SidebarTrigger />
-                      
-                    </header>
-                    <div className="flex-1">
-                      <RouterChangeHandler />
-                      <Routes>
-                        {routes.map((route) => (
-                          <Route 
-                            key={route.path} 
-                            path={route.path} 
-                            element={route.element} 
-                          />
-                        ))}
-                      </Routes>
-                    </div>
-                  </main>
-                </div>
-              </SidebarProvider>
-              <Toaster />
-            </TooltipProvider>
-          </BrowserRouter>
-        </CRMProvider>
-      </AppSettingsProvider>
+      <AuthProvider>
+        <AppSettingsProvider>
+          <CRMProvider>
+            <StatisticsProvider>
+              <BrowserRouter>
+                <TooltipProvider>
+                  <AppLayout />
+                  <Toaster />
+                </TooltipProvider>
+              </BrowserRouter>
+            </StatisticsProvider>
+          </CRMProvider>
+        </AppSettingsProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 };

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Frontend Auth</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .refresh-btn {
+            background: #28a745;
+        }
+        .refresh-btn:hover {
+            background: #1e7e34;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug Frontend Auth</h1>
+        
+        <div class="section info">
+            <h3>📋 Informações do LocalStorage</h3>
+            <div id="localStorage-info"></div>
+            <button onclick="checkLocalStorage()">🔄 Verificar LocalStorage</button>
+        </div>
+        
+        <div class="section info">
+            <h3>🔐 Teste de Verificação de Token</h3>
+            <div id="token-verify-info"></div>
+            <button onclick="verifyToken()">🔍 Verificar Token</button>
+        </div>
+        
+        <div class="section info">
+            <h3>👥 Teste de Busca de Usuários</h3>
+            <div id="users-info"></div>
+            <button onclick="fetchUsers()">👥 Buscar Usuários</button>
+        </div>
+        
+        <div class="section info">
+            <h3>🧹 Limpeza e Refresh</h3>
+            <button onclick="clearLocalStorage()">🗑️ Limpar LocalStorage</button>
+            <button onclick="refreshAuth()" class="refresh-btn">🔄 Refresh Auth</button>
+        </div>
+        
+        <div class="section warning">
+            <h3>⚠️ Instruções</h3>
+            <p>1. Primeiro, faça login na aplicação principal</p>
+            <p>2. Depois volte aqui e clique em "Verificar LocalStorage"</p>
+            <p>3. Verifique se o token está válido</p>
+            <p>4. Teste a busca de usuários</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        
+        function checkLocalStorage() {
+            const container = document.getElementById('localStorage-info');
+            
+            try {
+                const token = localStorage.getItem('token');
+                const user = localStorage.getItem('user');
+                
+                let html = '<h4>🔍 Dados do LocalStorage:</h4>';
+                
+                if (token) {
+                    html += `<p><strong>Token:</strong> ${token.substring(0, 50)}...</p>`;
+                } else {
+                    html += '<p><strong>Token:</strong> ❌ Não encontrado</p>';
+                }
+                
+                if (user) {
+                    try {
+                        const userData = JSON.parse(user);
+                        html += '<p><strong>Dados do Usuário:</strong></p>';
+                        html += `<pre>${JSON.stringify(userData, null, 2)}</pre>`;
+                        
+                        // Verificar permissões específicas
+                        html += '<h4>🔐 Verificação de Permissões:</h4>';
+                        html += `<p>can_access_users: ${userData.can_access_users ? '✅ SIM' : '❌ NÃO'}</p>`;
+                        html += `<p>position: ${userData.position}</p>`;
+                        html += `<p>isAdmin (position === 'Administrador'): ${userData.position === 'Administrador' ? '✅ SIM' : '❌ NÃO'}</p>`;
+                        
+                    } catch (e) {
+                        html += `<p><strong>Dados do Usuário:</strong> ❌ Erro ao parsear: ${e.message}</p>`;
+                    }
+                } else {
+                    html += '<p><strong>Dados do Usuário:</strong> ❌ Não encontrado</p>';
+                }
+                
+                container.innerHTML = html;
+                container.className = 'section ' + (token && user ? 'success' : 'error');
+                
+            } catch (error) {
+                container.innerHTML = `<p>❌ Erro: ${error.message}</p>`;
+                container.className = 'section error';
+            }
+        }
+        
+        async function verifyToken() {
+            const container = document.getElementById('token-verify-info');
+            
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    container.innerHTML = '<p>❌ Token não encontrado no localStorage</p>';
+                    container.className = 'section error';
+                    return;
+                }
+                
+                const response = await fetch(`${API_BASE}/auth/verify`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const userData = await response.json();
+                    let html = '<h4>✅ Token válido!</h4>';
+                    html += '<p><strong>Dados retornados pela API:</strong></p>';
+                    html += `<pre>${JSON.stringify(userData, null, 2)}</pre>`;
+                    
+                    // Verificar se os dados batem com o localStorage
+                    const localUser = JSON.parse(localStorage.getItem('user') || '{}');
+                    html += '<h4>🔄 Comparação com LocalStorage:</h4>';
+                    html += `<p>can_access_users - API: ${userData.can_access_users}, Local: ${localUser.can_access_users} ${userData.can_access_users === localUser.can_access_users ? '✅' : '❌'}</p>`;
+                    html += `<p>position - API: ${userData.position}, Local: ${localUser.position} ${userData.position === localUser.position ? '✅' : '❌'}</p>`;
+                    
+                    container.innerHTML = html;
+                    container.className = 'section success';
+                } else {
+                    const errorData = await response.json();
+                    container.innerHTML = `<p>❌ Token inválido: ${errorData.message || response.statusText}</p>`;
+                    container.className = 'section error';
+                }
+                
+            } catch (error) {
+                container.innerHTML = `<p>❌ Erro na verificação: ${error.message}</p>`;
+                container.className = 'section error';
+            }
+        }
+        
+        async function fetchUsers() {
+            const container = document.getElementById('users-info');
+            
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    container.innerHTML = '<p>❌ Token não encontrado no localStorage</p>';
+                    container.className = 'section error';
+                    return;
+                }
+                
+                const response = await fetch(`${API_BASE}/users`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const users = await response.json();
+                    let html = `<h4>✅ Usuários encontrados: ${users.length}</h4>`;
+                    
+                    users.forEach((user, index) => {
+                        html += `<div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">`;
+                        html += `<strong>${user.full_name}</strong> (${user.email})<br>`;
+                        html += `Posição: ${user.position}<br>`;
+                        html += `Ativo: ${user.is_active ? 'Sim' : 'Não'}<br>`;
+                        html += `Permissões: Dashboard(${user.can_access_dashboard}), Projetos(${user.can_access_projects}), Briefings(${user.can_access_briefings}), Códigos(${user.can_access_codes}), Despesas(${user.can_access_expenses}), CRM(${user.can_access_crm}), Usuários(${user.can_access_users})`;
+                        html += `</div>`;
+                    });
+                    
+                    container.innerHTML = html;
+                    container.className = 'section success';
+                } else {
+                    const errorData = await response.json();
+                    container.innerHTML = `<p>❌ Erro ao buscar usuários: ${errorData.message || response.statusText}</p>`;
+                    container.className = 'section error';
+                }
+                
+            } catch (error) {
+                container.innerHTML = `<p>❌ Erro na busca: ${error.message}</p>`;
+                container.className = 'section error';
+            }
+        }
+        
+        function clearLocalStorage() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            alert('LocalStorage limpo! Faça login novamente na aplicação principal.');
+            checkLocalStorage();
+        }
+        
+        async function refreshAuth() {
+            await verifyToken();
+            
+            // Atualizar localStorage com dados mais recentes
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    const response = await fetch(`${API_BASE}/auth/verify`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const userData = await response.json();
+                        localStorage.setItem('user', JSON.stringify(userData));
+                        alert('Dados do usuário atualizados no localStorage!');
+                        checkLocalStorage();
+                    }
+                } catch (error) {
+                    console.error('Erro ao atualizar dados:', error);
+                }
+            }
+        }
+        
+        // Verificar automaticamente ao carregar a página
+        window.onload = function() {
+            checkLocalStorage();
+        };
+    </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,24 +9,33 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
+import { createExpense, getProjects } from '@/api/crud';
+import { Loader2 } from 'lucide-react';
+import { Project } from '@/types/database';
+import { formatCurrency } from '@/lib/utils';
+import { getDayOfWeekFromDate } from '@/utils/billing-calculations';
 
 const despesaSchema = z.object({
-  nome: z.string().min(1, 'Nome é obrigatório'),
-  valor: z.string().min(1, 'Valor é obrigatório'),
-  data: z.string().min(1, 'Data é obrigatória'),
-  tipoCobranca: z.string().min(1, 'Tipo de cobrança é obrigatório'),
-  observacoes: z.string().optional(),
+  description: z.string().min(1, 'Despesa é obrigatória'),
+  amount: z.string().min(1, 'Valor é obrigatório'),
+  date: z.string().min(1, 'Data é obrigatória'),
+  billing_type: z.enum(['unica', 'semanal', 'mensal', 'anual']).default('unica'),
+  notes: z.string().optional(),
 });
 
 type DespesaFormData = z.infer<typeof despesaSchema>;
 
 interface NovaDespesaDialogProps {
   children: React.ReactNode;
+  onExpenseCreated?: () => void;
 }
 
-export function NovaDespesaDialog({ children }: NovaDespesaDialogProps) {
+export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDialogProps) {
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
 
   const {
     register,
@@ -37,7 +46,34 @@ export function NovaDespesaDialog({ children }: NovaDespesaDialogProps) {
     formState: { errors },
   } = useForm<DespesaFormData>({
     resolver: zodResolver(despesaSchema),
+    defaultValues: {
+      date: new Date().toISOString().split('T')[0],
+    }
   });
+
+  // Carregar projetos quando o componente montar
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setLoadingProjects(true);
+        const projectsList = await getProjects();
+        setProjects(projectsList);
+      } catch (error) {
+        console.error('Erro ao carregar projetos:', error);
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar os projetos.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    if (open) {
+      loadProjects();
+    }
+  }, [open, toast]);
 
   const formatCurrency = (value: string) => {
     const numericValue = value.replace(/\D/g, '');
@@ -54,19 +90,66 @@ export function NovaDespesaDialog({ children }: NovaDespesaDialogProps) {
 
   const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatCurrency(e.target.value);
-    setValue('valor', formatted);
+    setValue('amount', formatted);
   };
 
-  const onSubmit = (data: DespesaFormData) => {
-    console.log('Nova despesa:', data);
+  const onSubmit = async (data: DespesaFormData) => {
+    setIsSubmitting(true);
     
-    toast({
-      title: "Despesa cadastrada!",
-      description: `A despesa "${data.nome}" foi cadastrada com sucesso.`,
-    });
+    try {
+      // Verificar se há projetos disponíveis
+      if (projects.length === 0) {
+        toast({
+          title: "Erro",
+          description: "Nenhum projeto encontrado. Crie um projeto primeiro.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    reset();
-    setOpen(false);
+      // Converter valor de string para número
+      const amount = parseFloat(data.amount.replace(/[^\d,]/g, '').replace(',', '.'));
+      
+      // Calcular recurring_day_of_week para despesas semanais
+      const recurringDayOfWeek = data.billing_type === 'semanal' 
+        ? getDayOfWeekFromDate(data.date) 
+        : null;
+      
+      await createExpense({
+        project_id: projects[0].id, // Usar o primeiro projeto disponível
+        description: data.description,
+        amount,
+        date: data.date,
+        category: 'Geral',
+        notes: data.notes || '',
+        billing_type: data.billing_type,
+        is_recurring: data.billing_type !== 'unica',
+        recurring_day_of_week: recurringDayOfWeek,
+        status: 'paid'
+      });
+      
+      toast({
+        title: "Despesa cadastrada!",
+        description: `A despesa "${data.description}" foi cadastrada com sucesso.`,
+      });
+
+      reset();
+      setOpen(false);
+      
+      // Chamar callback para atualizar a lista
+      if (onExpenseCreated) {
+        onExpenseCreated();
+      }
+    } catch (error) {
+      console.error('Erro ao cadastrar despesa:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível cadastrar a despesa. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -85,83 +168,88 @@ export function NovaDespesaDialog({ children }: NovaDespesaDialogProps) {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="nome">Nome *</Label>
+              <Label htmlFor="description">Despesa *</Label>
               <Input
-                id="nome"
+                id="description"
                 placeholder="Ex: Licença Adobe Creative Suite"
-                {...register('nome')}
+                {...register('description')}
               />
-              {errors.nome && (
-                <p className="text-sm text-destructive">{errors.nome.message}</p>
+              {errors.description && (
+                <p className="text-sm text-destructive">{errors.description.message}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="valor">Valor *</Label>
+              <Label htmlFor="amount">Valor *</Label>
               <Input
-                id="valor"
+                id="amount"
                 placeholder="R$ 0,00"
-                {...register('valor')}
+                {...register('amount')}
                 onChange={handleValorChange}
               />
-              {errors.valor && (
-                <p className="text-sm text-destructive">{errors.valor.message}</p>
+              {errors.amount && (
+                <p className="text-sm text-destructive">{errors.amount.message}</p>
               )}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="data">Data *</Label>
+              <Label htmlFor="date">Data *</Label>
               <Input
-                id="data"
+                id="date"
                 type="date"
-                {...register('data')}
+                {...register('date')}
               />
-              {errors.data && (
-                <p className="text-sm text-destructive">{errors.data.message}</p>
+              {errors.date && (
+                <p className="text-sm text-destructive">{errors.date.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="billing_type">Tipo de Cobrança *</Label>
+              <Select onValueChange={(value) => setValue('billing_type', value as 'unica' | 'semanal' | 'mensal' | 'anual')} defaultValue="unica">
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unica">Única</SelectItem>
+                  <SelectItem value="semanal">Semanal</SelectItem>
+                  <SelectItem value="mensal">Mensal</SelectItem>
+                  <SelectItem value="anual">Anual</SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.billing_type && (
+                <p className="text-sm text-destructive">{errors.billing_type.message}</p>
               )}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="tipoCobranca">Tipo de Cobrança *</Label>
-            <Select onValueChange={(value) => setValue('tipoCobranca', value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o tipo de cobrança" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Única">Única</SelectItem>
-                <SelectItem value="Semanal">Semanal</SelectItem>
-                <SelectItem value="Quinzenal">Quinzenal</SelectItem>
-                <SelectItem value="Mensal">Mensal</SelectItem>
-                <SelectItem value="Bimestral">Bimestral</SelectItem>
-                <SelectItem value="Trimestral">Trimestral</SelectItem>
-                <SelectItem value="Semestral">Semestral</SelectItem>
-                <SelectItem value="Anual">Anual</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.tipoCobranca && (
-              <p className="text-sm text-destructive">{errors.tipoCobranca.message}</p>
-            )}
-          </div>
+
 
           <div className="space-y-2">
-            <Label htmlFor="observacoes">Observações</Label>
+            <Label htmlFor="notes">Observações</Label>
             <Textarea
-              id="observacoes"
+              id="notes"
               placeholder="Observações adicionais sobre a despesa..."
               rows={3}
-              {...register('observacoes')}
+              {...register('notes')}
             />
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>
               Cancelar
             </Button>
-            <Button type="submit">
-              Cadastrar Despesa
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cadastrando...
+                </>
+              ) : (
+                'Cadastrar Despesa'
+              )}
             </Button>
           </div>
         </form>

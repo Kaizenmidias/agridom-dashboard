@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Frontend Auth</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .danger-btn {
+            background: #dc3545;
+        }
+        .danger-btn:hover {
+            background: #c82333;
+        }
+        .success-btn {
+            background: #28a745;
+        }
+        .success-btn:hover {
+            background: #1e7e34;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix Frontend Auth</h1>
+        
+        <div class="section warning">
+            <h3>⚠️ Problema Identificado</h3>
+            <p>O backend está funcionando perfeitamente, mas o frontend não está mostrando os botões de edição de usuários.</p>
+            <p>Isso geralmente acontece por:</p>
+            <ul>
+                <li>Dados desatualizados no localStorage</li>
+                <li>Cache do navegador</li>
+                <li>Contexto de autenticação com dados antigos</li>
+            </ul>
+        </div>
+        
+        <div class="section info">
+            <h3>🔍 Status Atual</h3>
+            <div id="current-status"></div>
+            <button onclick="checkCurrentStatus()">🔄 Verificar Status</button>
+        </div>
+        
+        <div class="section info">
+            <h3>🧹 Soluções</h3>
+            
+            <div class="step">
+                <h4>Passo 1: Limpar Cache do Navegador</h4>
+                <p>Pressione <strong>Ctrl + Shift + R</strong> para recarregar sem cache</p>
+                <button onclick="hardRefresh()">🔄 Hard Refresh</button>
+            </div>
+            
+            <div class="step">
+                <h4>Passo 2: Limpar LocalStorage</h4>
+                <p>Remove todos os dados salvos localmente</p>
+                <button onclick="clearLocalStorage()" class="danger-btn">🗑️ Limpar LocalStorage</button>
+            </div>
+            
+            <div class="step">
+                <h4>Passo 3: Fazer Login Novamente</h4>
+                <p>Após limpar o localStorage, faça login novamente na aplicação</p>
+                <button onclick="openMainApp()" class="success-btn">🚀 Abrir Aplicação</button>
+            </div>
+            
+            <div class="step">
+                <h4>Passo 4: Forçar Atualização dos Dados</h4>
+                <p>Se ainda não funcionar, force uma atualização dos dados do usuário</p>
+                <button onclick="forceRefreshUserData()">🔄 Forçar Refresh</button>
+            </div>
+        </div>
+        
+        <div class="section info">
+            <h3>📋 Log de Ações</h3>
+            <div id="action-log"></div>
+        </div>
+        
+        <div class="section success">
+            <h3>✅ Verificação Final</h3>
+            <p>Após seguir os passos acima:</p>
+            <ol>
+                <li>Faça login como administrador</li>
+                <li>Vá para a página de Usuários</li>
+                <li>Verifique se os botões de editar (✏️) e excluir (🗑️) aparecem ao lado dos outros usuários</li>
+                <li>Teste editar as permissões de um usuário</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('action-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.margin = '5px 0';
+            logEntry.style.padding = '5px';
+            logEntry.style.borderRadius = '4px';
+            
+            switch(type) {
+                case 'success':
+                    logEntry.style.backgroundColor = '#d4edda';
+                    logEntry.style.color = '#155724';
+                    break;
+                case 'error':
+                    logEntry.style.backgroundColor = '#f8d7da';
+                    logEntry.style.color = '#721c24';
+                    break;
+                case 'warning':
+                    logEntry.style.backgroundColor = '#fff3cd';
+                    logEntry.style.color = '#856404';
+                    break;
+                default:
+                    logEntry.style.backgroundColor = '#d1ecf1';
+                    logEntry.style.color = '#0c5460';
+            }
+            
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function checkCurrentStatus() {
+            const container = document.getElementById('current-status');
+            
+            try {
+                const token = localStorage.getItem('token');
+                const user = localStorage.getItem('user');
+                
+                let html = '<h4>📊 Status Atual:</h4>';
+                
+                if (token) {
+                    html += `<p>✅ Token encontrado: ${token.substring(0, 30)}...</p>`;
+                } else {
+                    html += '<p>❌ Token não encontrado</p>';
+                }
+                
+                if (user) {
+                    try {
+                        const userData = JSON.parse(user);
+                        html += '<p>✅ Dados do usuário encontrados:</p>';
+                        html += `<ul>`;
+                        html += `<li>Nome: ${userData.full_name}</li>`;
+                        html += `<li>Email: ${userData.email}</li>`;
+                        html += `<li>Posição: ${userData.position}</li>`;
+                        html += `<li>can_access_users: ${userData.can_access_users}</li>`;
+                        html += `<li>isAdmin: ${userData.position === 'Administrador'}</li>`;
+                        html += `</ul>`;
+                        
+                        if (userData.position === 'Administrador' && userData.can_access_users) {
+                            html += '<p class="success">✅ Usuário deveria ver os botões de edição!</p>';
+                        } else {
+                            html += '<p class="error">❌ Usuário não tem permissões de administrador!</p>';
+                        }
+                        
+                    } catch (e) {
+                        html += `<p>❌ Erro ao parsear dados do usuário: ${e.message}</p>`;
+                    }
+                } else {
+                    html += '<p>❌ Dados do usuário não encontrados</p>';
+                }
+                
+                container.innerHTML = html;
+                log('Status verificado', 'info');
+                
+            } catch (error) {
+                container.innerHTML = `<p>❌ Erro: ${error.message}</p>`;
+                log(`Erro ao verificar status: ${error.message}`, 'error');
+            }
+        }
+        
+        function hardRefresh() {
+            log('Executando hard refresh...', 'info');
+            location.reload(true);
+        }
+        
+        function clearLocalStorage() {
+            try {
+                localStorage.clear();
+                log('LocalStorage limpo com sucesso!', 'success');
+                checkCurrentStatus();
+                alert('LocalStorage limpo! Agora faça login novamente na aplicação principal.');
+            } catch (error) {
+                log(`Erro ao limpar localStorage: ${error.message}`, 'error');
+            }
+        }
+        
+        function openMainApp() {
+            log('Abrindo aplicação principal...', 'info');
+            window.open('http://localhost:3000', '_blank');
+        }
+        
+        async function forceRefreshUserData() {
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    log('Token não encontrado. Faça login primeiro.', 'error');
+                    return;
+                }
+                
+                log('Forçando atualização dos dados do usuário...', 'info');
+                
+                const response = await fetch(`${API_BASE}/auth/verify`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const userData = await response.json();
+                    localStorage.setItem('user', JSON.stringify(userData));
+                    log('Dados do usuário atualizados com sucesso!', 'success');
+                    checkCurrentStatus();
+                    
+                    // Disparar evento customizado para notificar a aplicação
+                    window.dispatchEvent(new CustomEvent('userDataUpdated', { detail: userData }));
+                    
+                } else {
+                    const errorData = await response.json();
+                    log(`Erro ao atualizar dados: ${errorData.message}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`Erro na atualização: ${error.message}`, 'error');
+            }
+        }
+        
+        // Verificar status automaticamente ao carregar
+        window.onload = function() {
+            checkCurrentStatus();
+            log('Página de correção carregada', 'info');
+        };
+    </script>
+</body>
+</html>

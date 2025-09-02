@@ -29,63 +29,56 @@ import { format } from "date-fns"
 import { pt } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { formatCurrencyMask, parseCurrencyValue } from "@/utils/currency-mask"
-
-interface Projeto {
-  id: number;
-  nome: string;
-  cliente: string;
-  status: string;
-  prazo: string;
-  valor: string;
-  valorNumerico: number;
-  valorPago: number;
-  progresso: number;
-  tipo: string;
-}
+import { createProject, updateProject, Project } from "@/api/crud"
 
 interface NovoProjetoDialogProps {
   children: React.ReactNode;
-  projeto?: Projeto;
-  setProjetos?: React.Dispatch<React.SetStateAction<Projeto[]>>;
-  projetos?: Projeto[];
+  projeto?: Project;
+  onProjectChange?: () => void;
 }
 
-export function NovoProjetoDialog({ children, projeto, setProjetos, projetos }: NovoProjetoDialogProps) {
+export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoProjetoDialogProps) {
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
   const isEditing = !!projeto
   
+  // Função para formatar número para moeda
+  const formatCurrency = (value: number | null | undefined) => {
+    if (!value || typeof value !== 'number') return "";
+    return `R$ ${value.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+  };
+
   const [projetoForm, setProjetoForm] = useState({
-    nome: projeto?.nome || "",
-    cliente: projeto?.cliente || "",
-    tipo: projeto?.tipo || "",
-    descricao: "",
-    valor: projeto?.valorNumerico ? formatCurrencyMask((projeto.valorNumerico * 100).toString()) : "",
-    valorPago: projeto?.valorPago ? formatCurrencyMask((projeto.valorPago * 100).toString()) : "",
-    dataEntrega: projeto?.prazo ? new Date(projeto.prazo) : undefined as Date | undefined,
-    status: projeto?.status || "Em Andamento"
+    name: projeto?.name || "",
+    client: projeto?.client || "",
+    project_type: projeto?.project_type || "",
+    status: projeto?.status || "active",
+    description: projeto?.description || "",
+    project_value: formatCurrency(projeto?.project_value),
+    paid_value: formatCurrency(projeto?.paid_value),
+    delivery_date: projeto?.delivery_date || ""
   })
 
   const resetForm = () => {
     if (!isEditing) {
       setProjetoForm({
-        nome: "",
-        cliente: "",
-        tipo: "",
-        descricao: "",
-        valor: "",
-        valorPago: "",
-        dataEntrega: undefined,
-        status: "Em Andamento"
+        name: "",
+        client: "",
+        project_type: "",
+        status: "active",
+        description: "",
+        project_value: "",
+        paid_value: "",
+        delivery_date: ""
       })
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!projetoForm.nome || !projetoForm.cliente || !projetoForm.tipo || !projetoForm.valor || !projetoForm.dataEntrega) {
+    if (!projetoForm.name) {
       toast({
         title: "Erro",
         description: "Por favor, preencha todos os campos obrigatórios.",
@@ -94,48 +87,62 @@ export function NovoProjetoDialog({ children, projeto, setProjetos, projetos }: 
       return
     }
 
-    const valorNumerico = parseCurrencyValue(projetoForm.valor)
-    const valorPagoNumerico = parseCurrencyValue(projetoForm.valorPago)
+    setLoading(true)
+    
+    try {
+      // Função para converter valor com máscara para número
+        const convertCurrencyToNumber = (value: string) => {
+          if (!value) return null;
+          return parseFloat(value.replace(/[R$\s\.]/g, '').replace(',', '.'));
+        };
 
-    if (isEditing && setProjetos && projetos) {
-      // Editar projeto existente
-      const projetosAtualizados = projetos.map(p => 
-        p.id === projeto.id 
-          ? {
-              ...p,
-              nome: projetoForm.nome,
-              cliente: projetoForm.cliente,
-              tipo: projetoForm.tipo,
-              valor: valorNumerico.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-              valorNumerico,
-              valorPago: valorPagoNumerico,
-              prazo: projetoForm.dataEntrega!.toISOString().split('T')[0],
-              status: projetoForm.status
-            }
-          : p
-      )
-      setProjetos(projetosAtualizados)
+        const projectData = {
+          name: projetoForm.name,
+          client: projetoForm.client,
+          project_type: projetoForm.project_type,
+          status: projetoForm.status,
+          description: projetoForm.description,
+          project_value: convertCurrencyToNumber(projetoForm.project_value),
+          paid_value: convertCurrencyToNumber(projetoForm.paid_value),
+          delivery_date: projetoForm.delivery_date || null
+        }
+
+      if (isEditing && projeto) {
+        // Editar projeto existente
+        await updateProject(projeto.id, projectData)
+        toast({
+          title: "Projeto atualizado",
+          description: `O projeto "${projetoForm.name}" foi atualizado com sucesso.`,
+        })
+      } else {
+        // Criar novo projeto
+        await createProject(projectData)
+        toast({
+          title: "Projeto criado",
+          description: `O projeto "${projetoForm.name}" foi criado com sucesso.`,
+        })
+      }
+
+      setOpen(false)
+      resetForm()
       
+      // Notificar o componente pai para recarregar os dados
+      if (onProjectChange) {
+        onProjectChange()
+      }
+    } catch (error) {
+      console.error('Erro ao salvar projeto:', error)
       toast({
-        title: "Projeto atualizado",
-        description: `O projeto "${projetoForm.nome}" foi atualizado com sucesso.`,
+        title: "Erro",
+        description: "Ocorreu um erro ao salvar o projeto. Tente novamente.",
+        variant: "destructive",
       })
-    } else {
-      // Criar novo projeto
-      toast({
-        title: "Projeto criado",
-        description: `O projeto "${projetoForm.nome}" foi criado com sucesso.`,
-      })
+    } finally {
+      setLoading(false)
     }
-
-    setOpen(false)
-    resetForm()
   }
 
-  const handleValueChange = (field: 'valor' | 'valorPago', value: string) => {
-    const formatted = formatCurrencyMask(value)
-    setProjetoForm(prev => ({ ...prev, [field]: formatted }))
-  }
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -153,39 +160,44 @@ export function NovoProjetoDialog({ children, projeto, setProjetos, projetos }: 
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="nome">Nome do Projeto *</Label>
+              <Label htmlFor="name">Nome do Projeto *</Label>
               <Input
-                id="nome"
-                value={projetoForm.nome}
-                onChange={(e) => setProjetoForm(prev => ({ ...prev, nome: e.target.value }))}
+                id="name"
+                value={projetoForm.name}
+                onChange={(e) => setProjetoForm(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Digite o nome do projeto"
+                disabled={loading}
+                required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cliente">Cliente *</Label>
+              <Label htmlFor="client">Cliente</Label>
               <Input
-                id="cliente"
-                value={projetoForm.cliente}
-                onChange={(e) => setProjetoForm(prev => ({ ...prev, cliente: e.target.value }))}
+                id="client"
+                value={projetoForm.client}
+                onChange={(e) => setProjetoForm(prev => ({ ...prev, client: e.target.value }))}
                 placeholder="Nome do cliente"
+                disabled={loading}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="tipo">Tipo de Projeto *</Label>
+              <Label htmlFor="project_type">Tipo de Projeto</Label>
               <Select 
-                value={projetoForm.tipo} 
-                onValueChange={(value) => setProjetoForm(prev => ({ ...prev, tipo: value }))}
+                value={projetoForm.project_type} 
+                onValueChange={(value) => setProjetoForm(prev => ({ ...prev, project_type: value }))}
+                disabled={loading}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Website Institucional">Website Institucional</SelectItem>
+                  <SelectItem value="Site institucional">Site institucional</SelectItem>
                   <SelectItem value="E-commerce">E-commerce</SelectItem>
                   <SelectItem value="Landing Page">Landing Page</SelectItem>
+                  <SelectItem value="Outro">Outro</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -194,87 +206,90 @@ export function NovoProjetoDialog({ children, projeto, setProjetos, projetos }: 
               <Select 
                 value={projetoForm.status} 
                 onValueChange={(value) => setProjetoForm(prev => ({ ...prev, status: value }))}
+                disabled={loading}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione o status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Em Andamento">Em Andamento</SelectItem>
-                  <SelectItem value="Finalizado">Finalizado</SelectItem>
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="completed">Concluído</SelectItem>
+                  <SelectItem value="paused">Pausado</SelectItem>
+                  <SelectItem value="cancelled">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="descricao">Descrição</Label>
+            <Label htmlFor="description">Descrição</Label>
             <Textarea
-              id="descricao"
-              value={projetoForm.descricao}
-              onChange={(e) => setProjetoForm(prev => ({ ...prev, descricao: e.target.value }))}
+              id="description"
+              value={projetoForm.description}
+              onChange={(e) => setProjetoForm(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Descreva o projeto..."
+              disabled={loading}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="valor">Valor do Projeto *</Label>
-              <Input
-                id="valor"
-                value={projetoForm.valor}
-                onChange={(e) => handleValueChange('valor', e.target.value)}
-                placeholder="0,00"
-                type="text"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="valorPago">Valor Pago</Label>
-              <Input
-                id="valorPago"
-                value={projetoForm.valorPago}
-                onChange={(e) => handleValueChange('valorPago', e.target.value)}
-                placeholder="0,00"
-                type="text"
-              />
-            </div>
-          </div>
+             <div className="space-y-2">
+               <Label htmlFor="project_value">Valor do Projeto</Label>
+               <Input
+                 id="project_value"
+                 value={projetoForm.project_value}
+                 onChange={(e) => {
+                   let value = e.target.value.replace(/\D/g, '');
+                   if (value) {
+                     value = (parseInt(value) / 100).toFixed(2);
+                     value = value.replace('.', ',');
+                     value = value.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                     value = 'R$ ' + value;
+                   }
+                   setProjetoForm(prev => ({ ...prev, project_value: value }));
+                 }}
+                 placeholder="R$ 0,00"
+                 disabled={loading}
+               />
+             </div>
+             <div className="space-y-2">
+               <Label htmlFor="paid_value">Valor Pago</Label>
+               <Input
+                 id="paid_value"
+                 value={projetoForm.paid_value}
+                 onChange={(e) => {
+                   let value = e.target.value.replace(/\D/g, '');
+                   if (value) {
+                     value = (parseInt(value) / 100).toFixed(2);
+                     value = value.replace('.', ',');
+                     value = value.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                     value = 'R$ ' + value;
+                   }
+                   setProjetoForm(prev => ({ ...prev, paid_value: value }));
+                 }}
+                 placeholder="R$ 0,00"
+                 disabled={loading}
+               />
+             </div>
+           </div>
 
           <div className="space-y-2">
-            <Label>Data de Entrega *</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !projetoForm.dataEntrega && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon />
-                  {projetoForm.dataEntrega ? format(projetoForm.dataEntrega, "dd 'de' MMMM 'de' yyyy", { locale: pt }) : <span>Selecione uma data</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={projetoForm.dataEntrega}
-                  onSelect={(date) => setProjetoForm(prev => ({ ...prev, dataEntrega: date }))}
-                  disabled={(date) =>
-                    date < new Date()
-                  }
-                  initialFocus
-                  className={cn("p-3 pointer-events-auto")}
-                />
-              </PopoverContent>
-            </Popover>
+            <Label htmlFor="delivery_date">Data de Entrega</Label>
+            <Input
+              id="delivery_date"
+              type="date"
+              value={projetoForm.delivery_date}
+              onChange={(e) => setProjetoForm(prev => ({ ...prev, delivery_date: e.target.value }))}
+              disabled={loading}
+            />
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit" className="w-full">
-              {isEditing ? 'Atualizar Projeto' : 'Criar Projeto'}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Salvando...' : (isEditing ? 'Atualizar Projeto' : 'Criar Projeto')}
             </Button>
           </div>
         </form>

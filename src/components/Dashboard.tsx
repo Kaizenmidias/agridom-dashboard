@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -28,6 +28,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select } from './ui/select';
 import PageHeader from './layout/PageHeader';
+import { getDashboardStats, DashboardStats } from '../api/crud';
 
 // Sample data for charts - Adapté pour la Guadeloupe
 const revenueData = [
@@ -87,17 +88,20 @@ const initialWeatherAlerts = [
 
 const Dashboard = () => {
   // State for editable content
-  const [title, setTitle] = useState('Bonjour, Agriculteur Guadeloupéen');
-  const [description, setDescription] = useState('Voici un aperçu de votre exploitation agricole en Guadeloupe');
-  const [currentMonth, setCurrentMonth] = useState('Août 2023');
+  const [title, setTitle] = useState('Dashboard de Projetos');
+  const [description, setDescription] = useState('Visão geral dos seus projetos e despesas');
+  const [currentMonth, setCurrentMonth] = useState('Agosto 2024');
   
-  // Stats cards
-  const [monthlyRevenue, setMonthlyRevenue] = useState(15450);
-  const [revenueGrowth, setRevenueGrowth] = useState(8.5);
-  const [cultivatedArea, setCultivatedArea] = useState(35);
-  const [parcelsCount, setParcelsCount] = useState(5);
-  const [averageYield, setAverageYield] = useState(75);
-  const [yieldGrowth, setYieldGrowth] = useState(5.2);
+  // Dashboard stats from backend
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Stats cards (will be populated from backend data)
+  const [monthlyRevenue, setMonthlyRevenue] = useState(0);
+
+  const [activeProjects, setActiveProjects] = useState(0);
+  const [completedProjects, setCompletedProjects] = useState(0);
+  const [totalExpenses, setTotalExpenses] = useState(0);
   const [alertsCount, setAlertsCount] = useState(3);
   
   // Tasks and alerts
@@ -119,6 +123,36 @@ const Dashboard = () => {
   // Task editing state
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editedTaskTitle, setEditedTaskTitle] = useState('');
+  
+  // Load dashboard data from backend
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        const stats = await getDashboardStats();
+        setDashboardStats(stats);
+        
+        // Update state with real data - ensure proper number conversion
+        const revenue = parseFloat(String(stats.projects.total_paid_value || 0));
+        const expenses = parseFloat(String(stats.expenses.total_expenses_amount || 0));
+        
+        setMonthlyRevenue(revenue);
+        setActiveProjects(Number(stats.projects.active_projects) || 0);
+        setCompletedProjects(Number(stats.projects.completed_projects) || 0);
+        setTotalExpenses(expenses);
+        
+
+        
+      } catch (error) {
+        console.error('Erro ao carregar dados do dashboard:', error);
+        toast.error('Erro ao carregar dados do dashboard');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadDashboardData();
+  }, []);
   
   // Handle changes
   const handleTitleChange = (value: string | number) => {
@@ -142,10 +176,7 @@ const Dashboard = () => {
     toast.success('Revenu mensuel mis à jour');
   };
   
-  const handleRevenueGrowthChange = (value: string | number) => {
-    setRevenueGrowth(Number(value));
-    toast.success('Croissance du revenu mise à jour');
-  };
+
   
   const handleAreaChange = (value: string | number) => {
     setCultivatedArea(Number(value));
@@ -284,82 +315,52 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* Quick Stats Row - Adapté à l'agriculture guadeloupéenne */}
+      {/* Quick Stats Row - Dados reais dos projetos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="stat-card card-hover">
-          <p className="stat-label">Revenu mensuel</p>
+          <p className="stat-label">Faturamento Total</p>
           <div className="flex items-baseline justify-between mt-2">
             <p className="stat-value">
-              <EditableField
-                value={monthlyRevenue}
-                type="number"
-                onSave={handleRevenueChange}
-                className="inline-block font-bold"
-              /> €
+              {loading ? 'Carregando...' : Number(monthlyRevenue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
-            <span className="text-agri-success text-sm font-medium flex items-center">
-              <TrendingUp className="h-4 w-4 mr-1" /> +
-              <EditableField
-                value={revenueGrowth}
-                type="number"
-                onSave={handleRevenueGrowthChange}
-                className="inline-block"
-              />%
+            <span className="text-green-600 text-sm font-medium">
+              Total acumulado
             </span>
           </div>
         </div>
         
         <div className="stat-card card-hover">
-          <p className="stat-label">Superficie cultivée</p>
+          <p className="stat-label">Projetos Ativos</p>
           <div className="flex items-baseline justify-between mt-2">
             <p className="stat-value">
-              <EditableField
-                value={cultivatedArea}
-                type="number"
-                onSave={handleAreaChange}
-                className="inline-block font-bold"
-              /> ha
+              {loading ? 'Carregando...' : activeProjects}
             </p>
-            <span className="text-agri-primary text-sm font-medium">
-              <EditableField
-                value={parcelsCount}
-                type="number"
-                onSave={handleParcelsCountChange}
-                className="inline-block"
-              /> parcelles
+            <span className="text-blue-600 text-sm font-medium">
+              Em andamento
             </span>
           </div>
         </div>
         
         <div className="stat-card card-hover">
-          <p className="stat-label">Rendement moyen</p>
+          <p className="stat-label">Projetos Concluídos</p>
           <div className="flex items-baseline justify-between mt-2">
             <p className="stat-value">
-              <EditableField
-                value={averageYield}
-                type="number"
-                onSave={handleYieldChange}
-                className="inline-block font-bold"
-              /> t/ha
+              {loading ? 'Carregando...' : completedProjects}
             </p>
-            <span className="text-agri-success text-sm font-medium flex items-center">
-              <TrendingUp className="h-4 w-4 mr-1" /> +
-              <EditableField
-                value={yieldGrowth}
-                type="number"
-                onSave={handleYieldGrowthChange}
-                className="inline-block"
-              />%
+            <span className="text-green-600 text-sm font-medium flex items-center">
+              <Check className="h-4 w-4 mr-1" /> Finalizados
             </span>
           </div>
         </div>
         
         <div className="stat-card card-hover">
-          <p className="stat-label">Alertes</p>
+          <p className="stat-label">Total de Despesas</p>
           <div className="flex items-baseline justify-between mt-2">
-            <p className="stat-value">{alertsCount}</p>
-            <span className="text-agri-warning text-sm font-medium flex items-center">
-              <AlertTriangle className="h-4 w-4 mr-1" /> Récent
+            <p className="stat-value">
+              {loading ? 'Carregando...' : Number(totalExpenses || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+            <span className="text-red-600 text-sm font-medium flex items-center">
+              <Wallet className="h-4 w-4 mr-1" /> Gastos
             </span>
           </div>
         </div>
@@ -507,78 +508,177 @@ const Dashboard = () => {
 
       {/* Main Content Area */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Revenue Chart */}
+        {/* Revenue Chart - Dados reais de faturamento */}
         <div className="dashboard-card col-span-full lg:col-span-2 card-hover">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold">Revenu Mensuel</h3>
-            <div className="flex space-x-2">
-              <button className="text-xs px-3 py-1.5 bg-muted rounded-md text-foreground">2023</button>
-              <button className="text-xs px-3 py-1.5 text-muted-foreground hover:bg-muted rounded-md">2022</button>
+            <h3 className="font-semibold">Evolução do Faturamento</h3>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">Período:</span>
+              <EditableField
+                value={currentMonth}
+                type="text"
+                onSave={handleMonthChange}
+                className="text-sm font-medium"
+              />
             </div>
           </div>
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={revenueData}
-                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4CAF50" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#4CAF50" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f5" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `${value} €`} />
-                <Tooltip formatter={(value) => [`${value} €`, 'Revenu']} />
-                <Area 
-                  type="monotone" 
-                  dataKey="revenue" 
-                  stroke="#4CAF50" 
-                  fillOpacity={1} 
-                  fill="url(#colorRevenue)" 
-                  activeDot={{ r: 8 }} 
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-500">Carregando dados...</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={dashboardStats?.revenue_by_month.map(item => ({
+                    month: new Date(item.month + '-01').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+                    revenue: item.revenue
+                  })) || []}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4CAF50" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#4CAF50" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f5" />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                  <Tooltip formatter={(value) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Faturamento']} />
+                  <Area 
+                    type="monotone" 
+                    dataKey="revenue" 
+                    stroke="#4CAF50" 
+                    fillOpacity={1} 
+                    fill="url(#colorRevenue)" 
+                    activeDot={{ r: 8 }} 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
-        {/* Production Distribution - Adapté aux cultures guadeloupéennes */}
+        {/* Expenses by Category Chart */}
         <div className="dashboard-card card-hover">
-          <h3 className="font-semibold mb-4">Répartition des Cultures</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold">Despesas por Categoria</h3>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">Total:</span>
+              <span className="text-sm font-medium">
+                R$ {dashboardStats?.expenses_by_category.reduce((sum, item) => sum + item.total, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+              </span>
+            </div>
+          </div>
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={productionData}
-                layout="vertical"
-                margin={{ top: 20, right: 30, left: 40, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                <XAxis type="number" axisLine={false} tickLine={false} />
-                <YAxis 
-                  dataKey="name" 
-                  type="category" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  width={80} 
-                />
-                <Tooltip formatter={(value) => [`${value}%`, 'Pourcentage']} />
-                <Bar 
-                  dataKey="value" 
-                  fill="#8D6E63" 
-                  radius={[0, 4, 4, 0]} 
-                  barSize={20}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-500">Carregando dados...</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={dashboardStats?.expenses_by_category.map(item => ({
+                    category: item.category || 'Sem categoria',
+                    total: item.total
+                  })) || []}
+                  layout="vertical"
+                  margin={{ top: 20, right: 30, left: 80, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                  <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                  <YAxis 
+                    dataKey="category" 
+                    type="category" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    width={80} 
+                  />
+                  <Tooltip formatter={(value) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Total']} />
+                  <Bar 
+                    dataKey="total" 
+                    fill="#FF9800" 
+                    radius={[0, 4, 4, 0]} 
+                    barSize={20}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
 
       {/* Bottom Cards Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Projects */}
+        <div className="dashboard-card card-hover">
+          <h3 className="font-semibold mb-4">Projetos Recentes</h3>
+          <div className="space-y-3">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-gray-500">Carregando projetos...</p>
+              </div>
+            ) : dashboardStats?.recent_projects && dashboardStats.recent_projects.length > 0 ? (
+              dashboardStats.recent_projects.map((project, index) => {
+                const getStatusColor = (status: string) => {
+                  switch (status) {
+                    case 'ativo': return 'bg-green-500';
+                    case 'concluido': return 'bg-blue-500';
+                    case 'pausado': return 'bg-yellow-500';
+                    default: return 'bg-gray-500';
+                  }
+                };
+                
+                const getStatusText = (status: string) => {
+                  switch (status) {
+                    case 'ativo': return 'Ativo';
+                    case 'concluido': return 'Concluído';
+                    case 'pausado': return 'Pausado';
+                    default: return 'Indefinido';
+                  }
+                };
+                
+                const getProgressPercentage = (status: string) => {
+                  switch (status) {
+                    case 'ativo': return 50;
+                    case 'concluido': return 100;
+                    case 'pausado': return 25;
+                    default: return 0;
+                  }
+                };
+                
+                const progress = getProgressPercentage(project.status);
+                
+                return (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{project.name}</p>
+                      <p className="text-xs text-gray-600">{getStatusText(project.status)}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Valor: R$ {Number(project.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{progress}%</p>
+                      <div className="w-16 h-2 bg-gray-200 rounded-full mt-1">
+                        <div 
+                          className={`h-full rounded-full ${getStatusColor(project.status)}`}
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">Nenhum projeto encontrado</p>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Upcoming Tasks - Adapté au contexte agricole guadeloupéen */}
         <div className="dashboard-card card-hover">
           <div className="flex justify-between items-center mb-4">

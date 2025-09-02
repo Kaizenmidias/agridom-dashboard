@@ -84,9 +84,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
           <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
             <p className="text-xl md:text-2xl font-bold text-green-600">{totalIncome.toLocaleString('pt-BR', {
               style: 'currency',
-              currency: 'BRL',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0
+              currency: 'BRL'
             })}</p>
             
             {incomeChange !== null && (
@@ -123,9 +121,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
           <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
             <p className="text-xl md:text-2xl font-bold text-red-600">{totalExpenses.toLocaleString('pt-BR', {
               style: 'currency',
-              currency: 'BRL',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0
+              currency: 'BRL'
             })}</p>
             
             {expensesChange !== null && (
@@ -162,9 +158,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
           <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
             <p className="text-xl md:text-2xl font-bold text-orange-600">{totalReceivable.toLocaleString('pt-BR', {
               style: 'currency',
-              currency: 'BRL',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0
+              currency: 'BRL'
             })}</p>
             
             {receivableChange !== null && (
@@ -202,9 +196,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
             <p className={`text-xl md:text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {balance.toLocaleString('pt-BR', {
                 style: 'currency',
-                currency: 'BRL',
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0
+                currency: 'BRL'
               })}
             </p>
             

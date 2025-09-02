@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -12,8 +12,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Camera, Save, User } from "lucide-react"
+import { Camera, Save, User, LogOut } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/AuthContext"
+import { useNavigate } from "react-router-dom"
 
 interface UserProfileDialogProps {
   children: React.ReactNode
@@ -21,14 +23,15 @@ interface UserProfileDialogProps {
 
 export function UserProfileDialog({ children }: UserProfileDialogProps) {
   const { toast } = useToast()
+  const { user, logout, updateProfile, uploadAvatar, changePassword } = useAuth()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [userData, setUserData] = useState({
-    nome: "Kaizen Admin",
-    email: "admin@kaizen.com",
-    telefone: "(11) 99999-9999",
-    cargo: "Administrador",
-    bio: "Responsável pela gestão da Kaizen Web Design",
-    avatar: ""
+    nome: user?.full_name || "",
+    email: user?.email || "",
+    cargo: user?.position || "",
+    bio: user?.bio || "",
+    avatar: user?.avatar_url || ""
   })
   const [passwords, setPasswords] = useState({
     current: "",
@@ -36,7 +39,19 @@ export function UserProfileDialog({ children }: UserProfileDialogProps) {
     confirm: ""
   })
 
-  const handleSave = () => {
+  useEffect(() => {
+    if (user) {
+      setUserData({
+        nome: user.full_name || "",
+        email: user.email || "",
+        cargo: user.position || "",
+        bio: user.bio || "",
+        avatar: user.avatar_url || ""
+      })
+    }
+  }, [user])
+
+  const handleSave = async () => {
     // Validação básica
     if (!userData.nome || !userData.email) {
       toast({
@@ -56,22 +71,84 @@ export function UserProfileDialog({ children }: UserProfileDialogProps) {
       return
     }
 
-    // Simular salvamento
-    toast({
-      title: "Perfil atualizado",
-      description: "Suas informações foram salvas com sucesso"
-    })
-    setOpen(false)
+    try {
+      // Atualizar perfil
+      await updateProfile({
+        full_name: userData.nome,
+        position: userData.cargo,
+        bio: userData.bio,
+        avatar_url: userData.avatar
+      })
+      
+      // Alterar senha se fornecida
+      if (passwords.new && passwords.current) {
+        await changePassword(passwords.current, passwords.new)
+      }
+      
+      toast({
+        title: "Perfil atualizado",
+        description: passwords.new ? "Perfil e senha atualizados com sucesso" : "Suas informações foram salvas com sucesso"
+      })
+      setOpen(false)
+      setPasswords({ current: "", new: "", confirm: "" })
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Erro ao atualizar perfil. Tente novamente.",
+        variant: "destructive"
+      })
+    }
   }
 
-  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogout = () => {
+    logout()
+    setOpen(false)
+    navigate('/login')
+    toast({
+      title: "Logout realizado",
+      description: "Você foi desconectado com sucesso"
+    })
+  }
+
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setUserData(prev => ({ ...prev, avatar: e.target?.result as string }))
+      try {
+        // Validar tipo de arquivo
+        if (!file.type.startsWith('image/')) {
+          toast({
+            title: "Erro",
+            description: "Apenas arquivos de imagem são permitidos",
+            variant: "destructive"
+          })
+          return
+        }
+
+        // Validar tamanho do arquivo (5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          toast({
+            title: "Erro",
+            description: "O arquivo deve ter no máximo 5MB",
+            variant: "destructive"
+          })
+          return
+        }
+
+        // Fazer upload do avatar
+        await uploadAvatar(file)
+        
+        toast({
+          title: "Avatar atualizado",
+          description: "Sua foto de perfil foi atualizada com sucesso"
+        })
+      } catch (error) {
+        console.error('Erro ao fazer upload do avatar:', error)
+        toast({
+          title: "Erro",
+          description: "Erro ao atualizar avatar. Tente novamente.",
+          variant: "destructive"
+        })
       }
-      reader.readAsDataURL(file)
     }
   }
 
@@ -80,7 +157,7 @@ export function UserProfileDialog({ children }: UserProfileDialogProps) {
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto bg-background">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-background">
         <DialogHeader>
           <DialogTitle>Perfil do Usuário</DialogTitle>
           <DialogDescription>
@@ -148,15 +225,6 @@ export function UserProfileDialog({ children }: UserProfileDialogProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="telefone">Telefone</Label>
-              <Input
-                id="telefone"
-                value={userData.telefone}
-                onChange={(e) => setUserData(prev => ({ ...prev, telefone: e.target.value }))}
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="bio">Biografia</Label>
               <Textarea
                 id="bio"
@@ -204,14 +272,20 @@ export function UserProfileDialog({ children }: UserProfileDialogProps) {
           </div>
 
           {/* Botões de Ação */}
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancelar
+          <div className="flex justify-between pt-4">
+            <Button variant="destructive" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sair
             </Button>
-            <Button onClick={handleSave}>
-              <Save className="h-4 w-4 mr-2" />
-              Salvar Alterações
-            </Button>
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSave}>
+                <Save className="h-4 w-4 mr-2" />
+                Salvar Alterações
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

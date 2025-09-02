@@ -1,6 +1,7 @@
 import { useState } from "react"
-import { Home, FileText, Wallet, Users, Settings, User } from "lucide-react"
+import { Home, FileText, Wallet, Users, Settings, User, Briefcase, Code } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
+import { useAuth } from "@/contexts/AuthContext"
 
 import {
   Sidebar,
@@ -18,18 +19,28 @@ import { ThemeToggle } from "./theme-toggle"
 import { UserProfileDialog } from "./user-profile-dialog"
 import { Button } from "@/components/ui/button"
 
-const items = [
-  { title: "Dashboard", url: "/", icon: Home },
-  { title: "Projetos", url: "/projetos", icon: FileText },
-  { title: "Despesas", url: "/despesas", icon: Wallet },
-  { title: "CRM", url: "/crm", icon: Users },
-  { title: "Usuários", url: "/usuarios", icon: Settings },
+const allItems = [
+  { title: "Dashboard", url: "/", icon: Home, permission: "can_access_dashboard" },
+  { title: "Projetos", url: "/projetos", icon: FileText, permission: "can_access_projects" },
+  { title: "Briefings", url: "/briefings", icon: Briefcase, permission: "can_access_briefings" },
+  { title: "Códigos", url: "/codigos", icon: Code, permission: "can_access_codes" },
+  { title: "Despesas", url: "/despesas", icon: Wallet, permission: "can_access_expenses" },
+  { title: "CRM", url: "/crm", icon: Users, permission: "can_access_crm" },
+  { title: "Usuários", url: "/usuarios", icon: Settings, permission: "can_access_users" },
 ]
 
 export function AppSidebar() {
   const { state } = useSidebar()
+  const { user } = useAuth()
   const location = useLocation()
   const currentPath = location.pathname
+
+  // Filtrar itens baseado nas permissões do usuário
+  const items = allItems.filter(item => {
+    if (!user) return false
+    const permission = user[item.permission as keyof typeof user]
+    return permission === true || permission === 1
+  })
 
   const isActive = (path: string) => {
     if (path === "/" && currentPath === "/") return true
@@ -46,8 +57,8 @@ export function AppSidebar() {
       <SidebarContent>
         {/* Logo/Header */}
         <div className="p-4 border-b border-border flex items-center">
-          <div className="h-8 w-8 bg-primary rounded-lg text-primary-foreground flex items-center justify-center text-sm font-bold">
-            K
+          <div className="h-8 w-8 flex items-center justify-center">
+            <img src="/logo.png" alt="Logo" className="h-8 w-8 rounded-full" />
           </div>
           {!isCollapsed && (
             <span className="ml-3 text-lg font-bold text-foreground">Kaizen</span>
@@ -74,7 +85,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* User section at bottom */}
-        <div className="mt-auto p-4 border-t border-border space-y-3">
+        <div className="mt-auto p-4 border-t border-border space-y-3 overflow-hidden">
           {/* Theme Toggle */}
           <div className="flex justify-center">
             <ThemeToggle />
@@ -82,15 +93,17 @@ export function AppSidebar() {
           
           {/* User Profile */}
           <UserProfileDialog>
-            <Button variant="ghost" className="w-full justify-start p-2">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                  <span className="text-sm font-medium text-primary">KZ</span>
+            <Button variant="ghost" className="w-full justify-start p-2 overflow-hidden">
+              <div className="flex items-center space-x-3 w-full overflow-hidden">
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-medium text-primary">
+                    {user?.full_name ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}
+                  </span>
                 </div>
                 {!isCollapsed && (
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm font-medium truncate">Kaizen Admin</p>
-                    <p className="text-xs text-muted-foreground truncate">admin@kaizen.com</p>
+                  <div className="flex-1 min-w-0 text-left overflow-hidden">
+                    <p className="text-sm font-medium truncate whitespace-nowrap">{user?.full_name || 'Usuário'}</p>
+                    <p className="text-xs text-muted-foreground truncate whitespace-nowrap">{user?.email || 'email@exemplo.com'}</p>
                   </div>
                 )}
               </div>

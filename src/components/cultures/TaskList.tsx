@@ -93,7 +93,7 @@ const TaskList = () => {
   };
 
   return (
-    <div className="bg-white rounded-xl border overflow-hidden shadow-sm">
+    <div className="bg-white dark:bg-[#1D2530] rounded-xl border overflow-hidden shadow-sm">
       <div className="p-4 flex items-center justify-between border-b">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-agri-primary" />

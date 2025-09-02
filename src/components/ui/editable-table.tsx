@@ -98,7 +98,7 @@ export const EditableTable = ({
   };
 
   return (
-    <div className={`bg-white rounded-xl border overflow-hidden ${className}`}>
+    <div className={`bg-background rounded-xl border overflow-hidden ${className}`}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted text-xs uppercase">
@@ -127,7 +127,7 @@ export const EditableTable = ({
                 </th>
               ))}
               {(onDelete || actions.length > 0) && (
-                <th className="px-4 py-3 text-left w-24">Actions</th>
+                <th className="px-4 py-3 text-left w-24">Ações</th>
               )}
             </tr>
           </thead>

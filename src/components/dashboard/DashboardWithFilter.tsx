@@ -1,10 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { addDays, format, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import FinancialSummary from '@/components/finance/FinancialSummary';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+import { getDashboardStats, DashboardStats } from '@/api/crud';
+import { toast } from 'sonner';
 
 const DashboardWithFilter: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
@@ -12,54 +32,133 @@ const DashboardWithFilter: React.FC = () => {
     return `${now.getFullYear()}-${now.getMonth()}`;
   });
 
-  // Dados dos projetos simulados para calcular valores a receber
-  const projetos = [
-    { valor: 15000, valorPago: 10000 }, // 5000 a receber
-    { valor: 25000, valorPago: 25000 }, // 0 a receber
-    { valor: 8500, valorPago: 3000 }    // 5500 a receber
-  ];
-
-  // Dados financeiros simulados
+  // Estados para dados reais do dashboard
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Dados financeiros calculados a partir dos dados reais
   const currentMonthData = {
-    revenue: 78500,
-    expenses: 44200,
-    profit: 34300,
-    receivable: projetos.reduce((acc, projeto) => acc + (projeto.valor - projeto.valorPago), 0)
+    revenue: Number(dashboardStats?.projects.total_paid_value || 0),
+    expenses: Number(dashboardStats?.expenses.total_expenses_amount || 0),
+    profit: Number(dashboardStats?.projects.total_paid_value || 0) - Number(dashboardStats?.expenses.total_expenses_amount || 0),
+    receivable: Number(dashboardStats?.projects.total_project_value || 0) - Number(dashboardStats?.projects.total_paid_value || 0)
   };
 
+  // Dados do mês anterior (dados reais da API)
   const previousMonthData = {
-    revenue: 68800,
-    expenses: 39900,
-    profit: 28900,
-    receivable: 8000
+    revenue: Number(dashboardStats?.previous_period?.revenue || 0),
+    expenses: Number(dashboardStats?.previous_period?.expenses || 0),
+    profit: Number(dashboardStats?.previous_period?.revenue || 0) - Number(dashboardStats?.previous_period?.expenses || 0),
+    receivable: Number(dashboardStats?.previous_period?.receivable || 0)
   };
 
-  // Dados do gráfico por período - simulando dados diferentes para cada mês
-  const getChartDataForPeriod = (period: string) => {
-    if (period === 'year') {
-      return [
-        { name: 'Jan', value: 48500 },
-        { name: 'Fev', value: 52200 },
-        { name: 'Mar', value: 58800 },
-        { name: 'Abr', value: 65500 },
-        { name: 'Mai', value: 72200 },
-        { name: 'Jun', value: 68800 },
-        { name: 'Jul', value: 78500 },
-        { name: 'Ago', value: 84800 },
-        { name: 'Set', value: 76200 },
-        { name: 'Out', value: 71200 },
-        { name: 'Nov', value: 68500 },
-        { name: 'Dez', value: 82200 }
-      ];
+  // Carregar dados reais do dashboard
+  const loadDashboardData = async (filters?: {
+    startDate?: string;
+    endDate?: string;
+    previousStartDate?: string;
+    previousEndDate?: string;
+  }) => {
+    try {
+      setLoading(true);
+      console.log('Frontend - Enviando filtros para API:', filters);
+      const data = await getDashboardStats(filters);
+      setDashboardStats(data);
+    } catch (error) {
+      console.error('Erro ao carregar dados do dashboard:', error);
+      toast.error('Erro ao carregar dados do dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePeriodChange = (newPeriod: string) => {
+    setSelectedPeriod(newPeriod);
+    
+    console.log('Frontend - Período selecionado:', newPeriod);
+    
+    const now = new Date();
+    let startDate: string, endDate: string, previousStartDate: string, previousEndDate: string;
+    
+    if (newPeriod === 'year') {
+      // Ano atual
+      const startOfCurrentYear = startOfYear(now);
+      const endOfCurrentYear = endOfYear(now);
+      
+      startDate = format(startOfCurrentYear, 'yyyy-MM-dd');
+      endDate = format(endOfCurrentYear, 'yyyy-MM-dd');
+      
+      // Ano anterior
+      const prevYear = new Date(now.getFullYear() - 1, 0, 1);
+      const prevStartOfYear = startOfYear(prevYear);
+      const prevEndOfYear = endOfYear(prevYear);
+      
+      previousStartDate = format(prevStartOfYear, 'yyyy-MM-dd');
+      previousEndDate = format(prevEndOfYear, 'yyyy-MM-dd');
     } else {
-      // Dados semanais para o mês selecionado
-      const [year, month] = period.split('-');
-      const monthName = format(new Date(parseInt(year), parseInt(month)), 'MMMM', { locale: pt });
+      // Mês específico
+      const [year, month] = newPeriod.split('-');
+      const selectedDate = new Date(parseInt(year), parseInt(month), 1);
+      
+      const startOfSelectedMonth = startOfMonth(selectedDate);
+      const endOfSelectedMonth = endOfMonth(selectedDate);
+      
+      startDate = format(startOfSelectedMonth, 'yyyy-MM-dd');
+      endDate = format(endOfSelectedMonth, 'yyyy-MM-dd');
+      
+      // Mês anterior
+      const prevMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const prevStartOfMonth = startOfMonth(prevMonth);
+      const prevEndOfMonth = endOfMonth(prevMonth);
+      
+      previousStartDate = format(prevStartOfMonth, 'yyyy-MM-dd');
+      previousEndDate = format(prevEndOfMonth, 'yyyy-MM-dd');
+    }
+    
+    // Debug: Log das datas calculadas no frontend
+    console.log('Frontend - Datas calculadas:', {
+      startDate,
+      endDate,
+      previousStartDate,
+      previousEndDate
+    });
+    
+    // Carregar dados com filtros
+    loadDashboardData({
+      startDate,
+      endDate,
+      previousStartDate,
+      previousEndDate
+    });
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  // Dados do gráfico por período - usando dados reais
+  const getChartDataForPeriod = (period: string) => {
+    if (!dashboardStats) return [];
+    
+    if (period === 'year') {
+      // Usar dados reais de faturamento mensal
+      return dashboardStats.revenue_by_month.map(item => {
+        const year = new Date(item.month + '-01').getFullYear();
+        return {
+          name: year.toString(),
+          value: item.revenue
+        };
+      });
+    } else {
+      // Para mês específico, mostrar dados semanais baseados no total mensal
+      const monthlyTotal = currentMonthData.revenue;
+      const weeklyAverage = monthlyTotal / 4;
+      
       return [
-        { name: `${monthName} S1`, value: Math.floor(Math.random() * 20000) + 15000 },
-        { name: `${monthName} S2`, value: Math.floor(Math.random() * 20000) + 15000 },
-        { name: `${monthName} S3`, value: Math.floor(Math.random() * 20000) + 15000 },
-        { name: `${monthName} S4`, value: Math.floor(Math.random() * 20000) + 15000 }
+        { name: 'Semana 1', value: Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)) },
+        { name: 'Semana 2', value: Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)) },
+        { name: 'Semana 3', value: Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)) },
+        { name: 'Semana 4', value: Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)) }
       ];
     }
   };
@@ -94,6 +193,12 @@ const DashboardWithFilter: React.FC = () => {
 
   return (
     <div className="space-y-6 p-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">
+          Visão geral dos seus projetos e finanças
+        </p>
+      </div>
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
           <p className="text-muted-foreground">
@@ -102,7 +207,7 @@ const DashboardWithFilter: React.FC = () => {
         </div>
         
         <div className="w-full md:w-auto">
-          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+          <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
             <SelectTrigger className="w-full md:w-auto min-w-[200px]">
               <SelectValue placeholder="Selecionar período" />
             </SelectTrigger>
@@ -118,56 +223,100 @@ const DashboardWithFilter: React.FC = () => {
       </div>
 
       {/* Resumo Financeiro */}
-      <FinancialSummary
-        totalIncome={currentMonthData.revenue}
-        totalExpenses={currentMonthData.expenses}
-        totalReceivable={currentMonthData.receivable}
-        previousIncome={previousMonthData.revenue}
-        previousExpenses={previousMonthData.expenses}
-        previousReceivable={previousMonthData.receivable}
-        period={formatPeriod()}
-      />
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Carregando...</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">...</div>
+                  <p className="text-xs text-muted-foreground">Aguarde...</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <FinancialSummary
+            totalIncome={currentMonthData.revenue}
+            totalExpenses={currentMonthData.expenses}
+            totalReceivable={currentMonthData.receivable}
+            previousIncome={previousMonthData.revenue}
+            previousExpenses={previousMonthData.expenses}
+            previousReceivable={previousMonthData.receivable}
+          />
+        )}
 
       {/* Gráfico de Relatório */}
       <Card>
         <CardHeader>
-          <CardTitle>Relatório</CardTitle>
+          <CardTitle>Relatório de Faturamento</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis 
-                  tickFormatter={(value) => 
-                    new Intl.NumberFormat('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0
-                    }).format(value)
-                  }
-                />
-                <Tooltip 
-                  formatter={(value) => [
-                    new Intl.NumberFormat('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL'
-                    }).format(Number(value)),
-                    'Faturamento'
-                  ]}
-                />
-                <Legend />
-                <Bar 
-                  dataKey="value" 
-                  fill="#2563eb"
-                  name="Faturamento"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {loading ? (
+            <div className="h-[400px] flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-lg font-medium">Carregando dados...</div>
+                <div className="text-sm text-muted-foreground mt-2">Aguarde enquanto buscamos as informações</div>
+              </div>
+            </div>
+          ) : (
+            <div className="h-[400px]">
+              <Bar
+                data={{
+                  labels: chartData.map(item => item.name),
+                  datasets: [
+                    {
+                      label: 'Faturamento',
+                      data: chartData.map(item => item.value),
+                      backgroundColor: 'rgba(37, 99, 235, 0.6)',
+                      borderColor: 'rgba(37, 99, 235, 1)',
+                      borderWidth: 1,
+                      borderRadius: 4,
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'top' as const,
+                    },
+                    title: {
+                      display: false,
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: function(context) {
+                          return `Faturamento: ${new Intl.NumberFormat('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL'
+                          }).format(context.parsed.y)}`;
+                        }
+                      }
+                    }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      ticks: {
+                        callback: function(value) {
+                          return new Intl.NumberFormat('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0
+                          }).format(Number(value));
+                        }
+                      }
+                    },
+                  },
+                }}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -176,47 +325,67 @@ const DashboardWithFilter: React.FC = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Projetos Ativos</CardTitle>
+            <div className="h-4 w-4 text-muted-foreground">📊</div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">18</div>
+            {loading ? (
+              <div className="text-2xl font-bold">...</div>
+            ) : (
+              <div className="text-2xl font-bold">{dashboardStats?.projects.active_projects || 0}</div>
+            )}
             <p className="text-xs text-muted-foreground">
-              +3 desde o mês passado
+              Projetos em andamento
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clientes Ativos</CardTitle>
+            <CardTitle className="text-sm font-medium">Projetos Concluídos</CardTitle>
+            <div className="h-4 w-4 text-muted-foreground">✅</div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">45</div>
+            {loading ? (
+              <div className="text-2xl font-bold">...</div>
+            ) : (
+              <div className="text-2xl font-bold">{dashboardStats?.projects.completed_projects || 0}</div>
+            )}
             <p className="text-xs text-muted-foreground">
-              +7 desde o mês passado
+              Projetos finalizados
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Taxa de Conversão</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Projetos</CardTitle>
+            <div className="h-4 w-4 text-muted-foreground">📈</div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8.5%</div>
+            {loading ? (
+              <div className="text-2xl font-bold">...</div>
+            ) : (
+              <div className="text-2xl font-bold">{dashboardStats?.projects.total_projects || 0}</div>
+            )}
             <p className="text-xs text-muted-foreground">
-              +1.2% desde o mês passado
+              Todos os projetos
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Satisfação</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Despesas</CardTitle>
+            <div className="h-4 w-4 text-muted-foreground">💰</div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">92%</div>
+            {loading ? (
+              <div className="text-2xl font-bold">...</div>
+            ) : (
+              <div className="text-2xl font-bold">{dashboardStats?.expenses.total_expenses || 0}</div>
+            )}
             <p className="text-xs text-muted-foreground">
-              +3% desde o mês passado
+              Número de despesas
             </p>
           </CardContent>
         </Card>

@@ -36,7 +36,7 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({
   return (
     <div className="space-y-6 animate-enter">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-white rounded-xl border">
+        <Card className="bg-white dark:bg-[#1D2530] rounded-xl border">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Valeur totale</CardTitle>
           </CardHeader>
@@ -45,7 +45,7 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({
           </CardContent>
         </Card>
         
-        <Card className="bg-white rounded-xl border">
+        <Card className="bg-white dark:bg-[#1D2530] rounded-xl border">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Articles</CardTitle>
           </CardHeader>
@@ -59,7 +59,7 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({
           </CardContent>
         </Card>
         
-        <Card className="bg-white rounded-xl border">
+        <Card className="bg-white dark:bg-[#1D2530] rounded-xl border">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">État du stock</CardTitle>
           </CardHeader>
@@ -69,7 +69,7 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({
         </Card>
       </div>
       
-      <Card className="bg-white rounded-xl border">
+      <Card className="bg-white dark:bg-[#1D2530] rounded-xl border">
         <CardHeader>
           <CardTitle>Répartition par catégorie</CardTitle>
         </CardHeader>
