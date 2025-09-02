@@ -1,6 +1,6 @@
-# Configuração do MariaDB para Agri-Dom
+# Configuração do MariaDB para WebDesign Dashboard
 
-Este guia explica como configurar o MariaDB para o sistema Agri-Dom.
+Este guia explica como configurar o MariaDB para o sistema de gestão de empresa de web design.
 
 ## Pré-requisitos
 
@@ -21,7 +21,7 @@ Crie ou atualize o arquivo `.env.local` na raiz do projeto:
 # Configuração do MariaDB
 VITE_DB_HOST=localhost
 VITE_DB_PORT=3306
-VITE_DB_NAME=agri_dom
+VITE_DB_NAME=webdesign_dashboard
 VITE_DB_USER=root
 VITE_DB_PASSWORD=sua_senha_aqui
 
@@ -40,8 +40,8 @@ VITE_API_URL=http://localhost:3001
 Conecte-se ao MariaDB e execute:
 
 ```sql
-CREATE DATABASE IF NOT EXISTS agri_dom CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE agri_dom;
+CREATE DATABASE IF NOT EXISTS webdesign_dashboard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE webdesign_dashboard;
 ```
 
 ### 2. Executar o Script de Criação das Tabelas
@@ -50,7 +50,7 @@ Execute o arquivo `mariadb-tables.sql` no seu banco de dados:
 
 ```bash
 # Via linha de comando
-mysql -u root -p agri_dom < mariadb-tables.sql
+mysql -u root -p webdesign_dashboard < mariadb-tables.sql
 
 # Ou via cliente MariaDB
 source mariadb-tables.sql;
@@ -68,8 +68,8 @@ Você deve ver as seguintes tabelas:
 - `users`
 - `projects`
 - `expenses`
-- `parcels`
-- `crops`
+- `codes`
+- `briefings`
 
 ## Estrutura das Tabelas
 
@@ -108,32 +108,31 @@ Você deve ver as seguintes tabelas:
 - `created_at`: TIMESTAMP - Data de criação
 - `updated_at`: TIMESTAMP - Data de atualização
 
-### Tabela `parcels`
+### Tabela `codes`
 - `id`: CHAR(36) - Chave primária (UUID)
-- `name`: VARCHAR(255) - Nome da parcela
-- `area`: DECIMAL(10,4) - Área em hectares
-- `location`: VARCHAR(255) - Localização
-- `soil_type`: VARCHAR(100) - Tipo de solo
-- `project_id`: CHAR(36) - Referência ao projeto
+- `title`: VARCHAR(255) - Título do código
+- `description`: TEXT - Descrição
+- `code`: LONGTEXT - Código fonte
+- `language`: VARCHAR(50) - Linguagem de programação
+- `category`: VARCHAR(100) - Categoria
+- `tags`: TEXT - Tags (JSON)
 - `user_id`: CHAR(36) - Referência ao usuário
-- `coordinates`: TEXT - Coordenadas geográficas (JSON)
-- `notes`: TEXT - Observações
+- `is_public`: BOOLEAN - Código público/privado
 - `created_at`: TIMESTAMP - Data de criação
 - `updated_at`: TIMESTAMP - Data de atualização
 
-### Tabela `crops`
+### Tabela `briefings`
 - `id`: CHAR(36) - Chave primária (UUID)
-- `name`: VARCHAR(255) - Nome da cultura
-- `variety`: VARCHAR(255) - Variedade
-- `planting_date`: DATE - Data de plantio
-- `expected_harvest_date`: DATE - Data esperada de colheita
-- `actual_harvest_date`: DATE - Data real de colheita
-- `status`: ENUM - Status (planned, planted, growing, harvested, failed)
-- `parcel_id`: CHAR(36) - Referência à parcela
+- `title`: VARCHAR(255) - Título do briefing
+- `client_name`: VARCHAR(255) - Nome do cliente
+- `client_email`: VARCHAR(255) - Email do cliente
+- `project_type`: VARCHAR(100) - Tipo de projeto
+- `description`: TEXT - Descrição detalhada
+- `requirements`: TEXT - Requisitos (JSON)
+- `budget_range`: VARCHAR(50) - Faixa de orçamento
+- `deadline`: DATE - Prazo
+- `status`: ENUM - Status (pending, approved, rejected, in_progress)
 - `user_id`: CHAR(36) - Referência ao usuário
-- `yield_expected`: DECIMAL(10,2) - Produção esperada
-- `yield_actual`: DECIMAL(10,2) - Produção real
-- `notes`: TEXT - Observações
 - `created_at`: TIMESTAMP - Data de criação
 - `updated_at`: TIMESTAMP - Data de atualização
 
@@ -154,8 +153,8 @@ Você deve ver as seguintes tabelas:
 
 ### Usuário de Exemplo
 O script cria um usuário de exemplo:
-- **Email**: admin@agridom.com
-- **Senha**: 123456
+- **Email**: admin@webdesign.com
+- **Senha**: admin123
 - **Nome**: Administrador
 
 ## Testando a Integração
@@ -182,8 +181,8 @@ npm run dev
 ### 3. Fazer Login
 
 Use as credenciais do usuário de exemplo:
-- Email: admin@agridom.com
-- Senha: 123456
+- Email: admin@webdesign.com
+- Senha: admin123
 
 ## Hooks Disponíveis
 
@@ -216,19 +215,19 @@ Use as credenciais do usuário de exemplo:
 - `useUpdateExpense()` - Atualizar despesa
 - `useDeleteExpense()` - Deletar despesa
 
-#### Parcelas
-- `useParcels(userId?, projectId?)` - Listar parcelas
-- `useParcel(id)` - Buscar parcela por ID
-- `useCreateParcel()` - Criar parcela
-- `useUpdateParcel()` - Atualizar parcela
-- `useDeleteParcel()` - Deletar parcela
+#### Códigos
+- `useCodes(userId?, category?)` - Listar códigos
+- `useCode(id)` - Buscar código por ID
+- `useCreateCode()` - Criar código
+- `useUpdateCode()` - Atualizar código
+- `useDeleteCode()` - Deletar código
 
-#### Culturas
-- `useCrops(parcelId?, userId?)` - Listar culturas
-- `useCrop(id)` - Buscar cultura por ID
-- `useCreateCrop()` - Criar cultura
-- `useUpdateCrop()` - Atualizar cultura
-- `useDeleteCrop()` - Deletar cultura
+#### Briefings
+- `useBriefings(userId?, status?)` - Listar briefings
+- `useBriefing(id)` - Buscar briefing por ID
+- `useCreateBriefing()` - Criar briefing
+- `useUpdateBriefing()` - Atualizar briefing
+- `useDeleteBriefing()` - Deletar briefing
 
 #### Estatísticas
 - `useStatistics(userId)` - Buscar estatísticas do usuário
@@ -270,10 +269,10 @@ Use as credenciais do usuário de exemplo:
 
 ### Backup
 ```bash
-mysqldump -u root -p agri_dom > backup_agri_dom.sql
+mysqldump -u root -p webdesign_dashboard > backup_webdesign_dashboard.sql
 ```
 
 ### Restore
 ```bash
-mysql -u root -p agri_dom < backup_agri_dom.sql
+mysql -u root -p webdesign_dashboard < backup_webdesign_dashboard.sql
 ```

@@ -1,12 +1,17 @@
-# 🌱 AgriDom Dashboard
+# 🎨 WebDesign Dashboard
 
-Um dashboard moderno e responsivo para gestão agrícola, desenvolvido com React, TypeScript e Node.js.
+Um dashboard moderno e responsivo para gestão de empresa de web design, desenvolvido com React, TypeScript e Node.js.
 
 ## 📋 Funcionalidades
 
 - 🔐 **Autenticação Segura**: Login e registro com JWT
 - 🔄 **Recuperação de Senha**: Sistema de reset via email
 - 📊 **Dashboard Interativo**: Visualização de dados em tempo real
+- 💼 **Gestão de Projetos**: Controle completo de projetos de web design
+- 💰 **Controle de Despesas**: Gerenciamento financeiro integrado
+- 📝 **Briefings**: Sistema de briefings para clientes
+- 💻 **Biblioteca de Códigos**: Armazenamento e organização de snippets
+- 👥 **Gestão de Usuários**: Controle de permissões e acessos
 - 📱 **Design Responsivo**: Interface adaptável para todos os dispositivos
 - 🎨 **UI Moderna**: Componentes baseados em Shadcn/UI
 - 🔒 **Segurança**: Proteção CORS, validação de dados e criptografia
@@ -42,7 +47,7 @@ Um dashboard moderno e responsivo para gestão agrícola, desenvolvido com React
 ### 1. Clone o Repositório
 ```bash
 git clone <url-do-repositorio>
-cd agri-dom-dashboard
+cd webdesign-dashboard
 ```
 
 ### 2. Instalar Dependências
@@ -62,12 +67,12 @@ npm install
 
 1. Crie um banco MySQL:
 ```sql
-CREATE DATABASE agri_dom;
+CREATE DATABASE webdesign_dashboard;
 ```
 
 2. Execute o script de configuração:
 ```bash
-mysql -u root -p agri_dom < database/setup-mysql.sql
+mysql -u root -p webdesign_dashboard < database/setup-mysql.sql
 ```
 
 ### 4. Configurar Variáveis de Ambiente
@@ -75,7 +80,7 @@ mysql -u root -p agri_dom < database/setup-mysql.sql
 #### Frontend (.env)
 ```env
 VITE_API_URL=http://localhost:3001/api
-VITE_APP_NAME=AgriDom Dashboard
+VITE_APP_NAME=WebDesign Dashboard
 ```
 
 #### Backend (server/.env)
@@ -87,7 +92,7 @@ PORT=3001
 DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=sua_senha
-DB_NAME=agri_dom
+DB_NAME=webdesign_dashboard
 DB_PORT=3306
 
 # JWT
@@ -142,102 +147,81 @@ Para deploy em produção, consulte o arquivo [DEPLOY_CPANEL.md](./DEPLOY_CPANEL
 
 Após a instalação, use estas credenciais para o primeiro acesso:
 
-- **Email**: admin@agridom.com
+- **Email**: admin@webdesign.com
 - **Senha**: admin123
 
 ⚠️ **IMPORTANTE**: Altere a senha imediatamente após o primeiro login!
 
 ## 🚀 Deploy para Produção
 
-### Opção 1: Deploy Manual
+Consulte os arquivos de documentação específicos:
+- [DEPLOY_CPANEL.md](./DEPLOY_CPANEL.md) - Deploy em hospedagem compartilhada
+- [GITHUB_CPANEL_DEPLOY.md](./GITHUB_CPANEL_DEPLOY.md) - Deploy automatizado via GitHub
 
-```bash
-# Build otimizado para produção
-npm run build:prod
+## 📊 Estrutura do Banco de Dados
 
-# Preparar arquivos para cPanel
-npm run build:cpanel
-```
+O sistema utiliza as seguintes tabelas principais:
 
-1. Execute `npm run build:cpanel`
-2. Faça upload da pasta `deploy-cpanel/` para seu servidor
-3. Siga as instruções em `DEPLOY_CPANEL.md`
+### Autenticação e Usuários
+- **users** - Dados dos usuários e permissões
+- **password_reset_tokens** - Tokens para recuperação de senha
+- **sessions** - Sessões ativas dos usuários
+- **system_settings** - Configurações do sistema
 
-### Opção 2: Deploy Automático via GitHub
+### Gestão de Projetos
+- **projects** - Projetos de web design
+- **expenses** - Despesas associadas aos projetos
+- **briefings** - Briefings dos clientes
+- **codes** - Biblioteca de códigos e snippets
 
-#### ⚠️ Solução para "Repository not found"
+## 🔧 Funcionalidades Detalhadas
 
-Se você encontrou o erro "remote: Repository not found", siga estas etapas:
+### 💼 Gestão de Projetos
+- Criação e edição de projetos
+- Controle de status (ativo, concluído, pausado, cancelado)
+- Tipos de projeto (website, e-commerce, landing page, app, branding)
+- Controle de valores e pagamentos
+- Datas de entrega e conclusão
 
-```bash
-# Inicializar repositório Git (Windows)
-init-git.bat
+### 💰 Controle Financeiro
+- Registro de despesas por categoria
+- Despesas únicas e recorrentes
+- Associação de despesas a projetos
+- Relatórios financeiros
 
-# Ou manualmente:
-git init
-git add .
-git commit -m "Initial commit: AgriDom Dashboard"
-git branch -M main
-```
+### 📝 Sistema de Briefings
+- Criação de briefings para clientes
+- Controle de status e prioridade
+- Prazos e deadlines
+- Histórico de briefings
 
-1. **Remover remote incorreto e conectar ao repositório original:**
-   ```bash
-   # Remover remote atual
-   git remote remove origin
-   
-   # Conectar ao repositório original que funciona
-   git remote add origin https://github.com/tiagoo4000/agri-dom-5238.git
-   git push -u origin main
-   ```
+### 💻 Biblioteca de Códigos
+- Armazenamento de snippets HTML, CSS, JavaScript
+- Organização por tipo de código
+- Busca e filtragem
+- Reutilização de códigos
 
-2. **Alternativas de repositório:**
-   
-   **Opção A: Usar repositório original (RECOMENDADO)**
-   ```bash
-   git remote add origin https://github.com/tiagoo4000/agri-dom-5238.git
-   git push -u origin main
-   ```
-   
-   **Opção B: Criar seu próprio repositório**
-   ```bash
-   # 1. Criar repositório no GitHub (via web)
-   # 2. Conectar ao novo repositório
-   git remote add origin https://github.com/SEU_USUARIO/agridom-dashboard.git
-   git push -u origin main
-   ```
-   
-   **Opção C: Solicitar criação do repositório kaizenmidias**
-   ```bash
-   # Contate kaizenmidias para criar o repositório primeiro
-   # Depois conecte normalmente
-   ```
+### 👥 Gestão de Usuários
+- Controle granular de permissões
+- Acesso a diferentes módulos do sistema
+- Perfis de usuário personalizáveis
 
-3. Configure deploy automático seguindo `GITHUB_CPANEL_DEPLOY.md`
+## 🤝 Contribuindo
 
-### Deploy no cPanel
-
-Este projeto está pronto para deploy em hospedagem compartilhada com cPanel. Os arquivos prontos estarão na pasta `deploy-cpanel/` após executar o build.
-
-## 🐛 Troubleshooting
-
-### Problemas Comuns
-
-1. **Erro de conexão com banco**:
-   - Verifique se o MySQL está rodando
-   - Confirme as credenciais no `.env`
-
-2. **Erro de CORS**:
-   - Verifique se as URLs estão corretas no `.env`
-   - Confirme se o backend está rodando
-
-3. **Build falha**:
-   - Execute `npm install` novamente
-   - Instale dependências: `npm install --save-dev terser`
+1. Faça um fork do projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT.
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+## 📞 Suporte
+
+Para suporte técnico ou dúvidas sobre o sistema, entre em contato através do email: suporte@webdesign.com
 
 ---
 
-**Desenvolvido com ❤️ para a comunidade agrícola**
+**WebDesign Dashboard** - Desenvolvido com ❤️ para empresas de web design modernas.

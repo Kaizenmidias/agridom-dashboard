@@ -1,6 +1,6 @@
 # 🚀 Guia Completo de Deploy para cPanel
 
-Este guia irá te ajudar a colocar o projeto AgriDom Dashboard em produção usando hospedagem compartilhada com cPanel.
+Este guia irá te ajudar a colocar o projeto WebDesign Dashboard em produção usando hospedagem compartilhada com cPanel.
 
 ## 📋 Pré-requisitos
 
@@ -46,18 +46,38 @@ deploy-cpanel/
 1. Acesse o cPanel
 2. Vá em **MySQL Databases**
 3. Crie um novo banco de dados:
-   - Nome: `agridom_prod` (ou outro de sua escolha)
+   - Nome: `webdesign_prod` (ou outro de sua escolha)
 4. Crie um usuário MySQL:
-   - Usuário: `agridom_user`
+   - Usuário: `webdesign_user`
    - Senha: (gere uma senha forte)
 5. Associe o usuário ao banco com **ALL PRIVILEGES**
 
 ### 2.2 Importar Estrutura do Banco
 1. Acesse **phpMyAdmin** no cPanel
-2. Selecione o banco criado
-3. Vá na aba **Import**
-4. Faça upload do arquivo `database/setup-mysql.sql`
-5. Execute a importação
+2. **IMPORTANTE**: Selecione o banco criado na lista à esquerda
+3. Vá na aba **SQL**
+4. Copie e cole o conteúdo do arquivo `database/setup-mysql.sql`
+5. Execute o script
+
+**⚠️ ATENÇÃO**: O script foi otimizado para cPanel e:
+- Não inclui comandos CREATE DATABASE ou USE
+- Remove configurações que requerem privilégios SUPER (eventos automáticos)
+- Certifique-se de selecionar seu banco antes de executar
+
+**📝 NOTA**: A limpeza automática de tokens expirados foi removida. Recomenda-se criar um script de limpeza manual ou configurar via cron job no cPanel.
+
+### 🔍 Verificação da Instalação
+
+Se você receber o erro "Tabela 'users' desconhecida", execute o script de verificação:
+
+1. No phpMyAdmin, vá para a aba **SQL**
+2. Copie e cole o conteúdo do arquivo `database/verificar-tabelas.sql`
+3. Execute o script para diagnosticar o problema
+
+**Possíveis soluções:**
+- ✅ Certifique-se de ter selecionado o banco de dados correto antes de executar o `setup-mysql.sql`
+- ✅ Verifique se o script `setup-mysql.sql` foi executado completamente sem erros
+- ✅ Se necessário, execute novamente o `setup-mysql.sql` (é seguro executar múltiplas vezes)
 
 ## 📁 Passo 3: Upload dos Arquivos
 
@@ -168,7 +188,7 @@ chmod 755 backend/server.js
 1. **Frontend**: Acesse `https://seudominio.com`
 2. **API Health**: Acesse `https://seudominio.com/backend/api/health`
 3. **Login**: Teste o login com:
-   - Email: `admin@agridom.com`
+   - Email: `admin@webdesign.com`
    - Senha: `admin123`
    - **⚠️ ALTERE A SENHA IMEDIATAMENTE!**
 

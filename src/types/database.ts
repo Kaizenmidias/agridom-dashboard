@@ -157,14 +157,16 @@ export interface Database {
         updated_at?: string
       }
     }
-    // Tabela de parcelas
-    parcels: {
+    // Tabela de briefings
+    briefings: {
       Row: {
         id: string
-        name: string
-        area: number
-        location: string | null
-        soil_type: string | null
+        title: string
+        client: string
+        description: string | null
+        status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+        priority: 'low' | 'medium' | 'high'
+        deadline: string | null
         user_id: string
         project_id: string | null
         created_at: string
@@ -172,10 +174,12 @@ export interface Database {
       }
       Insert: {
         id?: string
-        name: string
-        area: number
-        location?: string | null
-        soil_type?: string | null
+        title: string
+        client: string
+        description?: string | null
+        status?: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+        priority?: 'low' | 'medium' | 'high'
+        deadline?: string | null
         user_id: string
         project_id?: string | null
         created_at?: string
@@ -183,53 +187,13 @@ export interface Database {
       }
       Update: {
         id?: string
-        name?: string
-        area?: number
-        location?: string | null
-        soil_type?: string | null
+        title?: string
+        client?: string
+        description?: string | null
+        status?: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+        priority?: 'low' | 'medium' | 'high'
+        deadline?: string | null
         project_id?: string | null
-        updated_at?: string
-      }
-    }
-    // Tabela de culturas
-    crops: {
-      Row: {
-        id: string
-        name: string
-        variety: string | null
-        parcel_id: string
-        planting_date: string | null
-        harvest_date: string | null
-        status: 'planted' | 'growing' | 'harvested'
-        yield_expected: number | null
-        yield_actual: number | null
-        user_id: string
-        created_at: string
-        updated_at: string
-      }
-      Insert: {
-        id?: string
-        name: string
-        variety?: string | null
-        parcel_id: string
-        planting_date?: string | null
-        harvest_date?: string | null
-        status?: 'planted' | 'growing' | 'harvested'
-        yield_expected?: number | null
-        yield_actual?: number | null
-        user_id: string
-        created_at?: string
-        updated_at?: string
-      }
-      Update: {
-        id?: string
-        name?: string
-        variety?: string | null
-        planting_date?: string | null
-        harvest_date?: string | null
-        status?: 'planted' | 'growing' | 'harvested'
-        yield_expected?: number | null
-        yield_actual?: number | null
         updated_at?: string
       }
     }
@@ -272,24 +236,19 @@ export interface Database {
 export type User = Database['tables']['users']['Row']
 export type Project = Database['tables']['projects']['Row']
 export type Expense = Database['tables']['expenses']['Row']
-export type Parcel = Database['tables']['parcels']['Row']
-export type Crop = Database['tables']['crops']['Row']
+export type Briefing = Database['tables']['briefings']['Row']
+export type Code = Database['tables']['codes']['Row']
 
 export type InsertUser = Database['tables']['users']['Insert']
 export type InsertProject = Database['tables']['projects']['Insert']
 export type InsertExpense = Database['tables']['expenses']['Insert']
-export type InsertParcel = Database['tables']['parcels']['Insert']
-export type InsertCrop = Database['tables']['crops']['Insert']
+export type InsertBriefing = Database['tables']['briefings']['Insert']
+export type InsertCode = Database['tables']['codes']['Insert']
 
 export type UpdateUser = Database['tables']['users']['Update']
 export type UpdateProject = Database['tables']['projects']['Update']
 export type UpdateExpense = Database['tables']['expenses']['Update']
-export type UpdateParcel = Database['tables']['parcels']['Update']
-export type UpdateCrop = Database['tables']['crops']['Update']
-
-// Tipos específicos para códigos
-export type Code = Database['tables']['codes']['Row']
-export type InsertCode = Database['tables']['codes']['Insert']
+export type UpdateBriefing = Database['tables']['briefings']['Update']
 export type UpdateCode = Database['tables']['codes']['Update']
 
 // Tipos para autenticação
