@@ -11,7 +11,7 @@
 - **Usuário**: `kaizenagencia_agridom_user`
 - **Host**: `localhost`
 - **Porta**: `3306`
-- **Senha**: *(definir no cPanel)*
+- **Senha**: `Beatriz@2908`
 
 ## Passos de Configuração no cPanel
 
@@ -31,7 +31,7 @@ Copie o conteúdo dos arquivos `.env.production` (raiz e server/) para as variá
 DB_HOST=localhost
 DB_NAME=kaizenagencia_agridom_prod
 DB_USER=kaizenagencia_agridom_user
-DB_PASSWORD=[sua_senha_mysql]
+DB_PASSWORD=Beatriz@2908
 JWT_SECRET=[gerar_chave_segura]
 BASE_URL=https://dashboard.kaizenmidias.com
 API_URL=https://dashboard.kaizenmidias.com/api
