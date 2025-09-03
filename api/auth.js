@@ -1,6 +1,6 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { query } = require('../utils/db');
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { query } from '../utils/db.js';
 
 // Configuração CORS
 const corsHeaders = {
@@ -367,7 +367,7 @@ async function handleResetPassword(req, res) {
 }
 
 // Função principal que roteia as requisições
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Configurar CORS
   Object.keys(corsHeaders).forEach(key => {
     res.setHeader(key, corsHeaders[key]);

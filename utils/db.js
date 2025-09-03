@@ -1,4 +1,4 @@
-const { Pool } = require('pg');
+import { Pool } from 'pg';
 
 // Configuração do banco de dados
 let pool;
@@ -95,9 +95,10 @@ async function transaction(callback) {
   }
 }
 
-module.exports = {
-  query,
-  pool,
-  testConnection,
-  transaction
-};
+// Função auxiliar para formatar datas para MySQL/PostgreSQL
+function formatDateForMySQL(dateString) {
+  const date = new Date(dateString);
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+export { query, pool, testConnection, transaction, formatDateForMySQL };

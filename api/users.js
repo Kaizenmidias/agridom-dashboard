@@ -1,9 +1,9 @@
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const { query } = require('../utils/db');
-const formidable = require('formidable');
-const fs = require('fs');
-const path = require('path');
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { query } from '../utils/db.js';
+import formidable from 'formidable';
+import fs from 'fs';
+import path from 'path';
 
 // Configuração CORS
 const corsHeaders = {
@@ -30,7 +30,7 @@ function authenticateToken(req) {
   }
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Configurar CORS
   Object.keys(corsHeaders).forEach(key => {
     res.setHeader(key, corsHeaders[key]);
