@@ -35,7 +35,7 @@ const ParcelMapDialog = ({ isOpen, onOpenChange }: ParcelMapDialogProps) => {
     { id: 'satellite', name: 'Vue satellite', enabled: false, type: 'base' },
     { id: 'terrain', name: 'Terrain', enabled: true, type: 'base' },
     { id: 'parcels', name: 'Limites parcellaires', enabled: true, type: 'overlay' },
-    { id: 'crops', name: 'Cultures actuelles', enabled: true, type: 'overlay' },
+    { id: 'crops', name: 'Culturas atuais', enabled: true, type: 'overlay' },
     { id: 'soil', name: 'Types de sol', enabled: false, type: 'overlay' },
     { id: 'irrigation', name: 'Irrigation', enabled: false, type: 'overlay' },
   ]);
@@ -255,7 +255,7 @@ const ParcelMapDialog = ({ isOpen, onOpenChange }: ParcelMapDialogProps) => {
           </div>
           
           <p className="text-sm text-muted-foreground text-center">
-            Cette vue d'ensemble montre l'emplacement de toutes vos parcelles. 
+            Esta visão geral mostra a localização de todas as suas parcelas. 
             Cliquez sur une parcelle spécifique pour voir plus de détails.
           </p>
           <div className="flex justify-between">

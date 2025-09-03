@@ -69,7 +69,7 @@ const InventoryFilters = ({
           >
             {categories.map(category => (
               <option key={category} value={category}>
-                {category === 'all' ? 'Toutes catégories' : category}
+                {category === 'all' ? 'Todas as categorias' : category}
               </option>
             ))}
           </select>
@@ -103,7 +103,7 @@ const InventoryFilters = ({
               )}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => toggleSort('lastUpdated')} className="flex justify-between">
-              <span>Date de mise à jour</span>
+              <span>Data de atualização</span>
               {sortBy === 'lastUpdated' && (
                 <span>{sortOrder === 'asc' ? '↑' : '↓'}</span>
               )}

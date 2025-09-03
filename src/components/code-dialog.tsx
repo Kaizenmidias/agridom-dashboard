@@ -37,8 +37,8 @@ const codeTypeOptions = [
 
 export function CodeDialog({ open, onOpenChange, code, onSuccess }: CodeDialogProps) {
   const [formData, setFormData] = useState({
-    name: "",
-    code_type: "css" as "css" | "html" | "javascript",
+    title: "",
+    language: "css" as "css" | "html" | "javascript",
     code_content: "",
     description: ""
   })
@@ -49,15 +49,15 @@ export function CodeDialog({ open, onOpenChange, code, onSuccess }: CodeDialogPr
   useEffect(() => {
     if (code) {
       setFormData({
-        name: code.name,
-        code_type: code.code_type,
+        title: code.title,
+        language: code.language,
         code_content: code.code_content,
         description: code.description || ""
       })
     } else {
       setFormData({
-        name: "",
-        code_type: "css",
+        title: "",
+        language: "css",
         code_content: "",
         description: ""
       })
@@ -67,8 +67,8 @@ export function CodeDialog({ open, onOpenChange, code, onSuccess }: CodeDialogPr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.name.trim()) {
-      toast.error("Nome é obrigatório")
+    if (!formData.title.trim()) {
+      toast.error("Título é obrigatório")
       return
     }
     
@@ -82,8 +82,8 @@ export function CodeDialog({ open, onOpenChange, code, onSuccess }: CodeDialogPr
     try {
       if (isEditing && code) {
         const updateData: UpdateCode = {
-          name: formData.name.trim(),
-          code_type: formData.code_type,
+          title: formData.title.trim(),
+          language: formData.language,
           code_content: formData.code_content.trim(),
           description: formData.description.trim() || null
         }
@@ -92,8 +92,8 @@ export function CodeDialog({ open, onOpenChange, code, onSuccess }: CodeDialogPr
         toast.success("Código atualizado com sucesso!")
       } else {
         const insertData: InsertCode = {
-          name: formData.name.trim(),
-          code_type: formData.code_type,
+          title: formData.title.trim(),
+          language: formData.language,
           code_content: formData.code_content.trim(),
           description: formData.description.trim() || null
         }
@@ -134,22 +134,22 @@ export function CodeDialog({ open, onOpenChange, code, onSuccess }: CodeDialogPr
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Nome *</Label>
+              <Label htmlFor="title">Título *</Label>
               <Input
-                id="name"
+                id="title"
                 placeholder="Ex: Botão Animado"
-                value={formData.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
+                value={formData.title}
+                onChange={(e) => handleInputChange("title", e.target.value)}
                 required
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="code_type">Tipo *</Label>
+              <Label htmlFor="language">Linguagem *</Label>
               <Select
-                value={formData.code_type}
+                value={formData.language}
                 onValueChange={(value: "css" | "html" | "javascript") => 
-                  handleInputChange("code_type", value)
+                  handleInputChange("language", value)
                 }
               >
                 <SelectTrigger>

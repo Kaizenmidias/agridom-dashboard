@@ -113,7 +113,8 @@ export interface Database {
         description: string
         amount: number
         category: string
-        date: string
+        expense_date: string
+        date?: string // Manter para compatibilidade
         user_id: string
         billing_type: 'unica' | 'semanal' | 'mensal' | 'anual'
         is_recurring: boolean
@@ -130,7 +131,8 @@ export interface Database {
         description: string
         amount: number
         category: string
-        date: string
+        expense_date: string
+        date?: string // Manter para compatibilidade
         user_id: string
         billing_type?: 'unica' | 'semanal' | 'mensal' | 'anual'
         is_recurring?: boolean
@@ -147,7 +149,8 @@ export interface Database {
         description?: string
         amount?: number
         category?: string
-        date?: string
+        expense_date?: string
+        date?: string // Manter para compatibilidade
         billing_type?: 'unica' | 'semanal' | 'mensal' | 'anual'
         is_recurring?: boolean
         recurring_day_of_week?: number | null
@@ -201,8 +204,8 @@ export interface Database {
     codes: {
       Row: {
         id: string
-        name: string
-        code_type: 'css' | 'html' | 'javascript'
+        title: string
+        language: 'css' | 'html' | 'javascript'
         code_content: string
         description: string | null
         user_id: string | null
@@ -211,8 +214,8 @@ export interface Database {
       }
       Insert: {
         id?: string
-        name: string
-        code_type: 'css' | 'html' | 'javascript'
+        title: string
+        language: 'css' | 'html' | 'javascript'
         code_content: string
         description?: string | null
         user_id?: string | null
@@ -221,8 +224,8 @@ export interface Database {
       }
       Update: {
         id?: string
-        name?: string
-        code_type?: 'css' | 'html' | 'javascript'
+        title?: string
+        language?: 'css' | 'html' | 'javascript'
         code_content?: string
         description?: string | null
         user_id?: string | null

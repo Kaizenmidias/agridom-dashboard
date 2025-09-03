@@ -1,10 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { loginUser, registerUser, verifyToken, updateUserProfile, uploadAvatar, changePassword } from '../api/auth'
 import { AuthUser, LoginCredentials, RegisterCredentials, AuthResponse } from '../types/database'
+import { getUsers } from '../api/crud'
 
 interface AuthContextType {
   user: AuthUser | null
+  usuarios: AuthUser[]
   loading: boolean
+  error: string | null
+  isAdmin: boolean
   login: (credentials: LoginCredentials) => Promise<AuthResponse | null>
   register: (credentials: RegisterCredentials) => Promise<AuthResponse | null>
   logout: () => void
@@ -23,7 +27,26 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null)
+  const [usuarios, setUsuarios] = useState<AuthUser[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
+  // Calcular se o usuário é admin baseado na permissão can_access_users
+  const isAdmin = user?.can_access_users || false
+
+  // Função para carregar lista de usuários
+  const loadUsuarios = async () => {
+    if (!user?.can_access_users) return
+    
+    try {
+      const usuariosList = await getUsers()
+      setUsuarios(usuariosList)
+      setError(null)
+    } catch (err) {
+      console.error('Erro ao carregar usuários:', err)
+      setError('Erro ao carregar usuários')
+    }
+  }
 
   // Verificar se há dados de usuário salvos no localStorage e validar token
   useEffect(() => {
@@ -93,6 +116,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const interval = setInterval(checkForUpdates, 30000)
 
     return () => clearInterval(interval)
+  }, [user])
+
+  // Carregar usuários quando o usuário logado mudar
+  useEffect(() => {
+    if (user?.can_access_users) {
+      loadUsuarios()
+    } else {
+      setUsuarios([])
+    }
   }, [user])
 
   // Função para fazer login
@@ -252,7 +284,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const value: AuthContextType = {
     user,
+    usuarios,
     loading,
+    error,
+    isAdmin,
     login,
     register,
     logout,

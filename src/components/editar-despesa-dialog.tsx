@@ -50,7 +50,38 @@ export function EditarDespesaDialog({ expense, open, onOpenChange, onExpenseUpda
     if (expense) {
       setValue('description', expense.description);
       setValue('amount', expense.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-      setValue('date', new Date(expense.date).toISOString().split('T')[0]);
+      
+      // Melhor tratamento da data
+      const expenseDate = expense.expense_date || expense.date;
+      let formattedDate = new Date().toISOString().split('T')[0]; // Data atual como fallback
+      
+      if (expenseDate) {
+        try {
+          // Tentar diferentes formatos de data
+          let dateObj;
+          
+          if (typeof expenseDate === 'string') {
+            // Se já está no formato YYYY-MM-DD, usar diretamente
+            if (/^\d{4}-\d{2}-\d{2}$/.test(expenseDate)) {
+              formattedDate = expenseDate;
+            } else {
+              // Tentar converter outros formatos
+              dateObj = new Date(expenseDate);
+              if (!isNaN(dateObj.getTime())) {
+                formattedDate = dateObj.toISOString().split('T')[0];
+              }
+            }
+          } else if (expenseDate instanceof Date) {
+            if (!isNaN(expenseDate.getTime())) {
+              formattedDate = expenseDate.toISOString().split('T')[0];
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao processar data:', expenseDate, error);
+        }
+      }
+      
+      setValue('date', formattedDate);
       setValue('billing_type', expense.billing_type || 'unica');
       setValue('notes', expense.notes || '');
     }

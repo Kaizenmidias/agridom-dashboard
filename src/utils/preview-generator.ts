@@ -12,7 +12,7 @@ export const generatePreviewHTML = (
   locale?: string
 ): string => {
   if (!data || data.length === 0) {
-    return '<div class="p-4 text-center">Aucune donnée disponible pour l\'aperçu</div>';
+    return '<div class="p-4 text-center">Nenhuma despesa disponível para o preview</div>';
   }
 
   const tableHeaders = (columns || Object.keys(data[0]).map(key => ({ key, header: key }))).map(
@@ -73,7 +73,7 @@ export const generatePreviewHTML = (
         </table>
       </div>
       <div class="mt-6 text-sm text-gray-500 dark:text-gray-400 text-right">
-        <p>Date: ${new Date().toLocaleDateString(locale || 'fr-FR')}</p>
+        <p>Date: ${new Date().toLocaleDateString(locale || 'pt-BR')}</p>
       </div>
       ${navigationButtons}
     </div>

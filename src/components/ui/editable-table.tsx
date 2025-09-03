@@ -193,7 +193,7 @@ export const EditableTable = ({
             {data.length === 0 && (
               <tr>
                 <td colSpan={columns.length + ((onDelete || actions.length > 0) ? 1 : 0)} className="px-4 py-4 text-center text-muted-foreground">
-                  Aucune donnée disponible
+                  Nenhuma despesa disponível
                 </td>
               </tr>
             )}

@@ -30,61 +30,7 @@ import { Select } from './ui/select';
 import PageHeader from './layout/PageHeader';
 import { getDashboardStats, DashboardStats } from '../api/crud';
 
-// Sample data for charts - Adapté pour la Guadeloupe
-const revenueData = [
-  { month: 'Jan', revenue: 1500 },
-  { month: 'Fév', revenue: 2200 },
-  { month: 'Mar', revenue: 2500 },
-  { month: 'Avr', revenue: 2800 },
-  { month: 'Mai', revenue: 3200 },
-  { month: 'Juin', revenue: 3500 },
-  { month: 'Juil', revenue: 4000 },
-];
-
-const productionData = [
-  { name: 'Canne à Sucre', value: 40 },
-  { name: 'Banane', value: 25 },
-  { name: 'Ananas', value: 15 },
-  { name: 'Igname', value: 10 },
-  { name: 'Autre', value: 10 },
-];
-
-// Task list adapté au contexte guadeloupéen
-const initialUpcomingTasks = [
-  { id: 1, title: 'Récolter la canne à sucre', due: 'Aujourd\'hui', priority: 'high' },
-  { id: 2, title: 'Commander des plants de bananier', due: 'Demain', priority: 'medium' },
-  { id: 3, title: 'Maintenance du tracteur', due: '28/08', priority: 'low' },
-  { id: 4, title: 'Irrigation des plantations d\'ananas', due: '30/08', priority: 'medium' },
-];
-
-// Alerts pour les agriculteurs en Guadeloupe
-const initialAlerts = [
-  { id: 1, message: 'Niveau bas de plants de bananier', type: 'warning' },
-  { id: 2, message: 'Risque cyclonique pour la semaine prochaine', type: 'danger' },
-  { id: 3, message: 'Échéance de subvention régionale approche', type: 'info' },
-];
-
-// Weather alerts data
-const initialWeatherAlerts = [
-  { 
-    id: 1, 
-    type: 'Cyclone', 
-    region: 'Toute la Guadeloupe', 
-    startDate: '2023-09-10', 
-    endDate: '2023-09-12', 
-    severity: 'critique', 
-    description: 'Cyclone tropical de catégorie 2 en approche' 
-  },
-  { 
-    id: 2, 
-    type: 'Pluie', 
-    region: 'Basse-Terre', 
-    startDate: '2023-09-20', 
-    endDate: '2023-09-23', 
-    severity: 'modérée', 
-    description: 'Fortes précipitations attendues' 
-  }
-];
+// Dados fictícios removidos - agora usando apenas dados reais da API
 
 const Dashboard = () => {
   // State for editable content
@@ -105,9 +51,9 @@ const Dashboard = () => {
   const [alertsCount, setAlertsCount] = useState(3);
   
   // Tasks and alerts
-  const [upcomingTasks, setUpcomingTasks] = useState(initialUpcomingTasks);
-  const [alerts, setAlerts] = useState(initialAlerts);
-  const [weatherAlerts, setWeatherAlerts] = useState(initialWeatherAlerts);
+  const [upcomingTasks, setUpcomingTasks] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [weatherAlerts, setWeatherAlerts] = useState([]);
   
   // New alert dialog
   const [showAddAlertDialog, setShowAddAlertDialog] = useState(false);
@@ -173,14 +119,14 @@ const Dashboard = () => {
   // Stat card updates
   const handleRevenueChange = (value: string | number) => {
     setMonthlyRevenue(Number(value));
-    toast.success('Revenu mensuel mis à jour');
+    toast.success('Receita mensal atualizada');
   };
   
 
   
   const handleAreaChange = (value: string | number) => {
     setCultivatedArea(Number(value));
-    toast.success('Superficie cultivée mise à jour');
+    toast.success('Superfície cultivada atualizada');
   };
   
   const handleParcelsCountChange = (value: string | number) => {
@@ -378,7 +324,7 @@ const Dashboard = () => {
           </Button>
         </div>
         <p className="text-muted-foreground mb-6">
-          Suivez les alertes météorologiques impactant l'agriculture en Guadeloupe
+          Acompanhe os alertas meteorológicos que impactam a agricultura na Guadalupe
         </p>
         
         <div className="overflow-x-auto">
@@ -386,8 +332,8 @@ const Dashboard = () => {
             <thead className="bg-muted text-xs uppercase">
               <tr>
                 <th className="px-4 py-3 text-left">Type</th>
-                <th className="px-4 py-3 text-left">Région</th>
-                <th className="px-4 py-3 text-left">Période</th>
+                <th className="px-4 py-3 text-left">Região</th>
+        <th className="px-4 py-3 text-left">Período</th>
                 <th className="px-4 py-3 text-left">Sévérité</th>
                 <th className="px-4 py-3 text-left">Description</th>
                 <th className="px-4 py-3 text-left">Actions</th>
@@ -418,14 +364,14 @@ const Dashboard = () => {
                         setWeatherAlerts(weatherAlerts.map(a => 
                           a.id === alert.id ? { ...a, region: String(value) } : a
                         ));
-                        toast.success('Région mise à jour');
+                        toast.success('Região atualizada');
                       }}
                     />
                   </td>
                   <td className="px-4 py-3">
                     <div className="space-y-1">
                       <div>
-                        <span className="text-xs text-muted-foreground">Début:</span>
+                        <span className="text-xs text-muted-foreground">Início:</span>
                         <EditableField
                           value={alert.startDate}
                           type="date"
@@ -433,12 +379,12 @@ const Dashboard = () => {
                             setWeatherAlerts(weatherAlerts.map(a => 
                               a.id === alert.id ? { ...a, startDate: String(value) } : a
                             ));
-                            toast.success('Date de début mise à jour');
+                            toast.success('Data de início atualizada');
                           }}
                         />
                       </div>
                       <div>
-                        <span className="text-xs text-muted-foreground">Fin:</span>
+                        <span className="text-xs text-muted-foreground">Fim:</span>
                         <EditableField
                           value={alert.endDate}
                           type="date"
@@ -446,7 +392,7 @@ const Dashboard = () => {
                             setWeatherAlerts(weatherAlerts.map(a => 
                               a.id === alert.id ? { ...a, endDate: String(value) } : a
                             ));
-                            toast.success('Date de fin mise à jour');
+                            toast.success('Data de fim atualizada');
                           }}
                         />
                       </div>
@@ -757,7 +703,7 @@ const Dashboard = () => {
           </div>
         </div>
         
-        {/* Alerts - Adapté à l'agriculture en Guadeloupe */}
+        {/* Alertas - Adaptado à agricultura na Guadalupe */}
         <div className="dashboard-card card-hover">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Alertes</h3>
@@ -832,7 +778,7 @@ const Dashboard = () => {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="region" className="text-right">
-                Région
+                Região
               </Label>
               <Input
                 id="region"
@@ -843,7 +789,7 @@ const Dashboard = () => {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="startDate" className="text-right">
-                Date de début
+                Data de início
               </Label>
               <Input
                 id="startDate"
@@ -855,7 +801,7 @@ const Dashboard = () => {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="endDate" className="text-right">
-                Date de fin
+                Data de fim
               </Label>
               <Input
                 id="endDate"

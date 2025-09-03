@@ -20,41 +20,7 @@ interface Briefing {
   updated_at: string
 }
 
-const mockBriefings: Briefing[] = [
-  {
-    id: '1',
-    title: 'Campanha de Marketing Digital',
-    client: 'Empresa ABC',
-    description: 'Desenvolvimento de estratégia de marketing digital para lançamento de produto',
-    status: 'in_progress',
-    priority: 'high',
-    deadline: '2024-02-15',
-    created_at: '2024-01-10T10:00:00Z',
-    updated_at: '2024-01-15T14:30:00Z'
-  },
-  {
-    id: '2',
-    title: 'Redesign do Website',
-    client: 'Startup XYZ',
-    description: 'Reformulação completa da interface e experiência do usuário',
-    status: 'pending',
-    priority: 'medium',
-    deadline: '2024-03-01',
-    created_at: '2024-01-12T09:15:00Z',
-    updated_at: '2024-01-12T09:15:00Z'
-  },
-  {
-    id: '3',
-    title: 'Consultoria em Processos',
-    client: 'Indústria 123',
-    description: 'Análise e otimização de processos internos da empresa',
-    status: 'completed',
-    priority: 'low',
-    deadline: '2024-01-30',
-    created_at: '2024-01-05T16:20:00Z',
-    updated_at: '2024-01-28T11:45:00Z'
-  }
-]
+// Briefings serão carregados da API quando implementada
 
 const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -84,7 +50,7 @@ const priorityLabels = {
 
 export default function BriefingsPage() {
   const { toast } = useToast()
-  const [briefings, setBriefings] = useState<Briefing[]>(mockBriefings)
+  const [briefings, setBriefings] = useState<Briefing[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')

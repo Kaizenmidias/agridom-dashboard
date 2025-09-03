@@ -68,10 +68,11 @@ const DespesasPage = () => {
 
 
   const totalDespesas = despesas.reduce((acc, despesa) => {
+    const totalExpenseDate = despesa.expense_date || despesa.date;
     const monthlyAmount = calculateMonthlyAmount(
       Number(despesa.amount) || 0,
       despesa.billing_type || 'unica',
-      despesa.date,
+      totalExpenseDate,
       new Date().getFullYear(),
       new Date().getMonth() + 1
     );
@@ -140,17 +141,43 @@ const DespesasPage = () => {
             </div>
           ) : (
             <EditableTable
-              data={despesas.map(despesa => ({
-                ...despesa,
-                date: new Date(despesa.date).toLocaleDateString('pt-BR'),
-                amount: `R$ ${despesa.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-                billing_type: despesa.billing_type === 'unica' ? 'Única' : 
-                             despesa.billing_type === 'semanal' ? 'Semanal' : 
-                             despesa.billing_type === 'mensal' ? 'Mensal' : 'Anual'
-              }))}
+              data={despesas.map(despesa => {
+                const expenseDate = despesa.expense_date || despesa.date;
+                const monthlyAmount = calculateMonthlyAmount(
+                  Number(despesa.amount) || 0,
+                  despesa.billing_type || 'unica',
+                  expenseDate,
+                  new Date().getFullYear(),
+                  new Date().getMonth() + 1
+                );
+                
+                let formattedDate = 'Data inválida';
+                
+                if (expenseDate) {
+                  try {
+                    const dateObj = new Date(expenseDate);
+                    if (!isNaN(dateObj.getTime())) {
+                      formattedDate = dateObj.toLocaleDateString('pt-BR');
+                    }
+                  } catch (error) {
+                    console.error('Erro ao formatar data:', expenseDate, error);
+                  }
+                }
+                
+                return {
+                  ...despesa,
+                  date: formattedDate,
+                  amount: `R$ ${despesa.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                  monthly_amount: `R$ ${monthlyAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                  billing_type: despesa.billing_type === 'unica' ? 'Única' : 
+                               despesa.billing_type === 'semanal' ? 'Semanal' : 
+                               despesa.billing_type === 'mensal' ? 'Mensal' : 'Anual'
+                };
+              })}
               columns={[
                 { id: 'description', header: 'Descrição', accessorKey: 'description', isEditable: false },
-                { id: 'amount', header: 'Valor', accessorKey: 'amount', isEditable: false },
+                { id: 'amount', header: 'Valor Original', accessorKey: 'amount', isEditable: false },
+                { id: 'monthly_amount', header: 'Valor Mensal', accessorKey: 'monthly_amount', isEditable: false },
                 { id: 'category', header: 'Categoria', accessorKey: 'category', isEditable: false },
                 { id: 'billing_type', header: 'Tipo de Cobrança', accessorKey: 'billing_type', isEditable: false },
                 { id: 'date', header: 'Data', accessorKey: 'date', isEditable: false }

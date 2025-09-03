@@ -65,13 +65,13 @@ interface StatisticsContextType {
   forecastData: any[];
   setForecastData: React.Dispatch<React.SetStateAction<any[]>>;
   
-  // Période et filtres
+  // Período e filtros
   period: 'day' | 'week' | 'month' | 'year';
   setPeriod: React.Dispatch<React.SetStateAction<'day' | 'week' | 'month' | 'year'>>;
   cropFilter: string;
   setCropFilter: React.Dispatch<React.SetStateAction<string>>;
   
-  // Fonction pour mettre à jour les données en fonction des filtres
+  // Função para atualizar os dados com base nos filtros
   updateDataWithFilters: (period: string, crop: string) => void;
 }
 
@@ -152,14 +152,14 @@ export const StatisticsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year'>('year');
   const [cropFilter, setCropFilter] = useState('all');
   
-  // Fonction pour mettre à jour les données en fonction des filtres
+  // Função para atualizar os dados com base nos filtros
   const updateDataWithFilters = (period: string, crop: string) => {
-    // Filtrer les données de rendement par culture si nécessaire
+    // Filtrar os dados de rendimento por cultura se necessário
     if (crop !== 'all') {
       const filteredYieldData = initialYieldData.filter(item => item.name === crop);
       setYieldData(filteredYieldData);
       
-      // Filtrer également les données financières par culture
+      // Filtrar também os dados financeiros por cultura
       const filteredProfitabilityData = initialProfitabilityData.filter(item => item.crop === crop);
       setFinancialData(prev => ({
         ...prev,
@@ -173,10 +173,10 @@ export const StatisticsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }));
     }
     
-    // Vous pourriez également ajuster les autres données en fonction de la période
+    // Você também pode ajustar os outros dados com base no período
   };
   
-  // Mettre à jour les données lorsque les filtres changent
+  // Atualizar os dados quando os filtros mudarem
   useEffect(() => {
     updateDataWithFilters(period, cropFilter);
   }, [period, cropFilter]);

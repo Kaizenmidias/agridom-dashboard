@@ -59,7 +59,7 @@ router.post('/avatar', authenticateToken, upload.single('avatar'), async (req, r
     
     // Atualizar o avatar do usuário no banco de dados
     await query(
-      'UPDATE users SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
+      'UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [avatarUrl, userId]
     );
     

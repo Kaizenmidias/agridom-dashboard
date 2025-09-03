@@ -1,6 +1,5 @@
 import { User, Project, Expense, Parcel, Crop, Code, InsertCode, UpdateCode } from '../types/database'
-
-const API_BASE_URL = 'http://localhost:3001/api';
+import { API_BASE_URL } from '../config/api'
 
 // Função auxiliar para fazer requisições autenticadas
 const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
@@ -198,17 +197,31 @@ export async function getExpenseById(id: string): Promise<Expense | null> {
 }
 
 export async function createExpense(expenseData: Omit<Expense, 'id' | 'created_at' | 'updated_at'>): Promise<Expense> {
+  // Garantir que a data esteja no formato correto
+  const processedData = {
+    ...expenseData,
+    expense_date: expenseData.expense_date || expenseData.date,
+    date: expenseData.date || expenseData.expense_date
+  };
+  
   return await fetchWithAuth(`${API_BASE_URL}/expenses`, {
     method: 'POST',
-    body: JSON.stringify(expenseData),
+    body: JSON.stringify(processedData),
   });
 }
 
 export async function updateExpense(id: string, expenseData: Partial<Expense>): Promise<Expense | null> {
   try {
+    // Garantir que a data esteja no formato correto
+    const processedData = {
+      ...expenseData,
+      expense_date: expenseData.expense_date || expenseData.date,
+      date: expenseData.date || expenseData.expense_date
+    };
+    
     return await fetchWithAuth(`${API_BASE_URL}/expenses/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(expenseData),
+      body: JSON.stringify(processedData),
     });
   } catch (error) {
     return null;

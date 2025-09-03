@@ -28,9 +28,9 @@ const ParcelImportDialog = ({ isOpen, onOpenChange, onImportConfirm }: ParcelImp
               <Calendar className="h-4 w-4 mr-2" />
               Données géospatiales (GeoJSON)
             </Button>
-            <Button variant="outline" className="justify-start" onClick={() => onImportConfirm('de cultures')}>
+            <Button variant="outline" className="justify-start" onClick={() => onImportConfirm('de culturas')}>
               <Filter className="h-4 w-4 mr-2" />
-              Historique des cultures (Excel)
+              Histórico das culturas (Excel)
             </Button>
           </div>
           <div className="flex justify-end">

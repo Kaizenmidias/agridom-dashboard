@@ -14,17 +14,17 @@ import {
 interface Task {
   id: number;
   task: string;
-  culture: string;
+  cultura: string;
   date: string;
   priority: 'Haute' | 'Moyenne' | 'Basse';
 }
 
 const initialTasks: Task[] = [
-  { id: 1, task: 'Fertilisation de la canne', culture: 'Canne à Sucre', date: '2023-09-25', priority: 'Haute' },
-  { id: 2, task: 'Traitement contre la cercosporiose', culture: 'Banane', date: '2023-09-28', priority: 'Moyenne' },
-  { id: 3, task: 'Inspection croissance ananas', culture: 'Ananas', date: '2023-09-30', priority: 'Basse' },
-  { id: 4, task: 'Désherbage parcelle madère', culture: 'Madère', date: '2023-10-05', priority: 'Moyenne' },
-  { id: 5, task: 'Préparation coupe canne', culture: 'Canne à Sucre', date: '2024-01-10', priority: 'Haute' },
+  { id: 1, task: 'Fertilização da cana', cultura: 'Cana-de-açúcar', date: '2023-09-25', priority: 'Alta' },
+  { id: 2, task: 'Tratamento contra cercosporiose', cultura: 'Banana', date: '2023-09-28', priority: 'Média' },
+  { id: 3, task: 'Inspeção crescimento abacaxi', cultura: 'Abacaxi', date: '2023-09-30', priority: 'Baixa' },
+  { id: 4, task: 'Capina parcela madeira', cultura: 'Madeira', date: '2023-10-05', priority: 'Média' },
+  { id: 5, task: 'Preparação corte cana', cultura: 'Cana-de-açúcar', date: '2024-01-10', priority: 'Alta' },
 ];
 
 const TaskList = () => {
@@ -32,7 +32,7 @@ const TaskList = () => {
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTask, setNewTask] = useState<Partial<Task>>({
     task: '',
-    culture: '',
+    cultura: '',
     date: '',
     priority: 'Moyenne'
   });
@@ -68,7 +68,7 @@ const TaskList = () => {
   };
 
   const handleAddTask = () => {
-    if (!newTask.task || !newTask.culture || !newTask.date) {
+    if (!newTask.task || !newTask.cultura || !newTask.date) {
       console.error('Veuillez remplir tous les champs obligatoires');
       return;
     }
@@ -76,7 +76,7 @@ const TaskList = () => {
     const taskToAdd: Task = {
       id: Math.max(0, ...tasks.map(t => t.id)) + 1,
       task: newTask.task,
-      culture: newTask.culture,
+      cultura: newTask.cultura,
       date: newTask.date,
       priority: newTask.priority as Task['priority'] || 'Moyenne'
     };
@@ -84,7 +84,7 @@ const TaskList = () => {
     setTasks([...tasks, taskToAdd]);
     setNewTask({
       task: '',
-      culture: '',
+      cultura: '',
       date: '',
       priority: 'Moyenne'
     });
@@ -122,13 +122,13 @@ const TaskList = () => {
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">Culture</label>
+              <label className="text-sm font-medium mb-1 block">Cultura</label>
               <select
-                value={newTask.culture}
-                onChange={(e) => setNewTask({...newTask, culture: e.target.value})}
+                value={newTask.cultura}
+                onChange={(e) => setNewTask({...newTask, cultura: e.target.value})}
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-agri-primary focus:border-agri-primary"
               >
-                <option value="">Sélectionner une culture</option>
+                <option value="">Selecionar uma cultura</option>
                 <option value="Canne à Sucre">Canne à Sucre</option>
                 <option value="Banane">Banane</option>
                 <option value="Ananas">Ananas</option>
@@ -137,7 +137,7 @@ const TaskList = () => {
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">Date</label>
+              <label className="text-sm font-medium mb-1 block">Data</label>
               <input
                 type="date"
                 value={newTask.date}
@@ -174,7 +174,7 @@ const TaskList = () => {
           <TableHeader>
             <TableRow>
               <TableHead className="w-[40%]">TÂCHE</TableHead>
-              <TableHead className="w-[20%]">CULTURE</TableHead>
+              <TableHead className="w-[20%]">CULTURA</TableHead>
               <TableHead className="w-[15%]">DATE</TableHead>
               <TableHead className="w-[15%]">PRIORITÉ</TableHead>
               <TableHead className="w-[10%]">ACTIONS</TableHead>
@@ -187,11 +187,11 @@ const TaskList = () => {
                 <TableCell>
                   <div className="flex items-center">
                     <Tag className="h-3 w-3 mr-1.5 text-agri-primary" />
-                    {task.culture}
+                    {task.cultura}
                   </div>
                 </TableCell>
                 <TableCell>
-                  {new Date(task.date).toLocaleDateString('fr-FR')}
+                  {new Date(task.date).toLocaleDateString('pt-BR')}
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>

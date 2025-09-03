@@ -58,7 +58,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
       nomScientifique: data.scientificName || data.nomScientifique || "Non spécifié",
       famille: data.family || data.famille || "Non spécifiée",
       origine: data.origin || data.origine || "Non spécifiée",
-      saisonCulture: data.growingSeason || data.saisonCulture || "Non spécifiée",
+      estacaoCultivo: data.growingSeason || data.estacaoCultivo || "Não especificada",
       typeSol: data.soilType || data.typeSol || "Non spécifié",
       besoinEau: data.waterNeeds || data.besoinEau || "Non spécifié",
       fertilisation: data.fertilization || data.fertilisation || "Non spécifiée",
@@ -117,14 +117,14 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
               ${item.type}
             </div>
             <div>
-              <span class="font-medium">Saison de culture:</span>
-              ${item.saisonCulture}
+              <span class="font-medium">Estação de cultivo:</span>
+              ${item.estacaoCultivo}
             </div>
           </div>
         </div>
         
         <div class="section mb-6">
-          <h2 class="text-lg font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-800'} border-b pb-2 mb-4">Conditions de culture</h2>
+          <h2 class="text-lg font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-800'} border-b pb-2 mb-4">Condições de cultivo</h2>
           <div class="grid grid-cols-2 gap-4">
             <div>
               <span class="font-medium">Type de sol:</span>
@@ -139,7 +139,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
               ${item.fertilisation}
             </div>
             <div>
-              <span class="font-medium">Période de récolte:</span>
+              <span class="font-medium">Período de colheita:</span>
               ${item.periodeRecolte}
             </div>
             <div>
@@ -187,7 +187,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Fiche Technique - ${data.name || data.nom || 'Culture'}</title>
+            <title>Ficha Técnica - ${data.name || data.nom || 'Cultura'}</title>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
@@ -316,7 +316,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl h-[80vh]">
           <DialogHeader>
-            <DialogTitle>Fiche Technique - {data?.name || data?.nom || 'Culture'}</DialogTitle>
+            <DialogTitle>Ficha Técnica - {data?.name || data?.nom || 'Cultura'}</DialogTitle>
             <DialogDescription>
               Aperçu de la fiche technique
             </DialogDescription>

@@ -55,7 +55,7 @@ const formSchema = z.object({
   month: z.string().min(1, { message: "Le mois est requis" }),
   year: z.coerce.number().min(2000, { message: "Année invalide" }).max(2100),
   amount: z.coerce.number().min(0, { message: "Valeur invalide" }),
-  location: z.string().min(1, { message: "La région est requise" }),
+  location: z.string().min(1, { message: "A região é obrigatória" }),
   impact: z.enum(['Positive', 'Neutral', 'Negative']),
   notes: z.string().optional(),
 });
@@ -63,7 +63,7 @@ const formSchema = z.object({
 const GuadeloupeRainfallTracking = () => {
   const { toast } = useToast();
   const [title, setTitle] = useState('Suivi des Précipitations en Guadeloupe');
-  const [description, setDescription] = useState('Visualisation des données pluviométriques pour optimiser la gestion des cultures');
+  const [description, setDescription] = useState('Visualização dos dados pluviométricos para otimizar o manejo das culturas');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterYear, setFilterYear] = useState('all');
   const [filterLocation, setFilterLocation] = useState('all');
@@ -83,7 +83,7 @@ const GuadeloupeRainfallTracking = () => {
   });
   
   const [rainfallData, setRainfallData] = useState<RainfallData[]>([
-    { id: 1, month: 'Janvier', year: 2023, amount: 210, location: 'Basse-Terre', impact: 'Positive', notes: 'Bon démarrage pour les cultures' },
+    { id: 1, month: 'Janeiro', year: 2023, amount: 210, location: 'Basse-Terre', impact: 'Positivo', notes: 'Bom início para as culturas' },
     { id: 2, month: 'Février', year: 2023, amount: 180, location: 'Basse-Terre', impact: 'Positive' },
     { id: 3, month: 'Mars', year: 2023, amount: 150, location: 'Basse-Terre', impact: 'Neutral' },
     { id: 4, month: 'Avril', year: 2023, amount: 120, location: 'Basse-Terre', impact: 'Neutral' },
@@ -120,7 +120,7 @@ const GuadeloupeRainfallTracking = () => {
     { id: 'month', header: 'Mois', accessorKey: 'month', isEditable: true },
     { id: 'year', header: 'Année', accessorKey: 'year', type: 'number', isEditable: true },
     { id: 'amount', header: 'Précipitations (mm)', accessorKey: 'amount', type: 'number', isEditable: true },
-    { id: 'location', header: 'Région', accessorKey: 'location', isEditable: true },
+    { id: 'location', header: 'Região', accessorKey: 'location', isEditable: true },
     { id: 'impact', header: 'Impact', accessorKey: 'impact', isEditable: true, options: ['Positive', 'Neutral', 'Negative'] },
     { id: 'notes', header: 'Notes', accessorKey: 'notes', isEditable: true }
   ];
@@ -400,7 +400,7 @@ const GuadeloupeRainfallTracking = () => {
           </div>
         </div>
         
-        {/* Filtres et recherche */}
+        {/* Filtros e pesquisa */}
         <div className="flex flex-wrap gap-4 mb-6 items-center">
           <div className="relative flex-grow max-w-sm">
             <Input
@@ -418,7 +418,7 @@ const GuadeloupeRainfallTracking = () => {
               <SelectValue placeholder="Année" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les années</SelectItem>
+              <SelectItem value="all">Todos os anos</SelectItem>
               {uniqueYears.map(year => (
                 <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
               ))}
@@ -428,10 +428,10 @@ const GuadeloupeRainfallTracking = () => {
           <Select value={filterLocation} onValueChange={setFilterLocation}>
             <SelectTrigger className="w-[180px]">
               <CloudRain className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Région" />
+              <SelectValue placeholder="Região" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les régions</SelectItem>
+              <SelectItem value="all">Todas as regiões</SelectItem>
               {uniqueLocations.map(location => (
                 <SelectItem key={location} value={location}>{location}</SelectItem>
               ))}
@@ -483,7 +483,7 @@ const GuadeloupeRainfallTracking = () => {
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionner un mois" />
+                                  <SelectValue placeholder="Selecionar um mês" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -533,11 +533,11 @@ const GuadeloupeRainfallTracking = () => {
                         name="location"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Région</FormLabel>
+                            <FormLabel>Região</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionner une région" />
+                                  <SelectValue placeholder="Selecionar uma região" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -563,7 +563,7 @@ const GuadeloupeRainfallTracking = () => {
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Sélectionner un impact" />
+                                <SelectValue placeholder="Selecionar um impacto" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>

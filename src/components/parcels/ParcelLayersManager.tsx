@@ -59,8 +59,8 @@ const ParcelLayersManager = ({ isOpen, onOpenChange }: ParcelLayersManagerProps)
     },
     { 
       id: 'crops', 
-      name: 'Cultures actuelles', 
-      description: 'Types de cultures par parcelle',
+      name: 'Culturas atuais', 
+      description: 'Tipos de culturas por parcela',
       enabled: true, 
       type: 'overlay',
       source: 'local'

@@ -48,7 +48,7 @@ const ChartSelector = ({ currentChart, setCurrentChart }: ChartSelectorProps) =>
   return (
     <div className="flex flex-col space-y-4 mb-6">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-500">Sélectionner un graphique</h3>
+        <h3 className="text-sm font-medium text-gray-500">Selecionar um gráfico</h3>
         <div className="flex gap-2">
           <Button 
             variant="outline" 

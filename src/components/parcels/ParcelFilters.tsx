@@ -19,7 +19,7 @@ import { Slider } from '@/components/ui/slider';
 import { DateRange } from 'react-day-picker';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { pt } from 'date-fns/locale';
 
 interface ParcelFiltersProps {
   searchTerm: string;
@@ -119,7 +119,7 @@ const ParcelFilters = ({
                   format(dateRange.from, 'dd/MM/yyyy')
                 )
               ) : (
-                "Sélectionner des dates"
+                "Selecionar datas"
               )}
             </Button>
           </PopoverTrigger>
@@ -131,7 +131,7 @@ const ParcelFilters = ({
               selected={dateRange}
               onSelect={setDateRange}
               numberOfMonths={2}
-              locale={fr}
+              locale={pt}
               className="p-3 pointer-events-auto"
             />
           </PopoverContent>
@@ -142,13 +142,13 @@ const ParcelFilters = ({
         <PopoverTrigger asChild>
           <Button variant="outline">
             <SlidersHorizontal className="h-4 w-4 mr-2" />
-            Filtres avancés
+            Filtros avançados
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-80">
           <div className="space-y-4">
             <div>
-              <h4 className="mb-2 font-medium">Superficie (hectares)</h4>
+              <h4 className="mb-2 font-medium">Superfície (hectares)</h4>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm">{tempAreaRange[0]} ha</span>
                 <span className="text-sm">{tempAreaRange[1]} ha</span>
@@ -168,7 +168,7 @@ const ParcelFilters = ({
                 onClick={applyAdvancedFilters}
                 className="bg-agri-primary hover:bg-agri-primary-dark text-white"
               >
-                Appliquer les filtres
+                Aplicar filtros
               </Button>
             </div>
           </div>

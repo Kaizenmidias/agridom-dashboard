@@ -22,19 +22,19 @@ export const useCRMContext = (): CRMContextState => {
   const [moduleData, setModuleData] = useState<Record<string, any>>({
     parcelles: {
       items: [
-        { id: 1, nom: "Parcelle Nord", surface: 12.5, culture: "Canne à Sucre", statut: "En culture" },
-        { id: 2, nom: "Parcelle Sud", surface: 8.3, culture: "Banane", statut: "En récolte" },
-        { id: 3, nom: "Parcelle Est", surface: 5.2, culture: "Ananas", statut: "En préparation" }
+        { id: 1, nom: "Parcela Norte", surface: 12.5, culture: "Cana-de-açúcar", statut: "Em cultivo" },
+        { id: 2, nom: "Parcela Sul", surface: 8.3, culture: "Banana", statut: "Em colheita" },
+        { id: 3, nom: "Parcela Leste", surface: 5.2, culture: "Abacaxi", statut: "Em preparação" }
       ],
       columns: [
         { key: "id", header: "ID" },
         { key: "nom", header: "Nom" },
         { key: "surface", header: "Surface (ha)" },
-        { key: "culture", header: "Culture" },
+        { key: "culture", header: "Cultura" },
         { key: "statut", header: "Statut" }
       ]
     },
-    cultures: {
+    culturas: {
       items: [
         { id: 1, nom: "Canne à Sucre", variete: "R579", dateDebut: "2023-03-15", dateFin: "2024-03-15" },
         { id: 2, nom: "Banane", variete: "Grande Naine", dateDebut: "2023-02-10", dateFin: "2023-12-10" },
@@ -42,10 +42,10 @@ export const useCRMContext = (): CRMContextState => {
       ],
       columns: [
         { key: "id", header: "ID" },
-        { key: "nom", header: "Culture" },
+        { key: "nom", header: "Cultura" },
         { key: "variete", header: "Variété" },
-        { key: "dateDebut", header: "Date de début" },
-        { key: "dateFin", header: "Date de fin" }
+        { key: "dateDebut", header: "Data de início" },
+        { key: "dateFin", header: "Data de fim" }
       ]
     },
     finances: {
@@ -69,8 +69,8 @@ export const useCRMContext = (): CRMContextState => {
         { periode: "2023-T1", cultureId: 2, rendement: 15.3, revenus: 7800, couts: 2100 }
       ],
       columns: [
-        { key: "periode", header: "Période" },
-        { key: "cultureId", header: "Culture ID" },
+        { key: "periodo", header: "Período" },
+        { key: "culturaId", header: "ID da Cultura" },
         { key: "rendement", header: "Rendement (t/ha)" },
         { key: "revenus", header: "Revenus (€)" },
         { key: "couts", header: "Coûts (€)" }
@@ -94,7 +94,7 @@ export const useCRMContext = (): CRMContextState => {
   });
   const [activeModules, setActiveModules] = useState<string[]>([
     'parcelles',
-    'cultures',
+    'culturas',
     'finances',
     'statistiques',
     'inventaire'
@@ -156,7 +156,7 @@ export const useCRMContext = (): CRMContextState => {
           landscape: false,
           template: 'technical_sheet'
         });
-      } else if (moduleName === 'guide_cultures') {
+      } else if (moduleName === 'guia_culturas') {
         return true;
       }
       
@@ -212,7 +212,7 @@ export const useCRMContext = (): CRMContextState => {
     
     const moduleNames: Record<string, string> = {
       parcelles: "Parcelles",
-      cultures: "Cultures",
+      culturas: "Culturas",
       finances: "Finances",
       statistiques: "Statistiques",
       inventaire: "Inventaire",

@@ -122,7 +122,7 @@ const EnvironmentalCharts = () => {
               <div className="w-16 h-16 rounded-full bg-agri-primary/10 flex items-center justify-center mb-2">
                 <Check className="h-8 w-8 text-agri-primary" />
               </div>
-              <h4 className="font-medium mb-1">Agriculture Raisonnée</h4>
+              <h4 className="font-medium mb-1">Agricultura Sustentável</h4>
               <p className="text-sm text-center text-muted-foreground">
                 Certifié depuis 2019
               </p>

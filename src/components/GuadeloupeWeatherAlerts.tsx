@@ -41,7 +41,7 @@ interface WeatherAlert {
 const alertFormSchema = z.object({
   date: z.string().min(1, { message: "La date est requise" }),
   type: z.enum(['Pluie intense', 'Tempête tropicale', 'Sécheresse', 'Chaleur excessive', 'Inondation']),
-  region: z.string().min(1, { message: "La région est requise" }),
+  region: z.string().min(1, { message: "A região é obrigatória" }),
   severity: z.enum(['Basse', 'Moyenne', 'Haute', 'Extrême']),
   impactCrops: z.enum(['Faible', 'Modéré', 'Sévère']),
   description: z.string().min(5, { message: "Description trop courte" }),
@@ -52,7 +52,7 @@ const alertFormSchema = z.object({
 const GuadeloupeWeatherAlerts = () => {
   const { toast } = useToast();
   const [title, setTitle] = useState('Alertes Météorologiques en Guadeloupe');
-  const [description, setDescription] = useState('Suivez les alertes météo impactant les cultures et préparez vos actions préventives');
+  const [description, setDescription] = useState('Acompanhe os alertas meteorológicos que impactam as culturas e prepare suas ações preventivas');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -93,7 +93,7 @@ const GuadeloupeWeatherAlerts = () => {
       severity: 'Extrême',
       impactCrops: 'Sévère',
       description: 'Tempête tropicale Emily approchant avec des vents pouvant dépasser 120 km/h et fortes précipitations.',
-      recommendation: 'Récolter préventivement les cultures matures. Renforcer les tuteurs des bananiers. Sécuriser les équipements agricoles.',
+      recommendation: 'Colher preventivamente as culturas maduras. Reforçar os tutores das bananeiras. Proteger os equipamentos agrícolas.',
       status: 'Prévue'
     },
     {
@@ -103,8 +103,8 @@ const GuadeloupeWeatherAlerts = () => {
       region: 'Grande-Terre',
       severity: 'Moyenne',
       impactCrops: 'Modéré',
-      description: 'Période prolongée sans précipitations significatives causant un stress hydrique pour certaines cultures.',
-      recommendation: 'Prioriser l\'irrigation des cultures sensibles. Utiliser du paillage pour conserver l\'humidité du sol.',
+      description: 'Período prolongado sem precipitações significativas causando estresse hídrico para certas culturas.',
+      recommendation: 'Priorizar a irrigação das culturas sensíveis. Usar cobertura morta para conservar a umidade do solo.',
       status: 'Terminée'
     },
     {
@@ -115,7 +115,7 @@ const GuadeloupeWeatherAlerts = () => {
       severity: 'Moyenne',
       impactCrops: 'Modéré',
       description: 'Vague de chaleur avec températures dépassant 35°C pendant plusieurs jours consécutifs.',
-      recommendation: 'Ombrager les cultures sensibles. Augmenter la fréquence d\'irrigation, de préférence tôt le matin ou tard le soir.',
+      recommendation: 'Sombrear as culturas sensíveis. Aumentar a frequência de irrigação, preferencialmente no início da manhã ou no final da tarde.',
       status: 'Prévue'
     },
     {
@@ -126,7 +126,7 @@ const GuadeloupeWeatherAlerts = () => {
       severity: 'Haute',
       impactCrops: 'Sévère',
       description: 'Débordement des rivières suite aux pluies intenses des derniers jours affectant les parcelles en zone basse.',
-      recommendation: 'Évacuer les cultures pouvant être récoltées. Préparer les demandes d\'indemnisation. Surveiller les maladies fongiques.',
+      recommendation: 'Evacuar as culturas que podem ser colhidas. Preparar as solicitações de indenização. Monitorar doenças fúngicas.',
       status: 'Terminée'
     }
   ]);
@@ -134,7 +134,7 @@ const GuadeloupeWeatherAlerts = () => {
   const columns: Column[] = [
     { id: 'date', header: 'Date', accessorKey: 'date', isEditable: true },
     { id: 'type', header: 'Type d\'alerte', accessorKey: 'type', isEditable: true },
-    { id: 'region', header: 'Région', accessorKey: 'region', isEditable: true },
+    { id: 'region', header: 'Região', accessorKey: 'region', isEditable: true },
     { id: 'severity', header: 'Sévérité', accessorKey: 'severity', isEditable: true },
     { id: 'status', header: 'Statut', accessorKey: 'status', isEditable: true },
   ];
@@ -308,7 +308,7 @@ const GuadeloupeWeatherAlerts = () => {
               <SelectValue placeholder="Sévérité" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
               <SelectItem value="Basse">Basse</SelectItem>
               <SelectItem value="Moyenne">Moyenne</SelectItem>
               <SelectItem value="Haute">Haute</SelectItem>
@@ -367,7 +367,7 @@ const GuadeloupeWeatherAlerts = () => {
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionner un type" />
+                                  <SelectValue placeholder="Selecionar um tipo" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -390,11 +390,11 @@ const GuadeloupeWeatherAlerts = () => {
                         name="region"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Région</FormLabel>
+                            <FormLabel>Região</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionner une région" />
+                                  <SelectValue placeholder="Selecionar uma região" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -419,7 +419,7 @@ const GuadeloupeWeatherAlerts = () => {
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionner une sévérité" />
+                                  <SelectValue placeholder="Selecionar uma severidade" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -441,11 +441,11 @@ const GuadeloupeWeatherAlerts = () => {
                         name="impactCrops"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Impact sur les cultures</FormLabel>
+                            <FormLabel>Impacto nas culturas</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionner un impact" />
+                                  <SelectValue placeholder="Selecionar um impacto" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -468,7 +468,7 @@ const GuadeloupeWeatherAlerts = () => {
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionner un statut" />
+                                  <SelectValue placeholder="Selecionar um status" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -544,7 +544,7 @@ const GuadeloupeWeatherAlerts = () => {
                     {getAlertIcon(alert.type)}
                     <div>
                       <h3 className="font-semibold">{alert.type} - {alert.region}</h3>
-                      <p className="text-sm text-muted-foreground">{new Date(alert.date).toLocaleDateString()}</p>
+                      <p className="text-sm text-muted-foreground">{new Date(alert.date).toLocaleDateString('pt-BR')}</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -575,7 +575,7 @@ const GuadeloupeWeatherAlerts = () => {
                       </div>
                     </div>
                     <div className="mt-4">
-                      <h4 className="text-sm font-semibold mb-1">Impact sur les cultures</h4>
+                      <h4 className="text-sm font-semibold mb-1">Impacto nas culturas</h4>
                       <Badge className={alert.impactCrops === 'Sévère' ? 'bg-red-100 text-red-800' : 
                                       alert.impactCrops === 'Modéré' ? 'bg-yellow-100 text-yellow-800' : 
                                       'bg-green-100 text-green-800'}>

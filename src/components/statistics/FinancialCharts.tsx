@@ -52,7 +52,7 @@ const FinancialCharts = () => {
                 <ZAxis 
                   type="category" 
                   dataKey="crop" 
-                  name="Culture" 
+                  name="Cultura" 
                   range={[100, 1000]} 
                 />
                 <Tooltip 
@@ -67,7 +67,7 @@ const FinancialCharts = () => {
                       return (
                         <div className="bg-white p-2 border rounded shadow-sm">
                           <p className="font-medium">{payload[2]?.payload.name}</p>
-                          <p>Culture: {payload[2]?.value}</p>
+                          <p>Cultura: {payload[2]?.value}</p>
                           <p>Taille: {payload[0]?.value} ha</p>
                           <p>Rentabilité: {payload[1]?.value} €/ha</p>
                         </div>
@@ -123,7 +123,7 @@ const FinancialCharts = () => {
         
         <Card>
           <CardHeader>
-            <CardTitle>Revenus et dépenses mensuels</CardTitle>
+            <CardTitle>Receitas e despesas mensais</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">

@@ -78,7 +78,7 @@ export const EditableField = ({
     if (type === 'date' && typeof val === 'string') {
       const date = new Date(val);
       if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString();
+        return date.toLocaleDateString('pt-BR');
       }
     } else if (type === 'select' && typeof val === 'string') {
       const option = options.find(opt => opt.value === val);

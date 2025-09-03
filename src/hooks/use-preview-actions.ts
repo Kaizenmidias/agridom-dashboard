@@ -27,7 +27,7 @@ export const usePreviewActions = ({
   const handlePrint = async () => {
     if (!data || data.length === 0) {
       toast.error("Aucune donnée à imprimer", {
-        description: "Veuillez vérifier vos filtres ou sélectionner une autre période."
+        description: "Por favor, verifique seus filtros ou selecione outro período."
       });
       return;
     }
@@ -55,7 +55,7 @@ export const usePreviewActions = ({
   const handleShowPreview = () => {
     if (!data || data.length === 0) {
       toast.error("Aucune donnée à afficher", {
-        description: "Veuillez vérifier vos filtres ou sélectionner une autre période."
+        description: "Por favor, verifique seus filtros ou selecione outro período."
       });
       return;
     }
@@ -68,7 +68,7 @@ export const usePreviewActions = ({
   const handleExportPDF = async () => {
     if (!data || data.length === 0) {
       toast.error("Aucune donnée à exporter", {
-        description: "Veuillez vérifier vos filtres ou sélectionner une autre période."
+        description: "Por favor, verifique seus filtros ou selecione outro período."
       });
       return;
     }

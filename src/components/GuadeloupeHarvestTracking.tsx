@@ -19,7 +19,7 @@ interface HarvestData {
 const GuadeloupeHarvestTracking = () => {
   const { yieldData } = useStatistics();
   const [title, setTitle] = useState('Suivi des Récoltes en Guadeloupe');
-  const [description, setDescription] = useState('Suivez les rendements et la qualité des récoltes pour les principales cultures guadeloupéennes');
+  const [description, setDescription] = useState('Acompanhe os rendimentos e a qualidade das colheitas para as principais culturas guadalupenses');
   
   // Convertir les données de rendement pour les adapter au format attendu
   const [harvestData, setHarvestData] = useState<HarvestData[]>(
@@ -39,7 +39,7 @@ const GuadeloupeHarvestTracking = () => {
   
   // Colonnes pour le tableau éditable
   const columns: Column[] = [
-    { id: 'crop', header: 'Culture', accessorKey: 'crop', isEditable: true },
+    { id: 'crop', header: 'Cultura', accessorKey: 'crop', isEditable: true },
     { id: 'currentYield', header: 'Rendement actuel', accessorKey: 'currentYield', type: 'number', isEditable: true },
     { id: 'previousYield', header: 'Rendement précédent', accessorKey: 'previousYield', type: 'number', isEditable: true },
     { id: 'unit', header: 'Unité', accessorKey: 'unit', isEditable: true },
@@ -75,7 +75,7 @@ const GuadeloupeHarvestTracking = () => {
     const newData = [...harvestData];
     newData.splice(rowIndex, 1);
     setHarvestData(newData);
-    console.log('Culture supprimée du suivi');
+    console.log('Cultura removida do acompanhamento');
   };
   
   const handleAddRow = (newRow: Record<string, any>) => {
@@ -88,7 +88,7 @@ const GuadeloupeHarvestTracking = () => {
       quality: (newRow.quality as HarvestData['quality']) || 'Moyenne'
     };
     setHarvestData([...harvestData, typedRow]);
-    console.log('Nouvelle culture ajoutée au suivi');
+    console.log('Nova cultura adicionada ao acompanhamento');
   };
   
   // Données pour le graphique comparatif
@@ -102,7 +102,7 @@ const GuadeloupeHarvestTracking = () => {
 
   // Prepare data for preview/print
   const printData = harvestData.map(item => ({
-    culture: item.crop,
+    cultura: item.crop,
     rendement_actuel: `${item.currentYield} ${item.unit}`,
     rendement_precedent: `${item.previousYield} ${item.unit}`,
     surface: `${item.harvestArea} ha`,
@@ -112,7 +112,7 @@ const GuadeloupeHarvestTracking = () => {
   
   // Columns for preview/print
   const printColumns = [
-    { key: "culture", header: "Culture" },
+    { key: "cultura", header: "Cultura" },
     { key: "rendement_actuel", header: "Rendement actuel" },
     { key: "rendement_precedent", header: "Rendement précédent" },
     { key: "surface", header: "Surface (ha)" },

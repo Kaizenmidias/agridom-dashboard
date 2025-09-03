@@ -169,7 +169,7 @@ const ParcelCard = ({
         </div>
         <div className="flex items-center">
           <Calendar className="h-4 w-4 mr-1.5" />
-          <span>{new Date(parcel.lastActivity).toLocaleDateString()}</span>
+          <span>{new Date(parcel.lastActivity).toLocaleDateString('pt-BR')}</span>
         </div>
         <div className="col-span-2 mt-1 py-1 px-2 bg-agri-primary/5 rounded-md text-center">
           <span className="text-agri-primary font-medium">{parcel.crop}</span>
@@ -291,7 +291,7 @@ const GuadeloupeParcelManagement = () => {
       <header className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold mb-1">Gestion des Parcelles en Guadeloupe</h1>
-          <p className="text-muted-foreground">Gérez et surveillez toutes vos parcelles agricoles sur l'archipel</p>
+          <p className="text-muted-foreground">Gerencie e monitore todas as suas parcelas agrícolas no arquipélago</p>
         </div>
         <button 
           className="inline-flex items-center justify-center px-4 py-2 bg-agri-primary text-white rounded-lg hover:bg-agri-primary-dark transition-colors whitespace-nowrap"
@@ -401,13 +401,13 @@ const GuadeloupeParcelManagement = () => {
                   <div className="border rounded-lg p-4">
                     <h3 className="font-medium mb-3 flex items-center">
                       <Calendar className="h-4 w-4 mr-2" />
-                      Culture actuelle
+                      Cultura atual
                     </h3>
                     
                     {isEditMode ? (
                       <div className="space-y-3">
                         <div>
-                          <label className="text-sm text-muted-foreground">Culture</label>
+                          <label className="text-sm text-muted-foreground">Cultura</label>
                           <input 
                             type="text" 
                             value={editedParcel?.crop || ''} 
@@ -417,7 +417,7 @@ const GuadeloupeParcelManagement = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="text-sm text-muted-foreground">Date de plantation</label>
+                            <label className="text-sm text-muted-foreground">Data de plantio</label>
                             <input 
                               type="date" 
                               value={editedParcel?.plantingDate || ''} 
@@ -426,7 +426,7 @@ const GuadeloupeParcelManagement = () => {
                             />
                           </div>
                           <div>
-                            <label className="text-sm text-muted-foreground">Date de récolte</label>
+                            <label className="text-sm text-muted-foreground">Data de colheita</label>
                             <input 
                               type="date" 
                               value={editedParcel?.harvestDate || ''} 
@@ -463,10 +463,10 @@ const GuadeloupeParcelManagement = () => {
                       <div className="bg-agri-primary/10 rounded-lg p-3 text-center">
                         <span className="font-semibold text-agri-primary">{selectedParcel.crop}</span>
                         {selectedParcel.plantingDate && (
-                          <p className="text-sm mt-1">Planté le: {new Date(selectedParcel.plantingDate).toLocaleDateString()}</p>
+                          <p className="text-sm mt-1">Planté le: {new Date(selectedParcel.plantingDate).toLocaleDateString('pt-BR')}</p>
                         )}
                         {selectedParcel.harvestDate && (
-                          <p className="text-sm">Récolte prévue: {new Date(selectedParcel.harvestDate).toLocaleDateString()}</p>
+                          <p className="text-sm">Récolte prévue: {new Date(selectedParcel.harvestDate).toLocaleDateString('pt-BR')}</p>
                         )}
                       </div>
                     )}
@@ -523,7 +523,7 @@ const GuadeloupeParcelManagement = () => {
                           <span className="text-sm font-medium">{selectedParcel.rainfall ? `${selectedParcel.rainfall} mm/an` : 'Non spécifié'}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-sm">Superficie:</span>
+                          <span className="text-sm">Superfície:</span>
                           <span className="text-sm font-medium">{selectedParcel.area} ha</span>
                         </div>
                       </div>

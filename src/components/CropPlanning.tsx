@@ -22,81 +22,10 @@ import { toast } from 'sonner';
 type CropStatus = 'growing' | 'harvested' | 'planned';
 type TaskPriority = 'high' | 'medium' | 'low';
 
-// Mock data for crop planning - Adapté à l'agriculture en Guadeloupe
-const initialCropsData = [
-  { 
-    id: 1, 
-    name: 'Canne à Sucre', 
-    variety: 'R579', 
-    parcel: 'Grande-Terre Nord', 
-    plantingDate: '2023-02-15', 
-    harvestDate: '2024-02-15', 
-    status: 'growing' as CropStatus,
-    area: 15.5 
-  },
-  { 
-    id: 2, 
-    name: 'Banane', 
-    variety: 'Poyo', 
-    parcel: 'Basse-Terre Sud', 
-    plantingDate: '2023-04-10', 
-    harvestDate: '2023-12-10', 
-    status: 'growing' as CropStatus,
-    area: 8.3
-  },
-  { 
-    id: 3, 
-    name: 'Ananas', 
-    variety: 'Bouteille', 
-    parcel: 'Capesterre', 
-    plantingDate: '2023-05-20', 
-    harvestDate: '2024-01-20', 
-    status: 'growing' as CropStatus,
-    area: 4.7 
-  },
-  { 
-    id: 4, 
-    name: 'Igname', 
-    variety: 'Pacala', 
-    parcel: 'Nord Grande-Terre', 
-    plantingDate: '2023-09-15', 
-    harvestDate: '2024-03-15', 
-    status: 'planned' as CropStatus,
-    area: 5.2 
-  },
-  { 
-    id: 5, 
-    name: 'Madère', 
-    variety: 'Blanche', 
-    parcel: 'Marie-Galante', 
-    plantingDate: '2023-04-01', 
-    harvestDate: '2023-11-01', 
-    status: 'growing' as CropStatus,
-    area: 3.8 
-  }
-];
-
-// Tasks related to crops - Adapté au contexte guadeloupéen
-const initialCropTasks = [
-  { id: 1, cropId: 1, title: 'Fertilisation de la canne', date: '2023-09-25', completed: false, priority: 'high' as TaskPriority },
-  { id: 2, cropId: 2, title: 'Traitement contre la cercosporiose', date: '2023-09-28', completed: false, priority: 'medium' as TaskPriority },
-  { id: 3, cropId: 3, title: 'Inspection croissance ananas', date: '2023-09-30', completed: false, priority: 'low' as TaskPriority },
-  { id: 4, cropId: 5, title: 'Désherbage parcelle madère', date: '2023-10-05', completed: false, priority: 'medium' as TaskPriority },
-  { id: 5, cropId: 1, title: 'Préparation coupe canne', date: '2024-01-10', completed: false, priority: 'high' as TaskPriority }
-];
-
-// Monthly calendar view mock data - Adapté à l'agriculture guadeloupéenne
-const monthlyEvents = [
-  { date: '2023-09-25', events: [{ id: 1, title: 'Fertilisation de la canne', crop: 'Canne à Sucre', priority: 'high' }] },
-  { date: '2023-09-28', events: [{ id: 2, title: 'Traitement contre la cercosporiose', crop: 'Banane', priority: 'medium' }] },
-  { date: '2023-09-30', events: [{ id: 3, title: 'Inspection croissance ananas', crop: 'Ananas', priority: 'low' }] },
-  { date: '2023-10-05', events: [{ id: 4, title: 'Désherbage parcelle madère', crop: 'Madère', priority: 'medium' }] },
-  { date: '2024-01-10', events: [{ id: 5, title: 'Préparation coupe canne', crop: 'Canne à Sucre', priority: 'high' }] },
-  { date: '2023-12-10', events: [{ id: 6, title: 'Récolte', crop: 'Banane', priority: 'high' }] },
-  { date: '2024-01-20', events: [{ id: 7, title: 'Récolte', crop: 'Ananas', priority: 'high' }] },
-  { date: '2023-11-01', events: [{ id: 8, title: 'Récolte', crop: 'Madère', priority: 'medium' }] },
-  { date: '2024-02-15', events: [{ id: 9, title: 'Coupe canne', crop: 'Canne à Sucre', priority: 'high' }] }
-];
+// Dados fictícios removidos - agora usando apenas dados reais da API
+const initialCropsData = [];
+const initialCropTasks = [];
+const monthlyEvents = [];
 
 interface CropData {
   id: number;
@@ -172,7 +101,7 @@ const CropCard = ({
           <span className="font-medium">{crop.parcel}</span>
         </div>
         <div className="flex justify-between text-sm mb-1">
-          <span>Superficie:</span>
+          <span>Superfície:</span>
           <span className="font-medium">{crop.area} ha</span>
         </div>
         <div className="flex justify-between text-sm">
@@ -184,11 +113,11 @@ const CropCard = ({
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="flex flex-col items-center p-2 bg-agri-primary/5 rounded-md">
           <span className="text-muted-foreground">Semis</span>
-          <span className="font-medium">{new Date(crop.plantingDate).toLocaleDateString()}</span>
+          <span className="font-medium">{new Date(crop.plantingDate).toLocaleDateString('pt-BR')}</span>
         </div>
         <div className="flex flex-col items-center p-2 bg-agri-accent/5 rounded-md">
           <span className="text-muted-foreground">Récolte</span>
-          <span className="font-medium">{new Date(crop.harvestDate).toLocaleDateString()}</span>
+          <span className="font-medium">{new Date(crop.harvestDate).toLocaleDateString('pt-BR')}</span>
         </div>
       </div>
       
@@ -277,7 +206,7 @@ const CropPlanning = () => {
   };
   
   const formatMonth = () => {
-    return currentMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    return currentMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   };
 
   const handleEditCrop = (crop: CropData) => {
@@ -302,7 +231,7 @@ const CropPlanning = () => {
   const handleDeleteCrop = (id: number) => {
     setCropsData(cropsData.filter(crop => crop.id !== id));
     setCropTasks(cropTasks.filter(task => task.cropId !== id));
-    toast.success('Culture supprimée avec succès');
+    toast.success('Cultura removida com sucesso');
   };
 
   const handleSaveCrop = () => {
@@ -310,7 +239,7 @@ const CropPlanning = () => {
       setCropsData(cropsData.map(crop => 
         crop.id === editingCrop.id ? editingCrop : crop
       ));
-      toast.success('Culture mise à jour avec succès');
+      toast.success('Cultura atualizada com sucesso');
     } else if (newCrop.name && newCrop.parcel) {
       const newId = Math.max(0, ...cropsData.map(c => c.id)) + 1;
       setCropsData([...cropsData, { 
@@ -323,7 +252,7 @@ const CropPlanning = () => {
         status: newCrop.status as CropStatus || 'planned',
         area: newCrop.area || 0
       } as CropData]);
-      toast.success('Nouvelle culture ajoutée');
+      toast.success('Nova cultura adicionada');
     } else {
       toast.error('Veuillez remplir tous les champs obligatoires');
       return;
@@ -369,7 +298,7 @@ const CropPlanning = () => {
     { id: 'title', header: 'Tâche', accessorKey: 'title', isEditable: true },
     { 
       id: 'crop', 
-      header: 'Culture', 
+      header: 'Cultura', 
       accessorKey: 'cropId', 
       isEditable: false,
     },
@@ -396,8 +325,8 @@ const CropPlanning = () => {
     <div className="p-6 animate-enter">
       <header className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold mb-1">Planification des Cultures Guadeloupéennes</h1>
-          <p className="text-muted-foreground">Gérez les cultures locales et planifiez vos activités agricoles</p>
+          <h1 className="text-2xl font-bold mb-1">Planejamento das Culturas Guadalupenses</h1>
+          <p className="text-muted-foreground">Gerencie as culturas locais e planeje suas atividades agrícolas</p>
         </div>
         <div className="flex space-x-2">
           <button 
@@ -437,7 +366,7 @@ const CropPlanning = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input 
                 type="text" 
-                placeholder="Rechercher une culture..." 
+                placeholder="Pesquisar uma cultura..." 
                 className="pl-10 pr-4 py-2 w-full border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -448,7 +377,7 @@ const CropPlanning = () => {
               onClick={handleAddCrop}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Ajouter une culture
+              Adicionar uma cultura
             </button>
           </div>
 
@@ -479,7 +408,7 @@ const CropPlanning = () => {
                 <thead className="text-xs uppercase bg-muted">
                   <tr>
                     <th className="px-4 py-2 text-left">Tâche</th>
-                    <th className="px-4 py-2 text-left">Culture</th>
+                    <th className="px-4 py-2 text-left">Cultura</th>
                     <th className="px-4 py-2 text-left">Date</th>
                     <th className="px-4 py-2 text-left">Priorité</th>
                     <th className="px-4 py-2 text-left">Actions</th>
@@ -633,13 +562,13 @@ const CropPlanning = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium mb-1">Culture</label>
+                <label className="block text-sm font-medium mb-1">Cultura</label>
                 <select 
                   className="w-full px-3 py-2 border border-input rounded-md"
                   value={newTask.cropId || ''}
                   onChange={(e) => setNewTask({...newTask, cropId: Number(e.target.value)})}
                 >
-                  <option value="">Sélectionner une culture</option>
+                  <option value="">Selecionar uma cultura</option>
                   {cropsData.map(crop => (
                     <option key={crop.id} value={crop.id}>
                       {crop.name} - {crop.parcel}
@@ -706,7 +635,7 @@ const CropPlanning = () => {
           <div className="bg-white rounded-xl p-6 max-w-md w-full">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">
-                {editingCrop ? 'Modifier une culture' : 'Ajouter une culture'}
+                {editingCrop ? 'Modificar uma cultura' : 'Adicionar uma cultura'}
               </h2>
               <button 
                 onClick={() => setShowCropForm(false)}
@@ -722,7 +651,7 @@ const CropPlanning = () => {
                 <input 
                   type="text" 
                   className="w-full px-3 py-2 border border-input rounded-md"
-                  placeholder="Nom de la culture"
+                  placeholder="Nome da cultura"
                   value={editingCrop ? editingCrop.name : newCrop.name}
                   onChange={(e) => {
                     if (editingCrop) {
@@ -805,11 +734,11 @@ const CropPlanning = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium mb-1">Superficie (ha)</label>
+                <label className="block text-sm font-medium mb-1">Superfície (ha)</label>
                 <input 
                   type="number" 
                   className="w-full px-3 py-2 border border-input rounded-md"
-                  placeholder="Surface en hectares"
+                  placeholder="Superfície em hectares"
                   value={editingCrop ? editingCrop.area : newCrop.area}
                   onChange={(e) => {
                     const value = parseFloat(e.target.value);

@@ -387,7 +387,7 @@ export const CultureDetailTable = ({
             </div>
             
             <div>
-              <Label>Période de récolte</Label>
+              <Label>Período de colheita</Label>
               <Input 
                 value={selectedCulture.harvestPeriod}
                 onChange={(e) => {
@@ -681,7 +681,7 @@ export const CultureDetailTable = ({
                 </div>
                 
                 <div>
-                  <Label htmlFor="harvestPeriod">Période de récolte</Label>
+                  <Label htmlFor="harvestPeriod">Período de colheita</Label>
                   <Input 
                     id="harvestPeriod"
                     type="text" 

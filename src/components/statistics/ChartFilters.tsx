@@ -37,9 +37,9 @@ const ChartFilters = ({
     setPeriod('year');
     setCropFilter('all');
     if (setSearchTerm) setSearchTerm('');
-    console.log("Filtres réinitialisés - Affichage de toutes les cultures sur une période annuelle");
-    toast.info("Filtres réinitialisés", {
-      description: "Affichage de toutes les cultures sur une période annuelle"
+    console.log("Filtros reinicializados - Exibindo todas as culturas em período anual");
+    toast.info("Filtros reinicializados", {
+      description: "Exibindo todas as culturas em período anual"
     });
   };
   
@@ -57,13 +57,13 @@ const ChartFilters = ({
       >
         <SelectTrigger className="w-[140px]">
           <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-          <SelectValue placeholder="Période" />
+          <SelectValue placeholder="Período" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="year">Annuel</SelectItem>
-          <SelectItem value="month">Mensuel</SelectItem>
-          <SelectItem value="week">Hebdomadaire</SelectItem>
-          <SelectItem value="day">Journalier</SelectItem>
+          <SelectItem value="year">Anual</SelectItem>
+        <SelectItem value="month">Mensal</SelectItem>
+        <SelectItem value="week">Semanal</SelectItem>
+        <SelectItem value="day">Diário</SelectItem>
         </SelectContent>
       </Select>
 
@@ -73,10 +73,10 @@ const ChartFilters = ({
       >
         <SelectTrigger className="w-[160px]">
           <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
-          <SelectValue placeholder="Culture" />
+          <SelectValue placeholder="Cultura" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Toutes cultures</SelectItem>
+          <SelectItem value="all">Todas as culturas</SelectItem>
           <SelectItem value="Canne à Sucre">Canne à Sucre</SelectItem>
           <SelectItem value="Banane">Banane</SelectItem>
           <SelectItem value="Ananas">Ananas</SelectItem>

@@ -43,7 +43,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
           <iframe
             srcDoc={`
               <!DOCTYPE html>
-              <html lang="${settings.locale || 'fr'}">
+              <html lang="${settings.locale || 'pt'}">
                 <head>
                   <meta charset="UTF-8">
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">

@@ -29,8 +29,9 @@ import { toast } from 'sonner';
 const DashboardWithFilter: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
     const now = new Date();
-    return `${now.getFullYear()}-${now.getMonth()}`;
+    return `${now.getFullYear()}-${now.getMonth() + 1}`;
   });
+  const [selectedMetric, setSelectedMetric] = useState<string>('faturamento');
 
   // Estados para dados reais do dashboard
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
@@ -98,7 +99,7 @@ const DashboardWithFilter: React.FC = () => {
     } else {
       // Mês específico
       const [year, month] = newPeriod.split('-');
-      const selectedDate = new Date(parseInt(year), parseInt(month), 1);
+      const selectedDate = new Date(parseInt(year), parseInt(month) - 1, 1);
       
       const startOfSelectedMonth = startOfMonth(selectedDate);
       const endOfSelectedMonth = endOfMonth(selectedDate);
@@ -107,7 +108,7 @@ const DashboardWithFilter: React.FC = () => {
       endDate = format(endOfSelectedMonth, 'yyyy-MM-dd');
       
       // Mês anterior
-      const prevMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const prevMonth = new Date(parseInt(year), parseInt(month) - 2, 1);
       const prevStartOfMonth = startOfMonth(prevMonth);
       const prevEndOfMonth = endOfMonth(prevMonth);
       
@@ -136,34 +137,194 @@ const DashboardWithFilter: React.FC = () => {
     loadDashboardData();
   }, []);
 
-  // Dados do gráfico por período - usando dados reais
-  const getChartDataForPeriod = (period: string) => {
-    if (!dashboardStats) return [];
-    
-    if (period === 'year') {
-      // Usar dados reais de faturamento mensal
-      return dashboardStats.revenue_by_month.map(item => {
-        const year = new Date(item.month + '-01').getFullYear();
-        return {
-          name: year.toString(),
-          value: item.revenue
-        };
-      });
-    } else {
-      // Para mês específico, mostrar dados semanais baseados no total mensal
-      const monthlyTotal = currentMonthData.revenue;
-      const weeklyAverage = monthlyTotal / 4;
-      
-      return [
-        { name: 'Semana 1', value: Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)) },
-        { name: 'Semana 2', value: Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)) },
-        { name: 'Semana 3', value: Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)) },
-        { name: 'Semana 4', value: Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)) }
-      ];
+  const getMetricLabel = () => {
+    switch (selectedMetric) {
+      case 'todos':
+        return 'Todas as Métricas';
+      case 'faturamento':
+        return 'Faturamento';
+      case 'despesas':
+        return 'Despesas';
+      case 'lucro':
+        return 'Lucro';
+      default:
+        return 'Faturamento';
     }
   };
 
-  const chartData = getChartDataForPeriod(selectedPeriod);
+  const getMetricColor = () => {
+    switch (selectedMetric) {
+      case 'faturamento':
+        return { bg: 'rgba(37, 99, 235, 0.6)', border: 'rgba(37, 99, 235, 1)' };
+      case 'despesas':
+        return { bg: 'rgba(239, 68, 68, 0.6)', border: 'rgba(239, 68, 68, 1)' };
+      case 'lucro':
+        return { bg: 'rgba(34, 197, 94, 0.6)', border: 'rgba(34, 197, 94, 1)' };
+      default:
+        return { bg: 'rgba(37, 99, 235, 0.6)', border: 'rgba(37, 99, 235, 1)' };
+    }
+  };
+
+  // Dados do gráfico por período - usando dados reais
+  const getChartDataForPeriod = (period: string, metric: string) => {
+    if (!dashboardStats) return { labels: [], datasets: [] };
+    
+    if (period === 'year') {
+      // Exibir dados mensais do ano atual até o presente momento
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth(); // 0-11
+      
+      // Criar array com todos os meses do ano atual até o mês atual
+      const labels = [];
+      const faturamentoData = [];
+      const despesasData = [];
+      const lucroData = [];
+      
+      for (let month = 0; month <= currentMonth; month++) {
+        const monthStr = `${currentYear}-${String(month + 1).padStart(2, '0')}`;
+        
+        // Buscar dados reais para este mês
+        const monthData = dashboardStats.revenue_by_month.find(item => 
+          item.month === monthStr
+        );
+        
+        const revenue = monthData ? monthData.revenue : 0;
+        const expenses = monthData ? (monthData.expenses || 0) : 0;
+        const profit = revenue - expenses;
+        
+        labels.push(format(new Date(currentYear, month), 'MMM', { locale: pt }));
+        faturamentoData.push(revenue);
+        despesasData.push(expenses);
+        lucroData.push(profit);
+      }
+      
+      if (metric === 'todos') {
+        return {
+          labels,
+          datasets: [
+            {
+              label: 'Faturamento',
+              data: faturamentoData,
+              backgroundColor: 'rgba(37, 99, 235, 0.6)',
+              borderColor: 'rgba(37, 99, 235, 1)',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+            {
+              label: 'Despesas',
+              data: despesasData,
+              backgroundColor: 'rgba(239, 68, 68, 0.6)',
+              borderColor: 'rgba(239, 68, 68, 1)',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+            {
+              label: 'Lucro',
+              data: lucroData,
+              backgroundColor: 'rgba(34, 197, 94, 0.6)',
+              borderColor: 'rgba(34, 197, 94, 1)',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+          ]
+        };
+      } else {
+        let data = [];
+        switch (metric) {
+          case 'faturamento':
+            data = faturamentoData;
+            break;
+          case 'despesas':
+            data = despesasData;
+            break;
+          case 'lucro':
+            data = lucroData;
+            break;
+        }
+        
+        return {
+          labels,
+          datasets: [{
+            label: getMetricLabel(),
+            data,
+            backgroundColor: getMetricColor().bg,
+            borderColor: getMetricColor().border,
+            borderWidth: 1,
+            borderRadius: 4,
+          }]
+        };
+      }
+    } else {
+      // Para mês específico, mostrar dados semanais baseados no total mensal
+      const labels = ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'];
+      
+      if (metric === 'todos') {
+        const faturamentoWeekly = currentMonthData.revenue / 4;
+        const despesasWeekly = currentMonthData.expenses / 4;
+        const lucroWeekly = currentMonthData.profit / 4;
+        
+        return {
+          labels,
+          datasets: [
+            {
+              label: 'Faturamento',
+              data: labels.map(() => Math.round(faturamentoWeekly * (0.8 + Math.random() * 0.4))),
+              backgroundColor: 'rgba(37, 99, 235, 0.6)',
+              borderColor: 'rgba(37, 99, 235, 1)',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+            {
+              label: 'Despesas',
+              data: labels.map(() => Math.round(despesasWeekly * (0.8 + Math.random() * 0.4))),
+              backgroundColor: 'rgba(239, 68, 68, 0.6)',
+              borderColor: 'rgba(239, 68, 68, 1)',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+            {
+              label: 'Lucro',
+              data: labels.map(() => Math.round(lucroWeekly * (0.8 + Math.random() * 0.4))),
+              backgroundColor: 'rgba(34, 197, 94, 0.6)',
+              borderColor: 'rgba(34, 197, 94, 1)',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+          ]
+        };
+      } else {
+        let monthlyTotal = 0;
+        switch (metric) {
+          case 'faturamento':
+            monthlyTotal = currentMonthData.revenue;
+            break;
+          case 'despesas':
+            monthlyTotal = currentMonthData.expenses;
+            break;
+          case 'lucro':
+            monthlyTotal = currentMonthData.profit;
+            break;
+        }
+        
+        const weeklyAverage = monthlyTotal / 4;
+        const data = labels.map(() => Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)));
+        
+        return {
+          labels,
+          datasets: [{
+            label: getMetricLabel(),
+            data,
+            backgroundColor: getMetricColor().bg,
+            borderColor: getMetricColor().border,
+            borderWidth: 1,
+            borderRadius: 4,
+          }]
+        };
+      }
+    }
+  };
+
+  const chartData = getChartDataForPeriod(selectedPeriod, selectedMetric);
 
   const formatPeriod = () => {
     if (selectedPeriod === 'year') {
@@ -183,7 +344,7 @@ const DashboardWithFilter: React.FC = () => {
     // Adicionar meses do ano atual
     for (let month = 0; month < 12; month++) {
       const date = new Date(currentYear, month);
-      const value = `${currentYear}-${month}`;
+      const value = `${currentYear}-${month + 1}`;
       const label = format(date, 'MMMM yyyy', { locale: pt });
       options.push({ value, label });
     }
@@ -206,19 +367,23 @@ const DashboardWithFilter: React.FC = () => {
           </p>
         </div>
         
-        <div className="w-full md:w-auto">
-          <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
-            <SelectTrigger className="w-full md:w-auto min-w-[200px]">
-              <SelectValue placeholder="Selecionar período" />
-            </SelectTrigger>
-            <SelectContent>
-              {getPeriodOptions().map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4">
+          <div className="w-full md:w-auto">
+            <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
+              <SelectTrigger className="w-full md:w-auto min-w-[200px]">
+                <SelectValue placeholder="Selecionar período" />
+              </SelectTrigger>
+              <SelectContent>
+                {getPeriodOptions().map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+
         </div>
       </div>
 
@@ -250,8 +415,21 @@ const DashboardWithFilter: React.FC = () => {
 
       {/* Gráfico de Relatório */}
       <Card>
-        <CardHeader>
-          <CardTitle>Relatório de Faturamento</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Relatório de {getMetricLabel()}</CardTitle>
+          <div className="w-auto">
+            <Select value={selectedMetric} onValueChange={setSelectedMetric}>
+              <SelectTrigger className="w-auto min-w-[150px]">
+                <SelectValue placeholder="Selecionar métrica" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="faturamento">Faturamento</SelectItem>
+                <SelectItem value="despesas">Despesas</SelectItem>
+                <SelectItem value="lucro">Lucro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -264,19 +442,7 @@ const DashboardWithFilter: React.FC = () => {
           ) : (
             <div className="h-[400px]">
               <Bar
-                data={{
-                  labels: chartData.map(item => item.name),
-                  datasets: [
-                    {
-                      label: 'Faturamento',
-                      data: chartData.map(item => item.value),
-                      backgroundColor: 'rgba(37, 99, 235, 0.6)',
-                      borderColor: 'rgba(37, 99, 235, 1)',
-                      borderWidth: 1,
-                      borderRadius: 4,
-                    },
-                  ],
-                }}
+                data={chartData}
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
@@ -290,7 +456,8 @@ const DashboardWithFilter: React.FC = () => {
                     tooltip: {
                       callbacks: {
                         label: function(context) {
-                          return `Faturamento: ${new Intl.NumberFormat('pt-BR', {
+                          const label = context.dataset.label || '';
+                          return `${label}: ${new Intl.NumberFormat('pt-BR', {
                             style: 'currency',
                             currency: 'BRL'
                           }).format(context.parsed.y)}`;

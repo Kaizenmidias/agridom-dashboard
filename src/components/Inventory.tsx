@@ -127,7 +127,7 @@ const initialInventoryData = [
 const initialTransactionHistory = [
   { id: 1, itemId: 1, type: 'out', quantity: 50, date: '2023-08-20', user: 'Jean Dupont', notes: 'Semis parcelle nord' },
   { id: 2, itemId: 2, type: 'out', quantity: 200, date: '2023-08-18', user: 'Jean Dupont', notes: 'Application parcelle est' },
-  { id: 3, itemId: 4, type: 'in', quantity: 500, date: '2023-08-18', user: 'Marie Martin', notes: 'Livraison mensuelle' },
+  { id: 3, itemId: 4, type: 'in', quantity: 500, date: '2023-08-18', user: 'Marie Martin', notes: 'Entrega mensal' },
   { id: 4, itemId: 3, type: 'out', quantity: 5, date: '2023-08-15', user: 'Jean Dupont', notes: 'Application parcelle sud' },
   { id: 5, itemId: 1, type: 'in', quantity: 200, date: '2023-08-10', user: 'Marie Martin', notes: 'Achat supplémentaire' },
   { id: 6, itemId: 6, type: 'out', quantity: 5, date: '2023-08-05', user: 'Pierre Leroy', notes: 'Vidange tracteur' },
@@ -696,7 +696,7 @@ const Inventory: React.FC<InventoryProps> = ({ dateRange, searchTerm: externalSe
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Dernière mise à jour:</span>
-                      <span>{new Date(selectedItem.lastUpdated).toLocaleDateString()}</span>
+                      <span>{new Date(selectedItem.lastUpdated).toLocaleDateString('pt-BR')}</span>
                     </div>
                   </div>
                 </div>
@@ -821,7 +821,7 @@ const Inventory: React.FC<InventoryProps> = ({ dateRange, searchTerm: externalSe
                     <tbody>
                       {itemTransactions.map((transaction) => (
                         <tr key={transaction.id} className="border-t">
-                          <td className="px-4 py-3">{new Date(transaction.date).toLocaleDateString()}</td>
+                          <td className="px-4 py-3">{new Date(transaction.date).toLocaleDateString('pt-BR')}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
                               transaction.type === 'in' 

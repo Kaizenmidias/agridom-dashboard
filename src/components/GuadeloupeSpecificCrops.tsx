@@ -22,20 +22,20 @@ const GuadeloupeSpecificCrops = () => {
   const { exportModuleData, importModuleData, getModuleData } = useCRM();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   
-  // Get cultures data for preview/print
-  const culturesData = getModuleData('cultures').items || [];
+  // Obter dados das culturas para visualização/impressão
+  const culturesData = getModuleData('culturas').items || [];
 
-  const handleAddCulture = () => {
+  const handleAddCultura = () => {
     setShowAddForm(true);
-    console.log("Ouverture du formulaire d'ajout de culture");
+    console.log("Abertura do formulário de adição de cultura");
   };
 
   const handleExportData = async (format: 'csv' | 'pdf' = 'csv') => {
     console.log(`Export en cours au format ${format}...`);
-    const success = await exportModuleData('cultures', format);
+    const success = await exportModuleData('culturas', format);
     
     if (success) {
-      console.log(`Les données des cultures ont été exportées en ${format.toUpperCase()}`);
+      console.log(`Os dados das culturas foram exportados em ${format.toUpperCase()}`);
     }
   };
 
@@ -49,20 +49,20 @@ const GuadeloupeSpecificCrops = () => {
     const file = e.target.files?.[0];
     if (file) {
       console.log(`Import ${file.name} en cours...`);
-      const success = await importModuleData('cultures', file);
+      const success = await importModuleData('culturas', file);
       
       if (success) {
-        console.log("Import réussi - Les données des cultures ont été mises à jour");
+        console.log("Importação bem-sucedida - Os dados das culturas foram atualizados");
       }
     }
   };
 
   const filterOptions = [
-    { value: 'all', label: 'Toutes les cultures' },
+    { value: 'all', label: 'Todas as culturas' },
     { value: 'fruits', label: 'Fruits' },
     { value: 'vegetables', label: 'Légumes' },
     { value: 'tubers', label: 'Tubercules' },
-    { value: 'cash', label: 'Cultures de rente' }
+    { value: 'cash', label: 'Culturas de renda' }
   ];
 
   return (
@@ -74,19 +74,19 @@ const GuadeloupeSpecificCrops = () => {
     >
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h2 className="text-xl font-bold">Cultures Spécifiques de Guadeloupe</h2>
-          <p className="text-muted-foreground">Gérez les informations sur vos cultures locales</p>
+          <h2 className="text-xl font-bold">Culturas Específicas da Guadalupe</h2>
+          <p className="text-muted-foreground">Gerencie as informações sobre suas culturas locais</p>
         </div>
         <div className="flex space-x-2">
           <PreviewPrintButton 
             data={culturesData}
-            moduleName="cultures"
-            title="Cultures Spécifiques de Guadeloupe"
+            moduleName="culturas"
+            title="Culturas Específicas da Guadalupe"
             columns={[
               { key: "nom", header: "Nom" },
               { key: "variete", header: "Variété" },
-              { key: "dateDebut", header: "Date de début" },
-              { key: "dateFin", header: "Date de fin" }
+              { key: "dateDebut", header: "Data de início" },
+              { key: "dateFin", header: "Data de fim" }
             ]}
           />
           
@@ -117,7 +117,7 @@ const GuadeloupeSpecificCrops = () => {
             <DropdownMenuContent align="end" className="bg-white border shadow-lg">
               <DropdownMenuItem onClick={handleImportClick} className="cursor-pointer">
                 <FileUp className="mr-2 h-4 w-4" />
-                Sélectionner un fichier
+                Selecionar um arquivo
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -131,11 +131,11 @@ const GuadeloupeSpecificCrops = () => {
           />
           
           <Button 
-            onClick={handleAddCulture} 
+            onClick={handleAddCultura} 
             className="transition-colors hover:bg-green-700"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Ajouter une culture
+            Adicionar uma cultura
           </Button>
         </div>
       </div>
@@ -145,7 +145,7 @@ const GuadeloupeSpecificCrops = () => {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
             type="text" 
-            placeholder="Rechercher une culture..." 
+            placeholder="Pesquisar uma cultura..." 
             className="pl-10 transition-all focus:border-green-500"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

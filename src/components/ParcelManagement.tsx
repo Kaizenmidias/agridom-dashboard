@@ -166,7 +166,7 @@ const ParcelCard = ({
         </div>
         <div className="flex items-center">
           <Calendar className="h-4 w-4 mr-1.5" />
-          <span>{new Date(parcel.lastActivity).toLocaleDateString()}</span>
+          <span>{new Date(parcel.lastActivity).toLocaleDateString('pt-BR')}</span>
         </div>
         <div className="col-span-2 mt-1 py-1 px-2 bg-agri-primary/5 rounded-md text-center">
           <span className="text-agri-primary font-medium">{parcel.crop}</span>
@@ -385,7 +385,7 @@ const ParcelManagement = () => {
   // Crop history table columns
   const cropHistoryColumns: Column[] = [
     { id: 'year', header: 'Année', accessorKey: 'year', isEditable: true, width: '100px' },
-    { id: 'crop', header: 'Culture', accessorKey: 'crop', isEditable: true },
+    { id: 'crop', header: 'Cultura', accessorKey: 'crop', isEditable: true },
     { id: 'yield', header: 'Rendement', accessorKey: 'yield', isEditable: true, width: '120px' },
     { id: 'notes', header: 'Remarques', accessorKey: 'notes', isEditable: true }
   ];
@@ -472,17 +472,17 @@ const ParcelManagement = () => {
                     value={newParcel.area || ''} 
                     onChange={(e) => handleNewParcelInputChange('area', e.target.value)}
                     className="w-full px-3 py-2 border border-input rounded-md"
-                    placeholder="Surface en hectares"
+                    placeholder="Superfície em hectares"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">Culture</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Cultura</label>
                   <input 
                     type="text" 
                     value={newParcel.crop || ''} 
                     onChange={(e) => handleNewParcelInputChange('crop', e.target.value)}
                     className="w-full px-3 py-2 border border-input rounded-md"
-                    placeholder="Culture principale"
+                    placeholder="Cultura principal"
                   />
                 </div>
                 <div>
@@ -632,7 +632,7 @@ const ParcelManagement = () => {
               className={sortBy === 'crop' ? 'bg-muted' : ''}
               onClick={() => handleSort('crop')}
             >
-              Culture
+              Cultura
               {sortBy === 'crop' && (
                 <ChevronDown className={`h-4 w-4 ml-1 ${sortDirection === 'desc' ? 'rotate-180' : ''}`} />
               )}
@@ -731,13 +731,13 @@ const ParcelManagement = () => {
                   <div className="border rounded-lg p-4">
                     <h3 className="font-medium mb-3 flex items-center">
                       <Calendar className="h-4 w-4 mr-2" />
-                      Culture actuelle
+                      Cultura atual
                     </h3>
                     
                     {isEditing ? (
                       <div className="space-y-3">
                         <div>
-                          <label className="text-sm text-muted-foreground">Culture</label>
+                          <label className="text-sm text-muted-foreground">Cultura</label>
                           <input 
                             type="text" 
                             value={editingParcel?.crop || ''} 
@@ -781,7 +781,7 @@ const ParcelManagement = () => {
                     ) : (
                       <div className="bg-agri-primary/10 rounded-lg p-3 text-center">
                         <span className="font-semibold text-agri-primary">{selectedParcel.crop}</span>
-                        <p className="text-sm mt-1">Dernière activité: {new Date(selectedParcel.lastActivity).toLocaleDateString()}</p>
+                        <p className="text-sm mt-1">Dernière activité: {new Date(selectedParcel.lastActivity).toLocaleDateString('pt-BR')}</p>
                       </div>
                     )}
                   </div>
@@ -869,7 +869,7 @@ const ParcelManagement = () => {
                   </div>
                   
                   <div className="border rounded-lg p-4 md:col-span-2">
-                    <h3 className="font-medium mb-3">Historique des cultures</h3>
+                    <h3 className="font-medium mb-3">Histórico das culturas</h3>
                     <EditableTable
                       data={cropHistory}
                       columns={cropHistoryColumns}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Plus, Search, Copy, Edit, Trash2, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,41 +21,8 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Code } from "@/types/database"
 import { CodeDialog } from "@/components/code-dialog"
-import { deleteCode } from "@/api/crud"
+import { deleteCode, getCodes } from "@/api/crud"
 import { ToastNotification, useToastNotification } from "@/components/ui/toast-notification"
-
-const mockCodes: Code[] = [
-  {
-    id: 1,
-    name: "Botão Animado CSS",
-    code_type: "css",
-    code_content: ".btn-animated {\n  background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);\n  border: none;\n  border-radius: 8px;\n  color: white;\n  padding: 12px 24px;\n  transition: transform 0.3s ease;\n}\n\n.btn-animated:hover {\n  transform: translateY(-2px);\n  box-shadow: 0 8px 25px rgba(0,0,0,0.15);\n}",
-    description: "Botão com gradiente e animação de hover",
-    user_id: 1,
-    created_at: "2024-01-15T10:30:00Z",
-    updated_at: "2024-01-15T10:30:00Z"
-  },
-  {
-    id: 2,
-    name: "Modal Responsivo",
-    code_type: "html",
-    code_content: "<div class=\"modal-overlay\">\n  <div class=\"modal-content\">\n    <div class=\"modal-header\">\n      <h2>Título do Modal</h2>\n      <button class=\"close-btn\">&times;</button>\n    </div>\n    <div class=\"modal-body\">\n      <p>Conteúdo do modal aqui...</p>\n    </div>\n    <div class=\"modal-footer\">\n      <button class=\"btn btn-cancel\">Cancelar</button>\n      <button class=\"btn btn-confirm\">Confirmar</button>\n    </div>\n  </div>\n</div>",
-    description: "Estrutura HTML para modal responsivo",
-    user_id: 1,
-    created_at: "2024-01-14T14:20:00Z",
-    updated_at: "2024-01-14T14:20:00Z"
-  },
-  {
-    id: 3,
-    name: "Validação de Formulário",
-    code_type: "javascript",
-    code_content: "function validateForm(formData) {\n  const errors = {};\n  \n  if (!formData.email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(formData.email)) {\n    errors.email = 'Email inválido';\n  }\n  \n  if (!formData.password || formData.password.length < 8) {\n    errors.password = 'Senha deve ter pelo menos 8 caracteres';\n  }\n  \n  if (!formData.name || formData.name.trim().length < 2) {\n    errors.name = 'Nome deve ter pelo menos 2 caracteres';\n  }\n  \n  return {\n    isValid: Object.keys(errors).length === 0,\n    errors\n  };\n}",
-    description: "Função para validação de formulários",
-    user_id: 1,
-    created_at: "2024-01-13T09:15:00Z",
-    updated_at: "2024-01-13T09:15:00Z"
-  }
-]
 
 const codeTypeLabels = {
   css: "CSS",
@@ -70,18 +37,36 @@ const codeTypeColors = {
 }
 
 export function CodesPage() {
-  const [codes, setCodes] = useState<Code[]>(mockCodes)
+  const [codes, setCodes] = useState<Code[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCode, setEditingCode] = useState<Code | null>(null)
   const { toast: toastNotification, showToast, hideToast } = useToastNotification()
 
+  // Carregar códigos da API
+  useEffect(() => {
+    loadCodes()
+  }, [])
+
+  const loadCodes = async () => {
+    try {
+      setIsLoading(true)
+      const codesData = await getCodes()
+      setCodes(codesData)
+    } catch (error) {
+      console.error('Erro ao carregar códigos:', error)
+      showToast('Erro ao carregar códigos', 'error')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const filteredCodes = codes.filter(code => {
-    const matchesSearch = code.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = code.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (code.description && code.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesType = selectedType === "all" || code.code_type === selectedType
+    const matchesType = selectedType === "all" || code.language === selectedType
     return matchesSearch && matchesType
   })
 
@@ -120,7 +105,7 @@ export function CodesPage() {
   }
 
   const handleDeleteCode = async (code: Code) => {
-    if (!confirm(`Tem certeza que deseja excluir o código "${code.name}"?`)) {
+    if (!confirm(`Tem certeza que deseja excluir o código "${code.title}"?`)) {
       return
     }
 
@@ -135,8 +120,7 @@ export function CodesPage() {
   }
 
   const handleDialogSuccess = () => {
-    // Recarregar a lista de códigos
-    // Por enquanto, usando mock data
+    loadCodes()
     toast.success("Lista atualizada!")
   }
 
@@ -204,10 +188,10 @@ export function CodesPage() {
             ) : (
               filteredCodes.map((code) => (
                 <TableRow key={code.id}>
-                  <TableCell className="font-medium">{code.name}</TableCell>
+                  <TableCell className="font-medium">{code.title}</TableCell>
                   <TableCell>
-                    <Badge className={codeTypeColors[code.code_type]}>
-                      {codeTypeLabels[code.code_type]}
+                    <Badge className={codeTypeColors[code.language]}>
+                      {codeTypeLabels[code.language]}
                     </Badge>
                   </TableCell>
                   <TableCell className="max-w-xs">
@@ -233,7 +217,7 @@ export function CodesPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => copyToClipboard(code.code_content, code.name)}
+                        onClick={() => copyToClipboard(code.code_content, code.title)}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>

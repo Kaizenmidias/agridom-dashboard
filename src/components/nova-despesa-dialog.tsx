@@ -13,7 +13,7 @@ import { createExpense, getProjects } from '@/api/crud';
 import { Loader2 } from 'lucide-react';
 import { Project } from '@/types/database';
 import { formatCurrency } from '@/lib/utils';
-import { getDayOfWeekFromDate } from '@/utils/billing-calculations';
+import { getDayOfWeekFromDate, calculateMonthlyAmount, getWeekdayOccurrencesInMonth } from '@/utils/billing-calculations';
 
 const despesaSchema = z.object({
   description: z.string().min(1, 'Despesa é obrigatória'),
@@ -50,6 +50,11 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
       date: new Date().toISOString().split('T')[0],
     }
   });
+
+  // Observar mudanças nos campos para calcular preview
+  const watchedAmount = watch('amount');
+  const watchedDate = watch('date');
+  const watchedBillingType = watch('billing_type');
 
   // Carregar projetos quando o componente montar
   useEffect(() => {
@@ -92,6 +97,35 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
     const formatted = formatCurrency(e.target.value);
     setValue('amount', formatted);
   };
+
+  // Calcular preview do valor mensal
+  const calculateMonthlyPreview = () => {
+    if (!watchedAmount || !watchedDate || !watchedBillingType) return null;
+    
+    const amount = parseFloat(watchedAmount.replace(/[^\d,]/g, '').replace(',', '.'));
+    if (isNaN(amount) || amount <= 0) return null;
+    
+    const currentDate = new Date();
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    
+    const monthlyAmount = calculateMonthlyAmount(
+      amount,
+      watchedBillingType,
+      watchedDate,
+      year,
+      month
+    );
+    
+    return {
+      amount: monthlyAmount,
+      occurrences: watchedBillingType === 'semanal' 
+        ? getWeekdayOccurrencesInMonth(year, month, getDayOfWeekFromDate(watchedDate))
+        : null
+    };
+  };
+
+  const monthlyPreview = calculateMonthlyPreview();
 
   const onSubmit = async (data: DespesaFormData) => {
     setIsSubmitting(true);
@@ -214,9 +248,19 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="unica">Única</SelectItem>
-                  <SelectItem value="semanal">Semanal</SelectItem>
+                  <SelectItem value="semanal">
+                    <div className="flex flex-col">
+                      <span>Semanal</span>
+                      <span className="text-xs text-muted-foreground">Valor multiplicado pelas ocorrências do dia no mês</span>
+                    </div>
+                  </SelectItem>
                   <SelectItem value="mensal">Mensal</SelectItem>
-                  <SelectItem value="anual">Anual</SelectItem>
+                  <SelectItem value="anual">
+                    <div className="flex flex-col">
+                      <span>Anual</span>
+                      <span className="text-xs text-muted-foreground">Valor dividido por 12 meses</span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {errors.billing_type && (
@@ -225,7 +269,54 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
             </div>
           </div>
 
-
+          {/* Preview do Valor Mensal */}
+          {monthlyPreview && watchedBillingType !== 'unica' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+              <h4 className="font-medium text-blue-900">Cálculo Mensal</h4>
+              <div className="text-sm text-blue-700">
+                {watchedBillingType === 'semanal' && (
+                  <>
+                    <p>
+                      <strong>Valor por ocorrência:</strong> {watchedAmount}
+                    </p>
+                    <p>
+                      <strong>Ocorrências neste mês:</strong> {monthlyPreview.occurrences}x
+                    </p>
+                    <p>
+                      <strong>Total mensal:</strong> {monthlyPreview.amount.toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL'
+                      })}
+                    </p>
+                    <p className="text-xs mt-1 text-blue-600">
+                      * O valor mensal varia conforme a quantidade de ocorrências do dia da semana no mês
+                    </p>
+                  </>
+                )}
+                {watchedBillingType === 'mensal' && (
+                  <p>
+                    <strong>Valor mensal:</strong> {monthlyPreview.amount.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL'
+                    })}
+                  </p>
+                )}
+                {watchedBillingType === 'anual' && (
+                  <>
+                    <p>
+                      <strong>Valor anual:</strong> {watchedAmount}
+                    </p>
+                    <p>
+                      <strong>Valor mensal (anual ÷ 12):</strong> {monthlyPreview.amount.toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL'
+                      })}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="notes">Observações</Label>

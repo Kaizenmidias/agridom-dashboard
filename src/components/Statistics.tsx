@@ -40,7 +40,7 @@ const Statistics = () => {
   
   const getChartDescription = () => {
     switch (currentChart) {
-      case 'yields': return 'Évolution des rendements par culture au fil des années';
+      case 'yields': return 'Evolução dos rendimentos por cultura ao longo dos anos';
       case 'financial': return 'Analyse détaillée des performances financières';
       case 'environmental': return 'Suivi des indicateurs de performance environnementale';
       default: return 'Données statistiques de votre exploitation';
@@ -72,7 +72,7 @@ const Statistics = () => {
     switch (currentChart) {
       case 'yields':
         return [
-          { key: "name", header: "Culture" },
+          { key: "name", header: "Cultura" },
           { key: "current", header: "Rendement actuel" },
           { key: "previous", header: "Rendement précédent" },
           { key: "unit", header: "Unité" }
@@ -82,7 +82,7 @@ const Statistics = () => {
           { key: "name", header: "Parcelle" },
           { key: "profitability", header: "Rentabilité (€)" },
           { key: "size", header: "Surface (ha)" },
-          { key: "crop", header: "Culture" }
+          { key: "crop", header: "Cultura" }
         ];
       case 'environmental':
         return [

@@ -135,7 +135,7 @@ const taskColumns: Column[] = [
 ];
 
 const cropColumns: Column[] = [
-  { id: 'crop', header: 'Culture', accessorKey: 'crop', isEditable: true },
+  { id: 'crop', header: 'Cultura', accessorKey: 'crop', isEditable: true },
   { id: 'variety', header: 'Variété', accessorKey: 'variety', isEditable: true },
   { id: 'plantingDate', header: 'Date plantation', accessorKey: 'plantingDate', isEditable: true },
   { id: 'harvestDate', header: 'Date récolte prévue', accessorKey: 'harvestDate', isEditable: true },
@@ -178,7 +178,7 @@ const GuadeloupeParcelDetail = () => {
     
     updatedParcel.crops = updatedCrops;
     setParcel(updatedParcel);
-    toast.success('Culture mise à jour');
+    toast.success('Cultura atualizada');
   };
 
   const handleAddTask = (newRow: Record<string, any>) => {
@@ -210,7 +210,7 @@ const GuadeloupeParcelDetail = () => {
     
     updatedParcel.crops = [...updatedParcel.crops, newCrop];
     setParcel(updatedParcel);
-    toast.success('Nouvelle culture ajoutée');
+    toast.success('Nova cultura adicionada');
   };
 
   const handleDeleteTask = (rowIndex: number) => {
@@ -226,7 +226,7 @@ const GuadeloupeParcelDetail = () => {
     updatedCrops.splice(rowIndex, 1);
     updatedParcel.crops = updatedCrops;
     setParcel(updatedParcel);
-    toast.success('Culture supprimée');
+    toast.success('Cultura removida');
   };
 
   return (
@@ -263,7 +263,7 @@ const GuadeloupeParcelDetail = () => {
               className={`px-4 py-2 rounded-lg ${activeTab === 'crops' ? 'bg-agri-primary text-white' : 'bg-muted'}`}
               onClick={() => setActiveTab('crops')}
             >
-              Cultures
+              Culturas
             </button>
             <button 
               className={`px-4 py-2 rounded-lg ${activeTab === 'tasks' ? 'bg-agri-primary text-white' : 'bg-muted'}`}
@@ -278,7 +278,7 @@ const GuadeloupeParcelDetail = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="bg-muted/30 p-4 rounded-lg">
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">Superficie</h3>
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">Superfície</h3>
                 <div className="flex items-center">
                   <EditableField
                     value={parcel.surface}
@@ -385,7 +385,7 @@ const GuadeloupeParcelDetail = () => {
         
         {activeTab === 'crops' && (
           <div className="space-y-6">
-            <h3 className="text-lg font-medium">Cultures sur cette parcelle</h3>
+            <h3 className="text-lg font-medium">Culturas nesta parcela</h3>
             <EditableTable
               data={parcel.crops}
               columns={cropColumns}
@@ -406,7 +406,7 @@ const GuadeloupeParcelDetail = () => {
                 variant="outline"
                 className="text-sm"
               >
-                Voir toutes les tâches
+                Ver todas as tarefas
               </Button>
             </div>
             

@@ -52,7 +52,9 @@ function calculateAnnualMonthlyAmount(annualAmount) {
  * @returns {number} Dia da semana (0 = Domingo, 1 = Segunda, ..., 6 = Sábado)
  */
 function getDayOfWeekFromDate(date) {
-  return new Date(date).getDay();
+  // Criar a data no fuso horário local para evitar problemas de UTC
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day).getDay();
 }
 
 /**
@@ -100,10 +102,12 @@ function calculateMonthlyAmount(
  */
 function calculateTotalMonthlyExpenses(expenses, targetYear, targetMonth) {
   return expenses.reduce((total, expense) => {
+    // Usar expense_date ou date, priorizando expense_date
+    const expenseDate = expense.expense_date || expense.date;
     const monthlyAmount = calculateMonthlyAmount(
       parseFloat(expense.amount) || 0,
       expense.billing_type || 'unica',
-      expense.date,
+      expenseDate,
       targetYear,
       targetMonth
     );

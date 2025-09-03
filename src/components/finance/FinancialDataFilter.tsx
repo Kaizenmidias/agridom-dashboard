@@ -51,7 +51,7 @@ const FinancialDataFilter: React.FC<FinancialDataFilterProps> = ({
       <div className="flex flex-col xs:flex-row justify-between items-start xs:items-center gap-2 md:gap-4 mb-3 md:mb-4">
         <h3 className="text-sm md:text-base font-medium flex items-center gap-1 md:gap-2">
           <Filter className="h-3.5 w-3.5 md:h-4 md:w-4" />
-          Filtres
+          Filtros
           {hasActiveFilters && (
             <Badge variant="secondary" className="ml-1 md:ml-2 text-xs">
               {activeFilters} actif{activeFilters > 1 ? 's' : ''}
@@ -88,17 +88,17 @@ const FinancialDataFilter: React.FC<FinancialDataFilterProps> = ({
       
       <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
         <div className="space-y-1">
-          <label className="text-xs font-medium">Période</label>
+          <label className="text-xs font-medium">Período</label>
           <Select value={timeFrame} onValueChange={setTimeFrame}>
             <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm">
-              <SelectValue placeholder="Période" />
+              <SelectValue placeholder="Período" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les périodes</SelectItem>
+              <SelectItem value="all">Todos os períodos</SelectItem>
               <SelectItem value="month">Mois en cours</SelectItem>
               <SelectItem value="quarter">Trimestre en cours</SelectItem>
               <SelectItem value="year">Année en cours</SelectItem>
-              <SelectItem value="custom">Période personnalisée</SelectItem>
+              <SelectItem value="custom">Período personalizado</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -113,7 +113,7 @@ const FinancialDataFilter: React.FC<FinancialDataFilterProps> = ({
               <SelectContent>
                 {categories.map((cat) => (
                   <SelectItem key={cat} value={cat}>
-                    {cat === 'all' ? 'Toutes catégories' : cat}
+                    {cat === 'all' ? 'Todas as categorias' : cat}
                   </SelectItem>
                 ))}
               </SelectContent>

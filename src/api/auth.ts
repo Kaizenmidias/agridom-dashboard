@@ -1,4 +1,5 @@
 import { AuthUser } from '../types/database'
+import { API_BASE_URL } from '../config/api'
 
 interface LoginCredentials {
   email: string
@@ -15,8 +16,6 @@ interface AuthResponse {
   user: AuthUser
   token: string
 }
-
-const API_BASE_URL = 'http://localhost:3001/api'
 
 export async function loginUser(credentials: LoginCredentials): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {

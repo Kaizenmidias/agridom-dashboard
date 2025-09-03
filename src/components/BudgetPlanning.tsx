@@ -138,7 +138,7 @@ const BudgetPlanning = () => {
               className={`px-3 py-1 rounded-sm ${selectedPeriod === 'annual' ? 'bg-background shadow-sm' : 'hover:bg-muted/80'}`}
               onClick={() => setSelectedPeriod('annual')}
             >
-              Annuel
+              Anual
             </button>
             <button 
               className={`px-3 py-1 rounded-sm ${selectedPeriod === 'quarterly' ? 'bg-background shadow-sm' : 'hover:bg-muted/80'}`}
@@ -150,7 +150,7 @@ const BudgetPlanning = () => {
               className={`px-3 py-1 rounded-sm ${selectedPeriod === 'monthly' ? 'bg-background shadow-sm' : 'hover:bg-muted/80'}`}
               onClick={() => setSelectedPeriod('monthly')}
             >
-              Mensuel
+              Mensal
             </button>
           </div>
           

@@ -7,7 +7,7 @@ import { exportToCSV, exportToExcel, exportToPDF, importFromCSV } from './crm-da
 export const formatDate = (date: Date | string): string => {
   if (!date) return '';
   const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return dateObj.toLocaleDateString('fr-FR', {
+  return dateObj.toLocaleDateString('pt-BR', {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
@@ -18,7 +18,7 @@ export const formatDate = (date: Date | string): string => {
  * Format currency with euro symbol
  */
 export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('fr-FR', {
+  return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'EUR',
     minimumFractionDigits: 2
@@ -128,7 +128,7 @@ export const getStatusColor = (status: string): string => {
     'pending': 'bg-yellow-100 text-yellow-800',
     'completed': 'bg-blue-100 text-blue-800',
     'cancelled': 'bg-red-100 text-red-800',
-    'En culture': 'bg-green-100 text-green-800',
+    'Em cultivo': 'bg-green-100 text-green-800',
     'En récolte': 'bg-blue-100 text-blue-800',
     'En préparation': 'bg-yellow-100 text-yellow-800',
     'Atteint': 'bg-green-100 text-green-800',

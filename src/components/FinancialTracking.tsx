@@ -213,7 +213,7 @@ const FinancialTracking = () => {
             <tbody>
               ${transactions.map(t => `
                 <tr>
-                  <td>${new Date(t.date).toLocaleDateString()}</td>
+                  <td>${new Date(t.date).toLocaleDateString('pt-BR')}</td>
                   <td>${t.description}</td>
                   <td class="${t.type === 'income' ? 'income' : 'expense'}">${t.amount.toFixed(2)} €</td>
                   <td>${t.category}</td>
@@ -288,7 +288,7 @@ const FinancialTracking = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-white">
           <CardHeader>
-            <CardTitle>Aperçu Mensuel</CardTitle>
+            <CardTitle>Visão Geral Mensal</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-80">
@@ -360,7 +360,7 @@ const FinancialTracking = () => {
               >
                 {categories.map(cat => (
                   <option key={cat} value={cat}>
-                    {cat === 'all' ? 'Toutes catégories' : cat}
+                    {cat === 'all' ? 'Todas as categorias' : cat}
                   </option>
                 ))}
               </select>
@@ -394,7 +394,7 @@ const FinancialTracking = () => {
                     <div className="flex-1">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                         <EditableField
-                          value={new Date(transaction.date).toLocaleDateString()}
+                          value={new Date(transaction.date).toLocaleDateString('pt-BR')}
                           type="date"
                           onSave={(value) => handleUpdateTransaction(
                             transaction.id, 

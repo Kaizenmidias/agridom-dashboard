@@ -31,7 +31,7 @@ const YieldsCharts = () => {
     { year: '2023', 'Canne à Sucre': 85, 'Banane': 32, 'Ananas': 45, 'Igname': 18, 'Madère': 22 }
   ];
 
-  // Générer les couleurs pour chaque culture
+  // Gerar as cores para cada cultura
   const colors = {
     'Canne à Sucre': '#4CAF50',
     'Banane': '#FFC107',
@@ -60,7 +60,7 @@ const YieldsCharts = () => {
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div>
             <CardTitle>Rendements actuels vs précédents</CardTitle>
-            <CardDescription>Comparaison des rendements actuels avec la période précédente</CardDescription>
+            <CardDescription>Comparação dos rendimentos atuais com o período anterior</CardDescription>
           </div>
           <div className="flex items-center space-x-2">
             <div className="flex rounded-md border overflow-hidden">
@@ -141,7 +141,7 @@ const YieldsCharts = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div>
-            <CardTitle>Évolution historique des rendements ({period === 'year' ? 'annuelle' : 'mensuelle'})</CardTitle>
+            <CardTitle>Evolução histórica dos rendimentos ({period === 'year' ? 'anual' : 'mensal'})</CardTitle>
             <CardDescription>Tendance des rendements sur plusieurs années</CardDescription>
           </div>
           <div className="flex items-center space-x-2">

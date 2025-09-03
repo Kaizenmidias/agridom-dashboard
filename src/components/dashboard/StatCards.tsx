@@ -39,7 +39,7 @@ const StatCards: React.FC<StatCardsProps> = ({
       <div className="stat-card bg-white dark:bg-[#1D2530] rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
         <div className="flex flex-row items-center justify-between">
           <div>
-            <p className="text-gray-500 font-medium text-sm mb-1">Revenu mensuel</p>
+            <p className="text-gray-500 font-medium text-sm mb-1">Receita mensal</p>
             <div className="flex items-baseline">
               <p className="text-3xl font-bold text-gray-800">
                 <EditableField
@@ -66,7 +66,7 @@ const StatCards: React.FC<StatCardsProps> = ({
       <div className="stat-card bg-white dark:bg-[#1D2530] rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
         <div className="flex flex-row items-center justify-between">
           <div>
-            <p className="text-gray-500 font-medium text-sm mb-1">Superficie cultivée</p>
+            <p className="text-gray-500 font-medium text-sm mb-1">Superfície cultivada</p>
             <div className="flex items-baseline">
               <p className="text-3xl font-bold text-gray-800">
                 <EditableField

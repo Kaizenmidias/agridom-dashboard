@@ -19,6 +19,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Buscar usuário por email
+    console.log('🔍 Buscando usuário:', email);
     const result = await query(
       `SELECT id, email, password_hash, full_name, position, avatar_url, is_active,
               can_access_dashboard, can_access_projects, can_access_briefings, 
@@ -27,15 +28,23 @@ router.post('/login', async (req, res) => {
       [email]
     );
 
+    console.log('📊 Resultado da busca:', result.rows ? result.rows.length : 0, 'usuários encontrados');
+    
     if (!result.rows || result.rows.length === 0) {
+      console.log('❌ Usuário não encontrado');
       return res.status(401).json({ error: 'Email ou senha inválidos' });
     }
 
     const user = result.rows[0];
+    console.log('👤 Usuário encontrado:', user.email, 'Hash:', user.password_hash.substring(0, 20) + '...');
 
     // Verificar senha
+    console.log('🔐 Verificando senha...');
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    console.log('🔐 Senha válida:', isValidPassword);
+    
     if (!isValidPassword) {
+      console.log('❌ Senha inválida');
       return res.status(401).json({ error: 'Email ou senha inválidos' });
     }
 
@@ -96,7 +105,7 @@ router.post('/register', async (req, res) => {
     // Inserir novo usuário
     await query(
       `INSERT INTO users (email, password_hash, full_name, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, true, NOW(), NOW())`,
+       VALUES (?, ?, ?, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [email, passwordHash, full_name || null]
     );
 
@@ -208,7 +217,7 @@ router.put('/profile', async (req, res) => {
            position = COALESCE(?, position),
            bio = COALESCE(?, bio),
            avatar_url = COALESCE(?, avatar_url),
-           updated_at = NOW()
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       params
     );
@@ -290,7 +299,7 @@ router.put('/change-password', async (req, res) => {
 
     // Atualizar senha no banco
     await query(
-      'UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?',
+      'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [newPasswordHash, userId]
     );
 
@@ -381,7 +390,7 @@ router.post('/reset-password', async (req, res) => {
 
     // Atualizar senha e limpar token
     await query(
-      'UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL, updated_at = NOW() WHERE id = ?',
+      'UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [newPasswordHash, user.id]
     );
 

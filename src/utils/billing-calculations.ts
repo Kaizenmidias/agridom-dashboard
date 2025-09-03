@@ -52,7 +52,9 @@ export function calculateAnnualMonthlyAmount(annualAmount: number): number {
  * @returns Dia da semana (0 = Domingo, 1 = Segunda, ..., 6 = Sábado)
  */
 export function getDayOfWeekFromDate(date: string): number {
-  return new Date(date).getDay();
+  // Criar a data no fuso horário local para evitar problemas de UTC
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day).getDay();
 }
 
 /**

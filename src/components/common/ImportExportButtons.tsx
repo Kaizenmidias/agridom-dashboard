@@ -79,7 +79,7 @@ const ImportExportButtons: React.FC<ImportExportButtonsProps> = ({
   
   const handleTechnicalSheetClick = async () => {
     try {
-      await exportModuleData('guide_cultures', 'pdf');
+      await exportModuleData('guia_culturas', 'pdf');
     } catch (error) {
       console.error("Error generating technical guide:", error);
     }

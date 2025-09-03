@@ -128,7 +128,7 @@ const createTechnicalSheetHTML = (item: any, title: string): string => {
       <body>
         <div class="technical-sheet">
           <div class="technical-sheet-header">
-            <h1>${item.nom || 'Culture'}</h1>
+            <h1>${item.nom || 'Cultura'}</h1>
             <p><em>${item.nomScientifique || ''}</em></p>
           </div>
           
@@ -148,14 +148,14 @@ const createTechnicalSheetHTML = (item: any, title: string): string => {
                 ${item.type || ''}
               </div>
               <div class="property">
-                <span class="property-label">Saison de culture:</span>
-                ${item.saisonCulture || ''}
+                <span class="property-label">Estação de cultivo:</span>
+                ${item.estacaoCultivo || ''}
               </div>
             </div>
           </div>
           
           <div class="section">
-            <h2>Conditions de culture</h2>
+            <h2>Condições de cultivo</h2>
             <div class="property-grid">
               <div class="property">
                 <span class="property-label">Type de sol:</span>
@@ -170,7 +170,7 @@ const createTechnicalSheetHTML = (item: any, title: string): string => {
                 ${item.fertilisation || ''}
               </div>
               <div class="property">
-                <span class="property-label">Période de récolte:</span>
+                <span class="property-label">Período de colheita:</span>
                 ${item.periodeRecolte || ''}
               </div>
               <div class="property">
@@ -221,7 +221,7 @@ const createReportHTML = (data: any[], title: string, columns: { key: string, he
     return `<tr>${cells}</tr>`;
   }).join('');
 
-  const currentDate = new Date().toLocaleDateString('fr-FR', {
+  const currentDate = new Date().toLocaleDateString('pt-BR', {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
