@@ -21,10 +21,10 @@ router.post('/login', async (req, res) => {
     // Buscar usuário por email
     console.log('🔍 Buscando usuário:', email);
     const result = await query(
-      `SELECT id, email, password_hash, full_name, position, avatar_url, is_active,
+      `SELECT id, email, password, name as full_name, role,
               can_access_dashboard, can_access_projects, can_access_briefings, 
               can_access_codes, can_access_expenses, can_access_crm, can_access_users 
-       FROM users WHERE email = ? AND is_active = true`,
+       FROM users WHERE email = $1`,
       [email]
     );
 
@@ -36,11 +36,11 @@ router.post('/login', async (req, res) => {
     }
 
     const user = result.rows[0];
-    console.log('👤 Usuário encontrado:', user.email, 'Hash:', user.password_hash.substring(0, 20) + '...');
+    console.log('👤 Usuário encontrado:', user.email, 'Hash:', user.password.substring(0, 20) + '...');
 
     // Verificar senha
     console.log('🔐 Verificando senha...');
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    const isValidPassword = await bcrypt.compare(password, user.password);
     console.log('🔐 Senha válida:', isValidPassword);
     
     if (!isValidPassword) {
@@ -49,6 +49,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Gerar token JWT
+
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.dashboard_SUPABASE_JWT_SECRET,
@@ -91,7 +92,7 @@ router.post('/register', async (req, res) => {
 
     // Verificar se o email já existe
     const existingUserResult = await query(
-      'SELECT id FROM users WHERE email = ?',
+      'SELECT id FROM users WHERE email = $1',
       [email]
     );
 
@@ -104,14 +105,14 @@ router.post('/register', async (req, res) => {
 
     // Inserir novo usuário
     await query(
-      `INSERT INTO users (email, password_hash, full_name, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      `INSERT INTO users (email, password, name, role, created_at, updated_at)
+       VALUES ($1, $2, $3, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [email, passwordHash, full_name || null]
     );
 
     // Buscar o usuário inserido
     const result = await query(
-      'SELECT id, email, full_name, avatar_url, is_active FROM users WHERE email = ?',
+      'SELECT id, email, name as full_name, role, created_at FROM users WHERE email = $1',
       [email]
     );
 
@@ -154,10 +155,10 @@ router.get('/verify', async (req, res) => {
     
     // Buscar usuário atual
     const result = await query(
-      `SELECT id, email, full_name, position, avatar_url, is_active,
+      `SELECT id, email, name as full_name, role,
               can_access_dashboard, can_access_projects, can_access_briefings, 
               can_access_codes, can_access_expenses, can_access_crm, can_access_users 
-       FROM users WHERE id = ? AND is_active = true`,
+       FROM users WHERE id = $1`,
       [decoded.userId]
     );
 
@@ -170,9 +171,7 @@ router.get('/verify', async (req, res) => {
       id: user.id,
       email: user.email,
       full_name: user.full_name,
-      position: user.position,
-      avatar_url: user.avatar_url,
-      is_active: user.is_active,
+      role: user.role,
       can_access_dashboard: user.can_access_dashboard,
       can_access_projects: user.can_access_projects,
       can_access_briefings: user.can_access_briefings,
@@ -213,21 +212,18 @@ router.put('/profile', async (req, res) => {
     // Atualizar dados no banco
     await query(
       `UPDATE users 
-       SET full_name = COALESCE(?, full_name),
-           position = COALESCE(?, position),
-           bio = COALESCE(?, bio),
-           avatar_url = COALESCE(?, avatar_url),
+       SET name = COALESCE($1, name),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      params
+       WHERE id = $2`,
+      [full_name, userId]
     );
 
     // Buscar o usuário atualizado
     const result = await query(
-      `SELECT id, email, full_name, position, bio, avatar_url, is_active,
+      `SELECT id, email, name as full_name, role,
               can_access_dashboard, can_access_projects, can_access_briefings, 
               can_access_codes, can_access_expenses, can_access_crm, can_access_users 
-       FROM users WHERE id = ?`,
+       FROM users WHERE id = $1`,
       [userId]
     );
 
@@ -240,10 +236,7 @@ router.put('/profile', async (req, res) => {
       id: updatedUser.id,
       email: updatedUser.email,
       full_name: updatedUser.full_name,
-      position: updatedUser.position,
-      bio: updatedUser.bio,
-      avatar_url: updatedUser.avatar_url,
-      is_active: updatedUser.is_active,
+      role: updatedUser.role,
       can_access_dashboard: updatedUser.can_access_dashboard,
       can_access_projects: updatedUser.can_access_projects,
       can_access_briefings: updatedUser.can_access_briefings,
@@ -278,7 +271,7 @@ router.put('/change-password', async (req, res) => {
 
     // Buscar o usuário atual
     const userResult = await query(
-      'SELECT password_hash FROM users WHERE id = ?',
+      'SELECT password FROM users WHERE id = $1',
       [userId]
     );
 
@@ -289,7 +282,7 @@ router.put('/change-password', async (req, res) => {
     const user = userResult.rows[0];
 
     // Verificar senha atual
-    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password_hash);
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
       return res.status(400).json({ error: 'Senha atual incorreta' });
     }
@@ -299,7 +292,7 @@ router.put('/change-password', async (req, res) => {
 
     // Atualizar senha no banco
     await query(
-      'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       [newPasswordHash, userId]
     );
 
@@ -322,7 +315,7 @@ router.post('/forgot-password', async (req, res) => {
 
     // Verificar se o usuário existe
     const userResult = await query(
-      'SELECT id, email, full_name FROM users WHERE email = ? AND is_active = true',
+      'SELECT id, email, full_name FROM users WHERE email = $1 AND is_active = true',
       [email]
     );
 
@@ -339,7 +332,7 @@ router.post('/forgot-password', async (req, res) => {
 
     // Salvar token no banco de dados
     await query(
-      'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?',
+      'UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3',
       [resetToken, resetTokenExpiry, user.id]
     );
 
@@ -370,7 +363,7 @@ router.post('/reset-password', async (req, res) => {
 
     // Buscar usuário pelo token
     const userResult = await query(
-      'SELECT id, email, reset_token_expiry FROM users WHERE reset_token = ? AND is_active = true',
+      'SELECT id, email, reset_token_expiry FROM users WHERE reset_token = $1 AND is_active = true',
       [token]
     );
 
@@ -390,7 +383,7 @@ router.post('/reset-password', async (req, res) => {
 
     // Atualizar senha e limpar token
     await query(
-      'UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE users SET password = $1, reset_token = NULL, reset_token_expiry = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       [newPasswordHash, user.id]
     );
 
