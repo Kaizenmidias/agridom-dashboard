@@ -1,11 +1,11 @@
 import { Pool } from 'pg';
 
-// Configuração do banco de dados
+// Configuração do banco de dados otimizada para Vercel
 let pool;
 let isProduction = process.env.NODE_ENV === 'production';
 
 if (isProduction) {
-  // Configuração para Supabase em produção
+  // Configuração para Supabase em produção (Vercel)
   const connectionString = process.env.dashboard_POSTGRES_URL || 
     `postgresql://${process.env.dashboard_POSTGRES_USER || 'postgres'}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE || 'postgres'}`;
   
@@ -14,9 +14,11 @@ if (isProduction) {
     ssl: {
       rejectUnauthorized: false
     },
-    max: 20,
-    idleTimeoutMillis: 30000,
+    max: 10, // Reduzido para serverless
+    min: 1,  // Mínimo de 1 conexão
+    idleTimeoutMillis: 5000, // 5 segundos para serverless
     connectionTimeoutMillis: 10000,
+    acquireTimeoutMillis: 10000,
   });
 } else {
   // Configuração para desenvolvimento usando Supabase
