@@ -7,14 +7,16 @@ let isProduction = process.env.NODE_ENV === 'production';
 if (isProduction) {
   // Configuração para Supabase em produção
   const connectionString = process.env.dashboard_POSTGRES_URL || 
-    `postgresql://${process.env.dashboard_POSTGRES_USER || 'postgres'}:${process.env.dashboard_POSTGRES_PASSWORD || 'KJ4E7xKy0SCEVIX7'}@${process.env.dashboard_POSTGRES_HOST || 'db.rxvcvlegxljinevhmbyk.supabase.co'}:5432/${process.env.dashboard_POSTGRES_DATABASE || 'postgres'}?sslmode=disable`;
+    `postgresql://${process.env.dashboard_POSTGRES_USER || 'postgres'}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE || 'postgres'}`;
   
   pool = new Pool({
     connectionString,
-    ssl: false,
+    ssl: {
+      rejectUnauthorized: false
+    },
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000,
   });
 } else {
   // Configuração para desenvolvimento usando Supabase
@@ -77,41 +79,25 @@ async function testConnection() {
   }
 }
 
-// Função para iniciar transação
+// Função para iniciar transação PostgreSQL
 async function transaction(callback) {
-  const connection = await pool.getConnection();
+  const client = await pool.connect();
   try {
-    await connection.beginTransaction();
-    const result = await callback(connection);
-    await connection.commit();
+    await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
     return result;
   } catch (error) {
-    await connection.rollback();
+    await client.query('ROLLBACK');
     throw error;
   } finally {
-    connection.release();
+    client.release();
   }
-}
-
-// Função helper para escapar valores
-function escape(value) {
-  return mysql.escape(value);
-}
-
-// Função helper para formatar datas para MySQL
-function formatDateForMySQL(date) {
-  if (!date) return null;
-  if (typeof date === 'string') {
-    date = new Date(date);
-  }
-  return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
 module.exports = {
   query,
   pool,
   testConnection,
-  transaction,
-  escape,
-  formatDateForMySQL
+  transaction
 };
