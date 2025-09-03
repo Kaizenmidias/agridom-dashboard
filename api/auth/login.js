@@ -52,7 +52,7 @@ module.exports = async (req, res) => {
     // Gerar token JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET,
+      process.env.dashboard_SUPABASE_JWT_SECRET,
       { expiresIn: '24h' }
     );
 

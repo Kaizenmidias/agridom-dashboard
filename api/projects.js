@@ -10,7 +10,7 @@ function authenticateToken(req) {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
     return decoded.userId;
   } catch (error) {
     throw new Error('Token inválido');

@@ -19,7 +19,7 @@ function authenticateToken(req) {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
     return decoded.userId;
   } catch (error) {
     throw new Error('Token inválido');
@@ -60,7 +60,7 @@ async function handleLogin(req, res) {
     // Gerar token JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET,
+      process.env.dashboard_SUPABASE_JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -125,7 +125,7 @@ async function handleRegister(req, res) {
     // Gerar token JWT
     const token = jwt.sign(
       { userId, email },
-      process.env.JWT_SECRET,
+      process.env.dashboard_SUPABASE_JWT_SECRET,
       { expiresIn: '24h' }
     );
 

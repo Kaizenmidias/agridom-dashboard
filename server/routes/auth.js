@@ -51,7 +51,7 @@ router.post('/login', async (req, res) => {
     // Gerar token JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET,
+      process.env.dashboard_SUPABASE_JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
@@ -120,7 +120,7 @@ router.post('/register', async (req, res) => {
     // Gerar token JWT
     const token = jwt.sign(
       { userId: userData.id, email: userData.email },
-      process.env.JWT_SECRET,
+      process.env.dashboard_SUPABASE_JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
@@ -150,7 +150,7 @@ router.get('/verify', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
     
     // Buscar usuário atual
     const result = await query(
@@ -198,7 +198,7 @@ router.put('/profile', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
     const userId = decoded.userId;
 
     // Tratar valores undefined como null
@@ -273,7 +273,7 @@ router.put('/change-password', async (req, res) => {
       return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
     const userId = decoded.userId;
 
     // Buscar o usuário atual
