@@ -32,7 +32,7 @@ router.post('/login', async (req, res) => {
     
     if (!result.rows || result.rows.length === 0) {
       console.log('❌ Usuário não encontrado');
-      return res.status(401).json({ error: 'Email ou senha inválidos' });
+      return res.status(401).json({ error: 'Usuário não encontrado' });
     }
 
     const user = result.rows[0];
@@ -45,7 +45,7 @@ router.post('/login', async (req, res) => {
     
     if (!isValidPassword) {
       console.log('❌ Senha inválida');
-      return res.status(401).json({ error: 'Email ou senha inválidos' });
+      return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     // Gerar token JWT

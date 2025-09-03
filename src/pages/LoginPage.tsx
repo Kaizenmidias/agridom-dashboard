@@ -14,6 +14,7 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { login, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -39,70 +40,49 @@ const LoginPage = () => {
   }
 
   // Função para obter mensagem de erro específica
-  const getErrorMessage = (errorMessage: string) => {
+  const getErrorMessage = (errorMessage: string, userEmail: string = '') => {
     const message = errorMessage.toLowerCase();
     
-    if (message.includes('email ou senha inválidos') || message.includes('invalid credentials')) {
-      return {
-        title: "Credenciais Inválidas",
-        description: "O email ou senha informados estão incorretos. Verifique os dados e tente novamente."
-      };
+    if (message.includes('email ou senha inválidos') || message.includes('invalid credentials') || message.includes('credenciais inválidas')) {
+      // Extrair nome do usuário do email para mensagem personalizada
+      const userName = userEmail ? userEmail.split('@')[0] : 'usuário';
+      return `Senha inválida para o usuário ${userName}`;
     }
     
     if (message.includes('usuário não encontrado') || message.includes('user not found')) {
-      return {
-        title: "Usuário Não Encontrado",
-        description: "Não existe uma conta associada a este email. Verifique o email ou entre em contato com o administrador."
-      };
+      return `Usuário não encontrado: ${userEmail}`;
     }
     
     if (message.includes('conta desativada') || message.includes('account disabled')) {
-      return {
-        title: "Conta Desativada",
-        description: "Sua conta foi desativada. Entre em contato com o administrador para reativá-la."
-      };
+      return `Conta desativada para o usuário ${userEmail}`;
     }
     
     if (message.includes('muitas tentativas') || message.includes('too many attempts')) {
-      return {
-        title: "Muitas Tentativas",
-        description: "Muitas tentativas de login falharam. Aguarde alguns minutos antes de tentar novamente."
-      };
+      return "Muitas tentativas de login. Aguarde alguns minutos antes de tentar novamente.";
     }
     
     if (message.includes('conexão') || message.includes('network') || message.includes('fetch')) {
-      return {
-        title: "Erro de Conexão",
-        description: "Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente."
-      };
+      return "Erro de conexão. Verifique sua internet e tente novamente.";
     }
     
-    return {
-      title: "Erro no Login",
-      description: errorMessage || "Ocorreu um erro inesperado. Tente novamente em alguns instantes."
-    };
+    return errorMessage || "Ocorreu um erro inesperado. Tente novamente.";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Limpar mensagem de erro anterior
+    setErrorMessage('');
+    
     if (!email || !password) {
-      toast({
-        title: "Campos Obrigatórios",
-        description: "Por favor, preencha o email e a senha para continuar.",
-        variant: "destructive",
-      });
+      setErrorMessage('Por favor, preencha o email e a senha para continuar.');
       return;
     }
 
     // Validação básica de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      toast({
-        title: "Email Inválido",
-        description: "Por favor, digite um endereço de email válido.",
-        variant: "destructive",
-      });
+      setErrorMessage('Por favor, digite um endereço de email válido.');
       return;
     }
 
@@ -127,12 +107,8 @@ const LoginPage = () => {
         description: `Bem-vindo de volta! Redirecionando para o dashboard...`,
       });
     } catch (error: any) {
-      const errorInfo = getErrorMessage(error.message);
-      toast({
-        title: errorInfo.title,
-        description: errorInfo.description,
-        variant: "destructive",
-      });
+      const errorMsg = getErrorMessage(error.message, email);
+      setErrorMessage(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -175,7 +151,10 @@ const LoginPage = () => {
                     type="email"
                     placeholder="seu@email.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errorMessage) setErrorMessage('');
+                    }}
                     className="pl-10"
                     disabled={loading}
                   />
@@ -191,7 +170,10 @@ const LoginPage = () => {
                     type="password"
                     placeholder="Sua senha"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errorMessage) setErrorMessage('');
+                    }}
                     className="pl-10"
                     disabled={loading}
                   />
@@ -220,6 +202,16 @@ const LoginPage = () => {
               >
                 {loading ? "Entrando..." : "Entrar"}
               </Button>
+              
+              {/* Mensagem de erro abaixo do botão */}
+              {errorMessage && (
+                <div className="mt-3 p-3 rounded-md bg-red-50 border border-red-200 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-700 font-medium">
+                    {errorMessage}
+                  </p>
+                </div>
+              )}
             </form>
             
             <div className="mt-4 text-center">
