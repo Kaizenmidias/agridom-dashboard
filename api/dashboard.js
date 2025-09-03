@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { query } = require('./db');
+const { query } = require('../utils/db');
 
 // Middleware de autenticação
 function authenticateToken(req) {

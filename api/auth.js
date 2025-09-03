@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { query } = require('./db');
+const { query } = require('../utils/db');
 
 // Configuração CORS
 const corsHeaders = {

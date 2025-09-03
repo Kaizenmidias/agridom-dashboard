@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { query } = require('./db');
+const { query } = require('../utils/db');
+const formidable = require('formidable');
+const fs = require('fs');
+const path = require('path');
 
 // Configuração CORS
 const corsHeaders = {
@@ -41,6 +44,12 @@ module.exports = async (req, res) => {
   try {
     // Autenticar usuário
     const user = authenticateToken(req);
+
+    // Verificar se é upload de avatar
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (url.pathname.includes('/upload/avatar')) {
+      return await uploadAvatar(req, res, user);
+    }
 
     switch (req.method) {
       case 'GET':
@@ -210,5 +219,84 @@ async function deleteUser(req, res, user) {
   } catch (error) {
     console.error('Erro ao deletar usuário:', error);
     res.status(500).json({ error: 'Erro ao deletar usuário' });
+  }
+}
+
+// Upload de avatar
+async function uploadAvatar(req, res, user) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método não permitido' });
+  }
+
+  try {
+    const userId = user.userId;
+
+    // Configurar formidable para processar o upload
+    const form = formidable({
+      maxFileSize: 5 * 1024 * 1024, // 5MB
+      keepExtensions: true,
+      filter: function ({ name, originalFilename, mimetype }) {
+        // Aceitar apenas imagens
+        return mimetype && mimetype.startsWith('image/');
+      }
+    });
+
+    // Processar o upload
+    const [fields, files] = await form.parse(req);
+    
+    const avatarFile = files.avatar;
+    if (!avatarFile || !avatarFile[0]) {
+      return res.status(400).json({ error: 'Nenhum arquivo foi enviado' });
+    }
+
+    const file = avatarFile[0];
+    
+    // Converter para base64 e armazenar no banco
+    const fileBuffer = fs.readFileSync(file.filepath);
+    const base64Data = fileBuffer.toString('base64');
+    const mimeType = file.mimetype || 'image/jpeg';
+    const avatarUrl = `data:${mimeType};base64,${base64Data}`;
+    
+    // Atualizar o avatar no PostgreSQL
+    await query(
+      'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2',
+      [avatarUrl, userId]
+    );
+    
+    // Buscar o usuário atualizado
+    const userResult = await query(
+      'SELECT * FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    
+    const updatedUser = userResult.rows[0];
+    
+    // Limpar arquivo temporário
+    fs.unlinkSync(file.filepath);
+    
+    res.json({
+      message: 'Avatar atualizado com sucesso',
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        full_name: updatedUser.full_name,
+        avatar_url: updatedUser.avatar_url,
+        status: updatedUser.status
+      },
+      avatar_url: avatarUrl
+    });
+
+  } catch (error) {
+    console.error('Erro no upload do avatar:', error);
+    
+    if (error.message === 'Token não fornecido' || error.message === 'Token inválido') {
+      return res.status(401).json({ error: error.message });
+    }
+    
+    res.status(500).json({ error: 'Erro interno do servidor' });
   }
 }

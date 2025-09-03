@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { query, formatDateForMySQL } = require('./db');
+const { query, formatDateForMySQL } = require('../utils/db');
 
 // Middleware de autenticação
 function authenticateToken(req) {
