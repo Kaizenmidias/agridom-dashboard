@@ -105,7 +105,7 @@ async function handleRegister(req, res) {
     }
 
     // Verificar se o usuário já existe
-    const existingUser = await query('SELECT id FROM users WHERE email = ?', [email]);
+    const existingUser = await query('SELECT id FROM users WHERE email = $1', [email]);
     
     if (existingUser.rows.length > 0) {
       return res.status(409).json({ error: 'Usuário já existe com este email' });
@@ -114,9 +114,9 @@ async function handleRegister(req, res) {
     // Hash da senha
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Criar novo usuário no MySQL
+    // Criar novo usuário no PostgreSQL/Supabase
     const result = await query(
-      'INSERT INTO users (email, password, full_name, role, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      'INSERT INTO users (email, password, full_name, role, status, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
       [email, hashedPassword, full_name, role, 'active']
     );
 

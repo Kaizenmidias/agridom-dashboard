@@ -70,7 +70,7 @@ async function getUsers(req, res, user) {
     
     if (id) {
       // GET /api/users/[id]
-      const result = await query('SELECT * FROM users WHERE id = ? AND is_active = 1', [id]);
+      const result = await query('SELECT * FROM users WHERE id = $1', [id]);
       
       if (result.rows.length === 0) {
         return res.status(404).json({ error: 'Usuário não encontrado' });
@@ -107,7 +107,7 @@ async function createUser(req, res, user) {
     }
 
     // Verificar se email já existe
-    const existingUser = await query('SELECT id FROM users WHERE email = ?', [email]);
+    const existingUser = await query('SELECT id FROM users WHERE email = $1', [email]);
 
     if (existingUser.rows.length > 0) {
       return res.status(400).json({ error: 'Email já está em uso' });
@@ -204,7 +204,7 @@ async function deleteUser(req, res, user) {
       return res.status(400).json({ error: 'ID do usuário é obrigatório' });
     }
 
-    await query('UPDATE users SET is_active = 0, updated_at = NOW() WHERE id = ?', [id]);
+    await query('UPDATE users SET status = \'inactive\', updated_at = NOW() WHERE id = $1', [id]);
 
     res.json({ message: 'Usuário removido com sucesso' });
   } catch (error) {

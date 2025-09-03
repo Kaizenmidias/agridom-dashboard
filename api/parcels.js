@@ -121,7 +121,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'ID da parcela é obrigatório' });
         }
 
-        await query('DELETE FROM parcels WHERE id = ?', [id]);
+        await query('DELETE FROM parcels WHERE id = $1', [id]);
         res.json({ message: 'Parcela removida com sucesso' });
         break;
 

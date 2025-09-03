@@ -122,7 +122,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'ID do projeto é obrigatório' });
         }
 
-        await query('DELETE FROM projects WHERE id = ?', [id]);
+        await query('DELETE FROM projects WHERE id = $1', [id]);
         res.json({ message: 'Projeto removido com sucesso' });
         break;
 

@@ -122,7 +122,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'ID do cultivo é obrigatório' });
         }
 
-        await query('DELETE FROM crops WHERE id = ?', [id]);
+        await query('DELETE FROM crops WHERE id = $1', [id]);
         res.json({ message: 'Cultivo removido com sucesso' });
         break;
 
