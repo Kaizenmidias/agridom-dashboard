@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npx tsc --noEmit && vite build",
-    "build:vercel": "npx tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build",
+    "build:vercel": "tsc --noEmit && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "vite preview",
@@ -75,7 +75,8 @@
     "tailwind-scrollbar": "^3.1.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.3",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "typescript": "^5.5.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
@@ -94,7 +95,6 @@
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.11",
     "terser": "^5.44.0",
-    "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1"
   }
