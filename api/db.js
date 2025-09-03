@@ -6,15 +6,12 @@ let isProduction = process.env.NODE_ENV === 'production';
 
 if (isProduction) {
   // Configuração para Supabase em produção
+  const connectionString = process.env.dashboard_POSTGRES_URL || 
+    `postgresql://${process.env.dashboard_POSTGRES_USER || 'postgres'}:${process.env.dashboard_POSTGRES_PASSWORD || 'KJ4E7xKy0SCEVIX7'}@${process.env.dashboard_POSTGRES_HOST || 'db.rxvcvlegxljinevhmbyk.supabase.co'}:5432/${process.env.dashboard_POSTGRES_DATABASE || 'postgres'}?sslmode=disable`;
+  
   pool = new Pool({
-    host: process.env.dashboard_POSTGRES_HOST || 'db.rxvcvlegxljinevhmbyk.supabase.co',
-    port: 5432,
-    database: process.env.dashboard_POSTGRES_DATABASE || 'postgres',
-    user: process.env.dashboard_POSTGRES_USER || 'postgres',
-    password: process.env.dashboard_POSTGRES_PASSWORD || 'KJ4E7xKy0SCEVIX7',
-    ssl: {
-      rejectUnauthorized: false
-    },
+    connectionString,
+    ssl: false,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
