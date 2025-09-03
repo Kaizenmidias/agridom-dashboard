@@ -1,4 +1,6 @@
-const { handleLogin } = require('../auth');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { query } = require('../db');
 
 module.exports = async (req, res) => {
   // Configurar CORS
@@ -17,11 +19,6 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-
-  // Importar e executar a função de login do auth.js
-  const bcrypt = require('bcryptjs');
-  const jwt = require('jsonwebtoken');
-  const { query } = require('../db');
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método não permitido' });
