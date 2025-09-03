@@ -7,11 +7,11 @@ let isProduction = process.env.NODE_ENV === 'production';
 if (isProduction) {
   // Configuração para Supabase em produção
   pool = new Pool({
-    host: process.env.SUPABASE_DB_HOST,
+    host: process.env.SUPABASE_DB_HOST || 'db.rxvcvlegxljinevhmbyk.supabase.co',
     port: process.env.SUPABASE_DB_PORT || 5432,
-    database: process.env.SUPABASE_DB_NAME,
-    user: process.env.SUPABASE_DB_USER,
-    password: process.env.SUPABASE_DB_PASSWORD,
+    database: process.env.SUPABASE_DB_NAME || 'postgres',
+    user: process.env.SUPABASE_DB_USER || 'postgres',
+    password: process.env.SUPABASE_DB_PASSWORD || 'KJ4E7xKy0SCEVIX7',
     ssl: {
       rejectUnauthorized: false
     },

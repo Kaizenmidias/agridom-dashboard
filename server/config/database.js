@@ -21,11 +21,14 @@ if (isProduction) {
   });
 } else {
   // Configuração para desenvolvimento usando Supabase
-  if (process.env.DB_HOST && process.env.DB_HOST.includes('supabase.co')) {
-    // Usar string de conexão para Supabase
-    const connectionString = `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}?sslmode=require`;
+  if (process.env.DB_HOST && (process.env.DB_HOST.includes('supabase.co') || process.env.DB_HOST.includes('supabase.com'))) {
+    // Usar configuração direta para Supabase
     pool = new Pool({
-      connectionString,
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT || 5432,
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
       ssl: {
         rejectUnauthorized: false
       },
