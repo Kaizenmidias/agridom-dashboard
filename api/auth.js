@@ -2,6 +2,11 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from '../utils/db.js';
 
+// Verificar se estamos em ambiente serverless
+if (typeof process !== 'undefined' && process.env.VERCEL) {
+  console.log('Executando em ambiente Vercel serverless');
+}
+
 // Configuração CORS
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '*',
@@ -368,39 +373,66 @@ async function handleResetPassword(req, res) {
 
 // Função principal que roteia as requisições
 export default async function handler(req, res) {
-  // Configurar CORS
-  Object.keys(corsHeaders).forEach(key => {
-    res.setHeader(key, corsHeaders[key]);
-  });
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // Extrair o path da URL
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const path = url.pathname;
-
   try {
+    console.log('Iniciando handler auth.js:', {
+      method: req.method,
+      url: req.url,
+      headers: Object.keys(req.headers)
+    });
+
+    // Configurar CORS
+    Object.keys(corsHeaders).forEach(key => {
+      res.setHeader(key, corsHeaders[key]);
+    });
+
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+      console.log('Respondendo a requisição OPTIONS');
+      return res.status(200).end();
+    }
+
+    // Extrair o path da URL
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const path = url.pathname;
+    console.log('Path extraído:', path);
+
     // Roteamento baseado no path
     if (path.includes('/login')) {
+      console.log('Roteando para handleLogin');
       return await handleLogin(req, res);
     } else if (path.includes('/register')) {
+      console.log('Roteando para handleRegister');
       return await handleRegister(req, res);
     } else if (path.includes('/profile')) {
+      console.log('Roteando para handleProfile');
       return await handleProfile(req, res);
     } else if (path.includes('/change-password')) {
+      console.log('Roteando para handleChangePassword');
       return await handleChangePassword(req, res);
     } else if (path.includes('/forgot-password')) {
+      console.log('Roteando para handleForgotPassword');
       return await handleForgotPassword(req, res);
     } else if (path.includes('/reset-password')) {
+      console.log('Roteando para handleResetPassword');
       return await handleResetPassword(req, res);
     } else {
+      console.log('Endpoint não encontrado:', path);
       return res.status(404).json({ error: 'Endpoint não encontrado' });
     }
   } catch (error) {
-    console.error('Erro na API de autenticação:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    console.error('Erro crítico na API de autenticação:', {
+      message: error.message,
+      stack: error.stack,
+      url: req.url,
+      method: req.method
+    });
+    
+    // Garantir que a resposta seja enviada
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Erro interno do servidor',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   }
 };
