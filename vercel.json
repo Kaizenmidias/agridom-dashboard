@@ -5,15 +5,11 @@
   "installCommand": "npm install",
   "framework": "vite",
   "functions": {
-    "api/auth.js": {
+    "api/*.js": {
       "runtime": "nodejs18.x"
     }
   },
   "rewrites": [
-    {
-      "source": "/api/auth/(.*)",
-      "destination": "/api/auth"
-    },
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
