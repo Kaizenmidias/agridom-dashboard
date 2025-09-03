@@ -21,9 +21,9 @@ if (isProduction) {
   });
 } else {
   // Configuração para desenvolvimento usando Supabase
-  if (process.env.DB_HOST && process.env.DB_HOST.includes('supabase.co')) {
+  if (process.env.dashboard_POSTGRES_HOST && process.env.dashboard_POSTGRES_HOST.includes('supabase.co')) {
     // Usar string de conexão para Supabase
-    const connectionString = `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}?sslmode=require`;
+    const connectionString = `postgresql://${process.env.dashboard_POSTGRES_USER}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE}?sslmode=require`;
     pool = new Pool({
       connectionString,
       ssl: {
@@ -36,11 +36,11 @@ if (isProduction) {
   } else {
     // Configuração local
     pool = new Pool({
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 5432,
-      database: process.env.DB_NAME || 'agridom_dev',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || '',
+      host: process.env.dashboard_POSTGRES_HOST || 'localhost',
+      port: 5432,
+      database: process.env.dashboard_POSTGRES_DATABASE || 'agridom_dev',
+      user: process.env.dashboard_POSTGRES_USER || 'postgres',
+      password: process.env.dashboard_POSTGRES_PASSWORD || '',
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,

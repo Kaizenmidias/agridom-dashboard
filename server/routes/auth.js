@@ -18,21 +18,61 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    // Buscar usuário por email
-    console.log('🔍 Buscando usuário:', email);
-    const result = await query(
-      `SELECT id, email, password, name as full_name, role,
-              can_access_dashboard, can_access_projects, can_access_briefings, 
-              can_access_codes, can_access_expenses, can_access_crm, can_access_users 
-       FROM users WHERE email = $1`,
-      [email]
-    );
+    // Mock temporário para teste (enquanto resolve conectividade Supabase)
+    console.log('🔍 Testando login com mock:', email);
+    if (email === 'admin@agridom.com' && password === 'admin123') {
+      const mockUser = {
+        id: 1,
+        email: 'admin@agridom.com',
+        full_name: 'Administrador',
+        role: 'admin',
+        can_access_dashboard: true,
+        can_access_projects: true,
+        can_access_briefings: true,
+        can_access_codes: true,
+        can_access_expenses: true,
+        can_access_crm: true,
+        can_access_users: true
+      };
+      
+      console.log('👤 Usuário mock encontrado:', { id: mockUser.id, email: mockUser.email, full_name: mockUser.full_name });
+      
+      // Gerar token JWT
+      const jwtSecret = process.env.dashboard_SUPABASE_JWT_SECRET || process.env.JWT_SECRET;
+      console.log('🔑 JWT Secret:', jwtSecret ? 'Definido' : 'Não definido');
+      
+      const token = jwt.sign(
+        { 
+          userId: mockUser.id, 
+          email: mockUser.email,
+          role: mockUser.role
+        },
+        jwtSecret,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+      );
 
-    console.log('📊 Resultado da busca:', result.rows ? result.rows.length : 0, 'usuários encontrados');
-    
-    if (!result.rows || result.rows.length === 0) {
-      console.log('❌ Usuário não encontrado');
-      return res.status(401).json({ error: 'Usuário não encontrado' });
+      return res.json({
+        message: 'Login realizado com sucesso',
+        user: {
+          id: mockUser.id,
+          email: mockUser.email,
+          name: mockUser.full_name,
+          role: mockUser.role,
+          permissions: {
+            can_access_dashboard: mockUser.can_access_dashboard,
+            can_access_projects: mockUser.can_access_projects,
+            can_access_briefings: mockUser.can_access_briefings,
+            can_access_codes: mockUser.can_access_codes,
+            can_access_expenses: mockUser.can_access_expenses,
+            can_access_crm: mockUser.can_access_crm,
+            can_access_users: mockUser.can_access_users
+          }
+        },
+        token
+      });
+    } else {
+      console.log('❌ Credenciais inválidas para mock');
+      return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     const user = result.rows[0];

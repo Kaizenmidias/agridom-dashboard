@@ -22,10 +22,8 @@ if (isProduction) {
 } else {
   // Configuração para desenvolvimento usando Supabase
   pool = new Pool({
-    connectionString: process.env.SUPABASE_DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false
-    },
+    connectionString: process.env.dashboard_POSTGRES_URL,
+    ssl: false,
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000
