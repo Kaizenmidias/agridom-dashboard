@@ -31,10 +31,10 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    // Buscar usuário no MySQL
+    // Buscar usuário no PostgreSQL/Supabase
     const userResult = await query(
-      'SELECT * FROM users WHERE email = ? AND status = ?',
-      [email, 'active']
+      'SELECT * FROM users WHERE email = $1',
+      [email]
     );
 
     if (userResult.rows.length === 0) {
