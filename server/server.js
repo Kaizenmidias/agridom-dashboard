@@ -1,11 +1,11 @@
+// Carregar variáveis de ambiente baseado no NODE_ENV ANTES de qualquer importação
+const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
+require('dotenv').config({ path: envFile });
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { query, testConnection, closeConnection } = require('./config/database');
-
-// Carregar variáveis de ambiente baseado no NODE_ENV
-const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
-require('dotenv').config({ path: envFile });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
