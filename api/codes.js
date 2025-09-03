@@ -41,7 +41,7 @@ export default async function handler(req, res) {
         if (id) {
           // GET /api/codes/[id]
           const result = await query(
-            'SELECT * FROM codes WHERE id = ?',
+            'SELECT * FROM codes WHERE id = $1',
             [id]
           );
           
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
 
         // Verificar se o código já existe
         const existingCode = await query(
-          'SELECT id FROM codes WHERE code = ?',
+          'SELECT id FROM codes WHERE code = $1',
           [code]
         );
 
@@ -79,13 +79,13 @@ export default async function handler(req, res) {
 
         const insertResult = await query(
           `INSERT INTO codes (code, description, category, status, created_by) 
-           VALUES (?, ?, ?, ?, ?)`,
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
           [code, description, category, status || 'ativo', userId]
         );
 
         res.status(201).json({ 
           message: 'Código criado com sucesso', 
-          id: insertResult.insertId 
+          id: insertResult.rows[0].id 
         });
         break;
 
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
 
         allowedFields.forEach(field => {
           if (updateData[field] !== undefined) {
-            updateFields.push(`${field} = ?`);
+            updateFields.push(`${field} = $${updateValues.length + 1}`);
             updateValues.push(updateData[field]);
           }
         });
@@ -118,7 +118,7 @@ export default async function handler(req, res) {
         // Se estiver atualizando o código, verificar se já existe
         if (updateData.code) {
           const existingCode = await query(
-            'SELECT id FROM codes WHERE code = ? AND id != ?',
+            'SELECT id FROM codes WHERE code = $1 AND id != $2',
             [updateData.code, id]
           );
 
@@ -130,7 +130,7 @@ export default async function handler(req, res) {
         updateValues.push(id);
         
         await query(
-          `UPDATE codes SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          `UPDATE codes SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${updateValues.length}`,
           updateValues
         );
 

@@ -41,7 +41,7 @@ export default async function handler(req, res) {
         if (id) {
           // GET /api/parcels/[id]
           const result = await query(
-            'SELECT * FROM parcels WHERE id = ?',
+            'SELECT * FROM parcels WHERE id = $1',
             [id]
           );
           
@@ -69,13 +69,13 @@ export default async function handler(req, res) {
 
         const insertResult = await query(
           `INSERT INTO parcels (name, area, location, soil_type, project_id, created_by) 
-           VALUES (?, ?, ?, ?, ?, ?)`,
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
           [name, area, location, soil_type, project_id, userId]
         );
 
         res.status(201).json({ 
           message: 'Parcela criada com sucesso', 
-          id: insertResult.insertId 
+          id: insertResult.rows[0].id 
         });
         break;
 
@@ -94,9 +94,9 @@ export default async function handler(req, res) {
           'name', 'area', 'location', 'soil_type', 'project_id'
         ];
 
-        allowedFields.forEach(field => {
+        allowedFields.forEach((field, index) => {
           if (updateData[field] !== undefined) {
-            updateFields.push(`${field} = ?`);
+            updateFields.push(`${field} = $${updateValues.length + 1}`);
             updateValues.push(updateData[field]);
           }
         });
@@ -108,7 +108,7 @@ export default async function handler(req, res) {
         updateValues.push(id);
         
         await query(
-          `UPDATE parcels SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          `UPDATE parcels SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${updateValues.length}`,
           updateValues
         );
 

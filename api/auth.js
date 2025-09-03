@@ -39,9 +39,9 @@ async function handleLogin(req, res) {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    // Buscar usuário no MySQL
+    // Buscar usuário no PostgreSQL
     const userResult = await query(
-      'SELECT * FROM users WHERE email = ? AND status = ?',
+      'SELECT * FROM users WHERE email = $1 AND status = $2',
       [email, 'active']
     );
 
@@ -66,7 +66,7 @@ async function handleLogin(req, res) {
 
     // Atualizar último login
     await query(
-      'UPDATE users SET last_login = NOW() WHERE id = ?',
+      'UPDATE users SET last_login = NOW() WHERE id = $1',
       [user.id]
     );
 
@@ -152,7 +152,7 @@ async function handleProfile(req, res) {
     if (req.method === 'GET') {
       // GET - Buscar perfil do usuário
       const result = await query(
-        'SELECT id, email, full_name, avatar_url, is_active, created_at FROM users WHERE id = ?',
+        'SELECT id, email, full_name, avatar_url, is_active, created_at FROM users WHERE id = $1',
         [userId]
       );
 
@@ -178,13 +178,13 @@ async function handleProfile(req, res) {
       }
 
       await query(
-        'UPDATE users SET full_name = ?, avatar_url = ?, updated_at = NOW() WHERE id = ?',
+        'UPDATE users SET full_name = $1, avatar_url = $2, updated_at = NOW() WHERE id = $3',
         [full_name, avatar_url || null, userId]
       );
 
       // Buscar usuário atualizado
       const result = await query(
-        'SELECT id, email, full_name, avatar_url, is_active, created_at FROM users WHERE id = ?',
+        'SELECT id, email, full_name, avatar_url, is_active, created_at FROM users WHERE id = $1',
         [userId]
       );
 
@@ -229,7 +229,7 @@ async function handleChangePassword(req, res) {
 
     // Buscar usuário atual
     const userResult = await query(
-      'SELECT * FROM users WHERE id = ? AND is_active = ?',
+      'SELECT * FROM users WHERE id = $1 AND is_active = $2',
       [userId, true]
     );
 
@@ -250,7 +250,7 @@ async function handleChangePassword(req, res) {
 
     // Atualizar senha no banco
     await query(
-      'UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?',
+      'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
       [hashedNewPassword, userId]
     );
 
@@ -279,7 +279,7 @@ async function handleForgotPassword(req, res) {
 
     // Verificar se o usuário existe
     const userResult = await query(
-      'SELECT * FROM users WHERE email = ? AND deleted_at IS NULL',
+      'SELECT * FROM users WHERE email = $1 AND deleted_at IS NULL',
       [email]
     );
 
@@ -299,7 +299,7 @@ async function handleForgotPassword(req, res) {
 
     // Salvar token no banco
     await query(
-      'UPDATE users SET reset_password_token = ?, reset_password_expires = ? WHERE id = ?',
+      'UPDATE users SET reset_password_token = $1, reset_password_expires = $2 WHERE id = $3',
       [resetToken, resetTokenExpiry, user.id]
     );
 
@@ -332,7 +332,7 @@ async function handleResetPassword(req, res) {
 
     // Verificar se o token é válido
     const userResult = await query(
-      'SELECT * FROM users WHERE reset_password_token = ? AND is_active = ?',
+      'SELECT * FROM users WHERE reset_password_token = $1 AND is_active = $2',
       [token, true]
     );
 
@@ -355,7 +355,7 @@ async function handleResetPassword(req, res) {
 
     // Atualizar senha e limpar token
     await query(
-      'UPDATE users SET password = ?, reset_password_token = NULL, reset_password_expires = NULL, updated_at = NOW() WHERE id = ?',
+      'UPDATE users SET password = $1, reset_password_token = NULL, reset_password_expires = NULL, updated_at = NOW() WHERE id = $2',
       [hashedPassword, user.id]
     );
 

@@ -41,7 +41,7 @@ export default async function handler(req, res) {
         if (id) {
           // GET /api/projects/[id]
           const result = await query(
-            'SELECT * FROM projects WHERE id = ?',
+            'SELECT * FROM projects WHERE id = $1',
             [id]
           );
           
@@ -69,13 +69,13 @@ export default async function handler(req, res) {
 
         const insertResult = await query(
           `INSERT INTO projects (name, description, client_name, start_date, end_date, status, budget, created_by) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
           [name, description, client_name, start_date, end_date, status || 'planejamento', budget, userId]
         );
 
         res.status(201).json({ 
           message: 'Projeto criado com sucesso', 
-          id: insertResult.insertId 
+          id: insertResult.rows[0].id 
         });
         break;
 
@@ -97,7 +97,7 @@ export default async function handler(req, res) {
 
         allowedFields.forEach(field => {
           if (updateData[field] !== undefined) {
-            updateFields.push(`${field} = ?`);
+            updateFields.push(`${field} = $${updateValues.length + 1}`);
             updateValues.push(updateData[field]);
           }
         });
@@ -109,7 +109,7 @@ export default async function handler(req, res) {
         updateValues.push(id);
         
         await query(
-          `UPDATE projects SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          `UPDATE projects SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${updateValues.length}`,
           updateValues
         );
 

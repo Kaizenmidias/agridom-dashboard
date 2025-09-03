@@ -41,7 +41,7 @@ export default async function handler(req, res) {
         if (id) {
           // GET /api/expenses/[id]
           const result = await query(
-            'SELECT * FROM expenses WHERE id = ?',
+            'SELECT * FROM expenses WHERE id = $1',
             [id]
           );
           
@@ -71,13 +71,13 @@ export default async function handler(req, res) {
         
         const insertResult = await query(
           `INSERT INTO expenses (description, amount, expense_date, category, project_id, parcel_id, created_by) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
           [description, amount, formattedDate, category, project_id, parcel_id, userId]
         );
 
         res.status(201).json({ 
           message: 'Despesa criada com sucesso', 
-          id: insertResult.insertId 
+          id: insertResult.rows[0].id 
         });
         break;
 
@@ -98,7 +98,7 @@ export default async function handler(req, res) {
 
         allowedFields.forEach(field => {
           if (updateData[field] !== undefined) {
-            updateFields.push(`${field} = ?`);
+            updateFields.push(`${field} = $${updateValues.length + 1}`);
             // Formatar data se for o campo expense_date
             if (field === 'expense_date') {
               updateValues.push(formatDateForMySQL(updateData[field]));
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
         updateValues.push(id);
         
         await query(
-          `UPDATE expenses SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          `UPDATE expenses SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${updateValues.length}`,
           updateValues
         );
 

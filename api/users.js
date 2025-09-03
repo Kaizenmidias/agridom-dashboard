@@ -131,7 +131,7 @@ async function createUser(req, res, user) {
       `INSERT INTO users (email, password, full_name, position, is_active, created_at, updated_at,
        can_access_dashboard, can_access_briefings, can_access_codes, can_access_projects,
        can_access_expenses, can_access_crm, can_access_users)
-       VALUES (?, ?, ?, ?, 1, NOW(), NOW(), ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, true, NOW(), NOW(), $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
       [
         email,
         password_hash,
@@ -147,7 +147,7 @@ async function createUser(req, res, user) {
       ]
     );
 
-    const userId = insertResult.rows.insertId;
+    const userId = insertResult.rows[0].id;
 
     res.status(201).json({ 
       message: 'Usuário criado com sucesso', 
@@ -192,8 +192,8 @@ async function updateUser(req, res, user) {
     const fields = Object.keys(filteredUpdateData);
     const values = Object.values(filteredUpdateData);
     
-    const setClause = fields.map(field => `${field} = ?`).join(', ');
-    const updateQuery = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ?`;
+    const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
+    const updateQuery = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $${fields.length + 1}`;
     
     await query(updateQuery, [...values, id]);
 
