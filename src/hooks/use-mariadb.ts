@@ -5,7 +5,6 @@ import {
   getExpenses, getExpenseById, createExpense, updateExpense, deleteExpense
 } from '../api/crud'
 import { User, Project, Expense } from '../types/database'
-import { query } from '../lib/mariadb'
 
 
 
