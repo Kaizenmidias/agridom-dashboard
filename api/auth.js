@@ -384,17 +384,17 @@ module.exports = async (req, res) => {
 
   try {
     // Roteamento baseado no path
-    if (path.endsWith('/login')) {
+    if (path.includes('/login')) {
       return await handleLogin(req, res);
-    } else if (path.endsWith('/register')) {
+    } else if (path.includes('/register')) {
       return await handleRegister(req, res);
-    } else if (path.endsWith('/profile')) {
+    } else if (path.includes('/profile')) {
       return await handleProfile(req, res);
-    } else if (path.endsWith('/change-password')) {
+    } else if (path.includes('/change-password')) {
       return await handleChangePassword(req, res);
-    } else if (path.endsWith('/forgot-password')) {
+    } else if (path.includes('/forgot-password')) {
       return await handleForgotPassword(req, res);
-    } else if (path.endsWith('/reset-password')) {
+    } else if (path.includes('/reset-password')) {
       return await handleResetPassword(req, res);
     } else {
       return res.status(404).json({ error: 'Endpoint não encontrado' });
