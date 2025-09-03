@@ -168,7 +168,7 @@ ADD COLUMN IF NOT EXISTS can_access_users BOOLEAN DEFAULT FALSE;
 -- Criar usuário administrador padrão (senha: admin123)
 -- IMPORTANTE: Altere a senha após o primeiro login!
 INSERT INTO users (email, password, name, role, can_access_dashboard, can_access_briefings, can_access_codes, can_access_projects, can_access_expenses, can_access_crm, can_access_users) VALUES
-('admin@webdesign.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.F5e', 'Administrador', 'admin', TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
+('admin@agridom.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.F5e', 'Administrador', 'admin', TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
 ON DUPLICATE KEY UPDATE 
     password = VALUES(password),
     name = VALUES(name),
