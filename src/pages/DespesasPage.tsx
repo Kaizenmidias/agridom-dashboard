@@ -79,8 +79,8 @@ const DespesasPage = () => {
     return acc + (Number(monthlyAmount) || 0);
   }, 0);
 
-  const despesasPagas = despesas.filter(d => d.status === 'paid').length;
-  const despesasPendentes = despesas.filter(d => d.status === 'pending').length;
+  // Todas as despesas são consideradas registradas
+  const quantidadeDespesas = despesas.length;
 
   return (
     <div className="p-6 space-y-6">
@@ -120,7 +120,7 @@ const DespesasPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Pagas</p>
-                <p className="text-xl font-bold">{despesasPagas}</p>
+                <p className="text-xl font-bold">{quantidadeDespesas}</p>
               </div>
             </div>
           </CardContent>

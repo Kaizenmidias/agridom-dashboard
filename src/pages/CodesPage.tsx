@@ -57,7 +57,7 @@ export function CodesPage() {
       setCodes(codesData)
     } catch (error) {
       console.error('Erro ao carregar códigos:', error)
-      showToast('Erro ao carregar códigos', 'error')
+      showToast('Erro ao carregar códigos')
     } finally {
       setIsLoading(false)
     }

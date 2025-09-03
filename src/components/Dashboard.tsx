@@ -53,6 +53,12 @@ const Dashboard = () => {
   // Tasks and alerts
   const [upcomingTasks, setUpcomingTasks] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  
+  // Agricultural metrics
+  const [cultivatedArea, setCultivatedArea] = useState(0);
+  const [parcelsCount, setParcelsCount] = useState(0);
+  const [averageYield, setAverageYield] = useState(0);
+  const [yieldGrowth, setYieldGrowth] = useState(0);
   const [weatherAlerts, setWeatherAlerts] = useState([]);
   
   // New alert dialog
@@ -513,7 +519,7 @@ const Dashboard = () => {
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-600">Total:</span>
               <span className="text-sm font-medium">
-                R$ {dashboardStats?.expenses_by_category.reduce((sum, item) => sum + item.total, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                R$ {dashboardStats?.expenses_by_category.reduce((sum, item) => sum + item.total_amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
               </span>
             </div>
           </div>
@@ -527,7 +533,7 @@ const Dashboard = () => {
                 <BarChart
                   data={dashboardStats?.expenses_by_category.map(item => ({
                     category: item.category || 'Sem categoria',
-                    total: item.total
+                    total: item.total_amount
                   })) || []}
                   layout="vertical"
                   margin={{ top: 20, right: 30, left: 80, bottom: 5 }}
@@ -602,7 +608,7 @@ const Dashboard = () => {
                       <p className="font-medium text-sm">{project.name}</p>
                       <p className="text-xs text-gray-600">{getStatusText(project.status)}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        Valor: R$ {Number(project.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        Valor: R$ {Number(project.project_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div className="text-right">

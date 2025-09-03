@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Users, UserCheck, UserX, Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createUser, updateUser, deleteUser } from '@/api/crud';
-import { UserType } from '@/types/user';
+import { User, InsertUser, AuthUser } from '@/types/database';
 import { toast } from '@/hooks/use-toast';
 
 const UsuariosPage = () => {
@@ -21,7 +21,7 @@ const UsuariosPage = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AuthUser | null>(null);
 
   const [newUser, setNewUser] = useState({
     full_name: '',
@@ -76,7 +76,13 @@ const UsuariosPage = () => {
       } : newUser.permissions;
 
       await createUser({
-        ...newUser,
+        email: newUser.email,
+        password_hash: newUser.password, // Será hasheado no backend
+        full_name: newUser.full_name || null,
+        position: newUser.position || null,
+        bio: null,
+        avatar_url: null,
+        is_active: true,
         ...permissions
       });
 
@@ -95,15 +101,12 @@ const UsuariosPage = () => {
     }
   };
 
-  const handleEditUser = (usuario: UserType) => {
-    setSelectedUser({
-      ...usuario,
-      password: ''
-    });
+  const handleEditUser = (usuario: AuthUser) => {
+    setSelectedUser(usuario);
     setIsEditDialogOpen(true);
   };
 
-  const handleDeleteUser = (usuario: UserType) => {
+  const handleDeleteUser = (usuario: AuthUser) => {
     setSelectedUser(usuario);
     setIsDeleteDialogOpen(true);
   };
@@ -153,7 +156,7 @@ const UsuariosPage = () => {
         email: selectedUser.email,
         position: selectedUser.position,
         is_active: selectedUser.is_active,
-        ...(selectedUser.password && { password: selectedUser.password }),
+        // password_hash será mantido como está no banco
         ...permissions
       });
 
@@ -200,7 +203,7 @@ const UsuariosPage = () => {
     return (
       <div className="p-6 space-y-6">
         <div className="flex justify-center items-center h-64">
-          <p className="text-red-600">Erro ao carregar usuários: {error.message}</p>
+          <p className="text-red-600">Erro ao carregar usuários: {error}</p>
         </div>
       </div>
     );
@@ -424,9 +427,7 @@ const UsuariosPage = () => {
                       <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                         <span>{usuario.email}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Criado em: {new Date(usuario.created_at).toLocaleDateString('pt-BR')}
-                      </p>
+
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">

@@ -194,7 +194,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true)
       
       // Atualizar perfil usando a API real
-      const updatedUser = await updateUserProfile(user.id, data)
+      const updatedUser = await updateUserProfile(data)
       
       if (updatedUser) {
         // Salvar no localStorage

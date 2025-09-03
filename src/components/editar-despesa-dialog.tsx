@@ -71,9 +71,15 @@ export function EditarDespesaDialog({ expense, open, onOpenChange, onExpenseUpda
                 formattedDate = dateObj.toISOString().split('T')[0];
               }
             }
-          } else if (expenseDate instanceof Date) {
-            if (!isNaN(expenseDate.getTime())) {
-              formattedDate = expenseDate.toISOString().split('T')[0];
+          } else if ((expenseDate as any) instanceof Date) {
+            if (!isNaN((expenseDate as Date).getTime())) {
+              formattedDate = (expenseDate as Date).toISOString().split('T')[0];
+            }
+          } else if (expenseDate) {
+            // Tentar converter qualquer outro tipo para Date
+            const dateObj = new Date(expenseDate as any);
+            if (!isNaN(dateObj.getTime())) {
+              formattedDate = dateObj.toISOString().split('T')[0];
             }
           }
         } catch (error) {
@@ -115,9 +121,9 @@ export function EditarDespesaDialog({ expense, open, onOpenChange, onExpenseUpda
       await updateExpense(expense.id, {
         description: data.description,
         amount,
-        date: data.date,
+        expense_date: data.date,
         billing_type: data.billing_type,
-        status: 'paid',
+        // status removido - não existe no tipo Expense
         notes: data.notes || '',
       });
       

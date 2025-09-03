@@ -10,9 +10,6 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 20, // máximo de conexões no pool
   queueLimit: 0,
-  acquireTimeout: 60000, // tempo limite para obter conexão
-  timeout: 60000, // tempo limite para queries
-  reconnect: true,
   charset: 'utf8mb4'
 });
 

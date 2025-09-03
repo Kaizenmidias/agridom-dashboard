@@ -189,7 +189,7 @@ const DashboardWithFilter: React.FC = () => {
         );
         
         const revenue = monthData ? monthData.revenue : 0;
-        const expenses = monthData ? (monthData.expenses || 0) : 0;
+        const expenses = 0; // Dados de despesas não disponíveis neste formato
         const profit = revenue - expenses;
         
         labels.push(format(new Date(currentYear, month), 'MMM', { locale: pt }));

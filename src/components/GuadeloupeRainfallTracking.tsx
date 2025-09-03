@@ -83,7 +83,7 @@ const GuadeloupeRainfallTracking = () => {
   });
   
   const [rainfallData, setRainfallData] = useState<RainfallData[]>([
-    { id: 1, month: 'Janeiro', year: 2023, amount: 210, location: 'Basse-Terre', impact: 'Positivo', notes: 'Bom início para as culturas' },
+    { id: 1, month: 'Janeiro', year: 2023, amount: 210, location: 'Basse-Terre', impact: 'Positive', notes: 'Bom início para as culturas' },
     { id: 2, month: 'Février', year: 2023, amount: 180, location: 'Basse-Terre', impact: 'Positive' },
     { id: 3, month: 'Mars', year: 2023, amount: 150, location: 'Basse-Terre', impact: 'Neutral' },
     { id: 4, month: 'Avril', year: 2023, amount: 120, location: 'Basse-Terre', impact: 'Neutral' },

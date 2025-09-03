@@ -1,5 +1,8 @@
-import { User, Project, Expense, Parcel, Crop, Code, InsertCode, UpdateCode } from '../types/database'
+import { User, Project, Expense, Code, InsertCode, UpdateCode } from '../types/database'
 import { API_BASE_URL } from '../config/api'
+
+// Re-exportar tipos para uso em outros componentes
+export type { User, Project, Expense, Code };
 
 // Função auxiliar para fazer requisições autenticadas
 const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
@@ -239,99 +242,7 @@ export async function deleteExpense(id: string): Promise<boolean> {
   }
 }
 
-// ============= PARCELS API =============
 
-export async function getParcels(filters?: { project_id?: string }): Promise<Parcel[]> {
-  const params = new URLSearchParams();
-  if (filters?.project_id) params.append('project_id', filters.project_id);
-  
-  const url = `${API_BASE_URL}/parcels${params.toString() ? `?${params.toString()}` : ''}`;
-  return await fetchWithAuth(url);
-}
-
-export async function getParcelById(id: string): Promise<Parcel | null> {
-  try {
-    return await fetchWithAuth(`${API_BASE_URL}/parcels/${id}`);
-  } catch (error) {
-    return null;
-  }
-}
-
-export async function createParcel(parcelData: Omit<Parcel, 'id' | 'created_at' | 'updated_at'>): Promise<Parcel> {
-  return await fetchWithAuth(`${API_BASE_URL}/parcels`, {
-    method: 'POST',
-    body: JSON.stringify(parcelData),
-  });
-}
-
-export async function updateParcel(id: string, parcelData: Partial<Parcel>): Promise<Parcel | null> {
-  try {
-    return await fetchWithAuth(`${API_BASE_URL}/parcels/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(parcelData),
-    });
-  } catch (error) {
-    return null;
-  }
-}
-
-export async function deleteParcel(id: string): Promise<boolean> {
-  try {
-    await fetchWithAuth(`${API_BASE_URL}/parcels/${id}`, {
-      method: 'DELETE',
-    });
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-// ============= CROPS API =============
-export async function getCrops(filters?: { parcel_id?: string; season?: string }): Promise<Crop[]> {
-  const params = new URLSearchParams();
-  if (filters?.parcel_id) params.append('parcel_id', filters.parcel_id);
-  if (filters?.season) params.append('season', filters.season);
-  
-  const url = `${API_BASE_URL}/crops${params.toString() ? `?${params.toString()}` : ''}`;
-  return await fetchWithAuth(url);
-}
-
-export async function getCropById(id: string): Promise<Crop | null> {
-  try {
-    return await fetchWithAuth(`${API_BASE_URL}/crops/${id}`);
-  } catch (error) {
-    return null;
-  }
-}
-
-export async function createCrop(cropData: Omit<Crop, 'id' | 'created_at' | 'updated_at'>): Promise<Crop> {
-  return await fetchWithAuth(`${API_BASE_URL}/crops`, {
-    method: 'POST',
-    body: JSON.stringify(cropData),
-  });
-}
-
-export async function updateCrop(id: string, cropData: Partial<Crop>): Promise<Crop | null> {
-  try {
-    return await fetchWithAuth(`${API_BASE_URL}/crops/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(cropData),
-    });
-  } catch (error) {
-    return null;
-  }
-}
-
-export async function deleteCrop(id: string): Promise<boolean> {
-  try {
-    await fetchWithAuth(`${API_BASE_URL}/crops/${id}`, {
-      method: 'DELETE',
-    });
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
 
 // ============= CODES API =============
 

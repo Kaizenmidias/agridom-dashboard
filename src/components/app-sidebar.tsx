@@ -39,7 +39,7 @@ export function AppSidebar() {
   const items = allItems.filter(item => {
     if (!user) return false
     const permission = user[item.permission as keyof typeof user]
-    return permission === true || permission === 1
+    return permission === true || permission === '1'
   })
 
   const isActive = (path: string) => {

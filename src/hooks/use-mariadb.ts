@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { 
+import {
   getUsers, getUserById, createUser, updateUser, deleteUser,
   getProjects, getProjectById, createProject, updateProject, deleteProject,
-  getExpenses, getExpenseById, createExpense, updateExpense, deleteExpense,
-  getParcels, getParcelById, createParcel, updateParcel, deleteParcel,
-  getCrops, getCropById, createCrop, updateCrop, deleteCrop
+  getExpenses, getExpenseById, createExpense, updateExpense, deleteExpense
 } from '../api/crud'
-import { User, Project, Expense, Parcel, Crop } from '../types/database'
+import { User, Project, Expense } from '../types/database'
+import { query } from '../lib/mariadb'
 
 
 
@@ -369,243 +368,7 @@ export function useDeleteExpense() {
   return { remove, loading, error }
 }
 
-// Hook para parcelas
-export function useParcels(filters?: { project_id?: string; status?: string }) {
-  const [data, setData] = useState<Parcel[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchParcels = async () => {
-      try {
-        setLoading(true)
-        const parcels = await getParcels(filters)
-        setData(parcels)
-        setError(null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro ao buscar parcelas')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchParcels()
-  }, [filters])
-
-  return { data, loading, error, refetch: () => window.location.reload() }
-}
-
-export function useParcel(id: string) {
-  const [data, setData] = useState<Parcel | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchParcel = async () => {
-      try {
-        setLoading(true)
-        const parcel = await getParcelById(id)
-        setData(parcel)
-        setError(null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro ao buscar parcela')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (id) {
-      fetchParcel()
-    }
-  }, [id])
-
-  return { data, loading, error }
-}
-
-export function useCreateParcel() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const create = async (parcelData: Omit<Parcel, 'id' | 'created_at' | 'updated_at'>) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const newParcel = await createParcel(parcelData)
-      return newParcel
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao criar parcela'
-      setError(errorMessage)
-      throw new Error(errorMessage)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return { create, loading, error }
-}
-
-export function useUpdateParcel() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const update = async (id: string, parcelData: Partial<Parcel>) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const updatedParcel = await updateParcel(id, parcelData)
-      return updatedParcel
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao atualizar parcela'
-      setError(errorMessage)
-      throw new Error(errorMessage)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return { update, loading, error }
-}
-
-export function useDeleteParcel() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const remove = async (id: string) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const success = await deleteParcel(id)
-      return success
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao deletar parcela'
-      setError(errorMessage)
-      throw new Error(errorMessage)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return { remove, loading, error }
-}
-
-// Hook para culturas
-export function useCrops(filters?: { parcel_id?: string; status?: string }) {
-  const [data, setData] = useState<Crop[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchCrops = async () => {
-      try {
-        setLoading(true)
-        const crops = await getCrops(filters)
-        setData(crops)
-        setError(null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro ao buscar culturas')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchCrops()
-  }, [filters])
-
-  return { data, loading, error, refetch: () => window.location.reload() }
-}
-
-export function useCrop(id: string) {
-  const [data, setData] = useState<Crop | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchCrop = async () => {
-      try {
-        setLoading(true)
-        const crop = await getCropById(id)
-        setData(crop)
-        setError(null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro ao buscar cultura')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (id) {
-      fetchCrop()
-    }
-  }, [id])
-
-  return { data, loading, error }
-}
-
-export function useCreateCrop() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const create = async (cropData: Omit<Crop, 'id' | 'created_at' | 'updated_at'>) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const newCrop = await createCrop(cropData)
-      return newCrop
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao criar cultura'
-      setError(errorMessage)
-      throw new Error(errorMessage)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return { create, loading, error }
-}
-
-export function useUpdateCrop() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const update = async (id: string, cropData: Partial<Crop>) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const updatedCrop = await updateCrop(id, cropData)
-      return updatedCrop
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao atualizar cultura'
-      setError(errorMessage)
-      throw new Error(errorMessage)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return { update, loading, error }
-}
-
-export function useDeleteCrop() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const remove = async (id: string) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const success = await deleteCrop(id)
-      return success
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao deletar cultura'
-      setError(errorMessage)
-      throw new Error(errorMessage)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return { remove, loading, error }
-}
 
 // Hook para estatísticas
 export function useStatistics(userId: string) {
@@ -629,10 +392,7 @@ export function useStatistics(userId: string) {
         const queries = [
           'SELECT COUNT(*) as count FROM projects WHERE user_id = ?',
           'SELECT COUNT(*) as count FROM projects WHERE user_id = ? AND status = \'active\'',
-          'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ?',
-          'SELECT COUNT(*) as count FROM parcels WHERE user_id = ?',
-          'SELECT COUNT(*) as count FROM crops WHERE user_id = ?',
-          'SELECT COUNT(*) as count FROM crops WHERE user_id = ? AND status IN (\'planted\', \'growing\')'
+          'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ?'
         ]
         
         const results = await Promise.all(
@@ -643,9 +403,9 @@ export function useStatistics(userId: string) {
           totalProjects: parseInt(results[0].rows[0].count),
           activeProjects: parseInt(results[1].rows[0].count),
           totalExpenses: parseFloat(results[2].rows[0].total),
-          totalParcels: parseInt(results[3].rows[0].count),
-          totalCrops: parseInt(results[4].rows[0].count),
-          activeCrops: parseInt(results[5].rows[0].count)
+          totalParcels: 0,
+          totalCrops: 0,
+          activeCrops: 0
         })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro ao carregar estatísticas')

@@ -106,14 +106,14 @@ const ProjetosPage = () => {
     
     // Calcular faturamento total (soma dos valores pagos)
     const faturamentoTotal = projetos.reduce((total, projeto) => {
-      const paidValue = parseFloat(projeto.paid_value) || 0;
+      const paidValue = Number(projeto.paid_value) || 0;
       return total + paidValue;
     }, 0);
     
     // Calcular valor pendente (valor total - valor pago)
     const valorPendente = projetos.reduce((total, projeto) => {
-      const valorProjeto = parseFloat(projeto.project_value) || 0;
-      const valorPago = parseFloat(projeto.paid_value) || 0;
+      const valorProjeto = Number(projeto.project_value) || 0;
+      const valorPago = Number(projeto.paid_value) || 0;
       return total + (valorProjeto - valorPago);
     }, 0);
     
@@ -508,7 +508,7 @@ const ProjetosPage = () => {
                     </TableCell>
                     <TableCell>
                       {projeto.project_value ? 
-                        parseFloat(projeto.project_value).toLocaleString('pt-BR', {
+                        Number(projeto.project_value).toLocaleString('pt-BR', {
                           style: 'currency',
                           currency: 'BRL'
                         }) : '-'
@@ -516,7 +516,7 @@ const ProjetosPage = () => {
                     </TableCell>
                     <TableCell>
                       {projeto.paid_value ? 
-                        parseFloat(projeto.paid_value).toLocaleString('pt-BR', {
+                        Number(projeto.paid_value).toLocaleString('pt-BR', {
                           style: 'currency',
                           currency: 'BRL'
                         }) : '-'

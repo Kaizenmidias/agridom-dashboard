@@ -25,14 +25,14 @@ export async function generateRecurringExpenses(
   try {
     switch (originalExpense.billing_type) {
       case 'semanal':
-        const weeklyDates = generateWeeklyRecurrenceDates(originalExpense.date, year, month);
+        const weeklyDates = generateWeeklyRecurrenceDates(originalExpense.expense_date, year, month);
         
         for (const date of weeklyDates) {
           // Verificar se já existe uma despesa para esta data
           const existingExpenses = await getExpenses();
           const alreadyExists = existingExpenses.some(expense => 
             expense.original_expense_id === originalExpense.id && 
-            expense.date === date
+            expense.expense_date === date
           );
 
           if (!alreadyExists) {
@@ -41,7 +41,7 @@ export async function generateRecurringExpenses(
               description: `${originalExpense.description} (Recorrência Semanal)`,
               amount: originalExpense.amount,
               category: originalExpense.category,
-              date: date,
+              expense_date: date,
               user_id: originalExpense.user_id,
               billing_type: 'unica', // As recorrências são marcadas como únicas
               is_recurring: false,
@@ -57,7 +57,7 @@ export async function generateRecurringExpenses(
 
       case 'mensal':
         // Para despesas mensais, criar uma despesa no mesmo dia do mês
-        const originalDate = new Date(originalExpense.date);
+        const originalDate = new Date(originalExpense.expense_date);
         const monthlyDate = new Date(year, month - 1, originalDate.getDate());
         
         // Ajustar se o dia não existir no mês (ex: 31 de fevereiro)
@@ -70,7 +70,7 @@ export async function generateRecurringExpenses(
         const existingMonthly = await getExpenses();
         const monthlyExists = existingMonthly.some(expense => 
           expense.original_expense_id === originalExpense.id && 
-          expense.date === monthlyDateStr
+          expense.expense_date === monthlyDateStr
         );
 
         if (!monthlyExists) {
@@ -79,7 +79,7 @@ export async function generateRecurringExpenses(
             description: `${originalExpense.description} (Recorrência Mensal)`,
             amount: originalExpense.amount,
             category: originalExpense.category,
-            date: monthlyDateStr,
+            expense_date: monthlyDateStr,
             user_id: originalExpense.user_id,
             billing_type: 'unica',
             is_recurring: false,
@@ -94,14 +94,14 @@ export async function generateRecurringExpenses(
 
       case 'anual':
         // Para despesas anuais, criar uma despesa no mesmo mês e dia
-        const originalAnnualDate = new Date(originalExpense.date);
+        const originalAnnualDate = new Date(originalExpense.expense_date);
         const annualDate = new Date(year, originalAnnualDate.getMonth(), originalAnnualDate.getDate());
         const annualDateStr = annualDate.toISOString().split('T')[0];
         
         const existingAnnual = await getExpenses();
         const annualExists = existingAnnual.some(expense => 
           expense.original_expense_id === originalExpense.id && 
-          expense.date === annualDateStr
+          expense.expense_date === annualDateStr
         );
 
         if (!annualExists) {
@@ -110,7 +110,7 @@ export async function generateRecurringExpenses(
             description: `${originalExpense.description} (Recorrência Anual)`,
             amount: originalExpense.amount,
             category: originalExpense.category,
-            date: annualDateStr,
+            expense_date: annualDateStr,
             user_id: originalExpense.user_id,
             billing_type: 'unica',
             is_recurring: false,

@@ -104,7 +104,9 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
           description: projetoForm.description,
           project_value: convertCurrencyToNumber(projetoForm.project_value),
           paid_value: convertCurrencyToNumber(projetoForm.paid_value),
-          delivery_date: projetoForm.delivery_date || null
+          delivery_date: projetoForm.delivery_date || null,
+          user_id: '1', // ID do usuário padrão
+          completion_date: null
         }
 
       if (isEditing && projeto) {
@@ -205,7 +207,7 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
               <Label htmlFor="status">Status</Label>
               <Select 
                 value={projetoForm.status} 
-                onValueChange={(value) => setProjetoForm(prev => ({ ...prev, status: value }))}
+                onValueChange={(value) => setProjetoForm(prev => ({ ...prev, status: value as 'paused' | 'active' | 'completed' | 'cancelled' }))}
                 disabled={loading}
               >
                 <SelectTrigger>

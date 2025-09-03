@@ -152,14 +152,16 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
       await createExpense({
         project_id: projects[0].id, // Usar o primeiro projeto disponível
         description: data.description,
-        amount,
-        date: data.date,
-        category: 'Geral',
+        amount: parseFloat(data.amount),
+        expense_date: data.date,
+        category: 'Geral', // Categoria padrão
         notes: data.notes || '',
         billing_type: data.billing_type,
         is_recurring: data.billing_type !== 'unica',
         recurring_day_of_week: recurringDayOfWeek,
-        status: 'paid'
+        user_id: '1', // ID do usuário padrão
+        recurring_end_date: null,
+        original_expense_id: null
       });
       
       toast({

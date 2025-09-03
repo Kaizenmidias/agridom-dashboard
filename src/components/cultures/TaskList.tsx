@@ -19,16 +19,16 @@ interface Task {
   priority: 'Haute' | 'Moyenne' | 'Basse';
 }
 
-const initialTasks: Task[] = [
-  { id: 1, task: 'Fertilização da cana', cultura: 'Cana-de-açúcar', date: '2023-09-25', priority: 'Alta' },
-  { id: 2, task: 'Tratamento contra cercosporiose', cultura: 'Banana', date: '2023-09-28', priority: 'Média' },
-  { id: 3, task: 'Inspeção crescimento abacaxi', cultura: 'Abacaxi', date: '2023-09-30', priority: 'Baixa' },
-  { id: 4, task: 'Capina parcela madeira', cultura: 'Madeira', date: '2023-10-05', priority: 'Média' },
-  { id: 5, task: 'Preparação corte cana', cultura: 'Cana-de-açúcar', date: '2024-01-10', priority: 'Alta' },
+const tasks = [
+  { id: 1, task: 'Irrigação plantação banana', cultura: 'Banana', date: '2023-09-25', priority: 'Haute' },
+  { id: 2, task: 'Tratamento contra cercosporiose', cultura: 'Banana', date: '2023-09-28', priority: 'Moyenne' },
+  { id: 3, task: 'Inspeção crescimento abacaxi', cultura: 'Abacaxi', date: '2023-09-30', priority: 'Basse' },
+  { id: 4, task: 'Capina parcela madeira', cultura: 'Madeira', date: '2023-10-05', priority: 'Moyenne' },
+  { id: 5, task: 'Preparação corte cana', cultura: 'Cana-de-açúcar', date: '2024-01-10', priority: 'Haute' },
 ];
 
 const TaskList = () => {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [taskList, setTaskList] = useState<Task[]>(tasks as Task[]);
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTask, setNewTask] = useState<Partial<Task>>({
     task: '',
@@ -52,16 +52,16 @@ const TaskList = () => {
 
   const handleTaskComplete = (id: number) => {
     console.log('Tâche marquée comme terminée');
-    setTasks(tasks.filter(task => task.id !== id));
+    setTaskList(taskList.filter(task => task.id !== id));
   };
 
   const handleTaskDelete = (id: number) => {
     console.log('Tâche supprimée avec succès');
-    setTasks(tasks.filter(task => task.id !== id));
+    setTaskList(taskList.filter(task => task.id !== id));
   };
 
   const handlePriorityChange = (id: number, priority: Task['priority']) => {
-    setTasks(tasks.map(task => 
+    setTaskList(taskList.map(task => 
       task.id === id ? { ...task, priority } : task
     ));
     console.log(`Priorité modifiée en "${priority}"`);
@@ -74,14 +74,14 @@ const TaskList = () => {
     }
 
     const taskToAdd: Task = {
-      id: Math.max(0, ...tasks.map(t => t.id)) + 1,
+      id: Math.max(0, ...taskList.map(t => t.id)) + 1,
       task: newTask.task,
       cultura: newTask.cultura,
       date: newTask.date,
       priority: newTask.priority as Task['priority'] || 'Moyenne'
     };
 
-    setTasks([...tasks, taskToAdd]);
+    setTaskList([...taskList, taskToAdd]);
     setNewTask({
       task: '',
       cultura: '',
@@ -181,7 +181,7 @@ const TaskList = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tasks.map((task) => (
+            {taskList.map((task) => (
               <TableRow key={task.id} className="hover:bg-muted/20 transition-colors">
                 <TableCell className="font-medium">{task.task}</TableCell>
                 <TableCell>
@@ -237,7 +237,7 @@ const TaskList = () => {
                 </TableCell>
               </TableRow>
             ))}
-            {tasks.length === 0 && (
+            {taskList.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
                   Aucune tâche à afficher
