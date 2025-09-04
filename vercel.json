@@ -1,12 +1,6 @@
 {
-  "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "functions": {
-    "api/index.js": {
-      "runtime": "nodejs18.x"
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -16,6 +10,8 @@
       "source": "/((?!api).*)",
       "destination": "/index.html"
     }
+  ]
+}
   ],
   "env": {
     "NODE_ENV": "production"
