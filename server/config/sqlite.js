@@ -41,6 +41,79 @@ function getDatabase() {
             console.log('✅ Tabela users criada/verificada');
           }
         });
+        
+        // Criar tabela projects se não existir
+        db.run(`
+          CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            client TEXT,
+            project_type TEXT DEFAULT 'website',
+            status TEXT DEFAULT 'active',
+            description TEXT,
+            project_value REAL,
+            paid_value REAL DEFAULT 0,
+            delivery_date DATE,
+            completion_date DATE,
+            user_id INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+          )
+        `, (err) => {
+          if (err) {
+            console.error('❌ Erro ao criar tabela projects:', err.message);
+          } else {
+            console.log('✅ Tabela projects criada/verificada');
+          }
+        });
+        
+        // Criar tabela expenses se não existir
+        db.run(`
+          CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT NOT NULL,
+            value REAL NOT NULL,
+            category TEXT,
+            date DATE NOT NULL,
+            expense_date DATE,
+            billing_type TEXT DEFAULT 'one_time',
+            project_id INTEGER,
+            user_id INTEGER NOT NULL,
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+          )
+        `, (err) => {
+          if (err) {
+            console.error('❌ Erro ao criar tabela expenses:', err.message);
+          } else {
+            console.log('✅ Tabela expenses criada/verificada');
+          }
+        });
+        
+        // Criar tabela codes se não existir
+        db.run(`
+          CREATE TABLE IF NOT EXISTS codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            language TEXT NOT NULL,
+            code_content TEXT NOT NULL,
+            description TEXT,
+            user_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+          )
+        `, (err) => {
+          if (err) {
+            console.error('❌ Erro ao criar tabela codes:', err.message);
+          } else {
+            console.log('✅ Tabela codes criada/verificada');
+          }
+        });
       }
     });
   }

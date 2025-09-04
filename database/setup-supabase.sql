@@ -94,11 +94,11 @@ CREATE INDEX IF NOT EXISTS idx_system_settings_key ON system_settings(setting_ke
 CREATE TABLE IF NOT EXISTS projects (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    client VARCHAR(255) NOT NULL,
-    type VARCHAR(20) DEFAULT 'website' CHECK (type IN ('website', 'ecommerce', 'landing_page', 'app', 'branding', 'other')),
+    client VARCHAR(255),
+    project_type VARCHAR(20) DEFAULT 'website' CHECK (project_type IN ('website', 'ecommerce', 'landing_page', 'app', 'branding', 'other')),
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'completed', 'paused', 'cancelled')),
     description TEXT,
-    value DECIMAL(10, 2),
+    project_value DECIMAL(10, 2),
     paid_value DECIMAL(10, 2) DEFAULT 0,
     delivery_date DATE,
     completion_date DATE,
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS projects (
 -- Índices para projects
 CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
-CREATE INDEX IF NOT EXISTS idx_projects_type ON projects(type);
+CREATE INDEX IF NOT EXISTS idx_projects_project_type ON projects(project_type);
 CREATE INDEX IF NOT EXISTS idx_projects_delivery_date ON projects(delivery_date);
 CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at);
 
@@ -141,8 +141,10 @@ CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON expenses(created_at);
 -- Tabela de códigos
 CREATE TABLE IF NOT EXISTS codes (
     id SERIAL PRIMARY KEY,
-    type VARCHAR(100) NOT NULL,
-    content TEXT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    language VARCHAR(20) NOT NULL CHECK (language IN ('css', 'html', 'javascript')),
+    code_content TEXT NOT NULL,
+    description TEXT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -150,7 +152,7 @@ CREATE TABLE IF NOT EXISTS codes (
 
 -- Índices para codes
 CREATE INDEX IF NOT EXISTS idx_codes_user_id ON codes(user_id);
-CREATE INDEX IF NOT EXISTS idx_codes_type ON codes(type);
+CREATE INDEX IF NOT EXISTS idx_codes_language ON codes(language);
 CREATE INDEX IF NOT EXISTS idx_codes_created_at ON codes(created_at);
 
 -- Tabela de briefings
@@ -217,12 +219,12 @@ ON CONFLICT (email) DO UPDATE SET
     can_access_users = EXCLUDED.can_access_users;
 
 -- Inserir dados de exemplo
-INSERT INTO codes (type, content, user_id) VALUES
-('HTML', '<div class="container">
+INSERT INTO codes (title, language, code_content, description, user_id) VALUES
+('Exemplo Container HTML', 'html', '<div class="container">
   <h1>Exemplo HTML</h1>
   <p>Este é um exemplo de código HTML.</p>
-</div>', 1),
-('CSS', '.container {
+</div>', 'Estrutura básica de container HTML', 1),
+('Estilo Container CSS', 'css', '.container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
@@ -231,13 +233,13 @@ INSERT INTO codes (type, content, user_id) VALUES
 h1 {
   color: #333;
   font-size: 2rem;
-}', 1),
-('JavaScript', 'function exemplo() {
+}', 'Estilos para container responsivo', 1),
+('Função Exemplo JavaScript', 'javascript', 'function exemplo() {
   console.log("Olá, mundo!");
   return "Função executada com sucesso";
 }
 
-exemplo();', 1)
+exemplo();', 'Função de exemplo básica', 1)
 ON CONFLICT DO NOTHING;
 
 -- Habilitar RLS (Row Level Security) para segurança

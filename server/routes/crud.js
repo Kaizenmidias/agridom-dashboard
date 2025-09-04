@@ -1275,8 +1275,8 @@ router.post('/codes', authenticateToken, async (req, res) => {
     
     const query = getQuery(req);
     const result = await query(
-      'INSERT INTO codes (type, content, user_id) VALUES (?, ?, ?)',
-      [language, code_content, req.userId]
+      'INSERT INTO codes (title, language, code_content, description, user_id) VALUES (?, ?, ?, ?, ?)',
+      [title, language, code_content, description, req.userId]
     );
     
     const newCode = await query(
@@ -1317,8 +1317,8 @@ router.put('/codes/:id', authenticateToken, async (req, res) => {
     }
     
     await query(
-      'UPDATE codes SET type = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [language, code_content, req.params.id]
+      'UPDATE codes SET title = ?, language = ?, code_content = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [title, language, code_content, description, req.params.id]
     );
     
     const updatedCode = await query(
@@ -1331,7 +1331,7 @@ router.put('/codes/:id', authenticateToken, async (req, res) => {
     console.error('Erro ao atualizar código:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
-});}]}
+});
 
 // DELETE /api/codes/:id
 router.delete('/codes/:id', authenticateToken, async (req, res) => {
