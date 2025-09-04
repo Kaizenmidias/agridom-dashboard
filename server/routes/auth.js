@@ -194,31 +194,52 @@ router.get('/verify', async (req, res) => {
     const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
     
     // Buscar usuário atual
-    const result = await query(
-      `SELECT id, email, name as full_name, role,
-              can_access_dashboard, can_access_projects, can_access_briefings, 
-              can_access_codes, can_access_expenses, can_access_crm, can_access_users 
-       FROM users WHERE id = $1`,
+    const userResult = await query(
+      `SELECT id, email, name as full_name, role FROM users WHERE id = $1`,
       [decoded.userId]
     );
 
-    if (!result.rows || result.rows.length === 0) {
+    if (!userResult.rows || userResult.rows.length === 0) {
       return res.status(401).json({ error: 'Usuário não encontrado' });
     }
 
-    const user = result.rows[0];
+    const user = userResult.rows[0];
+    
+    // Calcular permissões baseadas no cargo
+    const permissionsResult = await query(
+      `SELECT get_user_permissions($1) as permissions`,
+      [user.id]
+    );
+    
+    const permissions = permissionsResult.rows[0]?.permissions || {};
+    
+    // Verificar se é administrador
+    const isAdmin = user.role && (
+      user.role.toLowerCase() === 'administrador' ||
+      user.role.toLowerCase() === 'admin' ||
+      user.role.toLowerCase() === 'administrator'
+    );
+    
     res.json({
       id: user.id,
       email: user.email,
       full_name: user.full_name,
       role: user.role,
-      can_access_dashboard: user.can_access_dashboard,
-      can_access_projects: user.can_access_projects,
-      can_access_briefings: user.can_access_briefings,
-      can_access_codes: user.can_access_codes,
-      can_access_expenses: user.can_access_expenses,
-      can_access_crm: user.can_access_crm,
-      can_access_users: user.can_access_users
+      is_admin: isAdmin,
+      can_access_dashboard: permissions.can_access_dashboard || false,
+      can_access_projects: permissions.can_access_projects || false,
+      can_access_briefings: permissions.can_access_briefings || false,
+      can_access_codes: permissions.can_access_codes || false,
+      can_access_expenses: permissions.can_access_expenses || false,
+      can_access_crm: permissions.can_access_crm || false,
+      can_access_users: permissions.can_access_users || false,
+      can_access_reports: permissions.can_access_reports || false,
+      can_access_settings: permissions.can_access_settings || false,
+      can_manage_users: permissions.can_manage_users || false,
+      can_manage_projects: permissions.can_manage_projects || false,
+      can_manage_briefings: permissions.can_manage_briefings || false,
+      can_manage_reports: permissions.can_manage_reports || false,
+      can_manage_settings: permissions.can_manage_settings || false
     });
   } catch (error) {
     console.error('Erro na verificação do token:', error);

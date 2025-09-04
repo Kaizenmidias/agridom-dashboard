@@ -259,10 +259,12 @@ export interface AuthUser {
   id: string
   email: string
   full_name: string | null
+  role: string | null
   position: string | null
   bio: string | null
   avatar_url: string | null
   is_active: boolean
+  is_admin: boolean
   can_access_dashboard: boolean
   can_access_briefings: boolean
   can_access_codes: boolean
@@ -270,6 +272,13 @@ export interface AuthUser {
   can_access_expenses: boolean
   can_access_crm: boolean
   can_access_users: boolean
+  can_access_reports: boolean
+  can_access_settings: boolean
+  can_manage_users: boolean
+  can_manage_projects: boolean
+  can_manage_briefings: boolean
+  can_manage_reports: boolean
+  can_manage_settings: boolean
 }
 
 export interface LoginCredentials {

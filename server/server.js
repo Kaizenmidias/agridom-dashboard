@@ -36,6 +36,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const authRoutes = require('./routes/auth');
 const crudRoutes = require('./routes/crud');
 const uploadRoutes = require('./routes/upload');
+const permissionsRoutes = require('./routes/permissions');
 
 // Disponibilizar a função query para as rotas
 app.locals.query = query;
@@ -44,6 +45,7 @@ app.locals.query = query;
 app.use('/api/auth', authRoutes);
 app.use('/api', crudRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/permissions', permissionsRoutes);
 
 // Rota de teste
 app.get('/api/health', async (req, res) => {

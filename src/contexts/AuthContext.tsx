@@ -31,8 +31,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
-  // Calcular se o usuário é admin baseado na permissão can_access_users
-  const isAdmin = user?.can_access_users || false
+  // Calcular se o usuário é admin baseado no campo is_admin ou cargo
+  const isAdmin = user?.is_admin || 
+    (user?.role && (
+      user.role.toLowerCase() === 'administrador' ||
+      user.role.toLowerCase() === 'admin' ||
+      user.role.toLowerCase() === 'administrator'
+    )) || false
 
   // Função para carregar lista de usuários
   const loadUsuarios = async () => {
