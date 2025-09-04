@@ -3,6 +3,9 @@
 ## ⚠️ IMPORTANTE
 As variáveis de ambiente foram removidas do `vercel.json` por questões de segurança. Elas devem ser configuradas diretamente no painel da Vercel.
 
+## 🔧 CORREÇÃO DO ERRO ENOTFOUND
+As configurações abaixo usam o **Transaction Pooler** do Supabase em vez da conexão direta. Isso resolve o erro `getaddrinfo ENOTFOUND db.rxvcvlegxljinevhmbyk.supabase.co` que ocorre na Vercel com funções serverless.
+
 ## 📋 Variáveis Necessárias
 
 Configure as seguintes variáveis de ambiente no painel da Vercel:
@@ -12,12 +15,12 @@ Configure as seguintes variáveis de ambiente no painel da Vercel:
 SUPABASE_URL=https://rxvcvlegxljinevhmbyk.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4dmN2bGVneGxqaW5ldmhtYnlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5MjYyNjEsImV4cCI6MjA3MjUwMjI2MX0.E2uZRZjJjxQqBnxd1A_LP690BxYDWrBe-N4dXD3gZFA
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4dmN2bGVneGxqaW5ldmhtYnlrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjkyNjI2MSwiZXhwIjoyMDcyNTAyMjYxfQ.Q9u5aVKEpE3wZpnBpZIU4XjXk-tIazKkhzUK5F2bNfw
-SUPABASE_DB_HOST=db.rxvcvlegxljinevhmbyk.supabase.co
-SUPABASE_DB_PORT=5432
+SUPABASE_DB_HOST=aws-0-us-east-1.pooler.supabase.com
+SUPABASE_DB_PORT=6543
 SUPABASE_DB_NAME=postgres
-SUPABASE_DB_USER=postgres
+SUPABASE_DB_USER=postgres.rxvcvlegxljinevhmbyk
 SUPABASE_DB_PASSWORD=KJ4E7xKy0SCEVIX7
-SUPABASE_DATABASE_URL=postgresql://postgres:KJ4E7xKy0SCEVIX7@db.rxvcvlegxljinevhmbyk.supabase.co:5432/postgres
+SUPABASE_DATABASE_URL=postgresql://postgres.rxvcvlegxljinevhmbyk:KJ4E7xKy0SCEVIX7@aws-0-us-east-1.pooler.supabase.com:6543/postgres
 ```
 
 ### 🔐 JWT Configuration
