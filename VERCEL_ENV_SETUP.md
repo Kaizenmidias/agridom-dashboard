@@ -3,8 +3,13 @@
 ## ⚠️ IMPORTANTE
 As variáveis de ambiente foram removidas do `vercel.json` por questões de segurança. Elas devem ser configuradas diretamente no painel da Vercel.
 
-## 🔧 CORREÇÃO DO ERRO ENOTFOUND
+## 🔧 CORREÇÕES DE ERROS COMUNS
+
+### ❌ Erro ENOTFOUND
 As configurações abaixo usam o **Transaction Pooler** do Supabase em vez da conexão direta. Isso resolve o erro `getaddrinfo ENOTFOUND db.rxvcvlegxljinevhmbyk.supabase.co` que ocorre na Vercel com funções serverless.
+
+### ❌ Erro "Tenant or user not found"
+Este erro indica que o usuário PostgreSQL está incorreto. <mcreference link="https://stackoverflow.com/questions/78422887/error-supabase-hosting-django-db-utils-operationalerror-tenant-or-user-not-fou" index="2">2</mcreference> <mcreference link="https://github.com/orgs/supabase/discussions/30107" index="3">3</mcreference> No Supabase com pooler, o usuário deve ser `postgres.{project_id}` em vez de apenas `postgres`. A string de conexão também deve usar `postgres://` em vez de `postgresql://` para melhor compatibilidade. <mcreference link="https://github.com/orgs/supabase/discussions/20596" index="5">5</mcreference>
 
 ## 📋 Variáveis Necessárias
 
@@ -20,7 +25,7 @@ SUPABASE_DB_PORT=6543
 SUPABASE_DB_NAME=postgres
 SUPABASE_DB_USER=postgres.rxvcvlegxljinevhmbyk
 SUPABASE_DB_PASSWORD=KJ4E7xKy0SCEVIX7
-SUPABASE_DATABASE_URL=postgresql://postgres.rxvcvlegxljinevhmbyk:KJ4E7xKy0SCEVIX7@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+SUPABASE_DATABASE_URL=postgres://postgres.rxvcvlegxljinevhmbyk:KJ4E7xKy0SCEVIX7@aws-0-us-east-1.pooler.supabase.com:6543/postgres
 ```
 
 ### 🔐 JWT Configuration
