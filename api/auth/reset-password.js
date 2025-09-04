@@ -6,10 +6,10 @@ let pool;
 
 function getPool() {
   if (!pool) {
-    // Configurar string de conexão com prioridade para dashboard_POSTGRES_URL
-    let connectionString;
-    if (process.env.dashboard_POSTGRES_URL) {
-      connectionString = process.env.dashboard_POSTGRES_URL;
+    // Configurar string de conexão com prioridade para POSTGRES_URL
+  let connectionString;
+  if (process.env.POSTGRES_URL) {
+    connectionString = process.env.POSTGRES_URL;
     } else if (process.env.SUPABASE_DATABASE_URL) {
       connectionString = process.env.SUPABASE_DATABASE_URL;
     } else {

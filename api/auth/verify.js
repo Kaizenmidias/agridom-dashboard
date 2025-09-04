@@ -9,8 +9,8 @@ function getPool() {
     const isProduction = process.env.NODE_ENV === 'production';
     
     if (isProduction) {
-      const connectionString = process.env.dashboard_POSTGRES_URL || 
-        `postgresql://${process.env.dashboard_POSTGRES_USER || 'postgres'}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE || 'postgres'}`;
+      const connectionString = process.env.POSTGRES_URL || 
+        `postgresql://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST}:5432/${process.env.POSTGRES_DATABASE || 'postgres'}`;
       
       pool = new Pool({
         connectionString,
@@ -24,8 +24,8 @@ function getPool() {
         acquireTimeoutMillis: 5000,
       });
     } else {
-      if (process.env.dashboard_POSTGRES_HOST && process.env.dashboard_POSTGRES_HOST.includes('supabase.co')) {
-        const connectionString = `postgresql://${process.env.dashboard_POSTGRES_USER}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE}?sslmode=require`;
+      if (process.env.POSTGRES_HOST && process.env.POSTGRES_HOST.includes('supabase.co')) {
+        const connectionString = `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST}:5432/${process.env.POSTGRES_DATABASE}?sslmode=require`;
         pool = new Pool({
           connectionString,
           ssl: {

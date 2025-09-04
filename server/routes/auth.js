@@ -291,7 +291,7 @@ router.put('/change-password', async (req, res) => {
       return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias' });
     }
 
-    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
     const userId = decoded.userId;
 
     // Buscar o usuário atual

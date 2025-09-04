@@ -7,14 +7,12 @@ let pool;
 
 function getPool() {
   if (!pool) {
-    // Configurar string de conexão com prioridade para dashboard_POSTGRES_URL
+    // Configurar string de conexão com prioridade para POSTGRES_URL
     let connectionString;
-    if (process.env.dashboard_POSTGRES_URL) {
-      connectionString = process.env.dashboard_POSTGRES_URL;
-    } else if (process.env.SUPABASE_DATABASE_URL) {
-      connectionString = process.env.SUPABASE_DATABASE_URL;
+    if (process.env.POSTGRES_URL) {
+      connectionString = process.env.POSTGRES_URL;
     } else {
-      // Fallback para variáveis individuais do Supabase
+      // Construir string de conexão a partir das variáveis individuais
       const host = process.env.POSTGRES_HOST || 'localhost';
       const port = process.env.POSTGRES_PORT || 5432;
       const database = process.env.POSTGRES_DATABASE || 'postgres';
