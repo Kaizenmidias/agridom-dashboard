@@ -7,48 +7,27 @@ let pool;
 
 function getPool() {
   if (!pool) {
-    const isProduction = process.env.NODE_ENV === 'production';
+    console.log('🔧 Configurando pool de conexão...');
     
-    if (isProduction) {
-      const connectionString = process.env.dashboard_POSTGRES_URL || 
-        `postgresql://${process.env.dashboard_POSTGRES_USER || 'postgres'}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE || 'postgres'}`;
-      
-      pool = new Pool({
-        connectionString,
-        ssl: {
-          rejectUnauthorized: false
-        },
-        max: 1, // Reduzido para serverless
-        min: 0,
-        idleTimeoutMillis: 1000,
-        connectionTimeoutMillis: 5000,
-        acquireTimeoutMillis: 5000,
-      });
-    } else {
-      if (process.env.dashboard_POSTGRES_HOST && process.env.dashboard_POSTGRES_HOST.includes('supabase.co')) {
-        const connectionString = `postgresql://${process.env.dashboard_POSTGRES_USER}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE}?sslmode=require`;
-        pool = new Pool({
-          connectionString,
-          ssl: {
-            rejectUnauthorized: false
-          },
-          max: 1,
-          idleTimeoutMillis: 1000,
-          connectionTimeoutMillis: 5000,
-        });
-      } else {
-        pool = new Pool({
-          host: process.env.dashboard_POSTGRES_HOST || 'localhost',
-          port: 5432,
-          database: process.env.dashboard_POSTGRES_DATABASE || 'agridom_dev',
-          user: process.env.dashboard_POSTGRES_USER || 'postgres',
-          password: process.env.dashboard_POSTGRES_PASSWORD || '',
-          max: 1,
-          idleTimeoutMillis: 1000,
-          connectionTimeoutMillis: 5000,
-        });
-      }
-    }
+    // Usar variáveis do Supabase
+    const connectionString = process.env.SUPABASE_DATABASE_URL || 
+      `postgresql://${process.env.SUPABASE_DB_USER}:${process.env.SUPABASE_DB_PASSWORD}@${process.env.SUPABASE_DB_HOST}:${process.env.SUPABASE_DB_PORT}/${process.env.SUPABASE_DB_NAME}`;
+    
+    console.log('🔗 Connection string configurada:', connectionString ? 'Sim' : 'Não');
+    
+    pool = new Pool({
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false
+      },
+      max: 1, // Reduzido para serverless
+      min: 0,
+      idleTimeoutMillis: 1000,
+      connectionTimeoutMillis: 10000,
+      acquireTimeoutMillis: 10000,
+    });
+    
+    console.log('✅ Pool de conexão criado');
   }
   return pool;
 }
