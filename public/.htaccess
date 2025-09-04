@@ -4,8 +4,8 @@ RewriteEngine On
 # Handle Angular and React Router
 RewriteBase /
 
-# Handle API routes - redirecionar para o backend
-RewriteRule ^api/(.*)$ /backend/server.js/$1 [L,QSA]
+# Handle API routes - usar funções serverless do Vercel
+# RewriteRule ^api/(.*)$ /backend/server.js/$1 [L,QSA]
 
 # Handle client-side routing
 RewriteCond %{REQUEST_FILENAME} !-f
