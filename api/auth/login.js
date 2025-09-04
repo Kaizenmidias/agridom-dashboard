@@ -9,8 +9,9 @@ function getPool() {
   if (!pool) {
     console.log('🔧 Configurando pool de conexão...');
     
-    // Usar variáveis do Supabase
-    const connectionString = process.env.SUPABASE_DATABASE_URL || 
+    // Usar variáveis da integração automática do Supabase na Vercel
+    const connectionString = process.env.dashboard_POSTGRES_URL || 
+      process.env.SUPABASE_DATABASE_URL || 
       `postgresql://${process.env.SUPABASE_DB_USER}:${process.env.SUPABASE_DB_PASSWORD}@${process.env.SUPABASE_DB_HOST}:${process.env.SUPABASE_DB_PORT}/${process.env.SUPABASE_DB_NAME}`;
     
     console.log('🔗 Connection string configurada:', connectionString ? 'Sim' : 'Não');
@@ -65,9 +66,9 @@ module.exports = async function handler(req, res) {
   
   // Verificar variáveis de ambiente
   console.log('🔧 Variáveis de ambiente:');
+  console.log('- dashboard_POSTGRES_URL:', process.env.dashboard_POSTGRES_URL ? 'Definida' : 'Não definida');
+  console.log('- dashboard_SUPABASE_JWT_SECRET:', process.env.dashboard_SUPABASE_JWT_SECRET ? 'Definida' : 'Não definida');
   console.log('- SUPABASE_DATABASE_URL:', process.env.SUPABASE_DATABASE_URL ? 'Definida' : 'Não definida');
-  console.log('- SUPABASE_DB_HOST:', process.env.SUPABASE_DB_HOST ? 'Definida' : 'Não definida');
-  console.log('- SUPABASE_DB_USER:', process.env.SUPABASE_DB_USER ? 'Definida' : 'Não definida');
   console.log('- JWT_SECRET:', process.env.JWT_SECRET ? 'Definida' : 'Não definida');
   
   // Configurar CORS
