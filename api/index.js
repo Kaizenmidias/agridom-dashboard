@@ -47,6 +47,15 @@ module.exports = async function handler(req, res) {
       return res.status(200).end();
     }
 
+    // Teste básico de funcionamento
+    if (req.url === '/api' || req.url === '/api/') {
+      return res.status(200).json({ 
+        message: 'API funcionando',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+      });
+    }
+
     const { route } = req.query;
     const path = Array.isArray(route) ? route.join('/') : route || '';
 
@@ -105,12 +114,16 @@ module.exports = async function handler(req, res) {
       message: error.message,
       stack: error.stack,
       url: req.url,
-      method: req.method
+      method: req.method,
+      query: req.query,
+      body: req.body
     });
     
     res.status(500).json({ 
       error: 'Erro interno do servidor',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      timestamp: new Date().toISOString()
     });
   }
 }
