@@ -59,7 +59,6 @@
     "framer-motion": "^12.6.5",
     "input-otp": "^1.2.4",
     "jsonwebtoken": "^9.0.2",
-    "lovable-tagger": "^1.1.7",
     "lucide-react": "^0.462.0",
     "mysql2": "^3.14.4",
     "pg": "^8.11.3",
