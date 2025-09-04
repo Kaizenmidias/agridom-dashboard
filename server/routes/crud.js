@@ -479,10 +479,9 @@ router.post('/expenses', authenticateToken, async (req, res) => {
     
     await query(
       `INSERT INTO expenses (
-        project_id, description, amount, category, expense_date, user_id, 
-        billing_type, notes, is_recurring, recurring_day_of_week, 
-        recurring_end_date, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        project_id, description, value, category, date, user_id, 
+        billing_type, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         project_id, 
         description, 
@@ -490,12 +489,8 @@ router.post('/expenses', authenticateToken, async (req, res) => {
         category, 
         date || new Date().toISOString().split('T')[0], 
         req.userId,
-        billing_type || 'unica',
-        notes || null,
-        is_recurring || false,
-        recurring_day_of_week || null,
-        recurring_end_date || null,
-        status || 'pending'
+        billing_type || 'one_time',
+        notes || null
       ]
     );
     
@@ -549,17 +544,23 @@ router.put('/expenses/:id', authenticateToken, async (req, res) => {
     await query(
       `UPDATE expenses 
        SET description = COALESCE(?, description),
-           amount = COALESCE(?, amount),
+           value = COALESCE(?, value),
            category = COALESCE(?, category),
-           expense_date = COALESCE(?, expense_date),
+           date = COALESCE(?, date),
            billing_type = COALESCE(?, billing_type),
            notes = COALESCE(?, notes),
-           is_recurring = COALESCE(?, is_recurring),
-           recurring_day_of_week = COALESCE(?, recurring_day_of_week),
-           recurring_end_date = COALESCE(?, recurring_end_date),
            updated_at = ?
        WHERE id = ?`,
-      params
+      [
+        description !== undefined ? description : null,
+        amount !== undefined ? amount : null,
+        category !== undefined ? category : null,
+        date !== undefined ? date : null,
+        billing_type !== undefined ? billing_type : null,
+        notes !== undefined ? notes : null,
+        new Date().toISOString(),
+        req.params.id
+      ]
     );
     
     const result = await query(
@@ -1220,12 +1221,12 @@ router.get('/codes', authenticateToken, async (req, res) => {
     const params = [];
     
     if (search) {
-      sql += ' AND (name LIKE ? OR description LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      sql += ' AND content LIKE ?';
+      params.push(`%${search}%`);
     }
     
     if (code_type && code_type !== 'all') {
-      sql += ' AND code_type = ?';
+      sql += ' AND type = ?';
       params.push(code_type);
     }
     
@@ -1274,8 +1275,8 @@ router.post('/codes', authenticateToken, async (req, res) => {
     
     const query = getQuery(req);
     const result = await query(
-      'INSERT INTO codes (title, language, code_content, description, user_id) VALUES (?, ?, ?, ?, ?)',
-      [title, language, code_content, description || null, req.userId]
+      'INSERT INTO codes (type, content, user_id) VALUES (?, ?, ?)',
+      [language, code_content, req.userId]
     );
     
     const newCode = await query(
@@ -1316,8 +1317,8 @@ router.put('/codes/:id', authenticateToken, async (req, res) => {
     }
     
     await query(
-      'UPDATE codes SET name = ?, code_type = ?, code_content = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [name, code_type, code_content, description || null, req.params.id]
+      'UPDATE codes SET type = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [language, code_content, req.params.id]
     );
     
     const updatedCode = await query(
@@ -1330,7 +1331,7 @@ router.put('/codes/:id', authenticateToken, async (req, res) => {
     console.error('Erro ao atualizar código:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
-});
+});}]}
 
 // DELETE /api/codes/:id
 router.delete('/codes/:id', authenticateToken, async (req, res) => {
