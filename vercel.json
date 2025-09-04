@@ -1,11 +1,7 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "functions": {
-    "api/auth/*.js": {
-      "runtime": "nodejs18"
-    }
-  },
+
   "rewrites": [
     {
       "source": "/api/auth/login",
