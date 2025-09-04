@@ -84,13 +84,13 @@ const Dashboard = () => {
         const stats = await getDashboardStats();
         setDashboardStats(stats);
         
-        // Update state with real data - ensure proper number conversion
-        const revenue = parseFloat(String(stats.projects.total_paid_value || 0));
-        const expenses = parseFloat(String(stats.expenses.total_expenses_amount || 0));
+        // Update state with real data - ensure proper number conversion with safe access
+        const revenue = parseFloat(String(stats?.projects?.total_paid_value || 0));
+        const expenses = parseFloat(String(stats?.expenses?.total_expenses_amount || 0));
         
         setMonthlyRevenue(revenue);
-        setActiveProjects(Number(stats.projects.active_projects) || 0);
-        setCompletedProjects(Number(stats.projects.completed_projects) || 0);
+        setActiveProjects(Number(stats?.projects?.active_projects) || 0);
+        setCompletedProjects(Number(stats?.projects?.completed_projects) || 0);
         setTotalExpenses(expenses);
         
 

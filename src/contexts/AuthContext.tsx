@@ -61,21 +61,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const token = localStorage.getItem('auth_token')
         
         if (userData && token) {
-          // Verificar se o token ainda é válido
-          const isValid = await verifyToken(token)
-          
-          if (isValid) {
+          try {
+            // Primeiro, definir o usuário com os dados salvos
             setUser(JSON.parse(userData))
-          } else {
-            // Token inválido, limpar dados
-            localStorage.removeItem('user_data')
-            localStorage.removeItem('auth_token')
+            
+            // Depois verificar se o token ainda é válido
+            const validUser = await verifyToken(token)
+            
+            if (validUser) {
+              // Token válido, atualizar com dados mais recentes se necessário
+              setUser(validUser)
+            } else {
+              // Token inválido, limpar dados
+              localStorage.removeItem('user_data')
+              localStorage.removeItem('auth_token')
+              setUser(null)
+            }
+          } catch (tokenError) {
+            // Se houver erro na verificação do token, manter o usuário logado
+            // mas tentar novamente mais tarde
+            console.warn('Erro na verificação do token, mantendo usuário logado:', tokenError)
           }
         }
       } catch (error) {
         console.error('Erro ao verificar autenticação:', error)
-        localStorage.removeItem('user_data')
-        localStorage.removeItem('auth_token')
+        // Só limpar dados se for um erro crítico
+        if (error.message?.includes('JSON')) {
+          localStorage.removeItem('user_data')
+          localStorage.removeItem('auth_token')
+        }
       } finally {
         setLoading(false)
       }

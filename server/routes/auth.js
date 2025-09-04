@@ -128,7 +128,7 @@ router.post('/register', async (req, res) => {
     // Gerar token JWT
     const token = jwt.sign(
       { userId: userData.id, email: userData.email },
-      process.env.dashboard_SUPABASE_JWT_SECRET,
+      process.env.SUPABASE_JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
@@ -158,7 +158,7 @@ router.get('/verify', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
     
     // Buscar usuário atual
     const userResult = await query(
@@ -225,7 +225,7 @@ router.put('/profile', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
     const userId = decoded.userId;
 
     // Tratar valores undefined como null
