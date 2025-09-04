@@ -1,10 +1,12 @@
 const { Pool } = require('pg');
+const sqlite = require('./sqlite');
 
 // Configuração do banco de dados
 let pool;
+let useSQLite = false;
 
 function getPool() {
-  if (!pool) {
+  if (!pool && !useSQLite) {
     // Tentar configuração manual sem SSL
     let poolConfig;
     
@@ -48,11 +50,35 @@ function getPool() {
     pool = new Pool(poolConfig);
     
     pool.on('error', (err, client) => {
-      console.error('❌ Erro no pool de conexão (server):', err.message);
+      console.error('❌ Erro inesperado no cliente do banco:', err);
+      console.log('🔄 Tentando usar SQLite como fallback...');
+      useSQLite = true;
+      pool = null;
     });
     
-    console.log('✅ Server Pool de conexão DB criado');
+    // Testar conexão
+    pool.connect((err, client, release) => {
+      if (err) {
+        console.error('❌ Erro ao conectar PostgreSQL:', err.message);
+        console.log('🔄 Usando SQLite como fallback...');
+        useSQLite = true;
+        pool = null;
+        return;
+      }
+      release();
+      console.log('✅ Server Pool de conexão PostgreSQL criado');
+    });
   }
+  
+  if (useSQLite) {
+    console.log('📱 Usando SQLite como banco de dados');
+    return {
+      query: sqlite.query,
+      connect: (callback) => callback(null, {}, () => {}),
+      end: () => Promise.resolve()
+    };
+  }
+  
   return pool;
 }
 

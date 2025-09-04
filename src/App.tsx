@@ -30,13 +30,13 @@ const routes = [
   { path: "/login", element: <LoginPage />, protected: false },
   { path: "/forgot-password", element: <ForgotPasswordPage />, protected: false },
   { path: "/reset-password", element: <ResetPasswordPage />, protected: false },
-  { path: "/", element: <Index />, protected: true, permission: "can_access_dashboard" },
-  { path: "/projetos", element: <ProjetosPage />, protected: true, permission: "can_access_projects" },
-  { path: "/briefings", element: <BriefingsPage />, protected: true, permission: "can_access_briefings" },
-  { path: "/codigos", element: <CodesPage />, protected: true, permission: "can_access_codes" },
-  { path: "/despesas", element: <DespesasPage />, protected: true, permission: "can_access_expenses" },
-  { path: "/crm", element: <CRMPage />, protected: true, permission: "can_access_crm" },
-  { path: "/usuarios", element: <UsuariosPage />, protected: true, permission: "can_access_users" },
+  { path: "/", element: <Index />, protected: true },
+  { path: "/projetos", element: <ProjetosPage />, protected: true },
+  { path: "/briefings", element: <BriefingsPage />, protected: true },
+  { path: "/codigos", element: <CodesPage />, protected: true },
+  { path: "/despesas", element: <DespesasPage />, protected: true },
+  { path: "/crm", element: <CRMPage />, protected: true },
+  { path: "/usuarios", element: <UsuariosPage />, protected: true },
   { path: "*", element: <NotFound />, protected: false }
 ];
 
@@ -122,7 +122,7 @@ const AppLayout = () => {
                   key={route.path} 
                   path={route.path} 
                   element={route.protected ? (
-                    <ProtectedRoute requiredPermission={route.permission}>{route.element}</ProtectedRoute>
+                    <ProtectedRoute>{route.element}</ProtectedRoute>
                   ) : (
                     route.element
                   )} 

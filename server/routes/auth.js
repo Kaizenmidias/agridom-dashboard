@@ -18,60 +18,15 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    // Mock temporário para teste (enquanto resolve conectividade Supabase)
-    console.log('🔍 Testando login com mock:', email);
-    if (email === 'admin@agridom.com' && password === 'admin123') {
-      const mockUser = {
-        id: 1,
-        email: 'admin@agridom.com',
-        full_name: 'Administrador',
-        role: 'admin',
-        can_access_dashboard: true,
-        can_access_projects: true,
-        can_access_briefings: true,
-        can_access_codes: true,
-        can_access_expenses: true,
-        can_access_crm: true,
-        can_access_users: true
-      };
-      
-      console.log('👤 Usuário mock encontrado:', { id: mockUser.id, email: mockUser.email, full_name: mockUser.full_name });
-      
-      // Gerar token JWT
-      const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET;
-      console.log('🔑 JWT Secret:', jwtSecret ? 'Definido' : 'Não definido');
-      
-      const token = jwt.sign(
-        { 
-          userId: mockUser.id, 
-          email: mockUser.email,
-          role: mockUser.role
-        },
-        jwtSecret,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
-      );
+    // Buscar usuário no banco de dados
+    console.log('🔍 Buscando usuário:', email);
+    const result = await query(
+      'SELECT id, email, password, name, role, avatar_url, is_active, can_access_dashboard, can_access_projects, can_access_briefings, can_access_codes, can_access_expenses, can_access_crm, can_access_users FROM users WHERE email = ? AND is_active = 1',
+      [email]
+    );
 
-      return res.json({
-        message: 'Login realizado com sucesso',
-        user: {
-          id: mockUser.id,
-          email: mockUser.email,
-          name: mockUser.full_name,
-          role: mockUser.role,
-          permissions: {
-            can_access_dashboard: mockUser.can_access_dashboard,
-            can_access_projects: mockUser.can_access_projects,
-            can_access_briefings: mockUser.can_access_briefings,
-            can_access_codes: mockUser.can_access_codes,
-            can_access_expenses: mockUser.can_access_expenses,
-            can_access_crm: mockUser.can_access_crm,
-            can_access_users: mockUser.can_access_users
-          }
-        },
-        token
-      });
-    } else {
-      console.log('❌ Credenciais inválidas para mock');
+    if (!result.rows || result.rows.length === 0) {
+      console.log('❌ Usuário não encontrado');
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
@@ -89,10 +44,16 @@ router.post('/login', async (req, res) => {
     }
 
     // Gerar token JWT
-
+    const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+    console.log('🔑 JWT Secret:', jwtSecret ? 'Definido' : 'Não definido');
+    
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.dashboard_SUPABASE_JWT_SECRET,
+      { 
+        userId: user.id, 
+        email: user.email,
+        role: user.role
+      },
+      jwtSecret,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
@@ -100,20 +61,26 @@ router.post('/login', async (req, res) => {
     const authUser = {
       id: user.id,
       email: user.email,
-      full_name: user.full_name,
-      position: user.position,
+      name: user.name,
+      role: user.role,
       avatar_url: user.avatar_url,
       is_active: user.is_active,
-      can_access_dashboard: user.can_access_dashboard,
-      can_access_projects: user.can_access_projects,
-      can_access_briefings: user.can_access_briefings,
-      can_access_codes: user.can_access_codes,
-      can_access_expenses: user.can_access_expenses,
-      can_access_crm: user.can_access_crm,
-      can_access_users: user.can_access_users
+      permissions: {
+        can_access_dashboard: user.can_access_dashboard,
+        can_access_projects: user.can_access_projects,
+        can_access_briefings: user.can_access_briefings,
+        can_access_codes: user.can_access_codes,
+        can_access_expenses: user.can_access_expenses,
+        can_access_crm: user.can_access_crm,
+        can_access_users: user.can_access_users
+      }
     };
 
-    res.json({ user: authUser, token });
+    res.json({ 
+      message: 'Login realizado com sucesso',
+      user: authUser, 
+      token 
+    });
   } catch (error) {
     console.error('Erro no login:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });

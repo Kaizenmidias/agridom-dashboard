@@ -31,7 +31,7 @@ router.get('/users', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
     const result = await query(
-      'SELECT id, email, full_name, position, avatar_url, is_active, created_at, updated_at, can_access_dashboard, can_access_briefings, can_access_codes, can_access_projects, can_access_expenses, can_access_crm, can_access_users FROM users WHERE is_active = true ORDER BY created_at DESC'
+      'SELECT id, email, name as full_name, role as position, avatar_url, is_active, created_at, updated_at, can_access_dashboard, can_access_briefings, can_access_codes, can_access_projects, can_access_expenses, can_access_crm, can_access_users FROM users WHERE is_active = 1 ORDER BY created_at DESC'
     );
     res.json(result.rows || []);
   } catch (error) {
