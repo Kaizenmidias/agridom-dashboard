@@ -54,9 +54,12 @@ export function CodesPage() {
     try {
       setIsLoading(true)
       const codesData = await getCodes()
-      setCodes(codesData)
+      // Garantir que codesData seja sempre um array
+      setCodes(Array.isArray(codesData) ? codesData : [])
     } catch (error) {
       console.error('Erro ao carregar códigos:', error)
+      // Em caso de erro, definir como array vazio
+      setCodes([])
       showToast('Erro ao carregar códigos')
     } finally {
       setIsLoading(false)

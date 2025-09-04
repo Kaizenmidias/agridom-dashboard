@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { getQuery } = require('../config/database');
+const { getUserPermissions } = require('../utils/permissions');
 
 const router = express.Router();
 
@@ -54,8 +55,7 @@ router.get('/users', requireAdmin, async (req, res) => {
         u.email,
         u.name as full_name,
         u.role,
-        u.is_active,
-        get_user_permissions(u.id) as permissions
+        u.is_active
       FROM users u
       WHERE u.role IS NOT NULL 
         AND LOWER(u.role) NOT IN ('administrador', 'admin', 'administrator')
@@ -65,7 +65,7 @@ router.get('/users', requireAdmin, async (req, res) => {
 
     const users = result.rows.map(user => ({
       ...user,
-      permissions: user.permissions || {},
+      permissions: getUserPermissions(user.role),
       is_admin: false
     }));
 
@@ -103,13 +103,8 @@ router.get('/user/:userId', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Não é possível gerenciar permissões de administradores' });
     }
 
-    // Buscar permissões atuais
-    const permissionsResult = await query(
-      'SELECT get_user_permissions($1) as permissions',
-      [userId]
-    );
-
-    const permissions = permissionsResult.rows[0]?.permissions || {};
+    // Calcular permissões baseadas no cargo do usuário
+    const permissions = getUserPermissions(user.role);
 
     // Buscar permissões personalizadas
     const customPermissionsResult = await query(`
@@ -201,13 +196,14 @@ router.put('/user/:userId', requireAdmin, async (req, res) => {
         }
       }
 
-      // Atualizar permissões na tabela users usando a função
-      const newPermissions = await query(
-        'SELECT get_user_permissions($1) as permissions',
+      // Buscar cargo do usuário para recalcular permissões
+      const userRoleResult = await query(
+        'SELECT role FROM users WHERE id = $1',
         [userId]
       );
 
-      const perms = newPermissions.rows[0]?.permissions || {};
+      const userRole = userRoleResult.rows[0]?.role;
+      const perms = getUserPermissions(userRole);
 
       await query(`
         UPDATE users SET 
@@ -310,13 +306,14 @@ router.delete('/user/:userId/custom/:permissionName', requireAdmin, async (req, 
       [userId, permissionName]
     );
 
-    // Recalcular e atualizar permissões do usuário
-    const newPermissions = await query(
-      'SELECT get_user_permissions($1) as permissions',
+    // Buscar cargo do usuário para recalcular permissões
+    const userRoleResult = await query(
+      'SELECT role FROM users WHERE id = $1',
       [userId]
     );
 
-    const perms = newPermissions.rows[0]?.permissions || {};
+    const userRole = userRoleResult.rows[0]?.role;
+    const perms = getUserPermissions(userRole);
 
     await query(`
       UPDATE users SET 

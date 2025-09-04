@@ -45,10 +45,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     
     try {
       const usuariosList = await getUsers()
-      setUsuarios(usuariosList)
+      // Garantir que usuariosList seja sempre um array
+      setUsuarios(Array.isArray(usuariosList) ? usuariosList : [])
       setError(null)
     } catch (err) {
       console.error('Erro ao carregar usuários:', err)
+      // Em caso de erro, definir como array vazio
+      setUsuarios([])
       setError('Erro ao carregar usuários')
     }
   }

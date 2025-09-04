@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { sendPasswordResetEmail } = require('../config/email');
+const { getUserPermissions } = require('../utils/permissions');
 const router = express.Router();
 
 // Middleware para acessar a função query
@@ -174,12 +175,7 @@ router.get('/verify', async (req, res) => {
     const user = userResult.rows[0];
     
     // Calcular permissões baseadas no cargo
-    const permissionsResult = await query(
-      `SELECT get_user_permissions($1) as permissions`,
-      [user.id]
-    );
-    
-    const permissions = permissionsResult.rows[0]?.permissions || {};
+    const permissions = getUserPermissions(user.role);
     
     // Verificar se é administrador
     const isAdmin = user.role && (

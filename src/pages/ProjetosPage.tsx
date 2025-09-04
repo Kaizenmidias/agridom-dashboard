@@ -35,9 +35,12 @@ const ProjetosPage = () => {
     try {
       setLoading(true);
       const projects = await getProjects();
-      setProjetos(projects);
+      // Garantir que projects seja sempre um array
+      setProjetos(Array.isArray(projects) ? projects : []);
     } catch (error) {
       console.error('Erro ao carregar projetos:', error);
+      // Em caso de erro, definir como array vazio
+      setProjetos([]);
       toast({
         title: "Erro",
         description: "Não foi possível carregar os projetos.",

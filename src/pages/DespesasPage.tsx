@@ -22,9 +22,12 @@ const DespesasPage = () => {
     try {
       setLoading(true);
       const data = await getExpenses();
-      setDespesas(data);
+      // Garantir que data seja sempre um array
+      setDespesas(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Erro ao carregar despesas:', error);
+      // Em caso de erro, definir como array vazio
+      setDespesas([]);
       toast({
         title: "Erro",
         description: "Não foi possível carregar as despesas.",
