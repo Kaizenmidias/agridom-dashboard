@@ -158,7 +158,8 @@ router.get('/verify', async (req, res) => {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
+    const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+    const decoded = jwt.verify(token, jwtSecret);
     
     // Buscar usuário atual
     const userResult = await query(

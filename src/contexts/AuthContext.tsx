@@ -63,24 +63,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (userData && token) {
           try {
             // Primeiro, definir o usuário com os dados salvos
-            setUser(JSON.parse(userData))
+            const parsedUserData = JSON.parse(userData)
+            setUser(parsedUserData)
             
             // Depois verificar se o token ainda é válido
-            const validUser = await verifyToken(token)
-            
-            if (validUser) {
-              // Token válido, atualizar com dados mais recentes se necessário
-              setUser(validUser)
-            } else {
-              // Token inválido, limpar dados
-              localStorage.removeItem('user_data')
-              localStorage.removeItem('auth_token')
-              setUser(null)
+            try {
+              const validUser = await verifyToken(token)
+              
+              if (validUser) {
+                // Token válido, atualizar com dados mais recentes se necessário
+                localStorage.setItem('user_data', JSON.stringify(validUser))
+                setUser(validUser)
+              } else {
+                // Token inválido, limpar dados
+                console.warn('Token inválido, fazendo logout')
+                localStorage.removeItem('user_data')
+                localStorage.removeItem('auth_token')
+                setUser(null)
+              }
+            } catch (tokenError) {
+              // Se houver erro na verificação do token (ex: servidor offline),
+              // manter o usuário logado temporariamente
+              console.warn('Erro na verificação do token, mantendo usuário logado temporariamente:', tokenError)
+              // Não fazer logout automático em caso de erro de rede
             }
-          } catch (tokenError) {
-            // Se houver erro na verificação do token, manter o usuário logado
-            // mas tentar novamente mais tarde
-            console.warn('Erro na verificação do token, mantendo usuário logado:', tokenError)
+          } catch (parseError) {
+            // Erro ao fazer parse dos dados salvos
+            console.error('Erro ao fazer parse dos dados do usuário:', parseError)
+            localStorage.removeItem('user_data')
+            localStorage.removeItem('auth_token')
+            setUser(null)
           }
         }
       } catch (error) {
