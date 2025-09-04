@@ -10,20 +10,27 @@ function getPool() {
     console.log('🔧 Configurando pool de conexão...');
     
     // Usar variáveis da integração automática do Supabase na Vercel
-    const connectionString = process.env.dashboard_POSTGRES_URL || 
+    let connectionString = process.env.dashboard_POSTGRES_URL || 
       process.env.SUPABASE_DATABASE_URL || 
       `postgresql://${process.env.SUPABASE_DB_USER}:${process.env.SUPABASE_DB_PASSWORD}@${process.env.SUPABASE_DB_HOST}:${process.env.SUPABASE_DB_PORT}/${process.env.SUPABASE_DB_NAME}`;
+    
+    // Adicionar parâmetros SSL na URL para resolver certificado auto-assinado
+    if (connectionString && !connectionString.includes('sslmode')) {
+      const separator = connectionString.includes('?') ? '&' : '?';
+      connectionString += `${separator}sslmode=require&sslcert=&sslkey=&sslrootcert=`;
+    }
     
     console.log('🔗 Connection string configurada:', connectionString ? 'Sim' : 'Não');
     
     pool = new Pool({
       connectionString,
-      ssl: {
+      ssl: process.env.NODE_ENV === 'production' ? {
         rejectUnauthorized: false,
         ca: false,
         checkServerIdentity: () => undefined,
-        secureProtocol: 'TLSv1_2_method'
-      },
+        secureProtocol: 'TLSv1_2_method',
+        servername: false
+      } : false,
       max: 1, // Reduzido para serverless
       min: 0,
       idleTimeoutMillis: 1000,
