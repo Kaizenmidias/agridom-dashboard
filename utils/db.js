@@ -3,50 +3,61 @@ const { Pool } = require('pg');
 // Configuração do banco de dados otimizada para Vercel
 let pool;
 
-// Configurar string de conexão com prioridade para dashboard_POSTGRES_URL
-let connectionString;
-if (process.env.dashboard_POSTGRES_URL) {
-  connectionString = process.env.dashboard_POSTGRES_URL;
-} else if (process.env.SUPABASE_DATABASE_URL) {
-  connectionString = process.env.SUPABASE_DATABASE_URL;
-} else {
-  // Fallback para variáveis individuais do Supabase
-  const host = process.env.SUPABASE_HOST || 'localhost';
-  const port = process.env.SUPABASE_PORT || 5432;
-  const database = process.env.SUPABASE_DATABASE || 'postgres';
-  const user = process.env.SUPABASE_USER || 'postgres';
-  const password = process.env.SUPABASE_PASSWORD || '';
-  connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
+function getPool() {
+  if (!pool) {
+    // Tentar configuração manual sem SSL
+    let poolConfig;
+    
+    if (process.env.dashboard_POSTGRES_URL) {
+      // Usar URL completa mas forçar SSL como false
+      const url = new URL(process.env.dashboard_POSTGRES_URL);
+      poolConfig = {
+        host: url.hostname,
+        port: parseInt(url.port) || 5432,
+        database: url.pathname.slice(1),
+        user: url.username,
+        password: url.password,
+        ssl: false,
+        max: 1,
+        min: 0,
+        idleTimeoutMillis: 1000,
+        connectionTimeoutMillis: 5000,
+        acquireTimeoutMillis: 5000,
+      };
+    } else {
+      // Configuração manual com variáveis individuais
+      poolConfig = {
+        host: process.env.dashboard_POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.dashboard_POSTGRES_PORT) || 5432,
+        database: process.env.dashboard_POSTGRES_DATABASE || 'postgres',
+        user: process.env.dashboard_POSTGRES_USER || 'postgres',
+        password: process.env.dashboard_POSTGRES_PASSWORD || '',
+        ssl: false,
+        max: 1,
+        min: 0,
+        idleTimeoutMillis: 1000,
+        connectionTimeoutMillis: 5000,
+        acquireTimeoutMillis: 5000,
+      };
+    }
+    
+    pool = new Pool(poolConfig);
+    
+    pool.on('error', (err, client) => {
+      console.error('❌ Erro no pool de conexão (utils/db):', err.message);
+    });
+    
+    console.log('✅ Pool de conexão DB criado');
+  }
+  return pool;
 }
-
-// Forçar desabilitação completa do SSL com múltiplos parâmetros
-const sslParams = 'sslmode=disable&ssl=false&sslcert=&sslkey=&sslrootcert=&sslcrl=&requiressl=false';
-
-if (connectionString.includes('?')) {
-  connectionString = connectionString.split('?')[0] + '?' + sslParams;
-} else {
-  connectionString += '?' + sslParams;
-}
-
-console.log('🔗 DB Connection string configurada:', connectionString ? 'Sim' : 'Não');
-
-pool = new Pool({
-  connectionString,
-  ssl: false,
-  max: 1,
-  min: 0,
-  idleTimeoutMillis: 1000,
-  connectionTimeoutMillis: 5000,
-  acquireTimeoutMillis: 5000,
-});
-
-console.log('✅ Pool de conexão DB criado');
 
 // Função para executar queries
 async function query(text, params = []) {
   const start = Date.now();
   try {
-    const res = await pool.query(text, params);
+    const currentPool = getPool();
+    const res = await currentPool.query(text, params);
     const duration = Date.now() - start;
     
     if (process.env.NODE_ENV === 'development') {
@@ -63,7 +74,8 @@ async function query(text, params = []) {
 // Função para testar a conexão
 async function testConnection() {
   try {
-    const client = await pool.connect();
+    const currentPool = getPool();
+    const client = await currentPool.connect();
     await client.query('SELECT NOW()');
     client.release();
     console.log('✅ Conectado ao PostgreSQL/Supabase');
@@ -76,7 +88,8 @@ async function testConnection() {
 
 // Função para iniciar transação PostgreSQL
 async function transaction(callback) {
-  const client = await pool.connect();
+  const currentPool = getPool();
+  const client = await currentPool.connect();
   try {
     await client.query('BEGIN');
     const result = await callback(client);
@@ -96,4 +109,4 @@ function formatDateForMySQL(dateString) {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-module.exports = { query, pool, testConnection, transaction, formatDateForMySQL };
+module.exports = { query, pool: getPool, testConnection, transaction, formatDateForMySQL };

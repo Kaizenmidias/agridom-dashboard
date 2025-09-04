@@ -7,22 +7,6 @@ let pool;
 
 function getPool() {
   if (!pool) {
-    console.log('🔧 Configurando pool de conexão...');
-    
-    // Usar variáveis da integração automática do Supabase na Vercel
-    let connectionString = process.env.dashboard_POSTGRES_URL || 
-      process.env.SUPABASE_DATABASE_URL || 
-      `postgresql://${process.env.SUPABASE_DB_USER}:${process.env.SUPABASE_DB_PASSWORD}@${process.env.SUPABASE_DB_HOST}:${process.env.SUPABASE_DB_PORT}/${process.env.SUPABASE_DB_NAME}`;
-    
-    // Forçar desabilitação completa do SSL com múltiplos parâmetros
-    const sslParams = 'sslmode=disable&ssl=false&sslcert=&sslkey=&sslrootcert=&sslcrl=&requiressl=false';
-    
-    if (connectionString.includes('?')) {
-      connectionString = connectionString.split('?')[0] + '?' + sslParams;
-    } else {
-      connectionString += '?' + sslParams;
-    }
-    
     console.log('🔗 Configuração de conexão:');
     console.log('- dashboard_POSTGRES_URL:', process.env.dashboard_POSTGRES_URL ? 'Definido' : 'Não definido');
     console.log('- SUPABASE_DATABASE_URL:', process.env.SUPABASE_DATABASE_URL ? 'Definido' : 'Não definido');
@@ -31,20 +15,61 @@ function getPool() {
     console.log('- dashboard_POSTGRES_USER:', process.env.dashboard_POSTGRES_USER);
     console.log('- dashboard_POSTGRES_PASSWORD:', process.env.dashboard_POSTGRES_PASSWORD ? 'Definido' : 'Não definido');
     console.log('- NODE_ENV:', process.env.NODE_ENV);
-    console.log('- String de conexão final:', connectionString ? connectionString.replace(/:[^:@]*@/, ':***@') : 'Não definida');
-    console.log('🔗 Connection string configurada:', connectionString ? 'Sim' : 'Não');
     
-    pool = new Pool({
-      connectionString,
-      ssl: false,
-      max: 1, // Reduzido para serverless
-      min: 0,
-      idleTimeoutMillis: 1000,
-      connectionTimeoutMillis: 5000,
-      acquireTimeoutMillis: 5000,
+    // Tentar configuração manual sem SSL
+    let poolConfig;
+    
+    if (process.env.dashboard_POSTGRES_URL) {
+      // Usar URL completa mas forçar SSL como false
+      const url = new URL(process.env.dashboard_POSTGRES_URL);
+      poolConfig = {
+        host: url.hostname,
+        port: parseInt(url.port) || 5432,
+        database: url.pathname.slice(1),
+        user: url.username,
+        password: url.password,
+        ssl: false,
+        max: 1,
+        min: 0,
+        idleTimeoutMillis: 1000,
+        connectionTimeoutMillis: 5000,
+        acquireTimeoutMillis: 5000,
+      };
+    } else {
+      // Configuração manual com variáveis individuais
+      poolConfig = {
+        host: process.env.dashboard_POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.dashboard_POSTGRES_PORT) || 5432,
+        database: process.env.dashboard_POSTGRES_DATABASE || 'postgres',
+        user: process.env.dashboard_POSTGRES_USER || 'postgres',
+        password: process.env.dashboard_POSTGRES_PASSWORD || '',
+        ssl: false,
+        max: 1,
+        min: 0,
+        idleTimeoutMillis: 1000,
+        connectionTimeoutMillis: 5000,
+        acquireTimeoutMillis: 5000,
+      };
+    }
+    
+    console.log('🔗 Configuração do pool:', {
+      host: poolConfig.host,
+      port: poolConfig.port,
+      database: poolConfig.database,
+      user: poolConfig.user,
+      ssl: poolConfig.ssl
     });
     
-    console.log('✅ Pool de conexão criado');
+    pool = new Pool(poolConfig);
+    
+    pool.on('connect', (client) => {
+      console.log('🔗 Nova conexão estabelecida com sucesso');
+    });
+    
+    pool.on('error', (err, client) => {
+      console.error('❌ Erro no pool de conexão:', err.message);
+      console.error('❌ Stack do erro:', err.stack);
+    });
   }
   return pool;
 }
