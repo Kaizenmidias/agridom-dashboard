@@ -14,23 +14,17 @@ function getPool() {
       process.env.SUPABASE_DATABASE_URL || 
       `postgresql://${process.env.SUPABASE_DB_USER}:${process.env.SUPABASE_DB_PASSWORD}@${process.env.SUPABASE_DB_HOST}:${process.env.SUPABASE_DB_PORT}/${process.env.SUPABASE_DB_NAME}`;
     
-    // Adicionar parâmetros SSL na URL para resolver certificado auto-assinado
+    // Desabilitar SSL completamente para resolver certificados autoassinados
     if (connectionString && !connectionString.includes('sslmode')) {
       const separator = connectionString.includes('?') ? '&' : '?';
-      connectionString += `${separator}sslmode=require&sslcert=&sslkey=&sslrootcert=`;
+      connectionString += `${separator}sslmode=disable`;
     }
     
     console.log('🔗 Connection string configurada:', connectionString ? 'Sim' : 'Não');
     
     pool = new Pool({
       connectionString,
-      ssl: process.env.NODE_ENV === 'production' ? {
-        rejectUnauthorized: false,
-        ca: false,
-        checkServerIdentity: () => undefined,
-        secureProtocol: 'TLSv1_2_method',
-        servername: false
-      } : false,
+      ssl: false,
       max: 1, // Reduzido para serverless
       min: 0,
       idleTimeoutMillis: 1000,

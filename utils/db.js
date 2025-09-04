@@ -3,28 +3,33 @@ const { Pool } = require('pg');
 // Configuração do banco de dados otimizada para Vercel
 let pool;
 
-// Usar variáveis da integração automática do Supabase na Vercel
-let connectionString = process.env.dashboard_POSTGRES_URL || 
-  process.env.SUPABASE_DATABASE_URL || 
-  `postgresql://${process.env.SUPABASE_DB_USER}:${process.env.SUPABASE_DB_PASSWORD}@${process.env.SUPABASE_DB_HOST}:${process.env.SUPABASE_DB_PORT}/${process.env.SUPABASE_DB_NAME}`;
+// Configurar string de conexão com prioridade para dashboard_POSTGRES_URL
+let connectionString;
+if (process.env.dashboard_POSTGRES_URL) {
+  connectionString = process.env.dashboard_POSTGRES_URL;
+} else if (process.env.SUPABASE_DATABASE_URL) {
+  connectionString = process.env.SUPABASE_DATABASE_URL;
+} else {
+  // Fallback para variáveis individuais do Supabase
+  const host = process.env.SUPABASE_HOST || 'localhost';
+  const port = process.env.SUPABASE_PORT || 5432;
+  const database = process.env.SUPABASE_DATABASE || 'postgres';
+  const user = process.env.SUPABASE_USER || 'postgres';
+  const password = process.env.SUPABASE_PASSWORD || '';
+  connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
+}
 
-// Adicionar parâmetros SSL na URL para resolver certificado auto-assinado
-if (connectionString && !connectionString.includes('sslmode')) {
+// Desabilitar SSL completamente para resolver certificados autoassinados
+if (!connectionString.includes('sslmode')) {
   const separator = connectionString.includes('?') ? '&' : '?';
-  connectionString += `${separator}sslmode=require&sslcert=&sslkey=&sslrootcert=`;
+  connectionString += `${separator}sslmode=disable`;
 }
 
 console.log('🔗 DB Connection string configurada:', connectionString ? 'Sim' : 'Não');
 
 pool = new Pool({
   connectionString,
-  ssl: process.env.NODE_ENV === 'production' ? {
-    rejectUnauthorized: false,
-    ca: false,
-    checkServerIdentity: () => undefined,
-    secureProtocol: 'TLSv1_2_method',
-    servername: false
-  } : false,
+  ssl: false,
   max: 10, // Reduzido para serverless
   min: 0,  // Sem conexões mínimas para serverless
   idleTimeoutMillis: 5000, // 5 segundos para serverless
