@@ -34,31 +34,59 @@ function getPool() {
 
 // Função para executar queries
 async function query(text, params) {
-  const pool = getPool();
-  const client = await pool.connect();
+  console.log('🔍 Executando query:', text.substring(0, 50) + '...');
+  console.log('📊 Parâmetros:', params);
+  
   try {
-    const result = await client.query(text, params);
-    return result;
-  } finally {
-    client.release();
+    const pool = getPool();
+    console.log('🔗 Conectando ao banco...');
+    const client = await pool.connect();
+    console.log('✅ Cliente conectado');
+    
+    try {
+      const result = await client.query(text, params);
+      console.log('✅ Query executada com sucesso');
+      return result;
+    } finally {
+      client.release();
+      console.log('🔄 Cliente liberado');
+    }
+  } catch (error) {
+    console.error('❌ Erro na query:', error.message);
+    console.error('❌ Stack:', error.stack);
+    throw error;
   }
 }
 
 module.exports = async function handler(req, res) {
+  console.log('🚀 Iniciando função de login...');
+  console.log('📝 Método:', req.method);
+  console.log('🌐 URL:', req.url);
+  
+  // Verificar variáveis de ambiente
+  console.log('🔧 Variáveis de ambiente:');
+  console.log('- SUPABASE_DATABASE_URL:', process.env.SUPABASE_DATABASE_URL ? 'Definida' : 'Não definida');
+  console.log('- SUPABASE_DB_HOST:', process.env.SUPABASE_DB_HOST ? 'Definida' : 'Não definida');
+  console.log('- SUPABASE_DB_USER:', process.env.SUPABASE_DB_USER ? 'Definida' : 'Não definida');
+  console.log('- JWT_SECRET:', process.env.JWT_SECRET ? 'Definida' : 'Não definida');
+  
   // Configurar CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   if (req.method === 'OPTIONS') {
+    console.log('✅ Respondendo OPTIONS');
     return res.status(200).end();
   }
   
   if (req.method !== 'POST') {
+    console.log('❌ Método não permitido:', req.method);
     return res.status(405).json({ error: 'Método não permitido' });
   }
 
   try {
+    console.log('📦 Body da requisição:', req.body);
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -68,11 +96,23 @@ module.exports = async function handler(req, res) {
     // Conectar ao banco Supabase real
     console.log('🔍 Fazendo login com banco real:', email);
     
+    // Testar conexão com o banco
+    console.log('🔗 Testando conexão com banco...');
+    try {
+      const testPool = getPool();
+      console.log('✅ Pool obtido com sucesso');
+    } catch (poolError) {
+      console.error('❌ Erro ao obter pool:', poolError);
+      throw poolError;
+    }
+    
     // Buscar usuário no banco
+    console.log('🔍 Executando query para buscar usuário...');
     const result = await query(
       'SELECT id, email, password, name as full_name, role, can_access_dashboard, can_access_projects, can_access_briefings, can_access_codes, can_access_expenses, can_access_crm, can_access_users FROM users WHERE email = $1 AND is_active = true',
       [email]
     );
+    console.log('✅ Query executada, resultados:', result.rows ? result.rows.length : 0);
 
     if (!result.rows || result.rows.length === 0) {
       console.log('❌ Usuário não encontrado:', email);
@@ -129,7 +169,19 @@ module.exports = async function handler(req, res) {
       token 
     });
   } catch (error) {
-    console.error('Erro no login:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    console.error('❌ Erro no login:', error.message);
+    console.error('❌ Stack completo:', error.stack);
+    console.error('❌ Tipo do erro:', error.constructor.name);
+    
+    // Retornar erro mais específico em desenvolvimento
+    const isDev = process.env.NODE_ENV !== 'production';
+    
+    res.status(500).json({ 
+      error: 'Erro interno do servidor',
+      ...(isDev && { 
+        details: error.message,
+        type: error.constructor.name 
+      })
+    });
   }
 }
