@@ -18,9 +18,11 @@ function getPool() {
     
     pool = new Pool({
       connectionString,
-      ssl: {
-        rejectUnauthorized: false
-      },
+      ssl: process.env.NODE_ENV === 'production' ? {
+        rejectUnauthorized: false,
+        ca: false,
+        checkServerIdentity: () => undefined
+      } : false,
       max: 1, // Reduzido para serverless
       min: 0,
       idleTimeoutMillis: 1000,
