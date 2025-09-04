@@ -6,48 +6,37 @@ let pool;
 
 function getPool() {
   if (!pool) {
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    if (isProduction) {
-      const connectionString = process.env.dashboard_POSTGRES_URL || 
-        `postgresql://${process.env.dashboard_POSTGRES_USER || 'postgres'}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE || 'postgres'}`;
-      
-      pool = new Pool({
-        connectionString,
-        ssl: {
-          rejectUnauthorized: false
-        },
-        max: 1,
-        min: 0,
-        idleTimeoutMillis: 1000,
-        connectionTimeoutMillis: 5000,
-        acquireTimeoutMillis: 5000,
-      });
+    // Configurar string de conexão com prioridade para dashboard_POSTGRES_URL
+    let connectionString;
+    if (process.env.dashboard_POSTGRES_URL) {
+      connectionString = process.env.dashboard_POSTGRES_URL;
+    } else if (process.env.SUPABASE_DATABASE_URL) {
+      connectionString = process.env.SUPABASE_DATABASE_URL;
     } else {
-      if (process.env.dashboard_POSTGRES_HOST && process.env.dashboard_POSTGRES_HOST.includes('supabase.co')) {
-        const connectionString = `postgresql://${process.env.dashboard_POSTGRES_USER}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE}?sslmode=require`;
-        pool = new Pool({
-          connectionString,
-          ssl: {
-            rejectUnauthorized: false
-          },
-          max: 1,
-          idleTimeoutMillis: 1000,
-          connectionTimeoutMillis: 5000,
-        });
-      } else {
-        pool = new Pool({
-          host: process.env.dashboard_POSTGRES_HOST || 'localhost',
-          port: 5432,
-          database: process.env.dashboard_POSTGRES_DATABASE || 'agridom_dev',
-          user: process.env.dashboard_POSTGRES_USER || 'postgres',
-          password: process.env.dashboard_POSTGRES_PASSWORD || '',
-          max: 1,
-          idleTimeoutMillis: 1000,
-          connectionTimeoutMillis: 5000,
-        });
-      }
+      // Fallback para variáveis individuais do Supabase
+      const host = process.env.dashboard_POSTGRES_HOST || 'localhost';
+      const port = process.env.dashboard_POSTGRES_PORT || 5432;
+      const database = process.env.dashboard_POSTGRES_DATABASE || 'postgres';
+      const user = process.env.dashboard_POSTGRES_USER || 'postgres';
+      const password = process.env.dashboard_POSTGRES_PASSWORD || '';
+      connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
     }
+
+    // Desabilitar SSL completamente para resolver certificados autoassinados
+    if (!connectionString.includes('sslmode')) {
+      const separator = connectionString.includes('?') ? '&' : '?';
+      connectionString += `${separator}sslmode=disable`;
+    }
+
+    pool = new Pool({
+      connectionString,
+      ssl: false,
+      max: 1,
+      min: 0,
+      idleTimeoutMillis: 1000,
+      connectionTimeoutMillis: 5000,
+      acquireTimeoutMillis: 5000,
+    });
   }
   return pool;
 }

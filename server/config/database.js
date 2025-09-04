@@ -2,33 +2,42 @@ const { Pool } = require('pg');
 
 // Configuração do banco de dados
 let pool;
-let isProduction = process.env.NODE_ENV === 'production';
 
-if (isProduction) {
-  // Configuração para Supabase em produção
-  pool = new Pool({
-    host: process.env.dashboard_POSTGRES_HOST,
-    port: 5432,
-    database: process.env.dashboard_POSTGRES_DATABASE,
-    user: process.env.dashboard_POSTGRES_USER,
-    password: process.env.dashboard_POSTGRES_PASSWORD,
-    ssl: {
-      rejectUnauthorized: false
-    },
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-  });
+// Configurar string de conexão com prioridade para dashboard_POSTGRES_URL
+let connectionString;
+if (process.env.dashboard_POSTGRES_URL) {
+  connectionString = process.env.dashboard_POSTGRES_URL;
+} else if (process.env.SUPABASE_DATABASE_URL) {
+  connectionString = process.env.SUPABASE_DATABASE_URL;
 } else {
-  // Configuração para desenvolvimento usando Supabase
-  pool = new Pool({
-    connectionString: process.env.dashboard_POSTGRES_URL,
-    ssl: false,
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000
-  });
+  // Fallback para variáveis individuais do Supabase
+  const host = process.env.dashboard_POSTGRES_HOST || 'localhost';
+  const port = process.env.dashboard_POSTGRES_PORT || 5432;
+  const database = process.env.dashboard_POSTGRES_DATABASE || 'postgres';
+  const user = process.env.dashboard_POSTGRES_USER || 'postgres';
+  const password = process.env.dashboard_POSTGRES_PASSWORD || '';
+  connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
 }
+
+// Desabilitar SSL completamente para resolver certificados autoassinados
+if (!connectionString.includes('sslmode')) {
+  const separator = connectionString.includes('?') ? '&' : '?';
+  connectionString += `${separator}sslmode=disable`;
+}
+
+console.log('🔗 Server DB Connection string configurada:', connectionString ? 'Sim' : 'Não');
+
+pool = new Pool({
+  connectionString,
+  ssl: false,
+  max: 20,
+  min: 0,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+  acquireTimeoutMillis: 10000,
+});
+
+console.log('✅ Server Pool de conexão DB criado');
 
 // Função para executar queries
 async function query(text, params = []) {
