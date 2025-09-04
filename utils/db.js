@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+const { Pool } = require('pg');
 
 // Configuração do banco de dados otimizada para Vercel
 let pool;
@@ -103,4 +103,4 @@ function formatDateForMySQL(dateString) {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-export { query, pool, testConnection, transaction, formatDateForMySQL };
+module.exports = { query, pool, testConnection, transaction, formatDateForMySQL };

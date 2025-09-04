@@ -1,7 +1,7 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
-import { query } from '../utils/db.js';
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const { query } = require('../utils/db.js');
 
 // Configuração CORS
 const corsHeaders = {
@@ -29,7 +29,7 @@ function authenticateToken(req) {
 }
 
 // Handler principal que roteia todas as requisições
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     console.log('API Handler:', {
       method: req.method,
