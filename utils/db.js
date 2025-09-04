@@ -2,52 +2,30 @@ const { Pool } = require('pg');
 
 // Configuração do banco de dados otimizada para Vercel
 let pool;
-let isProduction = process.env.NODE_ENV === 'production';
 
-if (isProduction) {
-  // Configuração para Supabase em produção (Vercel)
-  const connectionString = process.env.dashboard_POSTGRES_URL || 
-    `postgresql://${process.env.dashboard_POSTGRES_USER || 'postgres'}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE || 'postgres'}`;
-  
-  pool = new Pool({
-    connectionString,
-    ssl: {
-      rejectUnauthorized: false
-    },
-    max: 10, // Reduzido para serverless
-    min: 1,  // Mínimo de 1 conexão
-    idleTimeoutMillis: 5000, // 5 segundos para serverless
-    connectionTimeoutMillis: 10000,
-    acquireTimeoutMillis: 10000,
-  });
-} else {
-  // Configuração para desenvolvimento usando Supabase
-  if (process.env.dashboard_POSTGRES_HOST && process.env.dashboard_POSTGRES_HOST.includes('supabase.co')) {
-    // Usar string de conexão para Supabase
-    const connectionString = `postgresql://${process.env.dashboard_POSTGRES_USER}:${process.env.dashboard_POSTGRES_PASSWORD}@${process.env.dashboard_POSTGRES_HOST}:5432/${process.env.dashboard_POSTGRES_DATABASE}?sslmode=require`;
-    pool = new Pool({
-      connectionString,
-      ssl: {
-        rejectUnauthorized: false
-      },
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-    });
-  } else {
-    // Configuração local
-    pool = new Pool({
-      host: process.env.dashboard_POSTGRES_HOST || 'localhost',
-      port: 5432,
-      database: process.env.dashboard_POSTGRES_DATABASE || 'agridom_dev',
-      user: process.env.dashboard_POSTGRES_USER || 'postgres',
-      password: process.env.dashboard_POSTGRES_PASSWORD || '',
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-  }
-}
+// Usar variáveis da integração automática do Supabase na Vercel
+const connectionString = process.env.dashboard_POSTGRES_URL || 
+  process.env.SUPABASE_DATABASE_URL || 
+  `postgresql://${process.env.SUPABASE_DB_USER}:${process.env.SUPABASE_DB_PASSWORD}@${process.env.SUPABASE_DB_HOST}:${process.env.SUPABASE_DB_PORT}/${process.env.SUPABASE_DB_NAME}`;
+
+console.log('🔗 DB Connection string configurada:', connectionString ? 'Sim' : 'Não');
+
+pool = new Pool({
+  connectionString,
+  ssl: {
+    rejectUnauthorized: false,
+    ca: false,
+    checkServerIdentity: () => undefined,
+    secureProtocol: 'TLSv1_2_method'
+  },
+  max: 10, // Reduzido para serverless
+  min: 0,  // Sem conexões mínimas para serverless
+  idleTimeoutMillis: 5000, // 5 segundos para serverless
+  connectionTimeoutMillis: 10000,
+  acquireTimeoutMillis: 10000,
+});
+
+console.log('✅ Pool de conexão DB criado');
 
 // Função para executar queries
 async function query(text, params = []) {
