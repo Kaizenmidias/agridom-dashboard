@@ -14,11 +14,11 @@ function getPool() {
       connectionString = process.env.SUPABASE_DATABASE_URL;
     } else {
       // Fallback para variáveis individuais do Supabase
-      const host = process.env.dashboard_POSTGRES_HOST || 'localhost';
-      const port = process.env.dashboard_POSTGRES_PORT || 5432;
-      const database = process.env.dashboard_POSTGRES_DATABASE || 'postgres';
-      const user = process.env.dashboard_POSTGRES_USER || 'postgres';
-      const password = process.env.dashboard_POSTGRES_PASSWORD || '';
+      const host = process.env.POSTGRES_HOST || 'localhost';
+  const port = process.env.POSTGRES_PORT || 5432;
+  const database = process.env.POSTGRES_DATABASE || 'postgres';
+  const user = process.env.POSTGRES_USER || 'postgres';
+  const password = process.env.POSTGRES_PASSWORD || '';
       connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
     }
 

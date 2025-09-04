@@ -8,9 +8,9 @@ function getPool() {
     // Tentar configuração manual sem SSL
     let poolConfig;
     
-    if (process.env.dashboard_POSTGRES_URL) {
+    if (process.env.POSTGRES_URL) {
       // Usar URL completa mas forçar SSL como false
-      const url = new URL(process.env.dashboard_POSTGRES_URL);
+      const url = new URL(process.env.POSTGRES_URL);
       poolConfig = {
         host: url.hostname,
         port: parseInt(url.port) || 5432,
@@ -27,11 +27,11 @@ function getPool() {
     } else {
       // Configuração manual com variáveis individuais
       poolConfig = {
-        host: process.env.dashboard_POSTGRES_HOST || 'localhost',
-        port: parseInt(process.env.dashboard_POSTGRES_PORT) || 5432,
-        database: process.env.dashboard_POSTGRES_DATABASE || 'postgres',
-        user: process.env.dashboard_POSTGRES_USER || 'postgres',
-        password: process.env.dashboard_POSTGRES_PASSWORD || '',
+        host: process.env.POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.POSTGRES_PORT) || 5432,
+        database: process.env.POSTGRES_DATABASE || 'postgres',
+        user: process.env.POSTGRES_USER || 'postgres',
+        password: process.env.POSTGRES_PASSWORD || '',
         ssl: false,
         max: 1,
         min: 0,

@@ -38,7 +38,7 @@ router.post('/login', async (req, res) => {
       console.log('👤 Usuário mock encontrado:', { id: mockUser.id, email: mockUser.email, full_name: mockUser.full_name });
       
       // Gerar token JWT
-      const jwtSecret = process.env.dashboard_SUPABASE_JWT_SECRET || process.env.JWT_SECRET;
+      const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET;
       console.log('🔑 JWT Secret:', jwtSecret ? 'Definido' : 'Não definido');
       
       const token = jwt.sign(

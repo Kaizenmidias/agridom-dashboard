@@ -46,22 +46,22 @@ NODE_ENV=production
 Se você conectou o Supabase através da integração automática da Vercel (Storage > Supabase), as seguintes variáveis já foram configuradas automaticamente:
 
 ```
-dashboard_POSTGRES_URL=postgres://postgres.{project_id}:{password}@aws-0-us-east-1.pooler.supabase.com:6543/{database_name}
-dashboard_POSTGRES_PASSWORD={password}
-dashboard_POSTGRES_DATABASE={database_name}
-dashboard_SUPABASE_SERVICE_ROLE_KEY={service_role_key}
-dashboard_POSTGRES_HOST=aws-0-us-east-1.pooler.supabase.com
-dashboard_SUPABASE_ANON_KEY={anon_key}
-dashboard_POSTGRES_PRISMA_URL={prisma_url}
-dashboard_POSTGRES_URL_NON_POOLING={non_pooling_url}
-dashboard_SUPABASE_JWT_SECRET={jwt_secret}
-dashboard_POSTGRES_USER=postgres.{project_id}
-dashboard_NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
+POSTGRES_URL=postgres://postgres.{project_id}:{password}@aws-0-us-east-1.pooler.supabase.com:6543/{database_name}
+POSTGRES_PASSWORD={password}
+POSTGRES_DATABASE={database_name}
+SUPABASE_SERVICE_ROLE_KEY={service_role_key}
+POSTGRES_HOST=aws-0-us-east-1.pooler.supabase.com
+SUPABASE_ANON_KEY={anon_key}
+POSTGRES_PRISMA_URL={prisma_url}
+POSTGRES_URL_NON_POOLING={non_pooling_url}
+SUPABASE_JWT_SECRET={jwt_secret}
+POSTGRES_USER=postgres.{project_id}
+NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
 ```
 
 **✅ Vantagem:** A integração automática já configura o pooler corretamente e resolve os problemas de conexão IPv6.
 
-**⚠️ Importante:** O código foi atualizado para usar prioritariamente as variáveis da integração automática (`dashboard_*`) antes das variáveis manuais.
+**⚠️ Importante:** O código foi atualizado para usar prioritariamente as variáveis da integração automática antes das variáveis manuais.
 
 ## 🚀 Como Configurar no Painel da Vercel
 

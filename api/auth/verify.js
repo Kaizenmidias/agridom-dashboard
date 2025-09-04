@@ -37,11 +37,11 @@ function getPool() {
         });
       } else {
         pool = new Pool({
-          host: process.env.dashboard_POSTGRES_HOST || 'localhost',
+          host: process.env.POSTGRES_HOST || 'localhost',
           port: 5432,
-          database: process.env.dashboard_POSTGRES_DATABASE || 'agridom_dev',
-          user: process.env.dashboard_POSTGRES_USER || 'postgres',
-          password: process.env.dashboard_POSTGRES_PASSWORD || '',
+          database: process.env.POSTGRES_DATABASE || 'agridom_dev',
+          user: process.env.POSTGRES_USER || 'postgres',
+          password: process.env.POSTGRES_PASSWORD || '',
           max: 1,
           idleTimeoutMillis: 1000,
           connectionTimeoutMillis: 5000,
@@ -85,7 +85,7 @@ module.exports = async function handler(req, res) {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
     
     // Buscar usuário atual
     const result = await query(

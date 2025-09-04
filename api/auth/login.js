@@ -8,20 +8,20 @@ let pool;
 function getPool() {
   if (!pool) {
     console.log('🔗 Configuração de conexão:');
-    console.log('- dashboard_POSTGRES_URL:', process.env.dashboard_POSTGRES_URL ? 'Definido' : 'Não definido');
+    console.log('- POSTGRES_URL:', process.env.POSTGRES_URL ? 'Definido' : 'Não definido');
     console.log('- SUPABASE_DATABASE_URL:', process.env.SUPABASE_DATABASE_URL ? 'Definido' : 'Não definido');
-    console.log('- dashboard_POSTGRES_HOST:', process.env.dashboard_POSTGRES_HOST);
-    console.log('- dashboard_POSTGRES_DATABASE:', process.env.dashboard_POSTGRES_DATABASE);
-    console.log('- dashboard_POSTGRES_USER:', process.env.dashboard_POSTGRES_USER);
-    console.log('- dashboard_POSTGRES_PASSWORD:', process.env.dashboard_POSTGRES_PASSWORD ? 'Definido' : 'Não definido');
+    console.log('- POSTGRES_HOST:', process.env.POSTGRES_HOST);
+    console.log('- POSTGRES_DATABASE:', process.env.POSTGRES_DATABASE);
+    console.log('- POSTGRES_USER:', process.env.POSTGRES_USER);
+    console.log('- POSTGRES_PASSWORD:', process.env.POSTGRES_PASSWORD ? 'Definido' : 'Não definido');
     console.log('- NODE_ENV:', process.env.NODE_ENV);
     
     // Tentar configuração manual sem SSL
     let poolConfig;
     
-    if (process.env.dashboard_POSTGRES_URL) {
+    if (process.env.POSTGRES_URL) {
       // Usar URL completa mas forçar SSL como false
-      const url = new URL(process.env.dashboard_POSTGRES_URL);
+      const url = new URL(process.env.POSTGRES_URL);
       poolConfig = {
         host: url.hostname,
         port: parseInt(url.port) || 5432,
@@ -38,11 +38,11 @@ function getPool() {
     } else {
       // Configuração manual com variáveis individuais
       poolConfig = {
-        host: process.env.dashboard_POSTGRES_HOST || 'localhost',
-        port: parseInt(process.env.dashboard_POSTGRES_PORT) || 5432,
-        database: process.env.dashboard_POSTGRES_DATABASE || 'postgres',
-        user: process.env.dashboard_POSTGRES_USER || 'postgres',
-        password: process.env.dashboard_POSTGRES_PASSWORD || '',
+        host: process.env.POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.POSTGRES_PORT) || 5432,
+        database: process.env.POSTGRES_DATABASE || 'postgres',
+        user: process.env.POSTGRES_USER || 'postgres',
+        password: process.env.POSTGRES_PASSWORD || '',
         ssl: false,
         max: 1,
         min: 0,
@@ -107,8 +107,8 @@ module.exports = async function handler(req, res) {
   
   // Verificar variáveis de ambiente
   console.log('🔧 Variáveis de ambiente:');
-  console.log('- dashboard_POSTGRES_URL:', process.env.dashboard_POSTGRES_URL ? 'Definida' : 'Não definida');
-  console.log('- dashboard_SUPABASE_JWT_SECRET:', process.env.dashboard_SUPABASE_JWT_SECRET ? 'Definida' : 'Não definida');
+  console.log('- POSTGRES_URL:', process.env.POSTGRES_URL ? 'Definida' : 'Não definida');
+  console.log('- SUPABASE_JWT_SECRET:', process.env.SUPABASE_JWT_SECRET ? 'Definida' : 'Não definida');
   console.log('- SUPABASE_DATABASE_URL:', process.env.SUPABASE_DATABASE_URL ? 'Definida' : 'Não definida');
   console.log('- JWT_SECRET:', process.env.JWT_SECRET ? 'Definida' : 'Não definida');
   
@@ -175,7 +175,7 @@ module.exports = async function handler(req, res) {
     }
 
     // Gerar token JWT
-    const jwtSecret = process.env.dashboard_SUPABASE_JWT_SECRET || process.env.JWT_SECRET;
+    const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET;
     console.log('🔑 JWT Secret:', jwtSecret ? 'Definido' : 'Não definido');
     
     const token = jwt.sign(

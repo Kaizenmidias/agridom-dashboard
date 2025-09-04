@@ -75,7 +75,7 @@ module.exports = async function handler(req, res) {
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.dashboard_SUPABASE_JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
     const userId = decoded.userId;
 
     // Atualizar dados no banco
