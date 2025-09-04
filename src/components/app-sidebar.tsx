@@ -58,7 +58,7 @@ export function AppSidebar() {
         {/* Logo/Header */}
         <div className="p-4 border-b border-border flex items-center">
           <div className="h-8 w-8 flex items-center justify-center">
-            <img src="/logo.png" alt="Logo" className="h-8 w-8 rounded-full" />
+            <img src="/logo.svg" alt="Logo" className="h-8 w-8 rounded-full" />
           </div>
           {!isCollapsed && (
             <span className="ml-3 text-lg font-bold text-foreground">Kaizen</span>
