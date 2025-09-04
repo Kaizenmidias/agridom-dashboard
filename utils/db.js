@@ -19,10 +19,13 @@ if (process.env.dashboard_POSTGRES_URL) {
   connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
 }
 
-// Desabilitar SSL completamente para resolver certificados autoassinados
-if (!connectionString.includes('sslmode')) {
-  const separator = connectionString.includes('?') ? '&' : '?';
-  connectionString += `${separator}sslmode=disable`;
+// Forçar desabilitação completa do SSL com múltiplos parâmetros
+const sslParams = 'sslmode=disable&ssl=false&sslcert=&sslkey=&sslrootcert=&sslcrl=&requiressl=false';
+
+if (connectionString.includes('?')) {
+  connectionString = connectionString.split('?')[0] + '?' + sslParams;
+} else {
+  connectionString += '?' + sslParams;
 }
 
 console.log('🔗 DB Connection string configurada:', connectionString ? 'Sim' : 'Não');
@@ -30,11 +33,11 @@ console.log('🔗 DB Connection string configurada:', connectionString ? 'Sim' :
 pool = new Pool({
   connectionString,
   ssl: false,
-  max: 10, // Reduzido para serverless
-  min: 0,  // Sem conexões mínimas para serverless
-  idleTimeoutMillis: 5000, // 5 segundos para serverless
-  connectionTimeoutMillis: 10000,
-  acquireTimeoutMillis: 10000,
+  max: 1,
+  min: 0,
+  idleTimeoutMillis: 1000,
+  connectionTimeoutMillis: 5000,
+  acquireTimeoutMillis: 5000,
 });
 
 console.log('✅ Pool de conexão DB criado');

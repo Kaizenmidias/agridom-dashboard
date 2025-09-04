@@ -14,12 +14,24 @@ function getPool() {
       process.env.SUPABASE_DATABASE_URL || 
       `postgresql://${process.env.SUPABASE_DB_USER}:${process.env.SUPABASE_DB_PASSWORD}@${process.env.SUPABASE_DB_HOST}:${process.env.SUPABASE_DB_PORT}/${process.env.SUPABASE_DB_NAME}`;
     
-    // Desabilitar SSL completamente para resolver certificados autoassinados
-    if (connectionString && !connectionString.includes('sslmode')) {
-      const separator = connectionString.includes('?') ? '&' : '?';
-      connectionString += `${separator}sslmode=disable`;
+    // Forçar desabilitação completa do SSL com múltiplos parâmetros
+    const sslParams = 'sslmode=disable&ssl=false&sslcert=&sslkey=&sslrootcert=&sslcrl=&requiressl=false';
+    
+    if (connectionString.includes('?')) {
+      connectionString = connectionString.split('?')[0] + '?' + sslParams;
+    } else {
+      connectionString += '?' + sslParams;
     }
     
+    console.log('🔗 Configuração de conexão:');
+    console.log('- dashboard_POSTGRES_URL:', process.env.dashboard_POSTGRES_URL ? 'Definido' : 'Não definido');
+    console.log('- SUPABASE_DATABASE_URL:', process.env.SUPABASE_DATABASE_URL ? 'Definido' : 'Não definido');
+    console.log('- dashboard_POSTGRES_HOST:', process.env.dashboard_POSTGRES_HOST);
+    console.log('- dashboard_POSTGRES_DATABASE:', process.env.dashboard_POSTGRES_DATABASE);
+    console.log('- dashboard_POSTGRES_USER:', process.env.dashboard_POSTGRES_USER);
+    console.log('- dashboard_POSTGRES_PASSWORD:', process.env.dashboard_POSTGRES_PASSWORD ? 'Definido' : 'Não definido');
+    console.log('- NODE_ENV:', process.env.NODE_ENV);
+    console.log('- String de conexão final:', connectionString ? connectionString.replace(/:[^:@]*@/, ':***@') : 'Não definida');
     console.log('🔗 Connection string configurada:', connectionString ? 'Sim' : 'Não');
     
     pool = new Pool({
@@ -28,8 +40,8 @@ function getPool() {
       max: 1, // Reduzido para serverless
       min: 0,
       idleTimeoutMillis: 1000,
-      connectionTimeoutMillis: 10000,
-      acquireTimeoutMillis: 10000,
+      connectionTimeoutMillis: 5000,
+      acquireTimeoutMillis: 5000,
     });
     
     console.log('✅ Pool de conexão criado');

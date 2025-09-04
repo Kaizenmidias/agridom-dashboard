@@ -19,10 +19,13 @@ if (process.env.dashboard_POSTGRES_URL) {
   connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
 }
 
-// Desabilitar SSL completamente para resolver certificados autoassinados
-if (!connectionString.includes('sslmode')) {
-  const separator = connectionString.includes('?') ? '&' : '?';
-  connectionString += `${separator}sslmode=disable`;
+// Forçar desabilitação completa do SSL com múltiplos parâmetros
+const sslParams = 'sslmode=disable&ssl=false&sslcert=&sslkey=&sslrootcert=&sslcrl=&requiressl=false';
+
+if (connectionString.includes('?')) {
+  connectionString = connectionString.split('?')[0] + '?' + sslParams;
+} else {
+  connectionString += '?' + sslParams;
 }
 
 console.log('🔗 Server DB Connection string configurada:', connectionString ? 'Sim' : 'Não');
