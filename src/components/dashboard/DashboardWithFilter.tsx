@@ -498,7 +498,7 @@ const DashboardWithFilter: React.FC = () => {
             {loading ? (
               <div className="text-2xl font-bold">...</div>
             ) : (
-              <div className="text-2xl font-bold">{dashboardStats?.projects.active_projects || 0}</div>
+              <div className="text-2xl font-bold">{dashboardStats?.projects?.active_projects || 0}</div>
             )}
             <p className="text-xs text-muted-foreground">
               Projetos em andamento
@@ -515,7 +515,7 @@ const DashboardWithFilter: React.FC = () => {
             {loading ? (
               <div className="text-2xl font-bold">...</div>
             ) : (
-              <div className="text-2xl font-bold">{dashboardStats?.projects.completed_projects || 0}</div>
+              <div className="text-2xl font-bold">{dashboardStats?.projects?.completed_projects || 0}</div>
             )}
             <p className="text-xs text-muted-foreground">
               Projetos finalizados
@@ -532,7 +532,7 @@ const DashboardWithFilter: React.FC = () => {
             {loading ? (
               <div className="text-2xl font-bold">...</div>
             ) : (
-              <div className="text-2xl font-bold">{dashboardStats?.projects.total_projects || 0}</div>
+              <div className="text-2xl font-bold">{dashboardStats?.projects?.total_projects || 0}</div>
             )}
             <p className="text-xs text-muted-foreground">
               Todos os projetos
@@ -549,7 +549,7 @@ const DashboardWithFilter: React.FC = () => {
             {loading ? (
               <div className="text-2xl font-bold">...</div>
             ) : (
-              <div className="text-2xl font-bold">{dashboardStats?.expenses.total_expenses || 0}</div>
+              <div className="text-2xl font-bold">{dashboardStats?.expenses?.total_expenses || 0}</div>
             )}
             <p className="text-xs text-muted-foreground">
               Número de despesas
