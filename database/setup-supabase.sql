@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+    is_active BOOLEAN DEFAULT TRUE,
     can_access_dashboard BOOLEAN DEFAULT TRUE,
     can_access_briefings BOOLEAN DEFAULT TRUE,
     can_access_codes BOOLEAN DEFAULT TRUE,
