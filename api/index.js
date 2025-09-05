@@ -254,19 +254,14 @@ async function handleTables(req, res) {
       .select('*')
       .limit(1);
 
-    // Tentar buscar dados de uma tabela que sabemos que existe
-    const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-
     res.json({
       status: 'SUCCESS',
       usersTable: {
         data: usersData,
         error: usersError,
-        exists: !usersError
-      },
-      authUsers: {
-        data: authUsers,
-        error: authError
+        exists: !usersError,
+        errorCode: usersError?.code,
+        errorMessage: usersError?.message
       }
     });
   } catch (error) {
