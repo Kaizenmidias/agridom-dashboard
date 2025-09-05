@@ -248,40 +248,26 @@ async function handleTables(req, res) {
   }
 
   try {
-    // Tentar diferentes formas de listar tabelas
-    const queries = [];
-    
-    // Query 1: Verificar se tabela users existe diretamente
-    try {
-      const { data: usersCheck, error: usersError } = await supabase
-        .from('users')
-        .select('count', { count: 'exact', head: true });
-      queries.push({ name: 'users_table_check', data: usersCheck, error: usersError });
-    } catch (e) {
-      queries.push({ name: 'users_table_check', error: e.message });
-    }
+    // Verificar se tabela users existe diretamente
+    const { data: usersData, error: usersError } = await supabase
+      .from('users')
+      .select('*')
+      .limit(1);
 
-    // Query 2: Listar via pg_tables
-    try {
-      const { data: pgTables, error: pgError } = await supabase
-        .rpc('exec_sql', { query: 'SELECT tablename FROM pg_tables WHERE schemaname = \'public\';' });
-      queries.push({ name: 'pg_tables', data: pgTables, error: pgError });
-    } catch (e) {
-      queries.push({ name: 'pg_tables', error: e.message });
-    }
-
-    // Query 3: Verificar schema
-    try {
-      const { data: schema, error: schemaError } = await supabase
-        .rpc('exec_sql', { query: 'SELECT table_name FROM information_schema.tables WHERE table_schema = \'public\';' });
-      queries.push({ name: 'information_schema', data: schema, error: schemaError });
-    } catch (e) {
-      queries.push({ name: 'information_schema', error: e.message });
-    }
+    // Tentar buscar dados de uma tabela que sabemos que existe
+    const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
 
     res.json({
       status: 'SUCCESS',
-      queries
+      usersTable: {
+        data: usersData,
+        error: usersError,
+        exists: !usersError
+      },
+      authUsers: {
+        data: authUsers,
+        error: authError
+      }
     });
   } catch (error) {
     res.status(500).json({
