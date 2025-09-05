@@ -162,6 +162,24 @@ async function handleVerify(req, res) {
   }
 }
 
+// Handler para debug de variáveis de ambiente
+async function handleDebug(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Método não permitido' });
+  }
+
+  const envVars = {
+    NODE_ENV: process.env.NODE_ENV,
+    SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'NOT_SET',
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT_SET',
+    JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT_SET',
+    SUPABASE_JWT_SECRET: process.env.SUPABASE_JWT_SECRET ? 'SET' : 'NOT_SET',
+    supabaseConnection: supabaseUrl && supabaseKey ? 'CONFIGURED' : 'NOT_CONFIGURED'
+  };
+
+  res.json({ envVars });
+}
+
 // Função principal que roteia as requisições
 export default async function handler(req, res) {
   setCorsHeaders(res);
@@ -177,6 +195,8 @@ export default async function handler(req, res) {
     return handleLogin(req, res);
   } else if (url.includes('/api/auth/verify') || url.includes('/auth/verify')) {
     return handleVerify(req, res);
+  } else if (url.includes('/api/debug') || url.includes('/debug')) {
+    return handleDebug(req, res);
   } else {
     return res.status(404).json({ error: 'Rota não encontrada' });
   }
