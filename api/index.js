@@ -52,8 +52,10 @@ async function handleLogin(req, res) {
 
     const user = users;
 
-    // Verificar senha
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    // Verificar senha usando SHA256 + salt (mesmo método usado para gerar os hashes)
+    const crypto = require('crypto');
+    const hashedPassword = crypto.createHash('sha256').update(password + 'agridom_salt').digest('hex');
+    const isValidPassword = hashedPassword === user.password;
     
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
