@@ -177,7 +177,7 @@ async function handleDebug(req, res) {
 
   const envVars = {
     NODE_ENV: process.env.NODE_ENV,
-    SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'NOT_SET',
+    SUPABASE_URL: process.env.SUPABASE_URL ? process.env.SUPABASE_URL : 'NOT_SET',
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT_SET',
     JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT_SET',
     SUPABASE_JWT_SECRET: process.env.SUPABASE_JWT_SECRET ? 'SET' : 'NOT_SET',
