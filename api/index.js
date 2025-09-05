@@ -239,6 +239,58 @@ async function handleTestDB(req, res) {
 }
 
 // Função principal que roteia as requisições
+}
+
+// Handler para listar tabelas do banco
+async function handleTables(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Método não permitido' });
+  }
+
+  try {
+    // Tentar diferentes formas de listar tabelas
+    const queries = [];
+    
+    // Query 1: Verificar se tabela users existe diretamente
+    try {
+      const { data: usersCheck, error: usersError } = await supabase
+        .from('users')
+        .select('count', { count: 'exact', head: true });
+      queries.push({ name: 'users_table_check', data: usersCheck, error: usersError });
+    } catch (e) {
+      queries.push({ name: 'users_table_check', error: e.message });
+    }
+
+    // Query 2: Listar via pg_tables
+    try {
+      const { data: pgTables, error: pgError } = await supabase
+        .rpc('exec_sql', { query: 'SELECT tablename FROM pg_tables WHERE schemaname = \'public\';' });
+      queries.push({ name: 'pg_tables', data: pgTables, error: pgError });
+    } catch (e) {
+      queries.push({ name: 'pg_tables', error: e.message });
+    }
+
+    // Query 3: Verificar schema
+    try {
+      const { data: schema, error: schemaError } = await supabase
+        .rpc('exec_sql', { query: 'SELECT table_name FROM information_schema.tables WHERE table_schema = \'public\';' });
+      queries.push({ name: 'information_schema', data: schema, error: schemaError });
+    } catch (e) {
+      queries.push({ name: 'information_schema', error: e.message });
+    }
+
+    res.json({
+      status: 'SUCCESS',
+      queries
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'ERROR',
+      error: error.message
+    });
+  }
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(res);
 
@@ -257,6 +309,8 @@ export default async function handler(req, res) {
     return handleDebug(req, res);
   } else if (url.includes('/api/testdb') || url.includes('/testdb')) {
     return handleTestDB(req, res);
+  } else if (url.includes('/api/tables') || url.includes('/tables')) {
+    return handleTables(req, res);
   } else {
     return res.status(404).json({ error: 'Rota não encontrada' });
   }
