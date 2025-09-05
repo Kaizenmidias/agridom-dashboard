@@ -528,16 +528,21 @@ export default async function handler(req, res) {
 
       if (req.method === 'POST') {
         // Criar novo código
+        console.log('POST /api/codes - Body:', req.body);
+        console.log('POST /api/codes - UserId:', userId);
+        
         const { title, language, code_content, description } = req.body;
 
         // Validação básica
         if (!title || !language || !code_content) {
+          console.log('Validação falhou - campos obrigatórios');
           return res.status(400).json({ error: 'Campos obrigatórios: title, language, code_content' });
         }
 
         // Validar linguagem
         const validLanguages = ['css', 'html', 'javascript'];
         if (!validLanguages.includes(language)) {
+          console.log('Validação falhou - linguagem inválida:', language);
           return res.status(400).json({ error: 'Linguagem deve ser: css, html ou javascript' });
         }
 
@@ -548,6 +553,8 @@ export default async function handler(req, res) {
           description: description || null,
           user_id: userId
         };
+        
+        console.log('Dados para inserir:', codeData);
 
         const { data, error } = await supabase
           .from('codes')
@@ -556,8 +563,11 @@ export default async function handler(req, res) {
           .single();
 
         if (error) {
+          console.log('Erro do Supabase:', error);
           return res.status(500).json({ error: 'Erro ao criar código', details: error.message });
         }
+        
+        console.log('Código criado com sucesso:', data);
 
         return res.status(201).json(data);
       }
