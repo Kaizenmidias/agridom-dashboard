@@ -42,18 +42,16 @@ const permissionsRoutes = require('./routes/permissions');
 const smartQuery = async (text, params = []) => {
   const pool = getPool();
   
-  console.log('🔍 SmartQuery chamada:', text.substring(0, 100));
-  console.log('🔍 Pool disponível:', !!pool);
-  console.log('🔍 Pool tem Supabase:', !!(pool && pool.supabase));
+  // SmartQuery chamada
   
   // Se estiver usando Supabase API, converter query para API calls
   if (pool && pool.supabase) {
-    console.log('🔍 Usando convertSQLToSupabaseAPI');
+    // Usando convertSQLToSupabaseAPI
     return await convertSQLToSupabaseAPI(pool.supabase, text, params);
   }
   
   // Caso contrário, usar query SQL normal
-  console.log('🔍 Usando query SQL normal');
+  // Usando query SQL normal
   return await query(text, params);
 };
 
@@ -67,66 +65,42 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
       if (sql.includes('from users')) {
         let query = supabase.from('users').select('*');
         
-        console.log('🔍 SQL original:', sql);
-        console.log('🔍 Parâmetros:', params);
+        
         
         if (sql.includes('where email =')) {
-          console.log('🔍 Aplicando filtro de email:', params[0]);
+
           query = query.eq('email', params[0]);
           if (sql.includes('and is_active')) {
-            console.log('🔍 Aplicando filtro is_active:', params[1]);
-            // Converter 1 para true, 0 para false
-            const isActiveValue = params[1] === 1 || params[1] === '1' ? true : false;
-            console.log('🔍 Valor convertido is_active:', isActiveValue);
+
+    const isActiveValue = params[1] === 1 || params[1] === '1' ? true : false;
             query = query.eq('is_active', isActiveValue);
           }
         } else if (sql.includes('where id =')) {
-          console.log('🔍 Aplicando filtro de ID:', params[0]);
+
           query = query.eq('id', params[0]);
         }
         
-        console.log('🔍 Query final construída');
-        
-        console.log('🔍 Query de usuários construída:', {
-          email: params[0],
-          hasIsActiveFilter: sql.includes('and is_active')
-        });
-        
-        console.log('🔍 Executando query no Supabase...');
-        console.log('🔍 Query object antes da execução:', query);
+
         const { data, error } = await query;
-        console.log('🔍 Query executada com sucesso');
-        
-        console.log('📊 Resultado da query Supabase:');
-        console.log('  - Data:', data);
-        console.log('  - Error:', error);
-        console.log('  - Data length:', data?.length || 0);
-        
         if (error) {
           console.error('❌ Erro na query Supabase:', error);
           throw error;
         }
         
         const result = { rows: data || [], rowCount: data?.length || 0 };
-        console.log('📊 Resultado final:', result);
         
         return result;
       }
       
       if (sql.includes('from projects')) {
-        console.log('🔍 Query contém "from projects"');
+
         // Verificar se é uma query de estatísticas (com COUNT e SUM)
         const normalizedSql = sql.replace(/\s+/g, ' ').toLowerCase();
-        console.log('🔍 Verificando query de projetos:', normalizedSql.substring(0, 150));
-        console.log('🔍 Contém COUNT?', normalizedSql.includes('count('));
-        console.log('🔍 Contém COALESCE?', normalizedSql.includes('coalesce('));
         
         if (normalizedSql.includes('count(*) as total_projects') && normalizedSql.includes('coalesce(sum(project_value), 0)')) {
-          console.log('🔍 Detectada query de estatísticas de projetos');
-          console.log('📊 Query SQL:', sqlText);
-          console.log('📊 Parâmetros:', params);
+
           
-          // Buscar todos os projetos do usuário
+
           const { data: projects, error } = await supabase
             .from('projects')
             .select('*')
@@ -134,10 +108,7 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
             
           if (error) throw error;
           
-          console.log('📊 Projetos encontrados:', projects?.length || 0);
-          console.log('📊 Dados dos projetos:', projects);
-          
-          // Calcular estatísticas manualmente
+
           const stats = {
             total_projects: projects?.length || 0,
             active_projects: projects?.filter(p => p.status === 'active').length || 0,
@@ -147,21 +118,17 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
             total_paid_value: projects?.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0) || 0
           };
           
-          console.log('📊 Estatísticas calculadas:', stats);
+
           
           return { rows: [stats], rowCount: 1 };
         }
         
-        // Verificar se é uma query de valores a receber (total_receivable)
-        console.log('🔍 Verificando total_receivable:', normalizedSql.includes('total_receivable'));
-        console.log('🔍 Verificando project_value - paid_value:', normalizedSql.includes('project_value - paid_value'));
+
         
         if (normalizedSql.includes('total_receivable') || normalizedSql.includes('project_value - paid_value')) {
-          console.log('💰 Detectada query de valores a receber');
-          console.log('💰 Query SQL:', sqlText);
-          console.log('💰 Parâmetros:', params);
+
           
-          // Buscar projetos ativos do usuário
+
           const { data: activeProjects, error } = await supabase
             .from('projects')
             .select('*')
@@ -170,17 +137,13 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
             
           if (error) throw error;
           
-          console.log('💰 Projetos ativos encontrados:', activeProjects?.length || 0);
-          console.log('💰 Dados dos projetos ativos:', activeProjects);
-          
-          // Calcular total a receber
+
           const totalReceivable = activeProjects?.reduce((sum, p) => {
             const receivable = (parseFloat(p.project_value) || 0) - (parseFloat(p.paid_value) || 0);
-            console.log(`💰 Projeto ${p.name}: R$ ${p.project_value} - R$ ${p.paid_value} = R$ ${receivable}`);
             return sum + receivable;
           }, 0) || 0;
           
-          console.log('💰 Total a receber calculado:', totalReceivable);
+
           
           return { rows: [{ total_receivable: totalReceivable }], rowCount: 1 };
         }
@@ -567,8 +530,8 @@ app.use((err, req, res, next) => {
 
 // Iniciar servidor
 const server = app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📊 API disponível em ${process.env.NODE_ENV === 'production' ? process.env.BACKEND_URL : `http://localhost:${PORT}`}/api`);
+  console.log(`Servidor rodando na porta ${PORT}`);
+console.log(`API disponível em ${process.env.NODE_ENV === 'production' ? process.env.BACKEND_URL : `http://localhost:${PORT}`}/api`);
   console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
 });
 

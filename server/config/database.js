@@ -21,42 +21,23 @@ function getSupabaseClient() {
 function getPool() {
   // Se estiver usando Supabase API, retornar objeto com cliente Supabase
   if (useSupabaseAPI) {
-    console.log('🌐 Usando Supabase API como banco de dados');
+    // Usando Supabase API como banco de dados
     const client = getSupabaseClient();
     const supabasePool = {
       supabase: client,  // Adicionar o cliente Supabase como propriedade
       query: async (text, params = []) => {
-        console.log('🔍 Executando query via Supabase API:', text, params);
-        console.log('🔍 Checking conditions:', {
-          hasCountProjects: text.includes('COUNT(*) as total_projects'),
-          hasCoalesceSum: text.includes('COALESCE(SUM(project_value), 0)'),
-          bothConditions: text.includes('COUNT(*) as total_projects') && text.includes('COALESCE(SUM(project_value), 0)')
-        });
+        // Executando query via Supabase API
         try {
-          console.log('🔍 Query recebida:', text.substring(0, 100) + '...');
-          console.log('📝 Query recebida:', text);
-          console.log('🔍 Verificando se contém from users:', text.toLowerCase().includes('from users'));
-          console.log('🔍 Texto em lowercase:', text.toLowerCase());
-          console.log('🔍 Checking conditions:', {
-            hasCountProjects: text.includes('COUNT(*) as total_projects'),
-            hasCoalesceSum: text.includes('COALESCE(SUM(project_value), 0)'),
-            hasPaidValue: text.includes('COALESCE(SUM(paid_value), 0)'),
-            bothConditions: text.includes('COUNT(*) as total_projects') && text.includes('COALESCE(SUM(project_value), 0)')
-          });
-          console.log('🔍 Query text for debugging:', JSON.stringify(text));
-          // Para queries de projetos
-          console.log('🔍 Verificando se query inclui projetos:', text.includes('FROM projects'), text.includes('projects'));
-          console.log('🔍 Query completa:', text);
           
           if (text.includes('FROM projects') || text.includes('projects')) {
-            console.log('🔍 Query de projetos detectada');
+            // Query de projetos detectada
             
             // Verificar se é uma query de estatísticas (com COUNT e SUM)
             const normalizedText = text.replace(/\s+/g, ' ').toLowerCase();
-            console.log('🔍 Texto normalizado:', normalizedText);
+            // Texto normalizado
             
             if (normalizedText.includes('count(*) as total_projects') && normalizedText.includes('coalesce(sum(project_value), 0)')) {
-              console.log('🔍 Query de estatísticas detectada');
+              // Query de estatísticas detectada
               
               // Buscar todos os projetos
               const { data: projects, error } = await client
@@ -68,7 +49,7 @@ function getPool() {
                 throw error;
               }
               
-              console.log('📊 Projetos encontrados:', projects?.length || 0);
+              // Projetos encontrados
               
               // Calcular estatísticas
               const totalProjects = projects?.length || 0;
@@ -76,12 +57,7 @@ function getPool() {
               const totalPaid = projects?.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0) || 0;
               const totalReceivable = totalValue - totalPaid;
               
-              console.log('📊 Estatísticas calculadas:', {
-                totalProjects,
-                totalValue,
-                totalPaid,
-                totalReceivable
-              });
+              // Estatísticas calculadas
               
               return {
                 rows: [{
@@ -122,24 +98,18 @@ function getPool() {
             return { rows: data || [], rowCount: data?.length || 0 };
           }
           
-          console.log('🔍 DEBUG: Verificando se query contém "from users":', text.toLowerCase().includes('from users'));
-          console.log('🔍 DEBUG: Query completa:', text);
           if (text.toLowerCase().includes('from users')) {
-            console.log('🔍 ENTRANDO NA SEÇÃO DE USERS');
-            console.log('🔍 Query original:', text);
-            console.log('🔍 Parâmetros recebidos:', params);
+            // Seção de users
             let query = client.from('users').select('*');
             
             if (text.toLowerCase().includes('where email =')) {
-              console.log('🔍 Aplicando filtro de email:', params[0]);
+              // Aplicando filtro de email
               query = query.eq('email', params[0]);
-              console.log('🔍 Verificando condição is_active:', text.toLowerCase().includes('and is_active'));
-              console.log('🔍 Texto da query (lowercase):', text.toLowerCase());
               if (text.toLowerCase().includes('and is_active')) {
-                console.log('🔍 Aplicando filtro is_active:', params[1]);
+                // Aplicando filtro is_active
                 // Converter 1 para true, 0 para false
                 const isActiveValue = params[1] === 1 || params[1] === '1' ? true : false;
-                console.log('🔍 Valor convertido is_active:', isActiveValue);
+                // Valor convertido is_active
                 query = query.eq('is_active', isActiveValue);
               }
             } else if (text.includes('limit 1')) {
@@ -271,7 +241,7 @@ function getPool() {
         return;
       }
       release();
-      console.log('✅ Server Pool de conexão PostgreSQL criado');
+      // Pool de conexão PostgreSQL criado
     });
   }
 
@@ -328,7 +298,7 @@ async function testConnection() {
   try {
     // Usar uma query simples que funcione com Supabase API
     const result = await query('SELECT * FROM users LIMIT 1');
-    console.log('✅ Conexão com o banco de dados estabelecida via Supabase API');
+    // Conexão com o banco de dados estabelecida via Supabase API
     return true;
   } catch (error) {
     console.error('❌ Erro ao conectar com o banco de dados:', error.message);

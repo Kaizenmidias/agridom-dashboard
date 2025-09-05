@@ -65,46 +65,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         if (userData && token) {
           try {
-            // Primeiro, definir o usuário com os dados salvos
-            const parsedUserData = JSON.parse(userData)
-            setUser(parsedUserData)
+            // Primeiro, verificar se o token é válido
+            const validUser = await verifyToken(token)
             
-            // Depois verificar se o token ainda é válido
-            try {
-              const validUser = await verifyToken(token)
-              
-              if (validUser) {
-                // Token válido, atualizar com dados mais recentes se necessário
-                localStorage.setItem('user_data', JSON.stringify(validUser))
-                setUser(validUser)
-              } else {
-                // Token inválido, limpar dados
-                console.warn('Token inválido, fazendo logout')
-                localStorage.removeItem('user_data')
-                localStorage.removeItem('auth_token')
-                setUser(null)
-              }
-            } catch (tokenError) {
-              // Se houver erro na verificação do token (ex: servidor offline),
-              // manter o usuário logado temporariamente
-              console.warn('Erro na verificação do token, mantendo usuário logado temporariamente:', tokenError)
-              // Não fazer logout automático em caso de erro de rede
+            if (validUser) {
+              // Token válido, usar dados mais recentes do servidor
+              localStorage.setItem('user_data', JSON.stringify(validUser))
+              setUser(validUser)
+              console.log('Usuário autenticado com sucesso:', validUser.email)
+            } else {
+              // Token inválido, limpar dados e forçar novo login
+              console.warn('Token inválido detectado, limpando dados de autenticação')
+              localStorage.removeItem('user_data')
+              localStorage.removeItem('auth_token')
+              localStorage.removeItem('token') // Limpar possíveis tokens antigos
+              localStorage.removeItem('user') // Limpar possíveis dados antigos
+              setUser(null)
             }
-          } catch (parseError) {
-            // Erro ao fazer parse dos dados salvos
-            console.error('Erro ao fazer parse dos dados do usuário:', parseError)
+          } catch (tokenError) {
+            // Erro na verificação do token - limpar dados para forçar novo login
+            console.error('Erro na verificação do token, limpando autenticação:', tokenError)
             localStorage.removeItem('user_data')
             localStorage.removeItem('auth_token')
+            localStorage.removeItem('token')
+            localStorage.removeItem('user')
             setUser(null)
           }
+        } else {
+          // Não há dados salvos, garantir que está limpo
+          setUser(null)
         }
       } catch (error) {
         console.error('Erro ao verificar autenticação:', error)
-        // Só limpar dados se for um erro crítico
-        if (error.message?.includes('JSON')) {
-          localStorage.removeItem('user_data')
-          localStorage.removeItem('auth_token')
-        }
+        // Limpar todos os dados em caso de erro
+        localStorage.removeItem('user_data')
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        setUser(null)
       } finally {
         setLoading(false)
       }
@@ -213,9 +211,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Função para fazer logout
   const logout = () => {
+    // Limpar todos os dados de autenticação possíveis
     localStorage.removeItem('user_data')
     localStorage.removeItem('auth_token')
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    
+    // Limpar sessionStorage também
+    sessionStorage.clear()
+    
     setUser(null)
+    setUsuarios([])
+    setError(null)
+    
+    console.log('Logout realizado - todos os dados de autenticação foram limpos')
   }
 
   // Função para atualizar perfil do usuário

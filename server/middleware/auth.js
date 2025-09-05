@@ -9,7 +9,9 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Token de acesso requerido' });
   }
 
-  jwt.verify(token, process.env.SUPABASE_JWT_SECRET, (err, user) => {
+  const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+  
+  jwt.verify(token, jwtSecret, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Token inválido' });
     }

@@ -46,18 +46,19 @@ const getOriginalBillingType = (expenseId, dbType) => {
 
 // Middleware de autenticação
 const authenticateToken = (req, res, next) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
   
   if (!token) {
     return res.status(401).json({ error: 'Token não fornecido' });
   }
 
+  const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+
   try {
-    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
-    console.log('Token decoded:', decoded);
+    const decoded = jwt.verify(token, jwtSecret);
     // Para tokens do Supabase, usar o campo 'sub' como userId
     req.userId = decoded.sub || decoded.userId || 4; // Fallback para usuário 4 em desenvolvimento
-    console.log('req.userId set to:', req.userId);
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Token inválido' });
@@ -1160,7 +1161,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       prevEnd
     });
     
-    console.log('🔍 DEBUG - Período atual para consultas SQL:', {
+    // Período atual para consultas SQL
       currentStart,
       currentEnd,
       'Tipo currentStart': typeof currentStart,
@@ -1353,9 +1354,9 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     
     // Buscar todos os projetos do período para calcular faturamento manualmente
     // Separar projetos criados no período (recebem paid_value) e entregues no período (recebem restante)
-    console.log('🔍 DEBUG - Período atual:', { currentStart, currentEnd });
+    // Período atual
     
-    console.log('🔍 DEBUG - Consulta projetos criados no período:');
+    // Consulta projetos criados no período
     console.log('  - SQL: SELECT paid_value, created_at as revenue_date FROM projects WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3');
     console.log('  - Parâmetros:', [req.userId, currentStart, currentEnd]);
     
@@ -1369,7 +1370,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       [req.userId, currentStart, currentEnd]
     );
     
-    console.log('🔍 DEBUG - Projetos criados no período:', projectsCreatedInPeriod.rows?.length || 0, projectsCreatedInPeriod.rows);
+    // Projetos criados no período
     
     const projectsDeliveredInPeriod = await query(
       `SELECT 
@@ -1380,7 +1381,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       [req.userId, currentStart, currentEnd]
     );
     
-    console.log('🔍 DEBUG - Projetos entregues no período:', projectsDeliveredInPeriod.rows?.length || 0, projectsDeliveredInPeriod.rows);
+    // Projetos entregues no período
     
     // Combinar os resultados
     const allProjectsInPeriod = {
@@ -1592,7 +1593,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     const currentExpensesAmount = expenseStats.total_expenses_amount;
     const currentProfit = currentRevenue - currentExpensesAmount;
     
-    console.log('🔍 VALORES CALCULADOS PARA RESPOSTA:');
+    // Valores calculados para resposta
     console.log('Current Revenue (total_paid_value):', currentRevenue);
     console.log('Previous Revenue:', previousRevenue);
     console.log('Current Expenses Amount:', currentExpensesAmount);

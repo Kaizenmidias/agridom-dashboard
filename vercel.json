@@ -1,46 +1,40 @@
 {
+  "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-
-  "rewrites": [
+  "builds": [
     {
-      "source": "/api/auth/login",
-      "destination": "/api/auth/login"
+      "src": "server/server.js",
+      "use": "@vercel/node"
     },
     {
-      "source": "/api/auth/register",
-      "destination": "/api/auth/register"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/server/server.js"
     },
     {
-      "source": "/api/auth/verify",
-      "destination": "/api/auth/verify"
+      "src": "/auth/(.*)",
+      "dest": "/server/server.js"
     },
     {
-      "source": "/api/auth/profile",
-      "destination": "/api/auth/profile"
-    },
-    {
-      "source": "/api/auth/change-password",
-      "destination": "/api/auth/change-password"
-    },
-    {
-      "source": "/api/auth/forgot-password",
-      "destination": "/api/auth/forgot-password"
-    },
-    {
-      "source": "/api/auth/reset-password",
-      "destination": "/api/auth/reset-password"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/index?route=$1"
-    },
-    {
-      "source": "/((?!api).*)",
-      "destination": "/index.html"
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "env": {
     "NODE_ENV": "production"
+  },
+  "functions": {
+    "server/server.js": {
+      "maxDuration": 30
+    }
   }
 }

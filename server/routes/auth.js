@@ -20,19 +20,19 @@ router.post('/login', async (req, res) => {
     }
 
     // Buscar usuário no banco de dados
-    console.log('🔍 Buscando usuário:', email);
+    // Buscando usuário
     const result = await query(
       'SELECT id, email, password, name, role, avatar_url, is_active, can_access_dashboard, can_access_projects, can_access_briefings, can_access_codes, can_access_expenses, can_access_crm, can_access_users FROM users WHERE email = ? AND is_active = ?',
       [email, 1]
     );
 
     if (!result.rows || result.rows.length === 0) {
-      console.log('❌ Usuário não encontrado');
+      // Usuário não encontrado
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     const user = result.rows[0];
-    console.log('👤 Usuário encontrado:', user.email, 'Hash:', user.password.substring(0, 20) + '...');
+    // Usuário encontrado
 
     // Verificar senha
     console.log('🔐 Verificando senha...');
@@ -40,13 +40,13 @@ router.post('/login', async (req, res) => {
     console.log('🔐 Senha válida:', isValidPassword);
     
     if (!isValidPassword) {
-      console.log('❌ Senha inválida');
+      // Senha inválida
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     // Gerar token JWT
     const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
-    console.log('🔑 JWT Secret:', jwtSecret ? 'Definido' : 'Não definido');
+    // JWT Secret verificado
     
     const token = jwt.sign(
       { 
@@ -129,7 +129,7 @@ router.post('/register', async (req, res) => {
     // Gerar token JWT
     const token = jwt.sign(
       { userId: userData.id, email: userData.email },
-      process.env.SUPABASE_JWT_SECRET,
+      process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
