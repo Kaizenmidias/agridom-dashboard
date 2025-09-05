@@ -57,6 +57,37 @@ export default async function handler(req, res) {
     }
   }
   
+  if (url.includes('/api/reset-admin-password')) {
+    try {
+      // Resetar senha do admin para 'admin123'
+      const newPassword = 'admin123';
+      const hashedPassword = crypto.createHash('sha256').update(newPassword + 'agridom_salt').digest('hex');
+      
+      const { data, error } = await supabase
+        .from('users')
+        .update({ password: hashedPassword })
+        .eq('email', 'agenciakaizendesign@gmail.com')
+        .select();
+
+      if (error) {
+        return res.status(500).json({ 
+          error: 'Erro ao atualizar senha',
+          details: error.message 
+        });
+      }
+
+      return res.json({ 
+        message: 'Senha do admin resetada para admin123',
+        updated: data
+      });
+    } catch (error) {
+      return res.status(500).json({ 
+        error: 'Erro interno',
+        details: error.message 
+      });
+    }
+  }
+  
   if (url.includes('/api/auth/login') || url.includes('/auth/login') || url.includes('/api/login')) {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' });
