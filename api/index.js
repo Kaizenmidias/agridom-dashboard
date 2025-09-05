@@ -194,53 +194,43 @@ async function handleTestDB(req, res) {
   }
 
   try {
-    // Testar conexão básica
-    const { data: testData, error: testError } = await supabase
-      .from('users')
-      .select('count')
-      .limit(1);
+    // Verificar se a tabela 'users' existe
+    const { data: tables, error: tablesError } = await supabase
+      .rpc('get_table_info');
 
-    if (testError) {
-      return res.json({
-        status: 'ERROR',
-        message: 'Erro na conexão com Supabase',
-        error: testError
-      });
-    }
-
-    // Buscar todos os usuários
+    // Teste de conexão básica
     const { data: users, error: usersError } = await supabase
       .from('users')
-      .select('id, email, name, is_active')
-      .limit(10);
+      .select('*');
 
-    if (usersError) {
-      return res.json({
-        status: 'ERROR',
-        message: 'Erro ao buscar usuários',
-        error: usersError
-      });
-    }
-
-    // Buscar especificamente o usuário lucas@agridom.com.br
+    // Buscar usuário específico
     const { data: lucasUser, error: lucasError } = await supabase
       .from('users')
       .select('*')
       .eq('email', 'lucas@agridom.com.br')
       .single();
 
+    // Verificar todas as tabelas disponíveis
+    const { data: allTables, error: allTablesError } = await supabase
+      .from('information_schema.tables')
+      .select('table_name')
+      .eq('table_schema', 'public');
+
     res.json({
       status: 'SUCCESS',
       connection: 'OK',
-      totalUsers: users?.length || 0,
-      users: users,
-      lucasUser: lucasUser,
-      lucasError: lucasError
+      totalUsers: users ? users.length : 0,
+      users: users || {},
+      lucasUser,
+      lucasError,
+      usersError,
+      allTables,
+      allTablesError
     });
   } catch (error) {
-    res.json({
+    res.status(500).json({
       status: 'ERROR',
-      message: 'Erro interno',
+      connection: 'FAILED',
       error: error.message
     });
   }
