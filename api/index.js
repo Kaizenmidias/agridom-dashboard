@@ -158,5 +158,70 @@ export default async function handler(req, res) {
     }
   }
   
+  if (url.includes('/api/auth/verify') || url.includes('/auth/verify')) {
+    if (req.method !== 'GET') {
+      return res.status(405).json({ error: 'Método não permitido' });
+    }
+
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token não fornecido' });
+      }
+
+      const token = authHeader.substring(7);
+      const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+      
+      // Verificar e decodificar o token
+      const decoded = jwt.verify(token, jwtSecret);
+      
+      // Buscar dados atualizados do usuário no banco
+      const { data: user, error: queryError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', decoded.userId)
+        .eq('is_active', true)
+        .single();
+
+      if (queryError || !user) {
+        return res.status(401).json({ error: 'Usuário não encontrado ou inativo' });
+      }
+
+      // Retornar dados atualizados do usuário
+      const authUser = {
+        id: user.id,
+        email: user.email,
+        full_name: user.name,
+        name: user.name,
+        role: user.role,
+        avatar_url: user.avatar_url,
+        is_active: user.is_active,
+        is_admin: user.is_admin || false,
+        position: user.position,
+        bio: user.bio,
+        can_access_dashboard: user.can_access_dashboard,
+        can_access_projects: user.can_access_projects,
+        can_access_briefings: user.can_access_briefings,
+        can_access_codes: user.can_access_codes,
+        can_access_expenses: user.can_access_expenses,
+        can_access_crm: user.can_access_crm,
+        can_access_users: user.can_access_users
+      };
+
+      return res.json(authUser);
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Token expirado' });
+      }
+      return res.status(500).json({ 
+        error: 'Erro interno do servidor',
+        details: error.message
+      });
+    }
+  }
+  
   return res.status(404).json({ error: 'Rota não encontrada', url: req.url });
 }
