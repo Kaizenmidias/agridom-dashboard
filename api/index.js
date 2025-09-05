@@ -25,11 +25,19 @@ async function handleLogin(req, res) {
   }
 
   try {
+    console.log('Iniciando processo de login');
+    console.log('Body recebido:', req.body);
+    
     const { email, password } = req.body;
 
     if (!email || !password) {
+      console.log('Email ou senha não fornecidos');
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
+
+    console.log('Verificando variáveis de ambiente...');
+    console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'Definida' : 'Não definida');
+    console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'Definida' : 'Não definida');
 
     // Buscar usuário no Supabase
     console.log('Tentando buscar usuário:', email);
@@ -46,21 +54,25 @@ async function handleLogin(req, res) {
       console.log('Erro na consulta ou usuário não encontrado:', queryError);
       return res.status(401).json({ 
         error: 'Credenciais inválidas',
-        debug: process.env.NODE_ENV === 'development' ? { queryError, users } : undefined
+        debug: { queryError, users, email }
       });
     }
 
     const user = users;
+    console.log('Usuário encontrado:', user.email);
 
     // Verificar senha usando SHA256 + salt (mesmo método usado para gerar os hashes)
+    console.log('Verificando senha...');
     const hashedPassword = crypto.createHash('sha256').update(password + 'agridom_salt').digest('hex');
     const isValidPassword = hashedPassword === user.password;
+    console.log('Senha válida:', isValidPassword);
     
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     // Gerar token JWT
+    console.log('Gerando token JWT...');
     const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
     
     const token = jwt.sign(
@@ -72,6 +84,8 @@ async function handleLogin(req, res) {
       jwtSecret,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
+
+    console.log('Token gerado com sucesso');
 
     // Retornar dados do usuário (sem a senha)
     const authUser = {
@@ -92,6 +106,7 @@ async function handleLogin(req, res) {
       }
     };
 
+    console.log('Login realizado com sucesso para:', user.email);
     res.json({ 
       message: 'Login realizado com sucesso',
       user: authUser, 
@@ -99,7 +114,14 @@ async function handleLogin(req, res) {
     });
   } catch (error) {
     console.error('Erro no login:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ 
+      error: 'Erro interno do servidor',
+      debug: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
   }
 }
 
