@@ -187,6 +187,65 @@ async function handleDebug(req, res) {
   res.json({ envVars });
 }
 
+// Handler para testar conexão com Supabase
+async function handleTestDB(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Método não permitido' });
+  }
+
+  try {
+    // Testar conexão básica
+    const { data: testData, error: testError } = await supabase
+      .from('users')
+      .select('count')
+      .limit(1);
+
+    if (testError) {
+      return res.json({
+        status: 'ERROR',
+        message: 'Erro na conexão com Supabase',
+        error: testError
+      });
+    }
+
+    // Buscar todos os usuários
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('id, email, name, is_active')
+      .limit(10);
+
+    if (usersError) {
+      return res.json({
+        status: 'ERROR',
+        message: 'Erro ao buscar usuários',
+        error: usersError
+      });
+    }
+
+    // Buscar especificamente o usuário lucas@agridom.com.br
+    const { data: lucasUser, error: lucasError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', 'lucas@agridom.com.br')
+      .single();
+
+    res.json({
+      status: 'SUCCESS',
+      connection: 'OK',
+      totalUsers: users?.length || 0,
+      users: users,
+      lucasUser: lucasUser,
+      lucasError: lucasError
+    });
+  } catch (error) {
+    res.json({
+      status: 'ERROR',
+      message: 'Erro interno',
+      error: error.message
+    });
+  }
+}
+
 // Função principal que roteia as requisições
 export default async function handler(req, res) {
   setCorsHeaders(res);
@@ -204,6 +263,8 @@ export default async function handler(req, res) {
     return handleVerify(req, res);
   } else if (url.includes('/api/debug') || url.includes('/debug')) {
     return handleDebug(req, res);
+  } else if (url.includes('/api/testdb') || url.includes('/testdb')) {
+    return handleTestDB(req, res);
   } else {
     return res.status(404).json({ error: 'Rota não encontrada' });
   }
