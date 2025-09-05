@@ -46,5 +46,9 @@ export default defineConfig(({ mode }) => ({
   base: './',
   define: {
     'process.env.NODE_ENV': JSON.stringify(mode),
+    __DEV__: mode === 'development',
+  },
+  esbuild: {
+    jsxDev: mode === 'development',
   },
 }));
