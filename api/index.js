@@ -1010,6 +1010,111 @@ export default async function handler(req, res) {
         }
       }
 
+      if (req.method === 'PUT') {
+        console.log('🔍 [DEBUG] Método PUT - atualizando permissões de usuário...');
+        
+        // Extrair ID do usuário da URL
+        const urlParts = url.split('/');
+        const userIdToUpdate = urlParts[urlParts.length - 1];
+        
+        if (!userIdToUpdate || isNaN(userIdToUpdate)) {
+          return res.status(400).json({ error: 'ID do usuário inválido' });
+        }
+        
+        try {
+          const body = JSON.parse(req.body);
+          const {
+            can_access_dashboard,
+            can_access_projects,
+            can_access_briefings,
+            can_access_codes,
+            can_access_expenses,
+            can_access_crm,
+            can_access_users
+          } = body;
+          
+          console.log('🔍 [DEBUG] Atualizando permissões para usuário:', userIdToUpdate);
+          console.log('🔍 [DEBUG] Novas permissões:', body);
+          
+          // Tentar atualizar na tabela 'profiles' primeiro, depois 'users'
+          let updateResult, updateError;
+          
+          // Primeiro tentar 'profiles'
+          const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
+            .update({
+              can_access_dashboard,
+              can_access_projects,
+              can_access_briefings,
+              can_access_codes,
+              can_access_expenses,
+              can_access_crm,
+              can_access_users
+            })
+            .eq('id', userIdToUpdate)
+            .select();
+            
+          if (!profilesError) {
+            console.log('✅ Permissões atualizadas na tabela profiles');
+            updateResult = profilesData;
+            updateError = null;
+          } else {
+            console.log('❌ Erro na tabela profiles, tentando users:', profilesError.message);
+            // Se falhar, tentar 'users'
+            const { data: usersData, error: usersTableError } = await supabase
+              .from('users')
+              .update({
+                can_access_dashboard,
+                can_access_projects,
+                can_access_briefings,
+                can_access_codes,
+                can_access_expenses,
+                can_access_crm,
+                can_access_users
+              })
+              .eq('id', userIdToUpdate)
+              .select();
+              
+            updateResult = usersData;
+            updateError = usersTableError;
+          }
+
+          if (updateError) {
+            console.log('❌ Erro detalhado ao atualizar permissões:', {
+              message: updateError.message,
+              details: updateError.details,
+              hint: updateError.hint,
+              code: updateError.code
+            });
+            return res.status(500).json({ 
+              error: 'Erro ao atualizar permissões', 
+              details: updateError.message,
+              supabaseError: updateError
+            });
+          }
+
+          console.log('✅ Permissões atualizadas com sucesso:', updateResult?.[0]);
+          return res.json(updateResult?.[0] || { success: true });
+        } catch (catchError) {
+          console.log('❌ Erro de exceção no PUT users:', catchError);
+          return res.status(500).json({ 
+            error: 'Erro interno no PUT users', 
+            details: catchError.message 
+          });
+        }
+      }
+
+          console.log('✅ Usuários encontrados:', users?.length || 0);
+          return res.json(users || []);
+        } catch (catchError) {
+          console.log('❌ Erro de exceção no GET users:', catchError);
+          return res.status(500).json({ 
+            error: 'Erro interno no GET users', 
+            details: catchError.message 
+          });
+        }
+      }
+
       if (req.method === 'POST') {
         console.log('🔍 [DEBUG] Método POST - criando novo usuário...');
         
