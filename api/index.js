@@ -854,6 +854,39 @@ export default async function handler(req, res) {
         const totalReceivable = totalRevenue - totalPaid;
         const totalProfit = totalRevenue - totalExpenses;
 
+        // Calcular receita por mês
+        const revenueByMonth = {};
+        projects.forEach(project => {
+          if (project.created_at) {
+            const date = new Date(project.created_at);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            if (!revenueByMonth[monthKey]) {
+              revenueByMonth[monthKey] = 0;
+            }
+            revenueByMonth[monthKey] += parseFloat(project.project_value) || 0;
+          }
+        });
+
+        // Converter para array ordenado
+        const revenueByMonthArray = Object.entries(revenueByMonth)
+          .map(([month, revenue]) => ({ month, revenue }))
+          .sort((a, b) => a.month.localeCompare(b.month));
+
+        // Calcular despesas por categoria
+        const expensesByCategory = {};
+        expenses.forEach(expense => {
+          const category = expense.category || 'Sem categoria';
+          if (!expensesByCategory[category]) {
+            expensesByCategory[category] = 0;
+          }
+          expensesByCategory[category] += parseFloat(expense.value) || 0;
+        });
+
+        // Converter para array ordenado
+        const expensesByCategoryArray = Object.entries(expensesByCategory)
+          .map(([category, total_amount]) => ({ category, total_amount }))
+          .sort((a, b) => b.total_amount - a.total_amount);
+
         const stats = {
           projects: {
             total: projects.length,
@@ -879,8 +912,8 @@ export default async function handler(req, res) {
             receivable: totalReceivable
           },
           current_receivable: totalReceivable,
-          revenue_by_month: [],
-          expenses_by_category: []
+          revenue_by_month: revenueByMonthArray,
+          expenses_by_category: expensesByCategoryArray
         };
 
         return res.json(stats);
