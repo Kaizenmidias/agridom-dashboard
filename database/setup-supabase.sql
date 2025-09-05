@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     value DECIMAL(10, 2) NOT NULL,
     category VARCHAR(100),
     date DATE NOT NULL,
-    billing_type VARCHAR(20) DEFAULT 'one_time' CHECK (billing_type IN ('one_time', 'recurring')),
+    billing_type VARCHAR(20) DEFAULT 'unica' CHECK (billing_type IN ('unica', 'semanal', 'mensal', 'anual')),
     recurrence VARCHAR(20) CHECK (recurrence IN ('monthly', 'quarterly', 'yearly')),
     project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

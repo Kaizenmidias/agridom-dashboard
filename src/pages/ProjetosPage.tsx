@@ -98,6 +98,18 @@ const ProjetosPage = () => {
       case 'completed': return 'Concluído';
       case 'paused': return 'Pausado';
       case 'cancelled': return 'Cancelado';
+      default: return projectType;
+    }
+  };
+
+  const getProjectTypeLabel = (projectType: string) => {
+    switch (projectType) {
+      case 'website': return 'Site institucional';
+      case 'ecommerce': return 'E-commerce';
+      case 'landing_page': return 'Landing Page';
+      case 'app': return 'Aplicativo';
+      case 'branding': return 'Branding';
+      case 'other': return 'Outro';
       default: return status;
     }
   };
@@ -503,7 +515,7 @@ const ProjetosPage = () => {
                       </div>
                     </TableCell>
                     <TableCell>{projeto.client || '-'}</TableCell>
-                    <TableCell>{projeto.project_type || '-'}</TableCell>
+                    <TableCell>{projeto.project_type ? getProjectTypeLabel(projeto.project_type) : '-'}</TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(projeto.status)}>
                         {getStatusLabel(projeto.status)}

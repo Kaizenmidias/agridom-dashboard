@@ -32,7 +32,7 @@ export function RecurringExpenseInfo({
   currentMonth = new Date().getMonth() + 1 
 }: RecurringExpenseInfoProps) {
   const monthlyAmount = calculateMonthlyAmount(
-    expense.amount,
+    expense.value || expense.amount,
     expense.billing_type,
     expense.date,
     currentYear,
@@ -104,7 +104,7 @@ export function RecurringExpenseInfo({
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-600">Valor base:</span>
-            <span className="font-semibold">{formatCurrency(expense.amount)}</span>
+            <span className="font-semibold">{formatCurrency(expense.value || expense.amount)}</span>
           </div>
           
           {expense.billing_type !== 'unica' && expense.billing_type !== 'mensal' && (

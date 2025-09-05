@@ -95,8 +95,8 @@ const initialYieldData: YieldData[] = [
 ];
 
 const initialProfitabilityData: FinancialData[] = [
-  { name: 'Projeto Alpha', profitability: 15000, size: 3.5, crop: 'E-commerce' },
-  { name: 'Projeto Beta', profitability: 8500, size: 2.0, crop: 'Landing Page' },
+  { name: 'Projeto Alpha', profitability: 15000, size: 3.5, crop: 'ecommerce' },
+    { name: 'Projeto Beta', profitability: 8500, size: 2.0, crop: 'landing_page' },
   { name: 'Projeto Gamma', profitability: 22000, size: 5.2, crop: 'Sistema Web' },
   { name: 'Projeto Delta', profitability: 12000, size: 2.8, crop: 'Marketing Digital' },
   { name: 'Projeto Epsilon', profitability: 18500, size: 4.1, crop: 'Aplicativo' }

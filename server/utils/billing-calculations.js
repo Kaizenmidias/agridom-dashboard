@@ -80,7 +80,14 @@ function calculateMonthlyAmount(
 
   switch (billingType) {
     case 'unica':
-      return numericAmount;
+      // Para despesas únicas, só contar se a data está no mês/ano alvo
+      // Usar parsing manual para evitar problemas de fuso horário
+      const [expenseYear, expenseMonth] = date.split('-').map(Number);
+      
+      if (expenseYear === year && expenseMonth === month) {
+        return numericAmount;
+      }
+      return 0;
     case 'semanal':
       const dayOfWeek = getDayOfWeekFromDate(date);
       return calculateWeeklyMonthlyAmount(numericAmount, year, month, dayOfWeek);
@@ -89,7 +96,14 @@ function calculateMonthlyAmount(
     case 'anual':
       return calculateAnnualMonthlyAmount(numericAmount);
     default:
-      return numericAmount;
+      // Para tipos desconhecidos, tratar como única
+      // Usar parsing manual para evitar problemas de fuso horário
+      const [unknownExpenseYear, unknownExpenseMonth] = date.split('-').map(Number);
+      
+      if (unknownExpenseYear === year && unknownExpenseMonth === month) {
+        return numericAmount;
+      }
+      return 0;
   }
 }
 
@@ -102,10 +116,12 @@ function calculateMonthlyAmount(
  */
 function calculateTotalMonthlyExpenses(expenses, targetYear, targetMonth) {
   return expenses.reduce((total, expense) => {
-    // Usar expense_date ou date, priorizando expense_date
-    const expenseDate = expense.expense_date || expense.date;
+    // Usar date
+    const expenseDate = expense.date;
+    // Tentar acessar tanto 'amount' quanto 'value' para compatibilidade
+    const expenseValue = expense.amount || expense.value || 0;
     const monthlyAmount = calculateMonthlyAmount(
-      parseFloat(expense.amount) || 0,
+      parseFloat(expenseValue),
       expense.billing_type || 'unica',
       expenseDate,
       targetYear,

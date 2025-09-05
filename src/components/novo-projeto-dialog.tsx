@@ -196,10 +196,12 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Site institucional">Site institucional</SelectItem>
-                  <SelectItem value="E-commerce">E-commerce</SelectItem>
-                  <SelectItem value="Landing Page">Landing Page</SelectItem>
-                  <SelectItem value="Outro">Outro</SelectItem>
+                  <SelectItem value="website">Site institucional</SelectItem>
+                  <SelectItem value="ecommerce">E-commerce</SelectItem>
+                  <SelectItem value="landing_page">Landing Page</SelectItem>
+                  <SelectItem value="app">Aplicativo</SelectItem>
+                  <SelectItem value="branding">Branding</SelectItem>
+                  <SelectItem value="other">Outro</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -86,7 +86,7 @@ const Dashboard = () => {
         
         // Update state with real data - ensure proper number conversion with safe access
         const revenue = parseFloat(String(stats?.projects?.total_paid_value || 0));
-        const expenses = parseFloat(String(stats?.expenses?.total_expenses_amount || 0));
+        const expenses = parseFloat(String(stats?.current_period?.expenses || 0));
         
         setMonthlyRevenue(revenue);
         setActiveProjects(Number(stats?.projects?.active_projects) || 0);
@@ -268,7 +268,7 @@ const Dashboard = () => {
       </header>
 
       {/* Quick Stats Row - Dados reais dos projetos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         <div className="stat-card card-hover">
           <p className="stat-label">Faturamento Total</p>
           <div className="flex items-baseline justify-between mt-2">
@@ -313,6 +313,32 @@ const Dashboard = () => {
             </p>
             <span className="text-red-600 text-sm font-medium flex items-center">
               <Wallet className="h-4 w-4 mr-1" /> Gastos
+            </span>
+          </div>
+        </div>
+        
+        <div className="stat-card card-hover">
+          <p className="stat-label">A Receber</p>
+          <div className="flex items-baseline justify-between mt-2">
+            <p className="stat-value">
+              {loading ? 'Carregando...' : Number(dashboardStats?.current_receivable || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+            <span className="text-orange-600 text-sm font-medium">
+              Pendente
+            </span>
+          </div>
+        </div>
+        
+        <div className="stat-card card-hover">
+          <p className="stat-label">Lucro</p>
+          <div className="flex items-baseline justify-between mt-2">
+            <p className="stat-value">
+              {loading ? 'Carregando...' : (Number(monthlyRevenue || 0) - Number(totalExpenses || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+            <span className={`text-sm font-medium ${
+              (Number(monthlyRevenue || 0) - Number(totalExpenses || 0)) >= 0 ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {(Number(monthlyRevenue || 0) - Number(totalExpenses || 0)) >= 0 ? 'Positivo' : 'Negativo'}
             </span>
           </div>
         </div>

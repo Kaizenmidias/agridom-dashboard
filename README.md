@@ -1,6 +1,6 @@
-# 🎨 WebDesign Dashboard
+# 🌾 AgriDom Dashboard
 
-Um dashboard moderno e responsivo para gestão de empresa de web design, desenvolvido com React, TypeScript e Node.js.
+Um dashboard moderno e responsivo para gestão agrícola, desenvolvido com React, TypeScript e Node.js com Supabase.
 
 ## 📋 Funcionalidades
 
@@ -31,7 +31,7 @@ Um dashboard moderno e responsivo para gestão de empresa de web design, desenvo
 ### Backend
 - **Node.js** - Runtime JavaScript
 - **Express.js** - Framework web minimalista
-- **MySQL** - Banco de dados relacional
+- **Supabase** - Backend-as-a-Service com PostgreSQL
 - **JWT** - Autenticação baseada em tokens
 - **Bcrypt** - Criptografia de senhas
 - **Nodemailer** - Envio de emails
@@ -40,8 +40,8 @@ Um dashboard moderno e responsivo para gestão de empresa de web design, desenvo
 ## 🚀 Instalação e Configuração
 
 ### Pré-requisitos
-- Node.js 16+ instalado
-- MySQL 8+ instalado
+- Node.js 22+ instalado
+- Conta no Supabase
 - Git instalado
 
 ### 1. Clone o Repositório

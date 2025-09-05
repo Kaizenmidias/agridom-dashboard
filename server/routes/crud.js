@@ -1,7 +1,15 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
-const { calculateTotalMonthlyExpenses } = require('../utils/billing-calculations');
+const { calculateTotalMonthlyExpenses, calculateMonthlyAmount } = require('../utils/billing-calculations');
+const { mapBillingTypeForDatabase, getOriginalBillingType, storeOriginalType } = require('../temp_billing_mapping');
+const { createClient } = require('@supabase/supabase-js');
+
+// Inicializar cliente Supabase
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 // Middleware para acessar a função query
 const getQuery = (req) => req.app.locals.query;
@@ -16,10 +24,12 @@ const authenticateToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
-    req.userId = decoded.userId;
+    console.log('Token decoded:', decoded);
+    // Para tokens do Supabase, usar o campo 'sub' como userId
+    req.userId = decoded.sub || decoded.userId || 4; // Fallback para usuário 4 em desenvolvimento
+    console.log('req.userId set to:', req.userId);
     next();
   } catch (error) {
-    console.error('Erro na autenticação:', error.message);
     return res.status(401).json({ error: 'Token inválido' });
   }
 };
@@ -63,8 +73,23 @@ router.get('/users/:id', authenticateToken, async (req, res) => {
 // PUT /api/users/:id
 router.put('/users/:id', authenticateToken, async (req, res) => {
   try {
-    const { full_name, position, avatar_url, is_active } = req.body;
-    const query = getQuery(req);
+    const { full_name, position, avatar_url, is_active, role, name } = req.body;
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY
+    );
+    
+    // Verificar se o usuário existe
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', req.params.id)
+      .single();
+    
+    if (checkError || !existingUser) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
     
     // Se o cargo for Administrador, dar todas as permissões automaticamente
     const permissions = position === 'Administrador' ? {
@@ -85,50 +110,36 @@ router.put('/users/:id', authenticateToken, async (req, res) => {
       can_access_users: req.body.can_access_users
     };
     
-    // Tratar valores undefined como null
-    const params = [
-      full_name !== undefined ? full_name : null,
-      position !== undefined ? position : null,
-      avatar_url !== undefined ? avatar_url : null,
-      is_active !== undefined ? is_active : null,
-      permissions.can_access_dashboard !== undefined ? permissions.can_access_dashboard : null,
-      permissions.can_access_briefings !== undefined ? permissions.can_access_briefings : null,
-      permissions.can_access_codes !== undefined ? permissions.can_access_codes : null,
-      permissions.can_access_projects !== undefined ? permissions.can_access_projects : null,
-      permissions.can_access_expenses !== undefined ? permissions.can_access_expenses : null,
-      permissions.can_access_crm !== undefined ? permissions.can_access_crm : null,
-      permissions.can_access_users !== undefined ? permissions.can_access_users : null,
-      req.params.id
-    ];
+    // Construir objeto de atualização
+    const updateData = {};
+    if (full_name !== undefined) updateData.name = full_name;
+    if (name !== undefined) updateData.name = name;
+    if (position !== undefined) updateData.position = position;
+    if (avatar_url !== undefined) updateData.avatar_url = avatar_url;
+    if (is_active !== undefined) updateData.is_active = is_active;
+    if (role !== undefined) updateData.role = role;
+    if (permissions.can_access_dashboard !== undefined) updateData.can_access_dashboard = permissions.can_access_dashboard;
+    if (permissions.can_access_briefings !== undefined) updateData.can_access_briefings = permissions.can_access_briefings;
+    if (permissions.can_access_codes !== undefined) updateData.can_access_codes = permissions.can_access_codes;
+    if (permissions.can_access_projects !== undefined) updateData.can_access_projects = permissions.can_access_projects;
+    if (permissions.can_access_expenses !== undefined) updateData.can_access_expenses = permissions.can_access_expenses;
+    if (permissions.can_access_crm !== undefined) updateData.can_access_crm = permissions.can_access_crm;
+    if (permissions.can_access_users !== undefined) updateData.can_access_users = permissions.can_access_users;
     
-    await query(
-      `UPDATE users 
-       SET full_name = COALESCE(?, full_name),
-           position = COALESCE(?, position),
-           avatar_url = COALESCE(?, avatar_url),
-           is_active = COALESCE(?, is_active),
-           can_access_dashboard = COALESCE(?, can_access_dashboard),
-           can_access_briefings = COALESCE(?, can_access_briefings),
-           can_access_codes = COALESCE(?, can_access_codes),
-           can_access_projects = COALESCE(?, can_access_projects),
-           can_access_expenses = COALESCE(?, can_access_expenses),
-           can_access_crm = COALESCE(?, can_access_crm),
-           can_access_users = COALESCE(?, can_access_users),
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      params
-    );
+    // Atualizar usuário diretamente no Supabase
+    const { data, error } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', req.params.id)
+      .select()
+      .single();
     
-    const result = await query(
-      'SELECT id, email, full_name, position, avatar_url, is_active, created_at, updated_at, can_access_dashboard, can_access_briefings, can_access_codes, can_access_projects, can_access_expenses, can_access_crm, can_access_users FROM users WHERE id = ?',
-      [req.params.id]
-    );
-    
-    if (!result.rows || result.rows.length === 0) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (error) {
+      console.error('Erro ao atualizar usuário no Supabase:', error);
+      return res.status(500).json({ error: 'Erro ao atualizar usuário' });
     }
     
-    res.json(result.rows[0]);
+    res.json(data);
   } catch (error) {
     console.error('Erro ao atualizar usuário:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
@@ -403,19 +414,55 @@ router.delete('/projects/:id', authenticateToken, async (req, res) => {
 
 // ===== EXPENSES =====
 
+
+
 // GET /api/expenses
 router.get('/expenses', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
     const result = await query(
-      `SELECT e.*, p.name as project_name 
+      `SELECT e.id, e.description, e.value, e.value as amount, e.category, e.date, 
+              e.billing_type, e.project_id, e.user_id, e.notes, e.created_at, e.updated_at,
+              p.name as project_name 
        FROM expenses e 
        LEFT JOIN projects p ON e.project_id = p.id 
-       WHERE p.user_id = ? 
-       ORDER BY e.expense_date DESC`,
+       WHERE e.user_id = ? 
+       ORDER BY e.date DESC`,
       [req.userId]
     );
-    res.json(result.rows || []);
+    
+    // 🔧 CALCULAR VALOR MENSAL e RECUPERAR TIPO ORIGINAL para cada despesa
+    const expensesWithMonthlyValue = (result.rows || []).map(expense => {
+      // 🔧 TEMPORÁRIO: Recuperar tipo original do cache
+      const originalBillingType = getOriginalBillingType(expense.id, expense.billing_type);
+      
+      let monthlyValue = expense.value;
+      
+      // Usar tipo original para calcular valor mensal
+      switch (originalBillingType) {
+        case 'semanal':
+          monthlyValue = expense.value * 4; // 4 semanas por mês
+          break;
+        case 'anual':
+          monthlyValue = expense.value / 12;
+          break;
+        case 'mensal':
+          monthlyValue = expense.value;
+          break;
+        case 'unica':
+        default:
+          monthlyValue = expense.value; // Para despesas únicas, valor mensal = valor total
+          break;
+      }
+      
+      return {
+        ...expense,
+        billing_type: originalBillingType, // 🔧 TEMPORÁRIO: Retornar tipo original
+        monthly_value: parseFloat(monthlyValue.toFixed(2))
+      };
+    });
+    
+    res.json(expensesWithMonthlyValue);
   } catch (error) {
     console.error('Erro ao buscar despesas:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
@@ -427,10 +474,12 @@ router.get('/expenses/:id', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
     const result = await query(
-      `SELECT e.*, p.name as project_name 
+      `SELECT e.id, e.description, e.value, e.value as amount, e.category, e.date, 
+              e.billing_type, e.project_id, e.user_id, e.notes, e.created_at, e.updated_at,
+              p.name as project_name 
        FROM expenses e 
        LEFT JOIN projects p ON e.project_id = p.id 
-       WHERE e.id = ? AND p.user_id = ?`,
+       WHERE e.id = ? AND e.user_id = ?`,
       [req.params.id, req.userId]
     );
     
@@ -438,72 +487,151 @@ router.get('/expenses/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Despesa não encontrada' });
     }
     
-    res.json(result.rows[0]);
+    // 🔧 CALCULAR VALOR MENSAL e RECUPERAR TIPO ORIGINAL para a despesa
+    const expense = result.rows[0];
+    
+    // 🔧 TEMPORÁRIO: Recuperar tipo original do cache
+    const originalBillingType = getOriginalBillingType(expense.id, expense.billing_type);
+    
+    let monthlyValue = expense.value;
+    
+    // Usar tipo original para calcular valor mensal
+    switch (originalBillingType) {
+      case 'semanal':
+        monthlyValue = expense.value * 4; // 4 semanas por mês
+        break;
+      case 'anual':
+        monthlyValue = expense.value / 12;
+        break;
+      case 'mensal':
+        monthlyValue = expense.value;
+        break;
+      case 'unica':
+      default:
+        monthlyValue = expense.value; // Para despesas únicas, valor mensal = valor total
+        break;
+    }
+    
+    const expenseWithMonthlyValue = {
+      ...expense,
+      billing_type: originalBillingType, // 🔧 TEMPORÁRIO: Retornar tipo original
+      monthly_value: parseFloat(monthlyValue.toFixed(2))
+    };
+    
+    res.json(expenseWithMonthlyValue);
   } catch (error) {
     console.error('Erro ao buscar despesa:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
+
+
 // POST /api/expenses
 router.post('/expenses', authenticateToken, async (req, res) => {
   try {
+    
     const { 
       project_id, 
       description, 
       amount, 
+      value, // 🔧 ADICIONAR: aceitar tanto 'amount' quanto 'value'
       category, 
       date,
       billing_type,
       notes,
-      is_recurring,
-      recurring_day_of_week,
-      recurring_end_date,
       status
     } = req.body;
     const query = getQuery(req);
     
-    if (!project_id || !description || !amount) {
-      return res.status(400).json({ error: 'Projeto, descrição e valor são obrigatórios' });
+    // 🔧 CORREÇÃO: aceitar tanto 'amount' quanto 'value' do frontend
+    const amountValue = amount !== undefined ? amount : value;
+    
+    if (!description || amountValue === undefined || amountValue === null) {
+      return res.status(400).json({ error: 'Descrição e valor são obrigatórios' });
     }
     
-    // Verificar se o projeto pertence ao usuário
-    const projectResult = await query(
-      'SELECT id FROM projects WHERE id = ? AND user_id = ?',
-      [project_id, req.userId]
+    // Converter amount para número se for string
+    const numericAmount = typeof amountValue === 'string' ? parseFloat(amountValue) : amountValue;
+    
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ error: 'Valor deve ser um número válido maior que zero' });
+    }
+    
+    // Verificar se o projeto pertence ao usuário (apenas se project_id foi fornecido)
+    if (project_id) {
+      const projectResult = await query(
+        'SELECT id FROM projects WHERE id = ? AND user_id = ?',
+        [project_id, req.userId]
+      );
+      
+      if (!projectResult.rows || projectResult.rows.length === 0) {
+        return res.status(403).json({ error: 'Projeto não encontrado ou não autorizado' });
+      }
+    }
+    
+    // 🔧 NOVO: Salvar tipo de cobrança original e calcular valor mensal
+    // Calcular valor mensal baseado na frequência usando função precisa
+    const expenseDate = date || new Date().toISOString().split('T')[0];
+    const monthlyValue = calculateMonthlyAmount(
+      numericAmount,
+      billing_type,
+      expenseDate
     );
     
-    if (!projectResult.rows || projectResult.rows.length === 0) {
-      return res.status(403).json({ error: 'Projeto não encontrado ou não autorizado' });
-    }
+    // 🔧 TEMPORÁRIO: Mapear tipos para constraint atual até migrações serem aplicadas
+    const mappedBillingType = mapBillingTypeForDatabase(billing_type);
     
-    await query(
+    console.log(`🔧 TIPO ORIGINAL: ${billing_type}`);
+    console.log(`🔧 TIPO MAPEADO (temporário): ${mappedBillingType}`);
+    console.log(`🔧 VALOR ORIGINAL: R$ ${numericAmount}`);
+    console.log(`🔧 VALOR MENSAL CALCULADO: R$ ${monthlyValue.toFixed(2)}`);
+    
+    const insertResult = await query(
       `INSERT INTO expenses (
-        project_id, description, value, category, date, user_id, 
-        billing_type, notes
+        description, value, category, date, billing_type, project_id, user_id, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        project_id, 
         description, 
-        amount, 
-        category, 
-        date || new Date().toISOString().split('T')[0], 
+        numericAmount, 
+        category || null, 
+        date || new Date().toISOString().split('T')[0],
+        mappedBillingType,  // 🔧 TEMPORÁRIO: Usar tipo mapeado até migrações
+        project_id || null,
         req.userId,
-        billing_type || 'one_time',
         notes || null
       ]
     );
     
+    // Buscar a despesa recém-criada pelo ID
+    const expenseId = insertResult.insertId || insertResult.lastInsertRowid;
+    console.log(`🔧 DEBUG: insertResult:`, insertResult);
+    console.log(`🔧 DEBUG: ID da despesa criada: ${expenseId}`);
     const result = await query(
       `SELECT e.*, p.name as project_name 
        FROM expenses e 
        LEFT JOIN projects p ON e.project_id = p.id 
-       WHERE p.user_id = ? 
-       ORDER BY e.created_at DESC LIMIT 1`,
-      [req.userId]
+       WHERE e.id = ?`,
+      [expenseId]
     );
     
-    res.status(201).json(result.rows[0]);
+    console.log(`🔧 DEBUG: Despesa retornada do banco:`, result.rows[0]);
+    
+    // 🔧 TEMPORÁRIO: Armazenar tipo original no cache
+    const finalExpenseId = expenseId || result.rows[0]?.id;
+    storeOriginalType(finalExpenseId, billing_type);
+    console.log(`🔧 CACHE: Tipo original '${billing_type}' armazenado para despesa ID ${finalExpenseId}`);
+    
+    // 🔧 TEMPORÁRIO: Adicionar dados calculados na resposta até migrações serem aplicadas
+    const expenseWithCalculatedData = {
+      ...result.rows[0],
+      billing_type: billing_type, // Retornar tipo original
+      monthly_value: parseFloat(monthlyValue.toFixed(2)) // Retornar valor mensal calculado
+    };
+    
+    console.log(`🔧 DEBUG: Resposta final:`, expenseWithCalculatedData);
+    
+    res.status(201).json(expenseWithCalculatedData);
   } catch (error) {
     console.error('Erro ao criar despesa:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
@@ -513,7 +641,7 @@ router.post('/expenses', authenticateToken, async (req, res) => {
 // PUT /api/expenses/:id
 router.put('/expenses/:id', authenticateToken, async (req, res) => {
   try {
-    const { description, amount, category, date, billing_type, notes, is_recurring, recurring_day_of_week, recurring_end_date } = req.body;
+    const { description, amount, category, date, billing_type, notes } = req.body;
     const query = getQuery(req);
     
     // Verificar se a despesa existe e pertence ao usuário
@@ -534,9 +662,6 @@ router.put('/expenses/:id', authenticateToken, async (req, res) => {
       date !== undefined ? date : null,
       billing_type !== undefined ? billing_type : null,
       notes !== undefined ? notes : null,
-      is_recurring !== undefined ? is_recurring : null,
-      recurring_day_of_week !== undefined ? recurring_day_of_week : null,
-      recurring_end_date !== undefined ? recurring_end_date : null,
       new Date().toISOString(),
       req.params.id
     ];
@@ -964,7 +1089,9 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     const prevStart = previousStartDate || new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().split('T')[0];
     const prevEnd = previousEndDate || new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().split('T')[0];
     
-    // Buscar estatísticas de projetos do período atual
+    console.log('Dashboard Stats - User ID:', req.userId);
+    
+    // Buscar estatísticas de projetos do período atual (filtrado por data de pagamento)
     const projectStats = await query(
       `SELECT 
         COUNT(*) as total_projects,
@@ -972,61 +1099,125 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_projects,
         COUNT(CASE WHEN status = 'paused' THEN 1 END) as paused_projects,
         COALESCE(SUM(project_value), 0) as total_project_value,
-        COALESCE(SUM(paid_value), 0) as total_paid_value_creation,
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN project_value - paid_value ELSE 0 END), 0) as total_completion_revenue
+        COALESCE(SUM(CASE WHEN payment_date IS NOT NULL AND DATE(payment_date) BETWEEN $2 AND $3 THEN paid_value ELSE 0 END), 0) as total_paid_value
        FROM projects 
-       WHERE user_id = ? AND DATE(created_at) BETWEEN ? AND ?`,
+       WHERE user_id = $1`,
       [req.userId, currentStart, currentEnd]
     );
     
-    // Buscar estatísticas de projetos do período anterior
+    console.log('Project Stats Result:', projectStats);
+    
+    // Buscar estatísticas de projetos do período anterior (filtrado por data de pagamento)
     const previousProjectStats = await query(
       `SELECT 
-        COALESCE(SUM(paid_value), 0) as total_paid_value
+        COALESCE(SUM(CASE WHEN payment_date IS NOT NULL AND DATE(payment_date) BETWEEN $2 AND $3 THEN paid_value ELSE 0 END), 0) as total_paid_value
        FROM projects 
-       WHERE user_id = ? AND DATE(created_at) BETWEEN ? AND ?`,
+       WHERE user_id = $1`,
       [req.userId, prevStart, prevEnd]
     );
     
-    // Buscar todas as despesas do período atual para cálculo mensal
-    const currentExpenses = await query(
-      `SELECT 
-        e.amount,
-        e.expense_date,
-        e.date,
-        e.category,
-        e.billing_type
-       FROM expenses e
-       LEFT JOIN projects p ON e.project_id = p.id
-       WHERE p.user_id = ? AND DATE(e.created_at) BETWEEN ? AND ?`,
-      [req.userId, currentStart, currentEnd]
-    );
+    // Buscar despesas do período atual usando Supabase
+    const { data: currentExpenses, error: currentExpensesError } = await supabase
+      .from('expenses')
+      .select('id, value, date, category, billing_type')
+      .eq('user_id', req.userId)
+      .gte('date', currentStart)
+      .lte('date', currentEnd);
+    
+    if (currentExpensesError) {
+      console.error('Erro ao buscar despesas atuais:', currentExpensesError);
+      return res.status(500).json({ error: 'Erro ao buscar despesas atuais' });
+    }
     
     // Calcular estatísticas de despesas atuais
-    const currentExpensesArray = currentExpenses?.rows || [];
-    const currentDate = new Date(currentStart);
-    const totalExpensesAmount = calculateTotalMonthlyExpenses(
-      currentExpensesArray,
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 1
-    );
+    const currentExpensesArray = currentExpenses || [];
+    // Mapear campos para compatibilidade com a função de cálculo
+    const mappedExpenses = currentExpensesArray.map(expense => {
+      // 🔧 TEMPORÁRIO: Recuperar tipo original do cache
+      const originalBillingType = getOriginalBillingType(expense.id, expense.billing_type);
+      return {
+        amount: expense.value,
+        date: expense.date,
+        category: expense.category,
+        billing_type: originalBillingType
+      };
+    });
+    console.log('Current Expenses Array:', currentExpensesArray);
+    console.log('Mapped Expenses Array:', mappedExpenses);
+    // Usar período dos filtros para cálculo correto
+    let totalExpensesAmount;
     
-    const expenseStats = [{
+    // Calcular despesas do período filtrado
+    if (startDate && endDate) {
+      // Adicionar horários para parsing correto das datas
+      const startWithTime = currentStart.includes('T') ? currentStart : `${currentStart}T00:00:00`;
+      const endWithTime = currentEnd.includes('T') ? currentEnd : `${currentEnd}T23:59:59`;
+      
+      const startDateObj = new Date(startWithTime);
+      const endDateObj = new Date(endWithTime);
+      
+      // Detectar filtro anual: mesmo ano e mês inicial = janeiro (0) e mês final = dezembro (11)
+      const isYearlyFilter = startDateObj.getFullYear() === endDateObj.getFullYear() && 
+                            startDateObj.getMonth() === 0 && 
+                            endDateObj.getMonth() === 11;
+      
+      if (isYearlyFilter) {
+        // Filtro anual - calcular despesas mensais multiplicadas pelos meses passados
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth(); // 0-based
+        
+        // Se o filtro é para o ano atual, usar meses passados até agora
+        // Se for ano passado, usar 12 meses
+        const monthsPassed = startDateObj.getFullYear() === currentYear ? 
+                           currentMonth + 1 : 12;
+        
+        // Calcular despesas mensais para janeiro (mês 1)
+        const monthlyExpenses = calculateTotalMonthlyExpenses(
+          mappedExpenses,
+          startDateObj.getFullYear(),
+          1
+        );
+        
+        totalExpensesAmount = monthlyExpenses * monthsPassed;
+      } else {
+        // Período mensal - usar cálculo mensal
+        const filterYear = startDateObj.getFullYear();
+        const filterMonth = startDateObj.getMonth() + 1;
+        totalExpensesAmount = calculateTotalMonthlyExpenses(
+          mappedExpenses,
+          filterYear,
+          filterMonth
+        );
+      }
+    } else {
+      // Sem filtros - usar mês atual
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      totalExpensesAmount = calculateTotalMonthlyExpenses(
+        mappedExpenses,
+        currentYear,
+        currentMonth
+      );
+    }
+    console.log('Total de despesas (período filtrado):', totalExpensesAmount);
+    console.log('Total Expenses Amount calculated:', totalExpensesAmount);
+    
+    const expenseStats = {
       total_expenses: currentExpensesArray.length,
       total_expenses_amount: totalExpensesAmount,
       expense_categories: [...new Set(currentExpensesArray.map(e => e.category))].length
-    }];
+    };
     
     // Buscar todas as despesas do período anterior para cálculo mensal
     const previousExpenses = await query(
       `SELECT 
-        e.amount,
-        e.expense_date,
+        e.value as amount,
         e.date,
         e.billing_type
        FROM expenses e
-       LEFT JOIN projects p ON e.project_id = p.id
-       WHERE p.user_id = ? AND DATE(e.created_at) BETWEEN ? AND ?`,
+       WHERE e.user_id = $1 AND DATE(e.date) BETWEEN $2 AND $3`,
       [req.userId, prevStart, prevEnd]
     );
     
@@ -1043,111 +1234,146 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       total_expenses_amount: previousTotalExpensesAmount
     }];
     
-    // Buscar dados de faturamento por período filtrado
-    const revenueByMonth = await query(
-      `SELECT 
-        strftime('%Y-%m', created_at) as month,
-        COALESCE(SUM(paid_value), 0) as revenue
-       FROM projects 
-       WHERE user_id = ? AND DATE(created_at) BETWEEN ? AND ?
-       GROUP BY strftime('%Y-%m', created_at)
-       ORDER BY month`,
+    // Buscar todos os projetos do período para calcular faturamento manualmente
+    const allProjectsInPeriod = await query(
+      `SELECT paid_value, created_at FROM projects 
+       WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3`,
       [req.userId, currentStart, currentEnd]
     );
     
-    // Buscar dados de despesas por mês
-    const expensesByMonth = await query(
-      `SELECT 
-        strftime('%Y-%m', e.expense_date) as month,
-        COALESCE(SUM(e.amount), 0) as expenses
-       FROM expenses e
-       LEFT JOIN projects p ON e.project_id = p.id
-       WHERE p.user_id = ? AND DATE(e.expense_date) BETWEEN ? AND ?
-       GROUP BY strftime('%Y-%m', e.expense_date)
-       ORDER BY month`,
+    // Buscar todas as despesas do período para calcular por mês manualmente
+    const allExpensesInPeriod = await query(
+      `SELECT e.value, e.date FROM expenses e
+       WHERE e.user_id = $1 AND DATE(e.date) BETWEEN $2 AND $3`,
       [req.userId, currentStart, currentEnd]
     );
     
-    // Combinar dados de faturamento e despesas por mês
-    const revenueData = revenueByMonth.rows || [];
-    const expensesData = expensesByMonth.rows || [];
-    
-    // Criar um mapa de todos os meses com dados
+    // Calcular faturamento e despesas por mês manualmente
     const monthlyDataMap = new Map();
     
-    // Adicionar dados de faturamento
-    revenueData.forEach(item => {
-      monthlyDataMap.set(item.month, {
-        month: item.month,
-        revenue: parseFloat(item.revenue) || 0,
-        expenses: 0
-      });
+    // Processar projetos
+    const projectsInPeriod = allProjectsInPeriod.rows || [];
+    console.log('Projects in period:', projectsInPeriod.length, projectsInPeriod);
+    
+    projectsInPeriod.forEach(project => {
+      const date = new Date(project.created_at);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      console.log('Processing project:', project.paid_value, 'for month:', monthKey);
+      
+      if (!monthlyDataMap.has(monthKey)) {
+        monthlyDataMap.set(monthKey, { month: monthKey, revenue: 0, expenses: 0 });
+      }
+      
+      monthlyDataMap.get(monthKey).revenue += parseFloat(project.paid_value) || 0;
     });
     
-    // Adicionar dados de despesas
-    expensesData.forEach(item => {
-      if (monthlyDataMap.has(item.month)) {
-        monthlyDataMap.get(item.month).expenses = parseFloat(item.expenses) || 0;
-      } else {
-        monthlyDataMap.set(item.month, {
-          month: item.month,
-          revenue: 0,
-          expenses: parseFloat(item.expenses) || 0
-        });
+    // Processar despesas
+    const expensesInPeriod = allExpensesInPeriod.rows || [];
+    expensesInPeriod.forEach(expense => {
+      const date = new Date(expense.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!monthlyDataMap.has(monthKey)) {
+        monthlyDataMap.set(monthKey, { month: monthKey, revenue: 0, expenses: 0 });
       }
+      
+      monthlyDataMap.get(monthKey).expenses += parseFloat(expense.value) || 0;
     });
     
     // Converter mapa para array ordenado
     const combinedMonthlyData = Array.from(monthlyDataMap.values())
       .sort((a, b) => a.month.localeCompare(b.month));
     
-    // Buscar despesas por categoria do período atual
-    const expensesByCategoryRaw = await query(
-      `SELECT 
-        category,
-        amount,
-        expense_date
-       FROM expenses e
-       LEFT JOIN projects p ON e.project_id = p.id
-       WHERE p.user_id = ? AND category IS NOT NULL AND DATE(e.created_at) BETWEEN ? AND ?
-       ORDER BY category`,
-      [req.userId, currentStart, currentEnd]
-    );
+    // Se não há dados, criar pelo menos um mês atual com zeros
+    if (combinedMonthlyData.length === 0) {
+      const currentDate = new Date();
+      const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+      combinedMonthlyData.push({ month: currentMonthKey, revenue: 0, expenses: 0 });
+    }
+    
+    // Buscar despesas por categoria do período atual usando Supabase
+    const { data: expensesByCategoryRaw, error: categoryError } = await supabase
+      .from('expenses')
+      .select('category, value, date, billing_type')
+      .eq('user_id', req.userId)
+      .gte('date', currentStart)
+      .lte('date', currentEnd)
+      .order('category');
+    
+    if (categoryError) {
+      console.error('Erro ao buscar despesas por categoria:', categoryError);
+      return res.status(500).json({ error: 'Erro ao buscar despesas por categoria' });
+    }
     
     // Agrupar e calcular totais mensais por categoria
     const categoryTotals = {};
-    const expensesByCategoryArray = expensesByCategoryRaw?.rows || [];
-    expensesByCategoryArray.forEach(expense => {
-      const monthlyAmount = calculateTotalMonthlyExpenses(
-        [expense],
-        currentDate.getFullYear(),
-        currentDate.getMonth() + 1
-      );
-      
-      if (!categoryTotals[expense.category]) {
-        categoryTotals[expense.category] = {
-          total_amount: 0,
-          count: 0
-        };
-      }
-      
-      categoryTotals[expense.category].total_amount += monthlyAmount;
-      categoryTotals[expense.category].count += 1;
-    });
+    const expensesByCategoryArray = expensesByCategoryRaw || [];
+    // Mapear dados para compatibilidade
+    const mappedCategoryExpenses = expensesByCategoryArray.map(expense => ({
+      category: expense.category || 'Sem categoria',
+      amount: expense.value,
+      date: expense.date,
+      billing_type: expense.billing_type
+    }));
+     mappedCategoryExpenses.forEach(expense => {
+       let monthlyAmount;
+       
+       if (startDate && endDate) {
+         // Se há filtros de data, usar lógica similar ao cálculo total
+         const startDateObj = new Date(currentStart);
+         const endDateObj = new Date(currentEnd);
+         const daysDiff = (endDateObj - startDateObj) / (1000 * 60 * 60 * 24);
+         
+         if (daysDiff > 35) {
+           // Período longo - usar valor direto
+           monthlyAmount = parseFloat(expense.amount || 0);
+         } else {
+           // Período mensal - usar cálculo mensal
+           const filterYear = startDateObj.getFullYear();
+           const filterMonth = startDateObj.getMonth() + 1;
+           monthlyAmount = calculateTotalMonthlyExpenses(
+             [expense],
+             filterYear,
+             filterMonth
+           );
+         }
+       } else {
+         // Sem filtros - usar mês atual
+         const now = new Date();
+         const currentYear = now.getFullYear();
+         const currentMonth = now.getMonth() + 1;
+         monthlyAmount = calculateTotalMonthlyExpenses(
+           [expense],
+           currentYear,
+           currentMonth
+         );
+       }
+       
+       if (!categoryTotals[expense.category]) {
+         categoryTotals[expense.category] = {
+           total_amount: 0,
+           count: 0
+         };
+       }
+       
+       categoryTotals[expense.category].total_amount += monthlyAmount;
+       categoryTotals[expense.category].count += 1;
+     });
     
     const expensesByCategory = Object.entries(categoryTotals)
       .map(([category, data]) => ({
         category,
-        total_amount: data.total_amount,
+        total: data.total_amount,
         count: data.count
       }))
-      .sort((a, b) => b.total_amount - a.total_amount);
+      .sort((a, b) => b.total - a.total);
     
     // Buscar projetos recentes do período atual
     const recentProjects = await query(
       `SELECT id, name, status, project_value, created_at
        FROM projects 
-       WHERE user_id = ? AND DATE(created_at) BETWEEN ? AND ?
+       WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3
        ORDER BY created_at DESC
        LIMIT 5`,
       [req.userId, currentStart, currentEnd]
@@ -1170,15 +1396,10 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
        completed_projects: parseInt(currentProjectsRaw.completed_projects) || 0,
        paused_projects: parseInt(currentProjectsRaw.paused_projects) || 0,
        total_project_value: parseFloat(currentProjectsRaw.total_project_value) || 0,
-       // Combinar faturamento de criação e conclusão
-       total_paid_value: (parseFloat(currentProjectsRaw.total_paid_value_creation) || 0) + (parseFloat(currentProjectsRaw.total_completion_revenue) || 0)
+       total_paid_value: parseFloat(currentProjectsRaw.total_paid_value) || 0
      };
     
-    const currentExpensesStats = expenseStats[0] || {
-      total_expenses: 0,
-      total_expenses_amount: 0,
-      expense_categories: 0
-    };
+    // expenseStats já é um objeto direto, não precisa de [0]
     
     const previousProjectsRaw = previousProjectStats.rows?.[0] || {
       total_paid_value: 0
@@ -1189,14 +1410,46 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     };
     const previousExpensesStats = previousExpenseStats[0] || { total_expenses_amount: 0 };
     
+    // Buscar valores a receber (todos os projetos ativos do usuário)
+    const currentReceivableStats = await query(
+      `SELECT 
+        COALESCE(SUM(project_value - paid_value), 0) as total_receivable
+       FROM projects 
+       WHERE user_id = $1 AND status = 'active'`,
+      [req.userId]
+    );
+    
+    const currentReceivable = Math.max(0, parseFloat(currentReceivableStats.rows?.[0]?.total_receivable || 0));
+    
+    // Para o período anterior, manter o mesmo valor (projetos ativos não mudam por período)
+    const previousReceivable = currentReceivable;
+
+    // Calcular receita (faturamento) considerando apenas projetos pagos no período filtrado
+    let currentRevenue = currentProjects.total_paid_value;
+    
+    // Para o período anterior, usar o valor calculado do período anterior
+    const previousRevenue = previousProjects.total_paid_value;
+    
+    const currentExpensesAmount = expenseStats.total_expenses_amount;
+    const currentProfit = currentRevenue - currentExpensesAmount;
+
     const stats = {
       projects: currentProjects,
-      expenses: currentExpensesStats,
+      expenses: expenseStats,
+      current_period: {
+         revenue: currentRevenue,
+         expenses: currentExpensesAmount,
+         receivable: currentReceivable,
+         profit: currentProfit,
+         total_projects: currentProjects.total_projects,
+         total_project_value: currentProjects.total_project_value
+       },
       previous_period: {
-        revenue: previousProjects.total_paid_value,
+        revenue: previousRevenue,
         expenses: previousExpensesStats.total_expenses_amount,
-        receivable: 0 // Pode ser calculado se necessário
+        receivable: previousReceivable
       },
+      current_receivable: currentReceivable,
       revenue_by_month: combinedMonthlyData,
       expenses_by_category: expensesByCategory || [],
       recent_projects: recentProjects.rows || []

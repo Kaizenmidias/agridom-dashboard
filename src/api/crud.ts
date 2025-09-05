@@ -95,6 +95,7 @@ export interface DashboardStats {
     expenses: number;
     receivable: number;
   };
+  current_receivable: number;
   revenue_by_month: Array<{
     month: string;
     revenue: number;
@@ -203,8 +204,7 @@ export async function createExpense(expenseData: Omit<Expense, 'id' | 'created_a
   // Garantir que a data esteja no formato correto
   const processedData = {
     ...expenseData,
-    expense_date: expenseData.expense_date || expenseData.date,
-    date: expenseData.date || expenseData.expense_date
+    date: expenseData.date
   };
   
   return await fetchWithAuth(`${API_BASE_URL}/expenses`, {
@@ -218,8 +218,7 @@ export async function updateExpense(id: string, expenseData: Partial<Expense>): 
     // Garantir que a data esteja no formato correto
     const processedData = {
       ...expenseData,
-      expense_date: expenseData.expense_date || expenseData.date,
-      date: expenseData.date || expenseData.expense_date
+      date: expenseData.date
     };
     
     return await fetchWithAuth(`${API_BASE_URL}/expenses/${id}`, {

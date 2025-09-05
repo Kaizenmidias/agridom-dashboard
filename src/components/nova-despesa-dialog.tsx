@@ -9,17 +9,16 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { createExpense, getProjects } from '@/api/crud';
+import { createExpense } from '@/api/crud';
 import { Loader2 } from 'lucide-react';
-import { Project } from '@/types/database';
 import { formatCurrency } from '@/lib/utils';
 import { getDayOfWeekFromDate, calculateMonthlyAmount, getWeekdayOccurrencesInMonth } from '@/utils/billing-calculations';
 
 const despesaSchema = z.object({
-  description: z.string().min(1, 'Despesa é obrigatória'),
+  description: z.string().min(1, 'Descrição é obrigatória'),
   amount: z.string().min(1, 'Valor é obrigatório'),
   date: z.string().min(1, 'Data é obrigatória'),
-  billing_type: z.enum(['unica', 'semanal', 'mensal', 'anual']).default('unica'),
+  billing_type: z.enum(['unica', 'semanal', 'mensal', 'anual']),
   notes: z.string().optional(),
 });
 
@@ -34,8 +33,7 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(true);
+
 
   const {
     register,
@@ -47,7 +45,8 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
   } = useForm<DespesaFormData>({
     resolver: zodResolver(despesaSchema),
     defaultValues: {
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toISOString().split('T')[0]
+      // Não definir valor padrão para billing_type
     }
   });
 
@@ -56,29 +55,7 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
   const watchedDate = watch('date');
   const watchedBillingType = watch('billing_type');
 
-  // Carregar projetos quando o componente montar
-  useEffect(() => {
-    const loadProjects = async () => {
-      try {
-        setLoadingProjects(true);
-        const projectsList = await getProjects();
-        setProjects(projectsList);
-      } catch (error) {
-        console.error('Erro ao carregar projetos:', error);
-        toast({
-          title: "Erro",
-          description: "Não foi possível carregar os projetos.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoadingProjects(false);
-      }
-    };
 
-    if (open) {
-      loadProjects();
-    }
-  }, [open, toast]);
 
   const formatCurrency = (value: string) => {
     const numericValue = value.replace(/\D/g, '');
@@ -131,45 +108,46 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
     setIsSubmitting(true);
     
     try {
-      // Verificar se há projetos disponíveis
-      if (projects.length === 0) {
+      console.log('🔍 DEBUG Frontend - Iniciando criação de despesa');
+      console.log('🔍 DEBUG Frontend - Token no localStorage:', localStorage.getItem('auth_token') ? 'Presente' : 'Ausente');
+      console.log('🔍 DEBUG Frontend - Dados do formulário:', data);
+      
+      // Converter valor de string para número
+      const amount = parseFloat(data.amount.replace(/[^\d,]/g, '').replace(',', '.'));
+      
+      if (isNaN(amount) || amount <= 0) {
         toast({
           title: "Erro",
-          description: "Nenhum projeto encontrado. Crie um projeto primeiro.",
+          description: "Por favor, insira um valor válido para a despesa.",
           variant: "destructive",
         });
         return;
       }
-
-      // Converter valor de string para número
-      const amount = parseFloat(data.amount.replace(/[^\d,]/g, '').replace(',', '.'));
       
-      // Calcular recurring_day_of_week para despesas semanais
-      const recurringDayOfWeek = data.billing_type === 'semanal' 
-        ? getDayOfWeekFromDate(data.date) 
-        : null;
-      
-      await createExpense({
-        project_id: projects[0].id, // Usar o primeiro projeto disponível
+      const expenseData = {
         description: data.description,
-        amount: parseFloat(data.amount),
-        expense_date: data.date,
-        category: 'Geral', // Categoria padrão
+        amount: amount,
+        date: data.date,
         notes: data.notes || '',
-        billing_type: data.billing_type,
-        is_recurring: data.billing_type !== 'unica',
-        recurring_day_of_week: recurringDayOfWeek,
-        user_id: '1', // ID do usuário padrão
-        recurring_end_date: null,
-        original_expense_id: null
-      });
+        billing_type: data.billing_type
+      };
+      
+      console.log('🔍 DEBUG Frontend - Dados da despesa a serem enviados:', expenseData);
+      
+      await createExpense(expenseData);
       
       toast({
         title: "Despesa cadastrada!",
         description: `A despesa "${data.description}" foi cadastrada com sucesso.`,
       });
 
-      reset();
+      reset({
+        date: new Date().toISOString().split('T')[0],
+        description: '',
+        amount: '',
+        notes: ''
+        // Não resetar billing_type para manter a seleção do usuário
+      });
       setOpen(false);
       
       // Chamar callback para atualizar a lista
@@ -229,6 +207,8 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
             </div>
           </div>
 
+
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="date">Data *</Label>
@@ -244,7 +224,7 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
 
             <div className="space-y-2">
               <Label htmlFor="billing_type">Tipo de Cobrança *</Label>
-              <Select onValueChange={(value) => setValue('billing_type', value as 'unica' | 'semanal' | 'mensal' | 'anual')} defaultValue="unica">
+              <Select onValueChange={(value) => setValue('billing_type', value as 'unica' | 'semanal' | 'mensal' | 'anual')} value={watch('billing_type')}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>

@@ -1,5 +1,5 @@
 import { AuthUser } from '../types/database'
-import { API_BASE_URL } from '../config/api'
+import { AUTH_API_BASE_URL, API_BASE_URL } from '../config/api'
 
 interface LoginCredentials {
   email: string
@@ -18,7 +18,7 @@ interface AuthResponse {
 }
 
 export async function loginUser(credentials: LoginCredentials): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}/login`, {
+  const response = await fetch(`${AUTH_API_BASE_URL}/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -37,7 +37,7 @@ export async function loginUser(credentials: LoginCredentials): Promise<AuthResp
 export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
   const token = localStorage.getItem('auth_token')
   
-  const response = await fetch(`${API_BASE_URL}/change-password`, {
+  const response = await fetch(`${AUTH_API_BASE_URL}/change-password`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -78,7 +78,7 @@ export async function uploadAvatar(file: File): Promise<AuthUser | null> {
 }
 
 export async function registerUser(credentials: RegisterCredentials): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}/register`, {
+  const response = await fetch(`${AUTH_API_BASE_URL}/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -95,7 +95,7 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Au
 }
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
-  const response = await fetch(`${API_BASE_URL}/verify`, {
+  const response = await fetch(`${AUTH_API_BASE_URL}/verify`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -118,7 +118,7 @@ export async function updateUserProfile(userData: {
 }): Promise<AuthUser> {
   const token = localStorage.getItem('auth_token')
   
-  const response = await fetch(`${API_BASE_URL}/profile`, {
+  const response = await fetch(`${AUTH_API_BASE_URL}/profile`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',

@@ -49,10 +49,10 @@ export function EditarDespesaDialog({ expense, open, onOpenChange, onExpenseUpda
   useEffect(() => {
     if (expense) {
       setValue('description', expense.description);
-      setValue('amount', expense.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+      setValue('amount', (expense.value || expense.amount) ? (expense.value || expense.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00');
       
       // Melhor tratamento da data
-      const expenseDate = expense.expense_date || expense.date;
+      const expenseDate = expense.date;
       let formattedDate = new Date().toISOString().split('T')[0]; // Data atual como fallback
       
       if (expenseDate) {
@@ -121,7 +121,7 @@ export function EditarDespesaDialog({ expense, open, onOpenChange, onExpenseUpda
       await updateExpense(expense.id, {
         description: data.description,
         amount,
-        expense_date: data.date,
+        date: data.date,
         billing_type: data.billing_type,
         // status removido - não existe no tipo Expense
         notes: data.notes || '',

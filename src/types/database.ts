@@ -117,6 +117,7 @@ export interface Database {
         date?: string // Manter para compatibilidade
         user_id: string
         billing_type: 'unica' | 'semanal' | 'mensal' | 'anual'
+        monthly_value?: number // Valor mensal calculado
         is_recurring: boolean
         recurring_day_of_week: number | null
         recurring_end_date: string | null
@@ -131,8 +132,7 @@ export interface Database {
         description: string
         amount: number
         category: string
-        expense_date: string
-        date?: string // Manter para compatibilidade
+        date: string
         user_id: string
         billing_type?: 'unica' | 'semanal' | 'mensal' | 'anual'
         is_recurring?: boolean
@@ -149,8 +149,7 @@ export interface Database {
         description?: string
         amount?: number
         category?: string
-        expense_date?: string
-        date?: string // Manter para compatibilidade
+        date?: string
         billing_type?: 'unica' | 'semanal' | 'mensal' | 'anual'
         is_recurring?: boolean
         recurring_day_of_week?: number | null

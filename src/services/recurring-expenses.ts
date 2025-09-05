@@ -39,7 +39,7 @@ export async function generateRecurringExpenses(
             const newExpense = await createExpense({
               project_id: originalExpense.project_id,
               description: `${originalExpense.description} (Recorrência Semanal)`,
-              amount: originalExpense.amount,
+              amount: originalExpense.value || originalExpense.amount,
               category: originalExpense.category,
               expense_date: date,
               user_id: originalExpense.user_id,
@@ -77,7 +77,7 @@ export async function generateRecurringExpenses(
           const newMonthlyExpense = await createExpense({
             project_id: originalExpense.project_id,
             description: `${originalExpense.description} (Recorrência Mensal)`,
-            amount: originalExpense.amount,
+            amount: originalExpense.value || originalExpense.amount,
             category: originalExpense.category,
             expense_date: monthlyDateStr,
             user_id: originalExpense.user_id,
@@ -108,7 +108,7 @@ export async function generateRecurringExpenses(
           const newAnnualExpense = await createExpense({
             project_id: originalExpense.project_id,
             description: `${originalExpense.description} (Recorrência Anual)`,
-            amount: originalExpense.amount,
+            amount: originalExpense.value || originalExpense.amount,
             category: originalExpense.category,
             expense_date: annualDateStr,
             user_id: originalExpense.user_id,

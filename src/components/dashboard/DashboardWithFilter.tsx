@@ -40,9 +40,9 @@ const DashboardWithFilter: React.FC = () => {
   // Dados financeiros calculados a partir dos dados reais
   const currentMonthData = {
     revenue: Number(dashboardStats?.projects?.total_paid_value || 0),
-    expenses: Number(dashboardStats?.expenses?.total_expenses_amount || 0),
-    profit: Number(dashboardStats?.projects?.total_paid_value || 0) - Number(dashboardStats?.expenses?.total_expenses_amount || 0),
-    receivable: Number(dashboardStats?.projects?.total_project_value || 0) - Number(dashboardStats?.projects?.total_paid_value || 0)
+    expenses: Number(dashboardStats?.current_period?.expenses || 0),
+    profit: Number(dashboardStats?.projects?.total_paid_value || 0) - Number(dashboardStats?.current_period?.expenses || 0),
+    receivable: Number(dashboardStats?.current_receivable || 0)
   };
 
   // Dados do mês anterior (dados reais da API)

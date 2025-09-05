@@ -12,7 +12,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "vite preview",
-    "type-check": "npx tsc --noEmit"
+    "type-check": "npx tsc --noEmit",
+    "supabase:start": "npx supabase start",
+    "supabase:stop": "npx supabase stop",
+    "supabase:reset": "npx supabase db reset",
+    "supabase:status": "npx supabase status",
+    "supabase:migrate": "npx supabase db push",
+    "dev:local": "npm run supabase:start && npm run dev"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -64,9 +70,9 @@
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.462.0",
     "mysql2": "^3.14.4",
-    "pg": "^8.11.3",
     "next-themes": "^0.3.0",
     "papaparse": "^5.5.2",
+    "pg": "^8.11.3",
     "react": "^18.3.1",
     "react-chartjs-2": "^5.3.0",
     "react-day-picker": "^8.10.1",
@@ -97,6 +103,7 @@
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
     "postcss": "^8.4.47",
+    "supabase": "^2.39.2",
     "tailwindcss": "^3.4.11",
     "terser": "^5.44.0",
     "typescript-eslint": "^8.0.1"

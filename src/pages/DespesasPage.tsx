@@ -71,9 +71,9 @@ const DespesasPage = () => {
 
 
   const totalDespesas = despesas.reduce((acc, despesa) => {
-    const totalExpenseDate = despesa.expense_date || despesa.date;
+    const totalExpenseDate = despesa.date;
     const monthlyAmount = calculateMonthlyAmount(
-      Number(despesa.amount) || 0,
+      Number(despesa.value || despesa.amount) || 0,
       despesa.billing_type || 'unica',
       totalExpenseDate,
       new Date().getFullYear(),
@@ -110,7 +110,7 @@ const DespesasPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total do Mês</p>
-                <p className="text-xl font-bold text-red-600">{totalDespesas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                <p className="text-xl font-bold text-red-600">{(Number(totalDespesas) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
               </div>
             </div>
           </CardContent>
@@ -145,9 +145,9 @@ const DespesasPage = () => {
           ) : (
             <EditableTable
               data={despesas.map(despesa => {
-                const expenseDate = despesa.expense_date || despesa.date;
+                const expenseDate = despesa.date;
                 const monthlyAmount = calculateMonthlyAmount(
-                  Number(despesa.amount) || 0,
+                  Number(despesa.value || despesa.amount) || 0,
                   despesa.billing_type || 'unica',
                   expenseDate,
                   new Date().getFullYear(),
@@ -170,18 +170,22 @@ const DespesasPage = () => {
                 return {
                   ...despesa,
                   date: formattedDate,
-                  amount: `R$ ${despesa.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-                  monthly_amount: `R$ ${monthlyAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-                  billing_type: despesa.billing_type === 'unica' ? 'Única' : 
+                  amount: `R$ ${(Number(despesa.value || despesa.amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                  monthly_amount: despesa.monthly_value ? 
+                                 `R$ ${(Number(despesa.monthly_value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` :
+                                 `R$ ${(Number(monthlyAmount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                  billing_type: despesa.billing_type === 'one_time' ? 'Única' : 
+                               despesa.billing_type === 'recurring' ? 'Recorrente' : 
+                               despesa.billing_type === 'unica' ? 'Única' : 
                                despesa.billing_type === 'semanal' ? 'Semanal' : 
-                               despesa.billing_type === 'mensal' ? 'Mensal' : 'Anual'
+                               despesa.billing_type === 'mensal' ? 'Mensal' : 
+                               despesa.billing_type === 'anual' ? 'Anual' : 'Única'
                 };
               })}
               columns={[
                 { id: 'description', header: 'Descrição', accessorKey: 'description', isEditable: false },
                 { id: 'amount', header: 'Valor Original', accessorKey: 'amount', isEditable: false },
                 { id: 'monthly_amount', header: 'Valor Mensal', accessorKey: 'monthly_amount', isEditable: false },
-                { id: 'category', header: 'Categoria', accessorKey: 'category', isEditable: false },
                 { id: 'billing_type', header: 'Tipo de Cobrança', accessorKey: 'billing_type', isEditable: false },
                 { id: 'date', header: 'Data', accessorKey: 'date', isEditable: false }
               ]}

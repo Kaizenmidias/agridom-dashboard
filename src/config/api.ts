@@ -7,12 +7,19 @@ const isProduction = window.location.hostname !== 'localhost' && window.location
 
 // URLs da API para diferentes ambientes
 const API_URLS = {
+  development: 'http://localhost:3001/api',
+  production: '/api' // Para Vercel, a API estará na mesma origem
+};
+
+// URLs específicas para autenticação
+const AUTH_API_URLS = {
   development: 'http://localhost:3001/api/auth',
   production: '/api/auth' // Para Vercel, a API estará na mesma origem
 };
 
 // Exporta a URL base da API baseada no ambiente
 export const API_BASE_URL = isProduction ? API_URLS.production : API_URLS.development;
+export const AUTH_API_BASE_URL = isProduction ? AUTH_API_URLS.production : AUTH_API_URLS.development;
 
 // Configurações adicionais da API
 export const API_CONFIG = {
