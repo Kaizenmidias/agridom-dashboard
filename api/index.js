@@ -728,6 +728,97 @@ export default async function handler(req, res) {
     }
   }
   
+  // Rota para estatísticas do dashboard
+  if (url.includes('/api/dashboard/stats') || url.includes('/dashboard/stats')) {
+    console.log('🔍 [DEBUG] Rota /api/dashboard/stats acessada');
+    try {
+      // Verificar autenticação
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token de acesso requerido' });
+      }
+
+      const token = authHeader.substring(7);
+      const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+      
+      let decoded;
+      try {
+        decoded = jwt.verify(token, jwtSecret);
+      } catch (jwtError) {
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+      
+      const userId = decoded.userId;
+
+      if (req.method === 'GET') {
+        // Buscar projetos do usuário
+        const { data: projects, error: projectsError } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('user_id', userId);
+
+        if (projectsError) {
+          console.log('Erro ao buscar projetos:', projectsError);
+          return res.status(500).json({ error: 'Erro ao buscar projetos' });
+        }
+
+        // Buscar despesas do usuário
+        const { data: expenses, error: expensesError } = await supabase
+          .from('expenses')
+          .select('*')
+          .eq('user_id', userId);
+
+        if (expensesError) {
+          console.log('Erro ao buscar despesas:', expensesError);
+          return res.status(500).json({ error: 'Erro ao buscar despesas' });
+        }
+
+        // Calcular estatísticas
+        const totalRevenue = projects.reduce((sum, project) => sum + (parseFloat(project.project_value) || 0), 0);
+        const totalPaid = projects.reduce((sum, project) => sum + (parseFloat(project.paid_value) || 0), 0);
+        const totalExpenses = expenses.reduce((sum, expense) => sum + (parseFloat(expense.value) || 0), 0);
+        const totalReceivable = totalRevenue - totalPaid;
+        const totalProfit = totalRevenue - totalExpenses;
+
+        const stats = {
+          projects: {
+            total: projects.length,
+            active: projects.filter(p => p.status === 'active').length,
+            completed: projects.filter(p => p.status === 'completed').length,
+            paused: projects.filter(p => p.status === 'paused').length,
+            total_value: totalRevenue,
+            total_paid: totalPaid
+          },
+          expenses: {
+            total: expenses.length,
+            total_amount: totalExpenses
+          },
+          currentPeriod: {
+            revenue: totalRevenue,
+            expenses: totalExpenses,
+            receivable: totalReceivable,
+            profit: totalProfit
+          },
+          previousPeriod: {
+            revenue: 0,
+            expenses: totalExpenses,
+            receivable: totalReceivable
+          },
+          current_receivable: totalReceivable,
+          revenue_by_month: [],
+          expenses_by_category: []
+        };
+
+        return res.json(stats);
+      }
+
+      return res.status(405).json({ error: 'Método não permitido' });
+    } catch (error) {
+      console.error('Erro ao buscar estatísticas do dashboard:', error);
+      return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+    }
+  }
+
   // Rota para usuários
   if (url.includes('/api/users') || url.includes('/users')) {
     console.log('🔍 [DEBUG] Rota /api/users acessada');
