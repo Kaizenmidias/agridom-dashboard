@@ -29,6 +29,34 @@ export default async function handler(req, res) {
     });
   }
   
+  if (url.includes('/api/testdb')) {
+    try {
+      // Buscar todos os usuários ativos
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('id, email, name, role, is_active')
+        .eq('is_active', true);
+
+      if (error) {
+        return res.status(500).json({ 
+          error: 'Erro ao consultar banco de dados',
+          details: error.message 
+        });
+      }
+
+      return res.json({ 
+        message: 'Conexão com banco OK',
+        users: users || [],
+        count: users ? users.length : 0
+      });
+    } catch (error) {
+      return res.status(500).json({ 
+        error: 'Erro interno',
+        details: error.message 
+      });
+    }
+  }
+  
   if (url.includes('/api/auth/login') || url.includes('/auth/login') || url.includes('/api/login')) {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' });
