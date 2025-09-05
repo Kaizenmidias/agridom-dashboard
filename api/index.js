@@ -966,7 +966,7 @@ export default async function handler(req, res) {
           // Primeiro tentar 'profiles'
           const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
-            .select('id, email, name, role, position, created_at')
+            .select('id, email, name, role, created_at')
             .order('created_at', { ascending: false });
             
           if (!profilesError) {
@@ -978,7 +978,7 @@ export default async function handler(req, res) {
             // Se falhar, tentar 'users'
             const { data: usersData, error: usersTableError } = await supabase
               .from('users')
-              .select('id, email, name, role, position, created_at')
+              .select('id, email, name, role, created_at')
               .order('created_at', { ascending: false });
               
             users = usersData;
@@ -1069,8 +1069,7 @@ export default async function handler(req, res) {
             name,
             email,
             password: hashedPassword,
-            role: role || 'user',
-            position: position || 'Usuário'
+            role: role || 'user'
           };
           
           console.log('🔍 [DEBUG] Inserindo usuário:', { ...userData, password: '[HIDDEN]' });
@@ -1081,7 +1080,7 @@ export default async function handler(req, res) {
            const { data: newProfile, error: profileCreateError } = await supabase
              .from('profiles')
              .insert(userData)
-             .select('id, email, name, role, position, created_at')
+             .select('id, email, name, role, created_at')
              .single();
              
            if (!profileCreateError) {
@@ -1093,7 +1092,7 @@ export default async function handler(req, res) {
              const { data: newUserData, error: userCreateError } = await supabase
                .from('users')
                .insert(userData)
-               .select('id, email, name, role, position, created_at')
+               .select('id, email, name, role, created_at')
                .single();
                
              newUser = newUserData;
