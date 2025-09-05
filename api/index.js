@@ -1,6 +1,6 @@
-const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
-const { createClient } = require('@supabase/supabase-js');
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import { createClient } from '@supabase/supabase-js';
 
 // Configuração do Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
