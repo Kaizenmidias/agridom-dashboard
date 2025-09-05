@@ -849,65 +849,119 @@ export default async function handler(req, res) {
       if (req.method === 'GET') {
         console.log('🔍 [DEBUG] Método GET - buscando usuários do banco...');
         
-        // Buscar todos os usuários
-        const { data: users, error: usersError } = await supabase
-          .from('users')
-          .select('id, email, name, role, position, created_at')
-          .order('created_at', { ascending: false });
+        try {
+          // Primeiro, verificar se a tabela existe
+          console.log('🔍 [DEBUG] Testando conexão com tabela users...');
+          
+          // Buscar todos os usuários
+          const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, email, name, role, position, created_at')
+            .order('created_at', { ascending: false });
 
-        if (usersError) {
-          console.log('❌ Erro ao buscar usuários:', usersError);
-          return res.status(500).json({ error: 'Erro ao buscar usuários' });
+          if (usersError) {
+            console.log('❌ Erro detalhado ao buscar usuários:', {
+              message: usersError.message,
+              details: usersError.details,
+              hint: usersError.hint,
+              code: usersError.code
+            });
+            return res.status(500).json({ 
+              error: 'Erro ao buscar usuários', 
+              details: usersError.message,
+              supabaseError: usersError
+            });
+          }
+
+          console.log('✅ Usuários encontrados:', users?.length || 0);
+          return res.json(users || []);
+        } catch (catchError) {
+          console.log('❌ Erro de exceção no GET users:', catchError);
+          return res.status(500).json({ 
+            error: 'Erro interno no GET users', 
+            details: catchError.message 
+          });
         }
-
-        console.log('✅ Usuários encontrados:', users.length);
-        return res.json(users);
       }
 
       if (req.method === 'POST') {
         console.log('🔍 [DEBUG] Método POST - criando novo usuário...');
         
-        const { name, email, password, role, position } = req.body;
-        
-        // Validar dados obrigatórios
-        if (!name || !email || !password) {
-          return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
-        }
-        
-        // Verificar se email já existe
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', email)
-          .single();
+        try {
+          const { name, email, password, role, position } = req.body;
+          console.log('🔍 [DEBUG] Dados recebidos:', { name, email, role, position, hasPassword: !!password });
           
-        if (existingUser) {
-          return res.status(400).json({ error: 'Email já está em uso' });
-        }
-        
-        // Hash da senha
-        const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
-        
-        // Criar usuário
-        const { data: newUser, error: createError } = await supabase
-          .from('users')
-          .insert({
+          // Validar dados obrigatórios
+          if (!name || !email || !password) {
+            console.log('❌ Validação falhou - campos obrigatórios');
+            return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+          }
+          
+          console.log('🔍 [DEBUG] Verificando se email já existe...');
+          // Verificar se email já existe
+          const { data: existingUser, error: checkError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('email', email)
+            .single();
+            
+          if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
+            console.log('❌ Erro ao verificar email existente:', checkError);
+            return res.status(500).json({ 
+              error: 'Erro ao verificar email', 
+              details: checkError.message 
+            });
+          }
+            
+          if (existingUser) {
+            console.log('❌ Email já existe');
+            return res.status(400).json({ error: 'Email já está em uso' });
+          }
+          
+          console.log('🔍 [DEBUG] Gerando hash da senha...');
+          // Hash da senha
+          const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+          
+          const userData = {
             name,
             email,
             password: hashedPassword,
             role: role || 'user',
             position: position || 'Usuário'
-          })
-          .select('id, email, name, role, position, created_at')
-          .single();
+          };
           
-        if (createError) {
-          console.log('❌ Erro ao criar usuário:', createError);
-          return res.status(500).json({ error: 'Erro ao criar usuário' });
+          console.log('🔍 [DEBUG] Inserindo usuário:', { ...userData, password: '[HIDDEN]' });
+          
+          // Criar usuário
+          const { data: newUser, error: createError } = await supabase
+            .from('users')
+            .insert(userData)
+            .select('id, email, name, role, position, created_at')
+            .single();
+            
+          if (createError) {
+            console.log('❌ Erro detalhado ao criar usuário:', {
+              message: createError.message,
+              details: createError.details,
+              hint: createError.hint,
+              code: createError.code
+            });
+            return res.status(500).json({ 
+              error: 'Erro ao criar usuário', 
+              details: createError.message,
+              supabaseError: createError
+            });
+          }
+          
+          console.log('✅ Usuário criado com sucesso:', newUser?.id);
+          return res.status(201).json(newUser);
+        } catch (catchError) {
+          console.log('❌ Erro de exceção no POST users:', catchError);
+          return res.status(500).json({ 
+            error: 'Erro interno no POST users', 
+            details: catchError.message 
+          });
         }
-        
-        console.log('✅ Usuário criado com sucesso:', newUser.id);
-        return res.status(201).json(newUser);
       }
 
       return res.status(405).json({ error: 'Método não permitido' });
