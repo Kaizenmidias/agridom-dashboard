@@ -22,8 +22,8 @@ router.post('/login', async (req, res) => {
     // Buscar usuário no banco de dados
     console.log('🔍 Buscando usuário:', email);
     const result = await query(
-      'SELECT id, email, password, name, role, avatar_url, is_active, can_access_dashboard, can_access_projects, can_access_briefings, can_access_codes, can_access_expenses, can_access_crm, can_access_users FROM users WHERE email = ? AND is_active = 1',
-      [email]
+      'SELECT id, email, password, name, role, avatar_url, is_active, can_access_dashboard, can_access_projects, can_access_briefings, can_access_codes, can_access_expenses, can_access_crm, can_access_users FROM users WHERE email = ? AND is_active = ?',
+      [email, 1]
     );
 
     if (!result.rows || result.rows.length === 0) {

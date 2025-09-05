@@ -1,147 +1,98 @@
-# 🌾 AgriDom Dashboard
+# 🌾 Agridom Dashboard
 
-Um dashboard moderno e responsivo para gestão agrícola, desenvolvido com React, TypeScript e Node.js com Supabase.
+Dashboard moderno e responsivo para gestão agrícola, desenvolvido com React, TypeScript e Supabase.
 
 ## 📋 Funcionalidades
 
-- 🔐 **Autenticação Segura**: Login e registro com JWT
-- 🔄 **Recuperação de Senha**: Sistema de reset via email
+- 🔐 **Autenticação Segura**: Login e registro com Supabase Auth
 - 📊 **Dashboard Interativo**: Visualização de dados em tempo real
-- 💼 **Gestão de Projetos**: Controle completo de projetos de web design
+- 💼 **Gestão de Projetos**: Controle completo de projetos agrícolas
 - 💰 **Controle de Despesas**: Gerenciamento financeiro integrado
-- 📝 **Briefings**: Sistema de briefings para clientes
-- 💻 **Biblioteca de Códigos**: Armazenamento e organização de snippets
+- 📝 **Relatórios**: Sistema de relatórios e análises
 - 👥 **Gestão de Usuários**: Controle de permissões e acessos
 - 📱 **Design Responsivo**: Interface adaptável para todos os dispositivos
 - 🎨 **UI Moderna**: Componentes baseados em Shadcn/UI
-- 🔒 **Segurança**: Proteção CORS, validação de dados e criptografia
+- ☁️ **Deploy Automático**: Hospedado no Vercel
 
 ## 🛠️ Tecnologias Utilizadas
 
-### Frontend
 - **React 18** - Biblioteca para interfaces de usuário
 - **TypeScript** - Tipagem estática para JavaScript
 - **Vite** - Build tool rápido e moderno
 - **Tailwind CSS** - Framework CSS utilitário
 - **Shadcn/UI** - Componentes de interface modernos
 - **React Router** - Roteamento do lado do cliente
-- **Axios** - Cliente HTTP para requisições
-- **React Query** - Gerenciamento de estado do servidor
-
-### Backend
-- **Node.js** - Runtime JavaScript
-- **Express.js** - Framework web minimalista
 - **Supabase** - Backend-as-a-Service com PostgreSQL
-- **JWT** - Autenticação baseada em tokens
-- **Bcrypt** - Criptografia de senhas
-- **Nodemailer** - Envio de emails
-- **Multer** - Upload de arquivos
+- **Vercel** - Plataforma de deploy e hospedagem
 
 ## 🚀 Instalação e Configuração
 
 ### Pré-requisitos
-- Node.js 22+ instalado
-- Conta no Supabase
+- Node.js 18+ instalado
+- Conta no [Supabase](https://supabase.com)
+- Conta no [Vercel](https://vercel.com) (para deploy)
 - Git instalado
 
 ### 1. Clone o Repositório
 ```bash
 git clone <url-do-repositorio>
-cd webdesign-dashboard
+cd agridom-dashboard
 ```
 
 ### 2. Instalar Dependências
-
-#### Frontend
 ```bash
 npm install
 ```
 
-#### Backend
-```bash
-cd server
-npm install
-```
+### 3. Configurar Supabase
 
-### 3. Configurar Banco de Dados
-
-1. Crie um banco MySQL:
-```sql
-CREATE DATABASE webdesign_dashboard;
-```
-
-2. Execute o script de configuração:
-```bash
-mysql -u root -p webdesign_dashboard < database/setup-mysql.sql
-```
+1. Crie um novo projeto no Supabase
+2. Obtenha a URL do projeto e a chave anônima
+3. Configure as tabelas necessárias no banco de dados
 
 ### 4. Configurar Variáveis de Ambiente
 
-#### Frontend (.env)
-```env
-VITE_API_URL=http://localhost:3001/api
-VITE_APP_NAME=WebDesign Dashboard
+Copie o arquivo de exemplo:
+```bash
+cp .env.example .env
 ```
 
-#### Backend (server/.env)
+Edite o arquivo `.env` com suas configurações:
 ```env
-NODE_ENV=development
-PORT=3001
-
-# Banco de Dados
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=sua_senha
-DB_NAME=webdesign_dashboard
-DB_PORT=3306
-
-# JWT
-JWT_SECRET=sua_chave_secreta_muito_forte
-JWT_EXPIRES_IN=24h
-
-# Email (opcional)
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=seu_email@gmail.com
-EMAIL_PASS=sua_senha_de_app
+VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+VITE_SUPABASE_ANON_KEY=sua_chave_anonima_aqui
+VITE_API_BASE_URL=http://localhost:5173/api
+VITE_AUTH_API_BASE_URL=http://localhost:5173/auth
 ```
 
 ## 🏃‍♂️ Executando o Projeto
 
-### Desenvolvimento
+### Desenvolvimento Local
 
-1. **Iniciar o Backend**:
-```bash
-cd server
-npm run dev
-```
-
-2. **Iniciar o Frontend** (em outro terminal):
 ```bash
 npm run dev
 ```
 
-3. **Acessar a Aplicação**:
-   - Frontend: http://localhost:8080
-   - Backend API: http://localhost:3001/api
+Acesse a aplicação em: http://localhost:5173
 
-### Produção
+### Deploy no Vercel
 
-Para deploy em produção, consulte o arquivo [DEPLOY_CPANEL.md](./DEPLOY_CPANEL.md) com instruções completas para hospedagem compartilhada.
+1. **Conecte seu repositório ao Vercel**
+2. **Configure as variáveis de ambiente no Vercel:**
+   ```env
+   VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+   VITE_SUPABASE_ANON_KEY=sua_chave_anonima_aqui
+   VITE_API_BASE_URL=https://seu-dominio.vercel.app/api
+   VITE_AUTH_API_BASE_URL=https://seu-dominio.vercel.app/auth
+   ```
+3. **Deploy automático** será realizado a cada push
 
 ## 📝 Scripts Disponíveis
 
-### Frontend
 - `npm run dev` - Inicia servidor de desenvolvimento
 - `npm run build` - Build para produção
-- `npm run build:prod` - Build otimizado para produção
-- `npm run build:cpanel` - Prepara arquivos para deploy no cPanel
 - `npm run preview` - Preview do build de produção
 - `npm run lint` - Executa linting do código
-
-### Backend
-- `npm run dev` - Inicia servidor com nodemon
-- `npm start` - Inicia servidor de produção
 
 ## 🔐 Credenciais Padrão
 

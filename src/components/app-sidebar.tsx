@@ -20,13 +20,13 @@ import { UserProfileDialog } from "./user-profile-dialog"
 import { Button } from "@/components/ui/button"
 
 const allItems = [
-  { title: "Dashboard", url: "/", icon: Home },
-  { title: "Projetos", url: "/projetos", icon: FileText },
-  { title: "Briefings", url: "/briefings", icon: Briefcase },
-  { title: "Códigos", url: "/codigos", icon: Code },
-  { title: "Despesas", url: "/despesas", icon: Wallet },
-  { title: "CRM", url: "/crm", icon: Users },
-  { title: "Usuários", url: "/usuarios", icon: Settings },
+  { title: "Dashboard", url: "/", icon: Home, permission: "can_access_dashboard" },
+  { title: "Projetos", url: "/projetos", icon: FileText, permission: "can_access_projects" },
+  { title: "Briefings", url: "/briefings", icon: Briefcase, permission: "can_access_briefings" },
+  { title: "Códigos", url: "/codigos", icon: Code, permission: "can_access_codes" },
+  { title: "Despesas", url: "/despesas", icon: Wallet, permission: "can_access_expenses" },
+  { title: "CRM", url: "/crm", icon: Users, permission: "can_access_crm" },
+  { title: "Usuários", url: "/usuarios", icon: Settings, permission: "can_access_users" },
 ]
 
 export function AppSidebar() {
@@ -35,8 +35,14 @@ export function AppSidebar() {
   const location = useLocation()
   const currentPath = location.pathname
 
-  // Mostrar todos os itens para usuários autenticados - sem verificação de permissão
-  const items = user ? allItems : []
+  // Filtrar itens baseado nas permissões do usuário
+  const items = user ? allItems.filter(item => {
+    // Se não tem permissão definida, mostrar sempre (para compatibilidade)
+    if (!item.permission) return true
+    
+    // Verificar se o usuário tem a permissão específica
+    return user[item.permission as keyof typeof user] === true
+  }) : []
 
   const isActive = (path: string) => {
     if (path === "/" && currentPath === "/") return true

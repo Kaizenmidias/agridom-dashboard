@@ -199,8 +199,6 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
                   <SelectItem value="website">Site institucional</SelectItem>
                   <SelectItem value="ecommerce">E-commerce</SelectItem>
                   <SelectItem value="landing_page">Landing Page</SelectItem>
-                  <SelectItem value="app">Aplicativo</SelectItem>
-                  <SelectItem value="branding">Branding</SelectItem>
                   <SelectItem value="other">Outro</SelectItem>
                 </SelectContent>
               </Select>
@@ -279,13 +277,34 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
 
           <div className="space-y-2">
             <Label htmlFor="delivery_date">Data de Entrega</Label>
-            <Input
-              id="delivery_date"
-              type="date"
-              value={projetoForm.delivery_date}
-              onChange={(e) => setProjetoForm(prev => ({ ...prev, delivery_date: e.target.value }))}
-              disabled={loading}
-            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !projetoForm.delivery_date && "text-muted-foreground"
+                  )}
+                  disabled={loading}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {projetoForm.delivery_date ? format(new Date(projetoForm.delivery_date), "dd/MM/yyyy", { locale: pt }) : <span>Selecione uma data</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={projetoForm.delivery_date ? new Date(projetoForm.delivery_date) : undefined}
+                  onSelect={(date) => {
+                    if (date) {
+                      setProjetoForm(prev => ({ ...prev, delivery_date: format(date, 'yyyy-MM-dd') }));
+                    }
+                  }}
+                  initialFocus
+                  locale={pt}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="flex justify-end space-x-2">

@@ -79,13 +79,20 @@ export function calculateMonthlyAmount(
 
   switch (billingType) {
     case 'unica':
-      return amount;
+      // Para despesas únicas, verificar se está no mês/ano correto
+      const [expenseYear, expenseMonth] = date.split('-').map(Number);
+      if (expenseYear === year && expenseMonth === month) {
+        return amount;
+      }
+      return 0;
     case 'semanal':
       const dayOfWeek = getDayOfWeekFromDate(date);
       return calculateWeeklyMonthlyAmount(amount, year, month, dayOfWeek);
     case 'mensal':
+      // Despesas mensais devem aparecer em todos os meses
       return amount;
     case 'anual':
+      // Despesas anuais devem aparecer em todos os meses (divididas por 12)
       return calculateAnnualMonthlyAmount(amount);
     default:
       return amount;

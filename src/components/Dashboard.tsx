@@ -19,7 +19,6 @@ import {
   Edit
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import GuadeloupeWeatherAlerts from './GuadeloupeWeatherAlerts';
 import { EditableField } from './ui/editable-field';
 import { Button } from './ui/button';
 import { toast } from 'sonner';

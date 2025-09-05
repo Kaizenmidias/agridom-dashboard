@@ -43,29 +43,43 @@ const LoginPage = () => {
   const getErrorMessage = (errorMessage: string, userEmail: string = '') => {
     const message = errorMessage.toLowerCase();
     
+    // Validação de formato de email
+    if (userEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
+      return "E-mail inválido";
+    }
+    
+    // Credenciais inválidas (senha incorreta)
     if (message.includes('email ou senha inválidos') || message.includes('invalid credentials') || message.includes('credenciais inválidas')) {
-      // Extrair nome do usuário do email para mensagem personalizada
-      const userName = userEmail ? userEmail.split('@')[0] : 'usuário';
-      return `Senha inválida para o usuário ${userName}`;
+      return "E-mail ou senha inválida";
     }
     
+    // Usuário não encontrado
     if (message.includes('usuário não encontrado') || message.includes('user not found')) {
-      return `Usuário não encontrado: ${userEmail}`;
+      return "E-mail ou senha inválida";
     }
     
+    // Senha específica inválida
+    if (message.includes('senha inválida') || message.includes('invalid password')) {
+      return "Senha inválida";
+    }
+    
+    // Conta desativada
     if (message.includes('conta desativada') || message.includes('account disabled')) {
-      return `Conta desativada para o usuário ${userEmail}`;
+      return "Conta desativada. Entre em contato com o administrador.";
     }
     
+    // Muitas tentativas
     if (message.includes('muitas tentativas') || message.includes('too many attempts')) {
       return "Muitas tentativas de login. Aguarde alguns minutos antes de tentar novamente.";
     }
     
-    if (message.includes('conexão') || message.includes('network') || message.includes('fetch')) {
+    // Erro de conexão
+    if (message.includes('conexão') || message.includes('network') || message.includes('fetch') || message.includes('timeout')) {
       return "Erro de conexão. Verifique sua internet e tente novamente.";
     }
     
-    return errorMessage || "Ocorreu um erro inesperado. Tente novamente.";
+    // Erro genérico
+    return "Ocorreu um erro inesperado";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,7 +96,7 @@ const LoginPage = () => {
     // Validação básica de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setErrorMessage('Por favor, digite um endereço de email válido.');
+      setErrorMessage('E-mail inválido');
       return;
     }
 

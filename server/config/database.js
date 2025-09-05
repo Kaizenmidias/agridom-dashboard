@@ -1,11 +1,9 @@
 const { Pool } = require('pg');
-const sqlite = require('./sqlite');
 const { createClient } = require('@supabase/supabase-js');
 
 // Configuração do banco de dados
 let pool;
-let useSQLite = false;
-let useSupabaseAPI = false;
+let useSupabaseAPI = true; // Ativar Supabase API desde o início
 let supabaseClient;
 
 // Inicializar cliente Supabase
@@ -21,7 +19,181 @@ function getSupabaseClient() {
 }
 
 function getPool() {
-  if (!pool && !useSQLite) {
+  // Se estiver usando Supabase API, retornar objeto com cliente Supabase
+  if (useSupabaseAPI) {
+    console.log('🌐 Usando Supabase API como banco de dados');
+    const client = getSupabaseClient();
+    const supabasePool = {
+      supabase: client,  // Adicionar o cliente Supabase como propriedade
+      query: async (text, params = []) => {
+        console.log('🔍 Executando query via Supabase API:', text, params);
+        console.log('🔍 Checking conditions:', {
+          hasCountProjects: text.includes('COUNT(*) as total_projects'),
+          hasCoalesceSum: text.includes('COALESCE(SUM(project_value), 0)'),
+          bothConditions: text.includes('COUNT(*) as total_projects') && text.includes('COALESCE(SUM(project_value), 0)')
+        });
+        try {
+          console.log('🔍 Query recebida:', text.substring(0, 100) + '...');
+          console.log('📝 Query recebida:', text);
+          console.log('🔍 Verificando se contém from users:', text.toLowerCase().includes('from users'));
+          console.log('🔍 Texto em lowercase:', text.toLowerCase());
+          console.log('🔍 Checking conditions:', {
+            hasCountProjects: text.includes('COUNT(*) as total_projects'),
+            hasCoalesceSum: text.includes('COALESCE(SUM(project_value), 0)'),
+            hasPaidValue: text.includes('COALESCE(SUM(paid_value), 0)'),
+            bothConditions: text.includes('COUNT(*) as total_projects') && text.includes('COALESCE(SUM(project_value), 0)')
+          });
+          console.log('🔍 Query text for debugging:', JSON.stringify(text));
+          // Para queries de projetos
+          console.log('🔍 Verificando se query inclui projetos:', text.includes('FROM projects'), text.includes('projects'));
+          console.log('🔍 Query completa:', text);
+          
+          if (text.includes('FROM projects') || text.includes('projects')) {
+            console.log('🔍 Query de projetos detectada');
+            
+            // Verificar se é uma query de estatísticas (com COUNT e SUM)
+            const normalizedText = text.replace(/\s+/g, ' ').toLowerCase();
+            console.log('🔍 Texto normalizado:', normalizedText);
+            
+            if (normalizedText.includes('count(*) as total_projects') && normalizedText.includes('coalesce(sum(project_value), 0)')) {
+              console.log('🔍 Query de estatísticas detectada');
+              
+              // Buscar todos os projetos
+              const { data: projects, error } = await client
+                .from('projects')
+                .select('project_value, paid_value');
+              
+              if (error) {
+                console.error('❌ Erro ao buscar projetos:', error);
+                throw error;
+              }
+              
+              console.log('📊 Projetos encontrados:', projects?.length || 0);
+              
+              // Calcular estatísticas
+              const totalProjects = projects?.length || 0;
+              const totalValue = projects?.reduce((sum, p) => sum + (parseFloat(p.project_value) || 0), 0) || 0;
+              const totalPaid = projects?.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0) || 0;
+              const totalReceivable = totalValue - totalPaid;
+              
+              console.log('📊 Estatísticas calculadas:', {
+                totalProjects,
+                totalValue,
+                totalPaid,
+                totalReceivable
+              });
+              
+              return {
+                rows: [{
+                  total_projects: totalProjects,
+                  total_value: totalValue,
+                  total_paid: totalPaid,
+                  total_receivable: totalReceivable
+                }],
+                rowCount: 1
+              };
+            }
+            
+            // Query normal de projetos
+            let query = client.from('projects').select('*');
+            
+            if (text.includes('where user_id =')) {
+              query = query.eq('user_id', params[0]);
+              if (text.includes('order by created_at desc')) {
+                query = query.order('created_at', { ascending: false });
+              }
+              if (text.includes('limit 1')) {
+                query = query.limit(1);
+              }
+            } else if (text.includes('where id =')) {
+              query = query.eq('id', params[0]);
+            }
+            
+            const { data, error } = await query;
+            if (error) throw error;
+            return { rows: data || [], rowCount: data?.length || 0 };
+          }
+          
+          if (text.includes('from expenses')) {
+            const { data, error } = await client
+              .from('expenses')
+              .select('*');
+            if (error) throw error;
+            return { rows: data || [], rowCount: data?.length || 0 };
+          }
+          
+          console.log('🔍 DEBUG: Verificando se query contém "from users":', text.toLowerCase().includes('from users'));
+          console.log('🔍 DEBUG: Query completa:', text);
+          if (text.toLowerCase().includes('from users')) {
+            console.log('🔍 ENTRANDO NA SEÇÃO DE USERS');
+            console.log('🔍 Query original:', text);
+            console.log('🔍 Parâmetros recebidos:', params);
+            let query = client.from('users').select('*');
+            
+            if (text.toLowerCase().includes('where email =')) {
+              console.log('🔍 Aplicando filtro de email:', params[0]);
+              query = query.eq('email', params[0]);
+              console.log('🔍 Verificando condição is_active:', text.toLowerCase().includes('and is_active'));
+              console.log('🔍 Texto da query (lowercase):', text.toLowerCase());
+              if (text.toLowerCase().includes('and is_active')) {
+                console.log('🔍 Aplicando filtro is_active:', params[1]);
+                // Converter 1 para true, 0 para false
+                const isActiveValue = params[1] === 1 || params[1] === '1' ? true : false;
+                console.log('🔍 Valor convertido is_active:', isActiveValue);
+                query = query.eq('is_active', isActiveValue);
+              }
+            } else if (text.includes('limit 1')) {
+              query = query.limit(1);
+            }
+            
+            const { data, error } = await query;
+            if (error) throw error;
+            return { rows: data || [], rowCount: data?.length || 0 };
+          }
+          
+          if (text.includes('from codes')) {
+            let query = client.from('codes').select('*');
+            
+            if (text.includes('where id =')) {
+              query = query.eq('id', params[0]);
+            } else if (text.includes('where 1=1')) {
+              // Query com filtros opcionais
+              let paramIndex = 0;
+              
+              if (text.includes('and content like')) {
+                query = query.ilike('code_content', params[paramIndex]);
+                paramIndex++;
+              }
+              
+              if (text.includes('and type =')) {
+                query = query.eq('language', params[paramIndex]);
+                paramIndex++;
+              }
+            }
+            
+            const { data, error } = await query;
+            if (error) throw error;
+            return { rows: data || [], rowCount: data?.length || 0 };
+          }
+          
+          // Para outras queries, tentar executar diretamente
+          console.log('⚠️ Query não reconhecida, tentando execução direta');
+          throw new Error(`Query não suportada pela API Supabase: ${text}`);
+          
+        } catch (error) {
+          console.error('❌ Erro na query Supabase:', error);
+          throw error;
+        }
+      },
+      connect: (callback) => callback(null, {}, () => {}),
+      end: () => Promise.resolve(),
+      on: () => {},
+      removeListener: () => {}
+    };
+    return supabasePool;
+  }
+  
+  if (!pool) {
     // Detectar se está usando Supabase Online
     const isSupabaseOnline = process.env.POSTGRES_HOST && process.env.POSTGRES_HOST.includes('supabase.co');
     const isSupabaseLocal = process.env.POSTGRES_HOST === 'localhost' && process.env.POSTGRES_PORT === '54322';
@@ -79,8 +251,7 @@ function getPool() {
         useSupabaseAPI = true;
         getSupabaseClient();
       } else {
-        console.log('🔄 Usando SQLite como fallback...');
-        useSQLite = true;
+        throw new Error('Configurações do Supabase não encontradas');
       }
       pool = null;
     });
@@ -94,8 +265,7 @@ function getPool() {
           useSupabaseAPI = true;
           getSupabaseClient();
         } else {
-          console.log('🔄 Usando SQLite como fallback...');
-          useSQLite = true;
+          throw new Error('Configurações do Supabase não encontradas');
         }
         pool = null;
         return;
@@ -104,182 +274,9 @@ function getPool() {
       console.log('✅ Server Pool de conexão PostgreSQL criado');
     });
   }
+
   
-  if (useSupabaseAPI) {
-    console.log('🌐 Usando Supabase API como banco de dados');
-    const client = getSupabaseClient();
-    return {
-      query: async (text, params = []) => {
-        console.log('🔍 Executando query via Supabase API:', text, params);
-        console.log('🔍 Checking conditions:', {
-          hasCountProjects: text.includes('COUNT(*) as total_projects'),
-          hasCoalesceSum: text.includes('COALESCE(SUM(project_value), 0)'),
-          bothConditions: text.includes('COUNT(*) as total_projects') && text.includes('COALESCE(SUM(project_value), 0)')
-        });
-        try {
-          console.log('🔍 Query recebida:', text.substring(0, 100) + '...');
-          console.log('📝 Query recebida:', text);
-          console.log('🔍 Checking conditions:', {
-            hasCountProjects: text.includes('COUNT(*) as total_projects'),
-            hasCoalesceSum: text.includes('COALESCE(SUM(project_value), 0)'),
-            hasPaidValue: text.includes('COALESCE(SUM(paid_value), 0)'),
-            bothConditions: text.includes('COUNT(*) as total_projects') && text.includes('COALESCE(SUM(project_value), 0)')
-          });
-          console.log('🔍 Query text for debugging:', JSON.stringify(text));
-          // Para queries de projetos
-          console.log('🔍 Verificando se query inclui projetos:', text.includes('FROM projects'), text.includes('projects'));
-          console.log('🔍 Query completa:', text);
-          
-          if (text.includes('FROM projects') || text.includes('projects')) {
-            console.log('🔍 Buscando projetos para user_id:', params[0]);
-            console.log('🔍 Query executada:', text);
-            console.log('🔍 Parâmetros da query:', params);
-            
-            let query = client
-              .from('projects')
-              .select('*')
-              .eq('user_id', params[0]);
-            
-            // Aplicar filtros de data se existirem
-            if (text.includes('DATE(created_at) BETWEEN') && params.length >= 3) {
-              const startDate = params[1] + 'T00:00:00.000Z';
-              const endDate = params[2] + 'T23:59:59.999Z';
-              console.log('🗓️ Aplicando filtros de data BETWEEN:', { startDate, endDate });
-              query = query
-                .gte('created_at', startDate)
-                .lte('created_at', endDate);
-            }
-            // Aplicar filtros de ano e mês se existirem
-            else if (text.includes('EXTRACT(year FROM created_at)') && text.includes('EXTRACT(month FROM created_at)') && params.length >= 3) {
-              const year = params[1];
-              const month = params[2];
-              const startDate = `${year}-${month.toString().padStart(2, '0')}-01T00:00:00.000Z`;
-              const endDate = new Date(year, month, 0).toISOString(); // Último dia do mês
-              console.log('🗓️ Aplicando filtros de ano e mês:', { year, month, startDate, endDate });
-              query = query
-                .gte('created_at', startDate)
-                .lte('created_at', endDate);
-            }
-            // Aplicar filtro apenas de ano se existir
-            else if (text.includes('EXTRACT(year FROM created_at)') && params.length >= 2) {
-              const year = params[1];
-              const startDate = `${year}-01-01T00:00:00.000Z`;
-              const endDate = `${year}-12-31T23:59:59.999Z`;
-              console.log('🗓️ Aplicando filtro de ano:', { year, startDate, endDate });
-              query = query
-                .gte('created_at', startDate)
-                .lte('created_at', endDate);
-            }
-            
-            const { data, error } = await query;
-            
-            console.log('📊 Dados retornados do Supabase:', data);
-            console.log('❌ Erro do Supabase:', error);
-            
-            if (error) throw error;
-            
-            // Simular resultado PostgreSQL
-            const result = {
-              rows: data || [],
-              rowCount: data ? data.length : 0
-            };
-            
-            // Calcular estatísticas manualmente
-            // Normalizar a query removendo quebras de linha e espaços extras
-            const normalizedText = text.replace(/\s+/g, ' ').trim();
-            console.log('🔍 Query normalizada:', normalizedText);
-            
-            const hasCount = normalizedText.includes('COUNT(*) as total_projects');
-            const hasProjectValue = normalizedText.includes('COALESCE(SUM(project_value), 0)');
-            const hasPaidValue = normalizedText.includes('COALESCE(SUM(paid_value), 0)');
-            const shouldCalculateStats = hasCount && hasProjectValue && hasPaidValue;
-            
-            console.log('🔍 Verificando condições para estatísticas:');
-            console.log('  - hasCount:', hasCount);
-            console.log('  - hasProjectValue:', hasProjectValue);
-            console.log('  - hasPaidValue:', hasPaidValue);
-            console.log('  - shouldCalculateStats:', shouldCalculateStats);
-            
-            if (shouldCalculateStats) {
-              console.log('✅ Calculando estatísticas manualmente...');
-              const stats = {
-                total_projects: data.length,
-                active_projects: data.filter(p => p.status === 'active').length,
-                completed_projects: data.filter(p => p.status === 'completed').length,
-                paused_projects: data.filter(p => p.status === 'paused').length,
-                total_project_value: data.reduce((sum, p) => sum + (parseFloat(p.project_value) || 0), 0),
-                total_paid_value: data.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0)
-              };
-              result.rows = [stats];
-              result.rowCount = 1;
-              console.log('📊 Estatísticas calculadas:', stats);
-            }
-            
-            // Para queries de período anterior (paid_value)
-            if (text.includes('total_paid_value') && text.includes('DATE(created_at) BETWEEN')) {
-              const totalPaidValue = data.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0);
-              result.rows = [{ total_paid_value: totalPaidValue }];
-              result.rowCount = 1;
-              console.log('💰 Total paid value calculado:', totalPaidValue);
-            }
-            
-            // Para queries de valores a receber
-            if (text.includes('total_receivable')) {
-              const activeProjects = data.filter(p => p.status === 'active');
-              const totalReceivable = activeProjects.reduce((sum, p) => {
-                const projectValue = parseFloat(p.project_value) || 0;
-                const paidValue = parseFloat(p.paid_value) || 0;
-                return sum + Math.max(0, projectValue - paidValue);
-              }, 0);
-              result.rows = [{ total_receivable: totalReceivable }];
-              result.rowCount = 1;
-              console.log('📈 Total receivable calculado:', totalReceivable);
-            }
-            
-            return result;
-          }
-          
-          // Para queries de despesas
-          if (text.includes('FROM expenses')) {
-            console.log('💸 Buscando despesas para user_id:', params[0]);
-            const { data, error } = await client
-              .from('expenses')
-              .select('*')
-              .eq('user_id', params[0]);
-            
-            console.log('💸 Despesas encontradas:', data);
-            if (error) {
-              console.error('❌ Erro ao buscar despesas:', error);
-              throw error;
-            }
-            
-            return {
-              rows: data || [],
-              rowCount: data ? data.length : 0
-            };
-          }
-          
-          // Para outras queries, retornar vazio
-          return { rows: [], rowCount: 0 };
-        } catch (error) {
-          console.error('Erro na query Supabase API:', error);
-          return { rows: [], rowCount: 0 };
-        }
-      },
-      supabase: client,
-      connect: (callback) => callback(null, {}, () => {}),
-      end: () => Promise.resolve()
-    };
-  }
-  
-  if (useSQLite) {
-    console.log('📱 Usando SQLite como banco de dados');
-    return {
-      query: sqlite.query,
-      connect: (callback) => callback(null, {}, () => {}),
-      end: () => Promise.resolve()
-    };
-  }
+
   
   return pool;
 }
@@ -329,8 +326,9 @@ async function query(text, params = []) {
 // Função para testar a conexão
 async function testConnection() {
   try {
-    const result = await query('SELECT NOW() as current_time');
-    console.log('✅ Conexão com o banco de dados estabelecida:', result.rows[0].current_time);
+    // Usar uma query simples que funcione com Supabase API
+    const result = await query('SELECT * FROM users LIMIT 1');
+    console.log('✅ Conexão com o banco de dados estabelecida via Supabase API');
     return true;
   } catch (error) {
     console.error('❌ Erro ao conectar com o banco de dados:', error.message);

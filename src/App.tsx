@@ -17,26 +17,26 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import PermissionProtectedRoute from "./components/PermissionProtectedRoute";
 import { useEffect } from "react";
 import { CRMProvider } from "./contexts/CRMContext";
-import { StatisticsProvider } from "./contexts/StatisticsContext";
 import { AppSettingsProvider } from "./contexts/AppSettingsContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
 import { trackPageView } from "./utils/analytics";
 
-// Define routes configuration
+// Define routes configuration with permissions
 const routes = [
   { path: "/login", element: <LoginPage />, protected: false },
   { path: "/forgot-password", element: <ForgotPasswordPage />, protected: false },
   { path: "/reset-password", element: <ResetPasswordPage />, protected: false },
-  { path: "/", element: <Index />, protected: true },
-  { path: "/projetos", element: <ProjetosPage />, protected: true },
-  { path: "/briefings", element: <BriefingsPage />, protected: true },
-  { path: "/codigos", element: <CodesPage />, protected: true },
-  { path: "/despesas", element: <DespesasPage />, protected: true },
-  { path: "/crm", element: <CRMPage />, protected: true },
-  { path: "/usuarios", element: <UsuariosPage />, protected: true },
+  { path: "/", element: <Index />, protected: true, permission: "can_access_dashboard" },
+  { path: "/projetos", element: <ProjetosPage />, protected: true, permission: "can_access_projects" },
+  { path: "/briefings", element: <BriefingsPage />, protected: true, permission: "can_access_briefings" },
+  { path: "/codigos", element: <CodesPage />, protected: true, permission: "can_access_codes" },
+  { path: "/despesas", element: <DespesasPage />, protected: true, permission: "can_access_expenses" },
+  { path: "/crm", element: <CRMPage />, protected: true, permission: "can_access_crm" },
+  { path: "/usuarios", element: <UsuariosPage />, protected: true, permission: "can_access_users" },
   { path: "*", element: <NotFound />, protected: false }
 ];
 
@@ -117,17 +117,43 @@ const AppLayout = () => {
           <div className="flex-1">
             <RouterChangeHandler />
             <Routes>
-              {routes.map((route) => (
-                <Route 
-                  key={route.path} 
-                  path={route.path} 
-                  element={route.protected ? (
-                    <ProtectedRoute>{route.element}</ProtectedRoute>
-                  ) : (
-                    route.element
-                  )} 
-                />
-              ))}
+              {routes.map((route) => {
+                if (!route.protected) {
+                  return (
+                    <Route 
+                      key={route.path} 
+                      path={route.path} 
+                      element={route.element} 
+                    />
+                  );
+                }
+                
+                // Se tem permissão específica, usar PermissionProtectedRoute
+                if (route.permission) {
+                  return (
+                    <Route 
+                      key={route.path} 
+                      path={route.path} 
+                      element={
+                        <PermissionProtectedRoute permission={route.permission as any}>
+                          {route.element}
+                        </PermissionProtectedRoute>
+                      } 
+                    />
+                  );
+                }
+                
+                // Fallback para ProtectedRoute básico
+                return (
+                  <Route 
+                    key={route.path} 
+                    path={route.path} 
+                    element={
+                      <ProtectedRoute>{route.element}</ProtectedRoute>
+                    } 
+                  />
+                );
+              })}
             </Routes>
           </div>
         </main>
@@ -143,14 +169,12 @@ const App = () => {
       <AuthProvider>
         <AppSettingsProvider>
           <CRMProvider>
-            <StatisticsProvider>
-              <BrowserRouter>
-                <TooltipProvider>
-                  <AppLayout />
-                  <Toaster />
-                </TooltipProvider>
-              </BrowserRouter>
-            </StatisticsProvider>
+            <BrowserRouter>
+              <TooltipProvider>
+                <AppLayout />
+                <Toaster />
+              </TooltipProvider>
+            </BrowserRouter>
           </CRMProvider>
         </AppSettingsProvider>
       </AuthProvider>

@@ -2,7 +2,6 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
 const { calculateTotalMonthlyExpenses, calculateMonthlyAmount } = require('../utils/billing-calculations');
-const { mapBillingTypeForDatabase, getOriginalBillingType, storeOriginalType } = require('../temp_billing_mapping');
 const { createClient } = require('@supabase/supabase-js');
 
 // Inicializar cliente Supabase
@@ -13,6 +12,37 @@ const supabase = createClient(
 
 // Middleware para acessar a função query
 const getQuery = (req) => req.app.locals.query;
+
+// Cache temporário para tipos de cobrança originais
+const billingTypeCache = new Map();
+
+// Função para mapear tipos de cobrança para o banco de dados
+const mapBillingTypeForDatabase = (billingType) => {
+  // Mapeamento temporário para compatibilidade com constraint atual
+  const typeMapping = {
+    'mensal': 'mensal',
+    'semanal': 'mensal', // Temporariamente mapear para mensal
+    'anual': 'mensal'    // Temporariamente mapear para mensal
+  };
+  
+  return typeMapping[billingType] || 'mensal';
+};
+
+// Função para armazenar tipo original no cache
+const storeOriginalType = (expenseId, originalType) => {
+  billingTypeCache.set(expenseId, originalType);
+};
+
+// Função para recuperar tipo original do cache
+const getOriginalBillingType = (expenseId, dbType) => {
+  // Primeiro, tentar recuperar do cache
+  if (billingTypeCache.has(expenseId)) {
+    return billingTypeCache.get(expenseId);
+  }
+  
+  // Se não estiver no cache, retornar o tipo do banco
+  return dbType;
+};
 
 // Middleware de autenticação
 const authenticateToken = (req, res, next) => {
@@ -41,9 +71,16 @@ router.get('/users', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
     const result = await query(
-      'SELECT id, email, name as full_name, role as position, avatar_url, is_active, created_at, updated_at, can_access_dashboard, can_access_briefings, can_access_codes, can_access_projects, can_access_expenses, can_access_crm, can_access_users FROM users WHERE is_active = 1 ORDER BY created_at DESC'
+      'SELECT id, email, name as full_name, role, avatar_url, is_active, created_at, updated_at, can_access_dashboard, can_access_briefings, can_access_codes, can_access_projects, can_access_expenses, can_access_crm, can_access_users FROM users WHERE is_active = 1 ORDER BY created_at DESC'
     );
-    res.json(result.rows || []);
+    
+    // Mapear roles para nomes em português
+    const users = (result.rows || []).map(user => ({
+      ...user,
+      position: user.role === 'admin' ? 'Administrador' : user.role === 'user' ? 'Web Designer' : user.role
+    }));
+    
+    res.json(users);
   } catch (error) {
     console.error('Erro ao buscar usuários:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
@@ -192,6 +229,13 @@ router.post('/users', authenticateToken, async (req, res) => {
       });
     }
 
+    // Mapear position para role do banco de dados
+    const roleMapping = {
+      'Administrador': 'admin',
+      'Web Designer': 'user'
+    };
+    const dbRole = roleMapping[position] || 'user';
+
     // Hash da senha se não estiver hasheada
     const bcrypt = require('bcryptjs');
     const hashedPassword = (password_hash && password_hash.startsWith('$2')) ? password_hash : await bcrypt.hash(password_hash, 10);
@@ -218,12 +262,12 @@ router.post('/users', authenticateToken, async (req, res) => {
     // Inserir novo usuário com permissões
     const insertResult = await query(
       `INSERT INTO users (
-        email, password_hash, full_name, position, is_active,
+        email, password_hash, name, role, is_active,
         can_access_dashboard, can_access_projects, can_access_expenses,
         can_access_crm, can_access_briefings, can_access_codes, can_access_users
       ) VALUES (?, ?, ?, ?, true, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        email, hashedPassword, full_name, position,
+        email, hashedPassword, full_name, dbRole,
         permissions.can_access_dashboard,
         permissions.can_access_projects,
         permissions.can_access_expenses,
@@ -308,7 +352,7 @@ router.get('/projects/:id', authenticateToken, async (req, res) => {
 // POST /api/projects
 router.post('/projects', authenticateToken, async (req, res) => {
   try {
-    const { name, client, project_type, status, description, project_value, paid_value, delivery_date } = req.body;
+    const { name, client, project_type, status, description, project_value, paid_value, delivery_date, completion_date } = req.body;
     const query = getQuery(req);
     
     if (!name) {
@@ -336,7 +380,7 @@ router.post('/projects', authenticateToken, async (req, res) => {
 // PUT /api/projects/:id
 router.put('/projects/:id', authenticateToken, async (req, res) => {
   try {
-    const { name, client, project_type, status, description, project_value, paid_value, delivery_date } = req.body;
+    const { name, client, project_type, status, description, project_value, paid_value, delivery_date, completion_date } = req.body;
     const query = getQuery(req);
     
     // Converter data para formato MySQL se fornecida
@@ -350,6 +394,17 @@ router.put('/projects/:id', authenticateToken, async (req, res) => {
       }
     }
     
+    // Converter completion_date para formato MySQL se fornecida
+    let formattedCompletionDate = completion_date;
+    if (completion_date && completion_date !== null) {
+      const date = new Date(completion_date);
+      if (!isNaN(date.getTime())) {
+        formattedCompletionDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+      } else {
+        formattedCompletionDate = null;
+      }
+    }
+    
     // Converter undefined para null para evitar erro do MySQL
     const params = [
       name ?? null,
@@ -360,6 +415,7 @@ router.put('/projects/:id', authenticateToken, async (req, res) => {
       project_value ?? null,
       paid_value ?? null,
       formattedDate ?? null,
+      formattedCompletionDate ?? null,
       req.params.id,
       req.userId
     ];
@@ -374,6 +430,7 @@ router.put('/projects/:id', authenticateToken, async (req, res) => {
             project_value = COALESCE(?, project_value),
             paid_value = COALESCE(?, paid_value),
             delivery_date = COALESCE(?, delivery_date),
+            completion_date = COALESCE(?, completion_date),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND user_id = ?`,
        params
@@ -1081,6 +1138,13 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     const query = getQuery(req);
     const { startDate, endDate, previousStartDate, previousEndDate } = req.query;
     
+    console.log('Backend - Filtros recebidos:', {
+      startDate,
+      endDate,
+      previousStartDate,
+      previousEndDate
+    });
+    
     // Se não há filtros de data, usar período atual (mês atual)
     const currentStart = startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
     const currentEnd = endDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];
@@ -1089,40 +1153,93 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     const prevStart = previousStartDate || new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().split('T')[0];
     const prevEnd = previousEndDate || new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().split('T')[0];
     
+    console.log('Backend - Datas calculadas:', {
+      currentStart,
+      currentEnd,
+      prevStart,
+      prevEnd
+    });
+    
+    console.log('🔍 DEBUG - Período atual para consultas SQL:', {
+      currentStart,
+      currentEnd,
+      'Tipo currentStart': typeof currentStart,
+      'Tipo currentEnd': typeof currentEnd
+    });
+    
     console.log('Dashboard Stats - User ID:', req.userId);
     
-    // Buscar estatísticas de projetos do período atual (filtrado por data de pagamento)
-    const projectStats = await query(
+    // Buscar estatísticas de projetos considerando valor pago na criação e restante na entrega
+    // Calcular separadamente projetos criados e entregues no período
+    const projectStatsCreated = await query(
       `SELECT 
-        COUNT(*) as total_projects,
-        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_projects,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_projects,
-        COUNT(CASE WHEN status = 'paused' THEN 1 END) as paused_projects,
-        COALESCE(SUM(project_value), 0) as total_project_value,
-        COALESCE(SUM(CASE WHEN payment_date IS NOT NULL AND DATE(payment_date) BETWEEN $2 AND $3 THEN paid_value ELSE 0 END), 0) as total_paid_value
+        COUNT(*) as created_projects,
+        COALESCE(SUM(project_value), 0) as created_project_value,
+        COALESCE(SUM(paid_value), 0) as created_paid_value,
+        COUNT(CASE WHEN status = 'active' THEN 1 END) as created_active,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as created_completed,
+        COUNT(CASE WHEN status = 'paused' THEN 1 END) as created_paused
        FROM projects 
-       WHERE user_id = $1`,
+       WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3`,
       [req.userId, currentStart, currentEnd]
     );
     
+    const projectStatsDelivered = await query(
+      `SELECT 
+        COUNT(*) as delivered_projects,
+        COALESCE(SUM(project_value - paid_value), 0) as delivered_paid_value
+       FROM projects 
+       WHERE user_id = $1 AND DATE(delivery_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
+      [req.userId, currentStart, currentEnd]
+    );
+    
+    // Combinar estatísticas
+    const createdStats = projectStatsCreated.rows[0] || {};
+    const deliveredStats = projectStatsDelivered.rows[0] || {};
+    
+    const projectStats = {
+      rows: [{
+        total_projects: (parseInt(createdStats.created_projects) || 0) + (parseInt(deliveredStats.delivered_projects) || 0),
+        active_projects: parseInt(createdStats.created_active) || 0,
+        completed_projects: parseInt(createdStats.created_completed) || 0,
+        paused_projects: parseInt(createdStats.created_paused) || 0,
+        total_project_value: (parseFloat(createdStats.created_project_value) || 0),
+        total_paid_value: (parseFloat(createdStats.created_paid_value) || 0) + (parseFloat(deliveredStats.delivered_paid_value) || 0)
+      }]
+    };
+    
     console.log('Project Stats Result:', projectStats);
     
-    // Buscar estatísticas de projetos do período anterior (filtrado por data de pagamento)
-    const previousProjectStats = await query(
+    // Buscar estatísticas de projetos do período anterior considerando valor pago na criação e restante na entrega
+    const previousProjectStatsCreated = await query(
       `SELECT 
-        COALESCE(SUM(CASE WHEN payment_date IS NOT NULL AND DATE(payment_date) BETWEEN $2 AND $3 THEN paid_value ELSE 0 END), 0) as total_paid_value
+        COALESCE(SUM(paid_value), 0) as created_paid_value
        FROM projects 
-       WHERE user_id = $1`,
+       WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3`,
       [req.userId, prevStart, prevEnd]
     );
     
-    // Buscar despesas do período atual usando Supabase
+    const previousProjectStatsDelivered = await query(
+      `SELECT 
+        COALESCE(SUM(project_value - paid_value), 0) as delivered_paid_value
+       FROM projects 
+       WHERE user_id = $1 AND DATE(delivery_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
+      [req.userId, prevStart, prevEnd]
+    );
+    
+    const previousProjectStats = {
+      rows: [{
+        total_paid_value: (parseFloat(previousProjectStatsCreated.rows[0]?.created_paid_value) || 0) + 
+                         (parseFloat(previousProjectStatsDelivered.rows[0]?.delivered_paid_value) || 0)
+      }]
+    };
+    
+    // Buscar TODAS as despesas do usuário (não filtrar por data aqui)
+    // O filtro por data será aplicado na função calculateMonthlyAmount
     const { data: currentExpenses, error: currentExpensesError } = await supabase
       .from('expenses')
       .select('id, value, date, category, billing_type')
-      .eq('user_id', req.userId)
-      .gte('date', currentStart)
-      .lte('date', currentEnd);
+      .eq('user_id', req.userId);
     
     if (currentExpensesError) {
       console.error('Erro ao buscar despesas atuais:', currentExpensesError);
@@ -1210,15 +1327,15 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       expense_categories: [...new Set(currentExpensesArray.map(e => e.category))].length
     };
     
-    // Buscar todas as despesas do período anterior para cálculo mensal
+    // Buscar todas as despesas do usuário para cálculo do período anterior
     const previousExpenses = await query(
       `SELECT 
         e.value as amount,
         e.date,
         e.billing_type
        FROM expenses e
-       WHERE e.user_id = $1 AND DATE(e.date) BETWEEN $2 AND $3`,
-      [req.userId, prevStart, prevEnd]
+       WHERE e.user_id = $1`,
+      [req.userId]
     );
     
     // Calcular estatísticas de despesas do período anterior
@@ -1235,11 +1352,43 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     }];
     
     // Buscar todos os projetos do período para calcular faturamento manualmente
-    const allProjectsInPeriod = await query(
-      `SELECT paid_value, created_at FROM projects 
+    // Separar projetos criados no período (recebem paid_value) e entregues no período (recebem restante)
+    console.log('🔍 DEBUG - Período atual:', { currentStart, currentEnd });
+    
+    console.log('🔍 DEBUG - Consulta projetos criados no período:');
+    console.log('  - SQL: SELECT paid_value, created_at as revenue_date FROM projects WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3');
+    console.log('  - Parâmetros:', [req.userId, currentStart, currentEnd]);
+    
+    const projectsCreatedInPeriod = await query(
+      `SELECT 
+        paid_value,
+        created_at as revenue_date,
+        paid_value as period_revenue
+       FROM projects 
        WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3`,
       [req.userId, currentStart, currentEnd]
     );
+    
+    console.log('🔍 DEBUG - Projetos criados no período:', projectsCreatedInPeriod.rows?.length || 0, projectsCreatedInPeriod.rows);
+    
+    const projectsDeliveredInPeriod = await query(
+      `SELECT 
+        (project_value - paid_value) as period_revenue,
+        delivery_date as revenue_date
+       FROM projects 
+       WHERE user_id = $1 AND DATE(delivery_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
+      [req.userId, currentStart, currentEnd]
+    );
+    
+    console.log('🔍 DEBUG - Projetos entregues no período:', projectsDeliveredInPeriod.rows?.length || 0, projectsDeliveredInPeriod.rows);
+    
+    // Combinar os resultados
+    const allProjectsInPeriod = {
+      rows: [
+        ...(projectsCreatedInPeriod.rows || []),
+        ...(projectsDeliveredInPeriod.rows || [])
+      ]
+    };
     
     // Buscar todas as despesas do período para calcular por mês manualmente
     const allExpensesInPeriod = await query(
@@ -1256,16 +1405,18 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     console.log('Projects in period:', projectsInPeriod.length, projectsInPeriod);
     
     projectsInPeriod.forEach(project => {
-      const date = new Date(project.created_at);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
-      console.log('Processing project:', project.paid_value, 'for month:', monthKey);
-      
-      if (!monthlyDataMap.has(monthKey)) {
-        monthlyDataMap.set(monthKey, { month: monthKey, revenue: 0, expenses: 0 });
+      if (project.revenue_date && project.period_revenue > 0) {
+        const date = new Date(project.revenue_date);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        
+        console.log('Processing project:', project.period_revenue, 'for month:', monthKey);
+        
+        if (!monthlyDataMap.has(monthKey)) {
+          monthlyDataMap.set(monthKey, { month: monthKey, revenue: 0, expenses: 0 });
+        }
+        
+        monthlyDataMap.get(monthKey).revenue += parseFloat(project.period_revenue) || 0;
       }
-      
-      monthlyDataMap.get(monthKey).revenue += parseFloat(project.paid_value) || 0;
     });
     
     // Processar despesas
@@ -1371,10 +1522,10 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     
     // Buscar projetos recentes do período atual
     const recentProjects = await query(
-      `SELECT id, name, status, project_value, created_at
+      `SELECT id, name, status, project_value, delivery_date
        FROM projects 
-       WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3
-       ORDER BY created_at DESC
+       WHERE user_id = $1 AND DATE(delivery_date) BETWEEN $2 AND $3
+       ORDER BY delivery_date DESC
        LIMIT 5`,
       [req.userId, currentStart, currentEnd]
     );
@@ -1424,14 +1575,29 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     // Para o período anterior, manter o mesmo valor (projetos ativos não mudam por período)
     const previousReceivable = currentReceivable;
 
-    // Calcular receita (faturamento) considerando apenas projetos pagos no período filtrado
-    let currentRevenue = currentProjects.total_paid_value;
+    // Calcular receita (faturamento) diretamente dos projetos do período
+    const createdProjectsRevenue = (projectsCreatedInPeriod.rows || []).reduce((sum, project) => {
+      return sum + (parseFloat(project.paid_value) || 0);
+    }, 0);
+    
+    const deliveredProjectsRevenue = (projectsDeliveredInPeriod.rows || []).reduce((sum, project) => {
+      return sum + (parseFloat(project.period_revenue) || 0);
+    }, 0);
+    
+    const currentRevenue = createdProjectsRevenue + deliveredProjectsRevenue;
     
     // Para o período anterior, usar o valor calculado do período anterior
     const previousRevenue = previousProjects.total_paid_value;
     
     const currentExpensesAmount = expenseStats.total_expenses_amount;
     const currentProfit = currentRevenue - currentExpensesAmount;
+    
+    console.log('🔍 VALORES CALCULADOS PARA RESPOSTA:');
+    console.log('Current Revenue (total_paid_value):', currentRevenue);
+    console.log('Previous Revenue:', previousRevenue);
+    console.log('Current Expenses Amount:', currentExpensesAmount);
+    console.log('Current Profit:', currentProfit);
+    console.log('Current Receivable:', currentReceivable);
 
     const stats = {
       projects: currentProjects,

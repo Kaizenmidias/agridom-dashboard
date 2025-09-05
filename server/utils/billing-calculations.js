@@ -92,8 +92,10 @@ function calculateMonthlyAmount(
       const dayOfWeek = getDayOfWeekFromDate(date);
       return calculateWeeklyMonthlyAmount(numericAmount, year, month, dayOfWeek);
     case 'mensal':
+      // Despesas mensais devem aparecer em todos os meses
       return numericAmount;
     case 'anual':
+      // Despesas anuais devem aparecer em todos os meses (divididas por 12)
       return calculateAnnualMonthlyAmount(numericAmount);
     default:
       // Para tipos desconhecidos, tratar como única

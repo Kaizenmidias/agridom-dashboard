@@ -5,13 +5,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { format } from 'date-fns';
+import { pt } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { updateExpense } from '@/api/crud';
 import { Expense } from '@/types/database';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CalendarIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const editarDespesaSchema = z.object({
   description: z.string().min(1, 'Despesa é obrigatória'),
@@ -188,11 +197,33 @@ export function EditarDespesaDialog({ expense, open, onOpenChange, onExpenseUpda
 
           <div className="space-y-2">
             <Label htmlFor="date">Data *</Label>
-            <Input
-              id="date"
-              type="date"
-              {...register('date')}
-            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !watch('date') && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {watch('date') ? format(new Date(watch('date')), "dd/MM/yyyy", { locale: pt }) : <span>Selecione uma data</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={watch('date') ? new Date(watch('date')) : undefined}
+                  onSelect={(date) => {
+                    if (date) {
+                      setValue('date', format(date, 'yyyy-MM-dd'));
+                    }
+                  }}
+                  initialFocus
+                  locale={pt}
+                />
+              </PopoverContent>
+            </Popover>
             {errors.date && (
               <p className="text-sm text-red-500">{errors.date.message}</p>
             )}

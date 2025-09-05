@@ -3,6 +3,8 @@ import { addDays, format, startOfMonth, endOfMonth, startOfYear, endOfYear } fro
 import { pt } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { DateRange } from 'react-day-picker';
 import FinancialSummary from '@/components/finance/FinancialSummary';
 import {
   Chart as ChartJS,
@@ -32,6 +34,7 @@ const DashboardWithFilter: React.FC = () => {
     return `${now.getFullYear()}-${now.getMonth() + 1}`;
   });
   const [selectedMetric, setSelectedMetric] = useState<string>('faturamento');
+  const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
 
   // Estados para dados reais do dashboard
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
@@ -39,10 +42,10 @@ const DashboardWithFilter: React.FC = () => {
   
   // Dados financeiros calculados a partir dos dados reais
   const currentMonthData = {
-    revenue: Number(dashboardStats?.projects?.total_paid_value || 0),
+    revenue: Number(dashboardStats?.current_period?.revenue || 0),
     expenses: Number(dashboardStats?.current_period?.expenses || 0),
-    profit: Number(dashboardStats?.projects?.total_paid_value || 0) - Number(dashboardStats?.current_period?.expenses || 0),
-    receivable: Number(dashboardStats?.current_receivable || 0)
+    profit: Number(dashboardStats?.current_period?.profit || 0),
+    receivable: Number(dashboardStats?.current_period?.receivable || 0)
   };
 
   // Dados do mês anterior (dados reais da API)
@@ -75,6 +78,11 @@ const DashboardWithFilter: React.FC = () => {
 
   const handlePeriodChange = (newPeriod: string) => {
     setSelectedPeriod(newPeriod);
+    
+    // Se for período personalizado, não processar ainda - aguardar seleção de datas
+    if (newPeriod === 'custom') {
+      return;
+    }
     
     console.log('Frontend - Período selecionado:', newPeriod);
     
@@ -133,8 +141,42 @@ const DashboardWithFilter: React.FC = () => {
     });
   };
 
+  // Função para lidar com mudança do período personalizado
+  const handleCustomDateRangeChange = (dateRange: DateRange | undefined) => {
+    setCustomDateRange(dateRange);
+    
+    if (dateRange?.from && dateRange?.to) {
+      const startDate = format(dateRange.from, 'yyyy-MM-dd');
+      const endDate = format(dateRange.to, 'yyyy-MM-dd');
+      
+      // Calcular período anterior com a mesma duração
+      const daysDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24));
+      const previousEndDate = addDays(dateRange.from, -1);
+      const previousStartDate = addDays(previousEndDate, -daysDiff);
+      
+      const previousStartDateStr = format(previousStartDate, 'yyyy-MM-dd');
+      const previousEndDateStr = format(previousEndDate, 'yyyy-MM-dd');
+      
+      console.log('Frontend - Período personalizado selecionado:', {
+        startDate,
+        endDate,
+        previousStartDate: previousStartDateStr,
+        previousEndDate: previousEndDateStr
+      });
+      
+      // Carregar dados com filtros personalizados
+      loadDashboardData({
+        startDate,
+        endDate,
+        previousStartDate: previousStartDateStr,
+        previousEndDate: previousEndDateStr
+      });
+    }
+  };
+
   useEffect(() => {
-    loadDashboardData();
+    // Aplicar filtro do período inicial automaticamente
+    handlePeriodChange(selectedPeriod);
   }, []);
 
   const getMetricLabel = () => {
@@ -330,8 +372,14 @@ const DashboardWithFilter: React.FC = () => {
     if (selectedPeriod === 'year') {
       return `ano de ${new Date().getFullYear()}`;
     }
+    if (selectedPeriod === 'custom') {
+      if (customDateRange?.from && customDateRange?.to) {
+        return `${format(customDateRange.from, 'dd/MM/yyyy', { locale: pt })} - ${format(customDateRange.to, 'dd/MM/yyyy', { locale: pt })}`;
+      }
+      return 'período personalizado';
+    }
     const [year, month] = selectedPeriod.split('-');
-    return format(new Date(parseInt(year), parseInt(month)), 'MMMM yyyy', { locale: pt });
+    return format(new Date(parseInt(year), parseInt(month)), 'MMMM', { locale: pt });
   };
 
   const getPeriodOptions = () => {
@@ -345,9 +393,12 @@ const DashboardWithFilter: React.FC = () => {
     for (let month = 0; month < 12; month++) {
       const date = new Date(currentYear, month);
       const value = `${currentYear}-${month + 1}`;
-      const label = format(date, 'MMMM yyyy', { locale: pt });
+      const label = format(date, 'MMMM', { locale: pt });
       options.push({ value, label });
     }
+    
+    // Adicionar opção "Personalizado"
+    options.push({ value: 'custom', label: 'Personalizado' });
     
     return options;
   };
@@ -383,6 +434,16 @@ const DashboardWithFilter: React.FC = () => {
             </Select>
           </div>
           
+          {selectedPeriod === 'custom' && (
+            <div className="w-full md:w-auto">
+              <DatePickerWithRange
+                date={customDateRange}
+                setDate={handleCustomDateRangeChange}
+                placeholderText="Selecionar período personalizado"
+                className="min-w-[280px]"
+              />
+            </div>
+          )}
 
         </div>
       </div>

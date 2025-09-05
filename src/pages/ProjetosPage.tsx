@@ -107,10 +107,8 @@ const ProjetosPage = () => {
       case 'website': return 'Site institucional';
       case 'ecommerce': return 'E-commerce';
       case 'landing_page': return 'Landing Page';
-      case 'app': return 'Aplicativo';
-      case 'branding': return 'Branding';
       case 'other': return 'Outro';
-      default: return status;
+      default: return projectType;
     }
   };
 
