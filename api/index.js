@@ -223,5 +223,142 @@ export default async function handler(req, res) {
     }
   }
   
+  // Rota para projetos
+  if (url.includes('/api/projects') || url.includes('/projects')) {
+    try {
+      // Verificar autenticação
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token não fornecido' });
+      }
+
+      const token = authHeader.substring(7);
+      const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+      const decoded = jwt.verify(token, jwtSecret);
+      
+      // GET - Listar projetos
+      if (req.method === 'GET') {
+        const { data: projects, error } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('user_id', decoded.userId)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao buscar projetos', details: error.message });
+        }
+
+        return res.json(projects || []);
+      }
+      
+      // POST - Criar projeto
+      if (req.method === 'POST') {
+        const { name, client, project_type, status, description, project_value, paid_value, delivery_date } = req.body;
+        
+        if (!name) {
+          return res.status(400).json({ error: 'Nome do projeto é obrigatório' });
+        }
+        
+        const projectData = {
+          user_id: decoded.userId,
+          name,
+          client: client || null,
+          project_type: project_type || 'website',
+          status: status || 'active',
+          description: description || null,
+          project_value: project_value ? parseFloat(project_value) : null,
+          paid_value: paid_value ? parseFloat(paid_value) : 0,
+          delivery_date: delivery_date || null
+        };
+        
+        const { data, error } = await supabase
+          .from('projects')
+          .insert(projectData)
+          .select()
+          .single();
+          
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao criar projeto', details: error.message });
+        }
+        
+        return res.status(201).json(data);
+      }
+      
+      // PUT - Atualizar projeto
+      if (req.method === 'PUT') {
+        const projectId = req.query.id || req.body.id;
+        if (!projectId) {
+          return res.status(400).json({ error: 'ID do projeto é obrigatório' });
+        }
+        
+        const { name, client, project_type, status, description, project_value, paid_value, delivery_date, completion_date } = req.body;
+        
+        const updateData = {};
+        if (name !== undefined) updateData.name = name;
+        if (client !== undefined) updateData.client = client;
+        if (project_type !== undefined) updateData.project_type = project_type;
+        if (status !== undefined) updateData.status = status;
+        if (description !== undefined) updateData.description = description;
+        if (project_value !== undefined) updateData.project_value = project_value ? parseFloat(project_value) : null;
+        if (paid_value !== undefined) updateData.paid_value = paid_value ? parseFloat(paid_value) : 0;
+        if (delivery_date !== undefined) updateData.delivery_date = delivery_date;
+        if (completion_date !== undefined) updateData.completion_date = completion_date;
+        updateData.updated_at = new Date().toISOString();
+        
+        const { data, error } = await supabase
+          .from('projects')
+          .update(updateData)
+          .eq('id', projectId)
+          .eq('user_id', decoded.userId)
+          .select()
+          .single();
+          
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao atualizar projeto', details: error.message });
+        }
+        
+        if (!data) {
+          return res.status(404).json({ error: 'Projeto não encontrado' });
+        }
+        
+        return res.json(data);
+      }
+      
+      // DELETE - Deletar projeto
+      if (req.method === 'DELETE') {
+        const projectId = req.query.id || req.body.id;
+        if (!projectId) {
+          return res.status(400).json({ error: 'ID do projeto é obrigatório' });
+        }
+        
+        const { error } = await supabase
+          .from('projects')
+          .delete()
+          .eq('id', projectId)
+          .eq('user_id', decoded.userId);
+          
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao deletar projeto', details: error.message });
+        }
+        
+        return res.json({ message: 'Projeto deletado com sucesso' });
+      }
+      
+      return res.status(405).json({ error: 'Método não permitido' });
+      
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Token expirado' });
+      }
+      return res.status(500).json({ 
+        error: 'Erro interno do servidor',
+        details: error.message
+      });
+    }
+  }
+  
   return res.status(404).json({ error: 'Rota não encontrada', url: req.url });
 }
