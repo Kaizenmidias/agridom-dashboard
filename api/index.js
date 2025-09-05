@@ -198,9 +198,9 @@ export default async function handler(req, res) {
   const { url } = req;
   
   // Roteamento baseado na URL
-  if (url.includes('/api/auth/login') || url.includes('/auth/login')) {
+  if (url.includes('/api/auth/login') || url.includes('/auth/login') || url.includes('/api/login')) {
     return handleLogin(req, res);
-  } else if (url.includes('/api/auth/verify') || url.includes('/auth/verify')) {
+  } else if (url.includes('/api/auth/verify') || url.includes('/auth/verify') || url.includes('/api/verify')) {
     return handleVerify(req, res);
   } else if (url.includes('/api/debug') || url.includes('/debug')) {
     return handleDebug(req, res);
