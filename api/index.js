@@ -487,28 +487,31 @@ export default async function handler(req, res) {
         console.log('Processing POST request for expenses');
         console.log('POST /api/expenses - Body recebido:', JSON.stringify(req.body));
         
-        const { description, value, category, date, billing_type, project_id, notes } = req.body;
+        const { description, value, amount, category, date, billing_type, project_id, notes } = req.body;
+        
+        // Aceitar tanto 'value' quanto 'amount'
+        const expenseValue = value !== undefined ? value : amount;
         
         console.log('POST /api/expenses - Campos extraídos:', {
-          description, value, category, date, billing_type, project_id, notes
+          description, value, amount, expenseValue, category, date, billing_type, project_id, notes
         });
 
         // Validação básica
-        if (!description || value === undefined || value === null || !category || !date) {
+        if (!description || expenseValue === undefined || expenseValue === null || !category || !date) {
           console.log('POST /api/expenses - Erro de validação:', {
             description: !!description,
-            value: value,
+            expenseValue: expenseValue,
             category: !!category,
             date: !!date
           });
           return res.status(400).json({ 
-            error: 'Campos obrigatórios: description, value, category, date',
-            received: { description: !!description, value: value, category: !!category, date: !!date }
+            error: 'Campos obrigatórios: description, value/amount, category, date',
+            received: { description: !!description, expenseValue: expenseValue, category: !!category, date: !!date }
           });
         }
         
         // Validar valor numérico
-        const numericValue = parseFloat(value);
+        const numericValue = parseFloat(expenseValue);
         if (isNaN(numericValue) || numericValue <= 0) {
           console.log('Invalid value:', value);
           return res.status(400).json({ error: 'Valor deve ser um número positivo' });
@@ -594,9 +597,20 @@ export default async function handler(req, res) {
 
       if (req.method === 'DELETE') {
         console.log('Processing DELETE request for expenses');
-        // Deletar despesa
-        const expenseId = req.query.id || req.body.id;
+        // Deletar despesa - extrair ID da URL
+        let expenseId = req.query.id || req.body.id;
+        
+        // Se não encontrou o ID nos query params ou body, extrair da URL
+        if (!expenseId) {
+          const urlParts = url.split('/');
+          const expensesIndex = urlParts.findIndex(part => part === 'expenses');
+          if (expensesIndex !== -1 && urlParts[expensesIndex + 1]) {
+            expenseId = urlParts[expensesIndex + 1];
+          }
+        }
+        
         console.log('Expense ID to delete:', expenseId);
+        console.log('URL:', url);
         console.log('Query params:', req.query);
         console.log('Body:', req.body);
         
