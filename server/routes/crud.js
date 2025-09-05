@@ -1162,6 +1162,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     });
     
     // Período atual para consultas SQL
+    console.log({
       currentStart,
       currentEnd,
       'Tipo currentStart': typeof currentStart,

@@ -26,12 +26,13 @@ export async function loginUser(credentials: LoginCredentials): Promise<AuthResp
     body: JSON.stringify(credentials),
   })
 
+  const data = await response.json()
+
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Erro no login')
+    throw new Error(data.error || 'Erro no login')
   }
 
-  return await response.json()
+  return data
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
@@ -46,12 +47,13 @@ export async function changePassword(currentPassword: string, newPassword: strin
     body: JSON.stringify({ currentPassword, newPassword }),
   })
 
+  const data = await response.json()
+
   if (!response.ok) {
-    const errorData = await response.json()
-    throw new Error(errorData.error || 'Erro ao alterar senha')
+    throw new Error(data.error || 'Erro ao alterar senha')
   }
 
-  return response.json()
+  return data
 }
 
 export async function uploadAvatar(file: File): Promise<AuthUser | null> {
@@ -86,12 +88,13 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Au
     body: JSON.stringify(credentials),
   })
 
+  const data = await response.json()
+
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Erro no registro')
+    throw new Error(data.error || 'Erro no registro')
   }
 
-  return await response.json()
+  return data
 }
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
@@ -127,10 +130,11 @@ export async function updateUserProfile(userData: {
     body: JSON.stringify(userData),
   })
 
+  const data = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-    throw new Error(error.error || 'Erro ao atualizar perfil')
+    throw new Error(data.error || 'Erro ao atualizar perfil')
   }
 
-  return await response.json()
+  return data
 }
