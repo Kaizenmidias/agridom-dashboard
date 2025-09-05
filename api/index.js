@@ -32,6 +32,7 @@ async function handleLogin(req, res) {
     }
 
     // Buscar usuário no Supabase
+    console.log('Tentando buscar usuário:', email);
     const { data: users, error: queryError } = await supabase
       .from('users')
       .select('id, email, password, name, role, avatar_url, is_active, can_access_dashboard, can_access_projects, can_access_briefings, can_access_codes, can_access_expenses, can_access_crm, can_access_users')
@@ -39,8 +40,14 @@ async function handleLogin(req, res) {
       .eq('is_active', true)
       .single();
 
+    console.log('Resultado da consulta:', { users, queryError });
+
     if (queryError || !users) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+      console.log('Erro na consulta ou usuário não encontrado:', queryError);
+      return res.status(401).json({ 
+        error: 'Credenciais inválidas',
+        debug: process.env.NODE_ENV === 'development' ? { queryError, users } : undefined
+      });
     }
 
     const user = users;
