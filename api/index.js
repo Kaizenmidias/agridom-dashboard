@@ -173,9 +173,9 @@ export default async function handler(req, res) {
   const { url } = req;
   
   // Roteamento baseado na URL
-  if (url.includes('/auth/login')) {
+  if (url.includes('/api/auth/login') || url.includes('/auth/login')) {
     return handleLogin(req, res);
-  } else if (url.includes('/auth/verify')) {
+  } else if (url.includes('/api/auth/verify') || url.includes('/auth/verify')) {
     return handleVerify(req, res);
   } else {
     return res.status(404).json({ error: 'Rota não encontrada' });
