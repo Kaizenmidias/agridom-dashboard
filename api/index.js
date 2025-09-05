@@ -304,7 +304,13 @@ export default async function handler(req, res) {
   
   // Roteamento baseado na URL
   if (url.includes('/api/auth/login') || url.includes('/auth/login') || url.includes('/api/login')) {
-    return handleLogin(req, res);
+    try {
+      console.log('Roteando para handleLogin');
+      return handleLogin(req, res);
+    } catch (error) {
+      console.error('Erro no roteamento de login:', error);
+      return res.status(500).json({ error: 'Erro no roteamento', details: error.message });
+    }
   } else if (url.includes('/api/auth/verify') || url.includes('/auth/verify') || url.includes('/api/verify')) {
     return handleVerify(req, res);
   } else if (url.includes('/api/debug') || url.includes('/debug')) {
@@ -313,6 +319,8 @@ export default async function handler(req, res) {
     return handleTestDB(req, res);
   } else if (url.includes('/api/tables') || url.includes('/tables')) {
     return handleTables(req, res);
+  } else if (url.includes('/api/simple-test')) {
+    return res.json({ message: 'Teste simples funcionando', timestamp: new Date().toISOString() });
   } else {
     return res.status(404).json({ error: 'Rota não encontrada' });
   }
