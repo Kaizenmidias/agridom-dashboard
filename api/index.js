@@ -396,12 +396,24 @@ export default async function handler(req, res) {
 
       if (req.method === 'POST') {
         // Criar nova despesa
+        console.log('POST /api/expenses - Body recebido:', req.body);
         const { description, value, category, date, billing_type, project_id, notes } = req.body;
+        
+        console.log('POST /api/expenses - Campos extraídos:', {
+          description, value, category, date, billing_type, project_id, notes
+        });
 
         // Validação básica
         if (!description || !value || !date) {
+          console.log('POST /api/expenses - Erro de validação:', {
+            description: !!description,
+            value: !!value,
+            date: !!date
+          });
           return res.status(400).json({ error: 'Campos obrigatórios: description, value, date' });
         }
+        
+        console.log('POST /api/expenses - Validação passou, userId:', userId);
 
         const expenseData = {
           description,
@@ -631,6 +643,69 @@ export default async function handler(req, res) {
         }
 
         return res.json({ message: 'Código deletado com sucesso' });
+      }
+
+      return res.status(405).json({ error: 'Método não permitido' });
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Token expirado' });
+      }
+      return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+    }
+  }
+  
+  // Rota para usuários
+  if (url.includes('/api/users') || url.includes('/users')) {
+    try {
+      // Verificar autenticação
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token de acesso requerido' });
+      }
+
+      const token = authHeader.substring(7);
+      const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+      const decoded = jwt.verify(token, jwtSecret);
+      const userId = decoded.userId;
+
+      // Verificar se o usuário tem permissão para acessar usuários
+      const { data: currentUser, error: userError } = await supabase
+        .from('users')
+        .select('can_access_users')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !currentUser?.can_access_users) {
+        return res.status(403).json({ error: 'Acesso negado' });
+      }
+
+      if (req.method === 'GET') {
+        // Listar usuários
+        const { data, error } = await supabase
+          .from('users')
+          .select(`
+            id, email, name, role, avatar_url, is_active, created_at, updated_at,
+            can_access_dashboard, can_access_briefings, can_access_codes,
+            can_access_projects, can_access_expenses, can_access_crm, can_access_users
+          `)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+        }
+
+        // Mapear roles para nomes em português
+        const users = (data || []).map(user => ({
+          ...user,
+          full_name: user.name,
+          position: user.role === 'admin' ? 'Administrador' : user.role === 'user' ? 'Web Designer' : user.role
+        }));
+
+        return res.json(users);
       }
 
       return res.status(405).json({ error: 'Método não permitido' });
