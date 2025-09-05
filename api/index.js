@@ -104,7 +104,15 @@ export default async function handler(req, res) {
     }
 
     try {
-      const { email, password } = req.body;
+      // Parse do body da requisição
+      let body;
+      if (typeof req.body === 'string') {
+        body = JSON.parse(req.body);
+      } else {
+        body = req.body;
+      }
+      
+      const { email, password } = body;
 
       if (!email || !password) {
         return res.status(400).json({ error: 'Email e senha são obrigatórios' });
