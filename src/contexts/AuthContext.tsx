@@ -111,14 +111,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     initAuth()
   }, [])
 
-  // Polling para verificar atualizações de permissões
+  // Polling para verificar atualizações de permissões (reduzido para evitar throttling)
   useEffect(() => {
     if (!user) return
 
+    let isCheckingUpdates = false
+
     const checkForUpdates = async () => {
+      // Evitar múltiplas requisições simultâneas
+      if (isCheckingUpdates) return
+      isCheckingUpdates = true
+
       try {
         const token = localStorage.getItem('auth_token')
-        if (!token) return
+        if (!token) {
+          isCheckingUpdates = false
+          return
+        }
 
         const updatedUser = await verifyToken(token)
         if (updatedUser) {
@@ -141,11 +150,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       } catch (error) {
         // Silenciar erros de polling para não interferir na experiência do usuário
+        console.debug('Erro no polling de permissões:', error)
+      } finally {
+        isCheckingUpdates = false
       }
     }
 
-    // Verificar a cada 30 segundos
-    const interval = setInterval(checkForUpdates, 30000)
+    // Verificar a cada 5 minutos (300 segundos) em vez de 30 segundos para reduzir throttling
+    const interval = setInterval(checkForUpdates, 300000)
 
     return () => clearInterval(interval)
   }, [user])
