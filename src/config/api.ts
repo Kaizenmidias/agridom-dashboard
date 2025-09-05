@@ -8,13 +8,13 @@ const isProduction = window.location.hostname !== 'localhost' && window.location
 // URLs da API para diferentes ambientes
 const API_URLS = {
   development: 'http://localhost:8080/api',
-  production: '/api' // Para Vercel, a API estará na mesma origem
+  production: 'https://agridom-backend.vercel.app/api' // Backend deployado separadamente
 };
 
 // URLs específicas para autenticação
 const AUTH_API_URLS = {
   development: 'http://localhost:8080/api/auth',
-  production: '/api/auth' // Para Vercel, a API estará na mesma origem
+  production: 'https://agridom-backend.vercel.app/api/auth' // Backend deployado separadamente
 };
 
 // Exporta a URL base da API baseada no ambiente
