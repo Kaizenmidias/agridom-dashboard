@@ -360,5 +360,280 @@ export default async function handler(req, res) {
     }
   }
   
+  // Rota para despesas (expenses)
+  if (url.includes('/api/expenses') || url.includes('/expenses')) {
+    try {
+      // Verificar autenticação
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token de acesso requerido' });
+      }
+
+      const token = authHeader.substring(7);
+      const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+      const decoded = jwt.verify(token, jwtSecret);
+      
+      const userId = decoded.userId;
+
+      if (req.method === 'GET') {
+        // Listar despesas do usuário
+        const { data, error } = await supabase
+          .from('expenses')
+          .select(`
+            id, description, value, category, date, billing_type, 
+            project_id, user_id, notes, created_at, updated_at,
+            projects(name)
+          `)
+          .eq('user_id', userId)
+          .order('date', { ascending: false });
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+        }
+
+        return res.json(data || []);
+      }
+
+      if (req.method === 'POST') {
+        // Criar nova despesa
+        const { description, value, category, date, billing_type, project_id, notes } = req.body;
+
+        // Validação básica
+        if (!description || !value || !date) {
+          return res.status(400).json({ error: 'Campos obrigatórios: description, value, date' });
+        }
+
+        const expenseData = {
+          description,
+          value: parseFloat(value),
+          category: category || null,
+          date,
+          billing_type: billing_type || 'unica',
+          project_id: project_id || null,
+          user_id: userId,
+          notes: notes || null
+        };
+
+        const { data, error } = await supabase
+          .from('expenses')
+          .insert(expenseData)
+          .select()
+          .single();
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao criar despesa', details: error.message });
+        }
+
+        return res.status(201).json(data);
+      }
+
+      if (req.method === 'PUT') {
+        // Atualizar despesa
+        const expenseId = req.query.id || req.body.id;
+        if (!expenseId) {
+          return res.status(400).json({ error: 'ID da despesa é obrigatório' });
+        }
+
+        const { description, value, category, date, billing_type, notes } = req.body;
+        const updateData = {};
+
+        if (description !== undefined) updateData.description = description;
+        if (value !== undefined) updateData.value = parseFloat(value);
+        if (category !== undefined) updateData.category = category;
+        if (date !== undefined) updateData.date = date;
+        if (billing_type !== undefined) updateData.billing_type = billing_type;
+        if (notes !== undefined) updateData.notes = notes;
+        updateData.updated_at = new Date().toISOString();
+
+        const { data, error } = await supabase
+          .from('expenses')
+          .update(updateData)
+          .eq('id', expenseId)
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao atualizar despesa', details: error.message });
+        }
+
+        if (!data) {
+          return res.status(404).json({ error: 'Despesa não encontrada' });
+        }
+
+        return res.json(data);
+      }
+
+      if (req.method === 'DELETE') {
+        // Deletar despesa
+        const expenseId = req.query.id || req.body.id;
+        if (!expenseId) {
+          return res.status(400).json({ error: 'ID da despesa é obrigatório' });
+        }
+
+        const { error } = await supabase
+          .from('expenses')
+          .delete()
+          .eq('id', expenseId)
+          .eq('user_id', userId);
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao deletar despesa', details: error.message });
+        }
+
+        return res.json({ message: 'Despesa deletada com sucesso' });
+      }
+
+      return res.status(405).json({ error: 'Método não permitido' });
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Token expirado' });
+      }
+      return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+    }
+  }
+  
+  // Rota para códigos (codes)
+  if (url.includes('/api/codes') || url.includes('/codes')) {
+    try {
+      // Verificar autenticação
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token de acesso requerido' });
+      }
+
+      const token = authHeader.substring(7);
+      const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+      const decoded = jwt.verify(token, jwtSecret);
+      
+      const userId = decoded.userId;
+
+      if (req.method === 'GET') {
+        // Listar códigos do usuário
+        const { data, error } = await supabase
+          .from('codes')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+        }
+
+        return res.json(data || []);
+      }
+
+      if (req.method === 'POST') {
+        // Criar novo código
+        const { title, language, code_content, description } = req.body;
+
+        // Validação básica
+        if (!title || !language || !code_content) {
+          return res.status(400).json({ error: 'Campos obrigatórios: title, language, code_content' });
+        }
+
+        // Validar linguagem
+        const validLanguages = ['css', 'html', 'javascript'];
+        if (!validLanguages.includes(language)) {
+          return res.status(400).json({ error: 'Linguagem deve ser: css, html ou javascript' });
+        }
+
+        const codeData = {
+          title,
+          language,
+          code_content,
+          description: description || null,
+          user_id: userId
+        };
+
+        const { data, error } = await supabase
+          .from('codes')
+          .insert(codeData)
+          .select()
+          .single();
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao criar código', details: error.message });
+        }
+
+        return res.status(201).json(data);
+      }
+
+      if (req.method === 'PUT') {
+        // Atualizar código
+        const codeId = req.query.id || req.body.id;
+        if (!codeId) {
+          return res.status(400).json({ error: 'ID do código é obrigatório' });
+        }
+
+        const { title, language, code_content, description } = req.body;
+        const updateData = {};
+
+        if (title !== undefined) updateData.title = title;
+        if (language !== undefined) {
+          const validLanguages = ['css', 'html', 'javascript'];
+          if (!validLanguages.includes(language)) {
+            return res.status(400).json({ error: 'Linguagem deve ser: css, html ou javascript' });
+          }
+          updateData.language = language;
+        }
+        if (code_content !== undefined) updateData.code_content = code_content;
+        if (description !== undefined) updateData.description = description;
+        updateData.updated_at = new Date().toISOString();
+
+        const { data, error } = await supabase
+          .from('codes')
+          .update(updateData)
+          .eq('id', codeId)
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao atualizar código', details: error.message });
+        }
+
+        if (!data) {
+          return res.status(404).json({ error: 'Código não encontrado' });
+        }
+
+        return res.json(data);
+      }
+
+      if (req.method === 'DELETE') {
+        // Deletar código
+        const codeId = req.query.id || req.body.id;
+        if (!codeId) {
+          return res.status(400).json({ error: 'ID do código é obrigatório' });
+        }
+
+        const { error } = await supabase
+          .from('codes')
+          .delete()
+          .eq('id', codeId)
+          .eq('user_id', userId);
+
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao deletar código', details: error.message });
+        }
+
+        return res.json({ message: 'Código deletado com sucesso' });
+      }
+
+      return res.status(405).json({ error: 'Método não permitido' });
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Token expirado' });
+      }
+      return res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+    }
+  }
+  
   return res.status(404).json({ error: 'Rota não encontrada', url: req.url });
 }
