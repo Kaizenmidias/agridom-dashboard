@@ -847,19 +847,68 @@ export default async function handler(req, res) {
       const userId = decoded.userId;
 
       if (req.method === 'GET') {
-        console.log('🔍 [DEBUG] Método GET - retornando dados de teste por enquanto...');
-        return res.json([
-          {
-            id: userId,
-            email: 'teste@teste.com',
-            name: 'Usuário Teste',
-            role: 'admin',
-            position: 'Administrador'
-          }
-        ]);
+        console.log('🔍 [DEBUG] Método GET - buscando usuários do banco...');
+        
+        // Buscar todos os usuários
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('id, email, name, role, position, created_at')
+          .order('created_at', { ascending: false });
+
+        if (usersError) {
+          console.log('❌ Erro ao buscar usuários:', usersError);
+          return res.status(500).json({ error: 'Erro ao buscar usuários' });
+        }
+
+        console.log('✅ Usuários encontrados:', users.length);
+        return res.json(users);
       }
 
-
+      if (req.method === 'POST') {
+        console.log('🔍 [DEBUG] Método POST - criando novo usuário...');
+        
+        const { name, email, password, role, position } = req.body;
+        
+        // Validar dados obrigatórios
+        if (!name || !email || !password) {
+          return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+        }
+        
+        // Verificar se email já existe
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', email)
+          .single();
+          
+        if (existingUser) {
+          return res.status(400).json({ error: 'Email já está em uso' });
+        }
+        
+        // Hash da senha
+        const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+        
+        // Criar usuário
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert({
+            name,
+            email,
+            password: hashedPassword,
+            role: role || 'user',
+            position: position || 'Usuário'
+          })
+          .select('id, email, name, role, position, created_at')
+          .single();
+          
+        if (createError) {
+          console.log('❌ Erro ao criar usuário:', createError);
+          return res.status(500).json({ error: 'Erro ao criar usuário' });
+        }
+        
+        console.log('✅ Usuário criado com sucesso:', newUser.id);
+        return res.status(201).json(newUser);
+      }
 
       return res.status(405).json({ error: 'Método não permitido' });
     } catch (error) {
