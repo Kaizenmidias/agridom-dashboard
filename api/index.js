@@ -110,15 +110,45 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Email e senha são obrigatórios' });
       }
 
-      // Buscar usuário no Supabase
-      const { data: user, error: queryError } = await supabase
-        .from('users')
+      // Buscar usuário no Supabase - tentar profiles primeiro, depois users
+      console.log('🔍 [LOGIN] Tentando buscar usuário:', email);
+      
+      let user = null;
+      let queryError = null;
+      
+      // Tentar buscar na tabela profiles primeiro
+      const { data: profileUser, error: profileError } = await supabase
+        .from('profiles')
         .select('*')
         .eq('email', email)
         .eq('is_active', true)
         .single();
+      
+      if (profileUser && !profileError) {
+        console.log('🔍 [LOGIN] Usuário encontrado na tabela profiles');
+        user = profileUser;
+      } else {
+        console.log('🔍 [LOGIN] Erro na tabela profiles:', profileError?.message || 'Usuário não encontrado');
+        
+        // Se não encontrou em profiles, tentar na tabela users
+        const { data: usersUser, error: usersError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', email)
+          .eq('is_active', true)
+          .single();
+        
+        if (usersUser && !usersError) {
+          console.log('🔍 [LOGIN] Usuário encontrado na tabela users');
+          user = usersUser;
+        } else {
+          console.log('🔍 [LOGIN] Erro na tabela users:', usersError?.message || 'Usuário não encontrado');
+          queryError = usersError;
+        }
+      }
 
       if (queryError || !user) {
+        console.log('🔍 [LOGIN] Credenciais inválidas - usuário não encontrado');
         return res.status(401).json({ error: 'Credenciais inválidas' });
       }
 
@@ -185,15 +215,45 @@ export default async function handler(req, res) {
       // Verificar e decodificar o token
       const decoded = jwt.verify(token, jwtSecret);
       
-      // Buscar dados atualizados do usuário no banco
-      const { data: user, error: queryError } = await supabase
-        .from('users')
+      // Buscar dados atualizados do usuário no banco - tentar profiles primeiro, depois users
+      console.log('🔍 [VERIFY] Tentando buscar usuário:', decoded.userId);
+      
+      let user = null;
+      let queryError = null;
+      
+      // Tentar buscar na tabela profiles primeiro
+      const { data: profileUser, error: profileError } = await supabase
+        .from('profiles')
         .select('*')
         .eq('id', decoded.userId)
         .eq('is_active', true)
         .single();
+      
+      if (profileUser && !profileError) {
+        console.log('🔍 [VERIFY] Usuário encontrado na tabela profiles');
+        user = profileUser;
+      } else {
+        console.log('🔍 [VERIFY] Erro na tabela profiles:', profileError?.message || 'Usuário não encontrado');
+        
+        // Se não encontrou em profiles, tentar na tabela users
+        const { data: usersUser, error: usersError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', decoded.userId)
+          .eq('is_active', true)
+          .single();
+        
+        if (usersUser && !usersError) {
+          console.log('🔍 [VERIFY] Usuário encontrado na tabela users');
+          user = usersUser;
+        } else {
+          console.log('🔍 [VERIFY] Erro na tabela users:', usersError?.message || 'Usuário não encontrado');
+          queryError = usersError;
+        }
+      }
 
       if (queryError || !user) {
+        console.log('🔍 [VERIFY] Usuário não encontrado ou inativo');
         return res.status(401).json({ error: 'Usuário não encontrado ou inativo' });
       }
 
