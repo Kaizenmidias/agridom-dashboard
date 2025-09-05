@@ -853,11 +853,30 @@ export default async function handler(req, res) {
           // Primeiro, verificar se a tabela existe
           console.log('🔍 [DEBUG] Testando conexão com tabela users...');
           
-          // Buscar todos os usuários
-          const { data: users, error: usersError } = await supabase
-            .from('users')
+          // Tentar buscar da tabela 'profiles' primeiro, depois 'users'
+          let users, usersError;
+          
+          // Primeiro tentar 'profiles'
+          const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
             .select('id, email, name, role, position, created_at')
             .order('created_at', { ascending: false });
+            
+          if (!profilesError) {
+            console.log('✅ Dados encontrados na tabela profiles');
+            users = profilesData;
+            usersError = null;
+          } else {
+            console.log('❌ Erro na tabela profiles, tentando users:', profilesError.message);
+            // Se falhar, tentar 'users'
+            const { data: usersData, error: usersTableError } = await supabase
+              .from('users')
+              .select('id, email, name, role, position, created_at')
+              .order('created_at', { ascending: false });
+              
+            users = usersData;
+            usersError = usersTableError;
+          }
 
           if (usersError) {
             console.log('❌ Erro detalhado ao buscar usuários:', {
@@ -898,12 +917,29 @@ export default async function handler(req, res) {
           }
           
           console.log('🔍 [DEBUG] Verificando se email já existe...');
-          // Verificar se email já existe
-          const { data: existingUser, error: checkError } = await supabase
-            .from('users')
-            .select('id')
-            .eq('email', email)
-            .single();
+           // Verificar se email já existe - tentar profiles primeiro
+           let existingUser, checkError;
+           
+           const { data: existingProfile, error: profileCheckError } = await supabase
+             .from('profiles')
+             .select('id')
+             .eq('email', email)
+             .single();
+             
+           if (!profileCheckError || profileCheckError.code === 'PGRST116') {
+             existingUser = existingProfile;
+             checkError = profileCheckError;
+           } else {
+             console.log('❌ Erro ao verificar profiles, tentando users:', profileCheckError.message);
+             const { data: existingUserData, error: userCheckError } = await supabase
+               .from('users')
+               .select('id')
+               .eq('email', email)
+               .single();
+               
+             existingUser = existingUserData;
+             checkError = userCheckError;
+           }
             
           if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
             console.log('❌ Erro ao verificar email existente:', checkError);
@@ -931,13 +967,31 @@ export default async function handler(req, res) {
           };
           
           console.log('🔍 [DEBUG] Inserindo usuário:', { ...userData, password: '[HIDDEN]' });
-          
-          // Criar usuário
-          const { data: newUser, error: createError } = await supabase
-            .from('users')
-            .insert(userData)
-            .select('id, email, name, role, position, created_at')
-            .single();
+           
+           // Criar usuário - tentar profiles primeiro
+           let newUser, createError;
+           
+           const { data: newProfile, error: profileCreateError } = await supabase
+             .from('profiles')
+             .insert(userData)
+             .select('id, email, name, role, position, created_at')
+             .single();
+             
+           if (!profileCreateError) {
+             console.log('✅ Usuário criado na tabela profiles');
+             newUser = newProfile;
+             createError = null;
+           } else {
+             console.log('❌ Erro ao criar em profiles, tentando users:', profileCreateError.message);
+             const { data: newUserData, error: userCreateError } = await supabase
+               .from('users')
+               .insert(userData)
+               .select('id, email, name, role, position, created_at')
+               .single();
+               
+             newUser = newUserData;
+             createError = userCreateError;
+           }
             
           if (createError) {
             console.log('❌ Erro detalhado ao criar usuário:', {
