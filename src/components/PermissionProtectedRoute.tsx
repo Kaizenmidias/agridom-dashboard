@@ -14,7 +14,7 @@ const PermissionProtectedRoute: React.FC<PermissionProtectedRouteProps> = ({
   permission,
   fallbackPath = '/briefings' // Página padrão para usuários sem permissão
 }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const [hasRedirected, setHasRedirected] = React.useState(false);
 
   if (loading) {
@@ -30,6 +30,12 @@ const PermissionProtectedRoute: React.FC<PermissionProtectedRouteProps> = ({
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // ADMINISTRADORES TÊM ACESSO TOTAL - IGNORAR VERIFICAÇÕES DE PERMISSÃO
+  if (isAdmin) {
+    console.log('🔑 Usuário é administrador - acesso total concedido');
+    return <>{children}</>;
   }
 
   // Se não há permissão específica definida, permitir acesso

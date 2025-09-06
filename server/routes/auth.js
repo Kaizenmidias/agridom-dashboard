@@ -107,6 +107,13 @@ router.post('/login', async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
+    // Determinar se é admin baseado no role
+    const isAdmin = user.role && (
+      user.role.toLowerCase() === 'administrador' ||
+      user.role.toLowerCase() === 'admin' ||
+      user.role.toLowerCase() === 'administrator'
+    );
+
     // Retornar dados do usuário (sem a senha)
     const authUser = {
       id: user.id,
@@ -115,15 +122,14 @@ router.post('/login', async (req, res) => {
       role: user.role,
       avatar_url: user.avatar_url,
       is_active: user.is_active,
-      permissions: {
-        can_access_dashboard: user.can_access_dashboard,
-        can_access_projects: user.can_access_projects,
-        can_access_briefings: user.can_access_briefings,
-        can_access_codes: user.can_access_codes,
-        can_access_expenses: user.can_access_expenses,
-        can_access_crm: user.can_access_crm,
-        can_access_users: user.can_access_users
-      }
+      is_admin: isAdmin,
+      can_access_dashboard: isAdmin || user.can_access_dashboard,
+      can_access_projects: isAdmin || user.can_access_projects,
+      can_access_briefings: isAdmin || user.can_access_briefings,
+      can_access_codes: isAdmin || user.can_access_codes,
+      can_access_expenses: isAdmin || user.can_access_expenses,
+      can_access_crm: isAdmin || user.can_access_crm,
+      can_access_users: isAdmin || user.can_access_users
     };
 
     res.json({ 
@@ -236,23 +242,24 @@ router.get('/verify', async (req, res) => {
     res.json({
       id: user.id,
       email: user.email,
+      name: user.full_name,
       full_name: user.full_name,
       role: user.role,
       is_admin: isAdmin,
-      can_access_dashboard: permissions.can_access_dashboard || false,
-      can_access_projects: permissions.can_access_projects || false,
-      can_access_briefings: permissions.can_access_briefings || false,
-      can_access_codes: permissions.can_access_codes || false,
-      can_access_expenses: permissions.can_access_expenses || false,
-      can_access_crm: permissions.can_access_crm || false,
-      can_access_users: permissions.can_access_users || false,
-      can_access_reports: permissions.can_access_reports || false,
-      can_access_settings: permissions.can_access_settings || false,
-      can_manage_users: permissions.can_manage_users || false,
-      can_manage_projects: permissions.can_manage_projects || false,
-      can_manage_briefings: permissions.can_manage_briefings || false,
-      can_manage_reports: permissions.can_manage_reports || false,
-      can_manage_settings: permissions.can_manage_settings || false
+      can_access_dashboard: isAdmin || permissions.can_access_dashboard || false,
+      can_access_projects: isAdmin || permissions.can_access_projects || false,
+      can_access_briefings: isAdmin || permissions.can_access_briefings || false,
+      can_access_codes: isAdmin || permissions.can_access_codes || false,
+      can_access_expenses: isAdmin || permissions.can_access_expenses || false,
+      can_access_crm: isAdmin || permissions.can_access_crm || false,
+      can_access_users: isAdmin || permissions.can_access_users || false,
+      can_access_reports: isAdmin || permissions.can_access_reports || false,
+      can_access_settings: isAdmin || permissions.can_access_settings || false,
+      can_manage_users: isAdmin || permissions.can_manage_users || false,
+      can_manage_projects: isAdmin || permissions.can_manage_projects || false,
+      can_manage_briefings: isAdmin || permissions.can_manage_briefings || false,
+      can_manage_reports: isAdmin || permissions.can_manage_reports || false,
+      can_manage_settings: isAdmin || permissions.can_manage_settings || false
     });
   } catch (error) {
     console.error('Erro na verificação do token:', error);

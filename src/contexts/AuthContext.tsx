@@ -32,7 +32,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [error, setError] = useState<string | null>(null)
   
   // Calcular se o usuário é admin baseado no campo is_admin ou cargo
-  const isAdmin = user?.is_admin || 
+  const isAdmin = user?.is_admin === true || 
     (user?.role && (
       user.role.toLowerCase() === 'administrador' ||
       user.role.toLowerCase() === 'admin' ||
