@@ -175,9 +175,22 @@ const DashboardWithFilter: React.FC = () => {
   };
 
   useEffect(() => {
-    // Aplicar filtro do período inicial automaticamente
-    handlePeriodChange(selectedPeriod);
-  }, []);
+    // Aplicar filtro do período inicial automaticamente apenas uma vez
+    // Evitar loops infinitos que causam throttling do navegador
+    const loadInitialData = () => {
+      const now = new Date();
+      const initialPeriod = `${now.getFullYear()}-${now.getMonth() + 1}`;
+      
+      if (selectedPeriod === initialPeriod) {
+        handlePeriodChange(selectedPeriod);
+      }
+    };
+    
+    // Usar timeout para evitar execução imediata e throttling
+    const timeoutId = setTimeout(loadInitialData, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, []); // Dependências vazias para executar apenas uma vez
 
   const getMetricLabel = () => {
     switch (selectedMetric) {
