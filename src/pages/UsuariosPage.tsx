@@ -14,7 +14,7 @@ import { User, InsertUser, AuthUser } from '@/types/database';
 import { toast } from '@/hooks/use-toast';
 
 const UsuariosPage = () => {
-  const { user, usuarios, loading, error, isAdmin } = useAuth();
+  const { user, usuarios, loading, error, isAdmin, refreshUserData } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -93,7 +93,8 @@ const UsuariosPage = () => {
 
       resetForm();
       setIsDialogOpen(false);
-      window.location.reload();
+      // Recarregar dados sem refresh da página
+      refreshUserData();
     } catch (error) {
       toast({ title: 'Erro', description: 'Erro ao criar usuário', variant: 'destructive' });
     } finally {
@@ -120,7 +121,8 @@ const UsuariosPage = () => {
       toast({ title: 'Sucesso', description: 'Usuário excluído com sucesso!' });
       setIsDeleteDialogOpen(false);
       setSelectedUser(null);
-      window.location.reload();
+      // Recarregar dados sem refresh da página
+      refreshUserData();
     } catch (error) {
       toast({ title: 'Erro', description: 'Erro ao excluir usuário', variant: 'destructive' });
     } finally {
@@ -171,7 +173,8 @@ const UsuariosPage = () => {
 
       setIsEditDialogOpen(false);
       setSelectedUser(null);
-      window.location.reload();
+      // Recarregar dados sem refresh da página
+      refreshUserData();
     } catch (error) {
       toast({ title: 'Erro', description: 'Erro ao atualizar usuário', variant: 'destructive' });
     } finally {
