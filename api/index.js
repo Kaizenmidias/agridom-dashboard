@@ -52,6 +52,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método não permitido' });
   }
 
+  // Rota de teste para variáveis de ambiente
+  if (req.url === '/api/test-env') {
+    if (req.method === 'GET') {
+      try {
+        const envCheck = {
+          NODE_ENV: process.env.NODE_ENV,
+          SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'NOT_SET',
+          SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT_SET',
+          SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SET' : 'NOT_SET',
+          JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT_SET',
+          timestamp: new Date().toISOString()
+        };
+        return res.status(200).json(envCheck);
+      } catch (error) {
+        return res.status(500).json({ error: error.message, stack: error.stack });
+      }
+    }
+    return res.status(405).json({ error: 'Método não permitido' });
+  }
+
   // Rota de login
   if (req.url === '/api/login' || req.url === '/api/auth/login') {
     if (req.method === 'POST') {
