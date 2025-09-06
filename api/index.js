@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-import jwt from 'jsonwebtoken';
+const { createClient } = require('@supabase/supabase-js');
+const jwt = require('jsonwebtoken');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -21,7 +21,7 @@ const authenticateToken = (token) => {
   }
 };
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     // Configuração CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
