@@ -22,17 +22,23 @@ const authenticateToken = (token) => {
 };
 
 export default async function handler(req, res) {
-  // Configuração CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  try {
+    // Configuração CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
 
-  console.log('🔍 [API] Request received:', req.method, req.url);
-  console.log('🔍 [API] Body:', req.body);
+    console.log('🔍 [API] Request received:', req.method, req.url);
+    console.log('🔍 [API] Body:', req.body);
+    console.log('🔍 [API] Environment check:', {
+      hasSupabaseUrl: !!supabaseUrl,
+      hasSupabaseKey: !!supabaseKey,
+      hasJwtSecret: !!jwtSecret
+    });
 
   // Rota de teste simples
   if (req.url === '/api/test-login') {
@@ -213,4 +219,14 @@ export default async function handler(req, res) {
   }
   
   return res.status(404).json({ error: 'Rota não encontrada' });
+  
+  } catch (globalError) {
+    console.error('🚨 [API] Erro global não tratado:', globalError);
+    console.error('🚨 [API] Stack trace:', globalError.stack);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: process.env.NODE_ENV === 'development' ? globalError.message : 'Internal server error'
+    });
+  }
 }
