@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { sendPasswordResetEmail } = require('../config/email');
-const { getUserPermissions } = require('../utils/permissions');
+
 const router = express.Router();
 
 // Middleware para acessar a função query
@@ -22,8 +22,8 @@ router.post('/login', async (req, res) => {
     // Buscar usuário no banco de dados
     // Buscando usuário
     const result = await query(
-      'SELECT id, email, password, name, role, avatar_url, is_active, can_access_dashboard, can_access_projects, can_access_briefings, can_access_codes, can_access_expenses, can_access_crm, can_access_users FROM users WHERE email = ? AND is_active = ?',
-      [email, 1]
+      'SELECT id, email, password, name, role, avatar_url, is_active FROM users WHERE email = $1 AND is_active = $2',
+      [email, true]
     );
 
     if (!result.rows || result.rows.length === 0) {
@@ -31,31 +31,22 @@ router.post('/login', async (req, res) => {
       if (email === 'agenciakaizendesign@gmail.com' && password === '123456') {
         console.log('🔐 Usando credenciais de fallback para desenvolvimento');
         const fallbackUser = {
-          id: 1,
+          id: 26,
           email: 'agenciakaizendesign@gmail.com',
-          name: 'Admin',
-          role: 'administrador',
+          name: 'Administrador',
+          role: 'admin',
           avatar_url: null,
-          is_active: true,
-          can_access_dashboard: true,
-          can_access_projects: true,
-          can_access_briefings: true,
-          can_access_codes: true,
-          can_access_expenses: true,
-          can_access_crm: true,
-          can_access_users: true
+          is_active: true
         };
         
         // Gerar token JWT para usuário fallback
         const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
-        const permissions = getUserPermissions(fallbackUser.role);
         
         const token = jwt.sign(
           { 
             userId: fallbackUser.id, 
             email: fallbackUser.email,
-            role: fallbackUser.role,
-            permissions
+            role: fallbackUser.role
           },
           jwtSecret,
           { expiresIn: '24h' }
@@ -70,8 +61,7 @@ router.post('/login', async (req, res) => {
             name: fallbackUser.name,
             role: fallbackUser.role,
             avatar_url: fallbackUser.avatar_url,
-            is_admin: fallbackUser.role === 'administrador',
-            ...permissions
+            is_admin: fallbackUser.role === 'admin'
           }
         });
       }
@@ -108,11 +98,10 @@ router.post('/login', async (req, res) => {
     );
 
     // Determinar se é admin baseado no role
-    const isAdmin = user.role && (
-      user.role.toLowerCase() === 'administrador' ||
-      user.role.toLowerCase() === 'admin' ||
-      user.role.toLowerCase() === 'administrator'
-    );
+      const isAdmin = user.role && (
+        user.role.toLowerCase() === 'admin' ||
+        user.role.toLowerCase() === 'administrator'
+      );
 
     // Retornar dados do usuário (sem a senha)
     const authUser = {
@@ -122,14 +111,7 @@ router.post('/login', async (req, res) => {
       role: user.role,
       avatar_url: user.avatar_url,
       is_active: user.is_active,
-      is_admin: isAdmin,
-      can_access_dashboard: isAdmin || user.can_access_dashboard,
-      can_access_projects: isAdmin || user.can_access_projects,
-      can_access_briefings: isAdmin || user.can_access_briefings,
-      can_access_codes: isAdmin || user.can_access_codes,
-      can_access_expenses: isAdmin || user.can_access_expenses,
-      can_access_crm: isAdmin || user.can_access_crm,
-      can_access_users: isAdmin || user.can_access_users
+      is_admin: isAdmin
     };
 
     res.json({ 
@@ -233,11 +215,10 @@ router.get('/verify', async (req, res) => {
     const user = userResult.rows[0];
     
     // Verificar se é administrador
-    const isAdmin = user.role && (
-      user.role.toLowerCase() === 'administrador' ||
-      user.role.toLowerCase() === 'admin' ||
-      user.role.toLowerCase() === 'administrator'
-    );
+      const isAdmin = user.role && (
+        user.role.toLowerCase() === 'admin' ||
+        user.role.toLowerCase() === 'administrator'
+      );
     
     // Usar permissões diretas do banco de dados
     res.json({

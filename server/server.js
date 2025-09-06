@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3001;
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://agridom-dashboard.vercel.app', process.env.CORS_ORIGIN].filter(Boolean)
-    : ['http://localhost:8080', 'http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:8080', 'http://127.0.0.1:5173'],
+    : ['http://localhost:8080', 'http://localhost:8081', 'http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:8080', 'http://127.0.0.1:8081', 'http://127.0.0.1:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -36,7 +36,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const authRoutes = require('./routes/auth');
 const crudRoutes = require('./routes/crud');
 const uploadRoutes = require('./routes/upload');
-const permissionsRoutes = require('./routes/permissions');
+
 
 // Wrapper inteligente para queries que detecta Supabase API
 const smartQuery = async (text, params = []) => {
@@ -510,7 +510,7 @@ app.locals.query = smartQuery;
 app.use('/api/auth', authRoutes);
 app.use('/api', crudRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/permissions', permissionsRoutes);
+
 
 // Rota de teste
 app.get('/api/health', async (req, res) => {

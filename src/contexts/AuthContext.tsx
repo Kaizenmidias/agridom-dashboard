@@ -41,8 +41,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Função para carregar lista de usuários
   const loadUsuarios = async () => {
-    if (!user?.can_access_users) return
-    
     try {
       const usuariosList = await getUsers()
       // Garantir que usuariosList seja sempre um array
@@ -165,7 +163,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Carregar usuários quando o usuário logado mudar
   useEffect(() => {
-    if (user?.can_access_users) {
+    if (user) {
       loadUsuarios()
     } else {
       setUsuarios([])

@@ -72,7 +72,7 @@ router.get('/users', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
     const result = await query(
-      'SELECT id, email, name as full_name, role, avatar_url, is_active, created_at, updated_at, can_access_dashboard, can_access_briefings, can_access_codes, can_access_projects, can_access_expenses, can_access_crm, can_access_users FROM users WHERE is_active = 1 ORDER BY created_at DESC'
+      'SELECT id, email, name as full_name, role, avatar_url, is_active, created_at, updated_at FROM users WHERE is_active = 1 ORDER BY created_at DESC'
     );
     
     // Mapear roles para nomes em português
@@ -93,7 +93,7 @@ router.get('/users/:id', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
     const result = await query(
-      'SELECT id, email, full_name, position, avatar_url, is_active, created_at, updated_at, can_access_dashboard, can_access_briefings, can_access_codes, can_access_projects, can_access_expenses, can_access_crm, can_access_users FROM users WHERE id = ? AND is_active = true',
+      'SELECT id, email, full_name, position, avatar_url, is_active, created_at, updated_at FROM users WHERE id = ? AND is_active = true',
       [req.params.id]
     );
     
@@ -129,25 +129,6 @@ router.put('/users/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
     
-    // Se o cargo for Administrador, dar todas as permissões automaticamente
-    const permissions = position === 'Administrador' ? {
-      can_access_dashboard: true,
-      can_access_projects: true,
-      can_access_expenses: true,
-      can_access_crm: true,
-      can_access_briefings: true,
-      can_access_codes: true,
-      can_access_users: true
-    } : {
-      can_access_dashboard: req.body.can_access_dashboard,
-      can_access_projects: req.body.can_access_projects,
-      can_access_expenses: req.body.can_access_expenses,
-      can_access_crm: req.body.can_access_crm,
-      can_access_briefings: req.body.can_access_briefings,
-      can_access_codes: req.body.can_access_codes,
-      can_access_users: req.body.can_access_users
-    };
-    
     // Construir objeto de atualização
     const updateData = {};
     if (full_name !== undefined) updateData.name = full_name;
@@ -156,13 +137,6 @@ router.put('/users/:id', authenticateToken, async (req, res) => {
     if (avatar_url !== undefined) updateData.avatar_url = avatar_url;
     if (is_active !== undefined) updateData.is_active = is_active;
     if (role !== undefined) updateData.role = role;
-    if (permissions.can_access_dashboard !== undefined) updateData.can_access_dashboard = permissions.can_access_dashboard;
-    if (permissions.can_access_briefings !== undefined) updateData.can_access_briefings = permissions.can_access_briefings;
-    if (permissions.can_access_codes !== undefined) updateData.can_access_codes = permissions.can_access_codes;
-    if (permissions.can_access_projects !== undefined) updateData.can_access_projects = permissions.can_access_projects;
-    if (permissions.can_access_expenses !== undefined) updateData.can_access_expenses = permissions.can_access_expenses;
-    if (permissions.can_access_crm !== undefined) updateData.can_access_crm = permissions.can_access_crm;
-    if (permissions.can_access_users !== undefined) updateData.can_access_users = permissions.can_access_users;
     
     // Atualizar usuário diretamente no Supabase
     const { data, error } = await supabase
@@ -192,14 +166,7 @@ router.post('/users', authenticateToken, async (req, res) => {
       password_hash, 
       full_name, 
       position, 
-      bio, 
-      can_access_dashboard,
-      can_access_projects,
-      can_access_expenses,
-      can_access_crm,
-      can_access_briefings,
-      can_access_codes,
-      can_access_users
+      bio
     } = req.body;
     const query = getQuery(req);
     
@@ -241,41 +208,13 @@ router.post('/users', authenticateToken, async (req, res) => {
     const bcrypt = require('bcryptjs');
     const hashedPassword = (password_hash && password_hash.startsWith('$2')) ? password_hash : await bcrypt.hash(password_hash, 10);
 
-    // Se o cargo for Administrador, dar todas as permissões automaticamente
-    const permissions = position === 'Administrador' ? {
-      can_access_dashboard: true,
-      can_access_projects: true,
-      can_access_expenses: true,
-      can_access_crm: true,
-      can_access_briefings: true,
-      can_access_codes: true,
-      can_access_users: true
-    } : {
-      can_access_dashboard: can_access_dashboard || false,
-      can_access_projects: can_access_projects || false,
-      can_access_expenses: can_access_expenses || false,
-      can_access_crm: can_access_crm || false,
-      can_access_briefings: can_access_briefings || false,
-      can_access_codes: can_access_codes || false,
-      can_access_users: can_access_users || false
-    };
-
-    // Inserir novo usuário com permissões
+    // Inserir novo usuário
     const insertResult = await query(
       `INSERT INTO users (
-        email, password_hash, name, role, is_active,
-        can_access_dashboard, can_access_projects, can_access_expenses,
-        can_access_crm, can_access_briefings, can_access_codes, can_access_users
-      ) VALUES (?, ?, ?, ?, true, ?, ?, ?, ?, ?, ?, ?)`,
+        email, password_hash, name, role, is_active
+      ) VALUES (?, ?, ?, ?, true)`,
       [
-        email, hashedPassword, full_name, dbRole,
-        permissions.can_access_dashboard,
-        permissions.can_access_projects,
-        permissions.can_access_expenses,
-        permissions.can_access_crm,
-        permissions.can_access_briefings,
-        permissions.can_access_codes,
-        permissions.can_access_users
+        email, hashedPassword, full_name, dbRole
       ]
     );
     

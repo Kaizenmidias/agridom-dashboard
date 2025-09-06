@@ -17,7 +17,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
-import PermissionProtectedRoute from "./components/PermissionProtectedRoute";
+// Removed PermissionProtectedRoute - no longer needed
 import { useEffect } from "react";
 import { CRMProvider } from "./contexts/CRMContext";
 import { AppSettingsProvider } from "./contexts/AppSettingsContext";
@@ -25,18 +25,19 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
 import { trackPageView } from "./utils/analytics";
 
-// Define routes configuration with permissions
+// Define routes configuration without permissions
 const routes = [
   { path: "/login", element: <LoginPage />, protected: false },
   { path: "/forgot-password", element: <ForgotPasswordPage />, protected: false },
   { path: "/reset-password", element: <ResetPasswordPage />, protected: false },
-  { path: "/", element: <Index />, protected: true, permission: "can_access_dashboard" },
-  { path: "/projetos", element: <ProjetosPage />, protected: true, permission: "can_access_projects" },
-  { path: "/briefings", element: <BriefingsPage />, protected: true, permission: "can_access_briefings" },
-  { path: "/codigos", element: <CodesPage />, protected: true, permission: "can_access_codes" },
-  { path: "/despesas", element: <DespesasPage />, protected: true, permission: "can_access_expenses" },
-  { path: "/crm", element: <CRMPage />, protected: true, permission: "can_access_crm" },
-  { path: "/usuarios", element: <UsuariosPage />, protected: true, permission: "can_access_users" },
+  { path: "/", element: <Index />, protected: true },
+  { path: "/dashboard", element: <Navigate to="/" replace />, protected: false },
+  { path: "/projetos", element: <ProjetosPage />, protected: true },
+  { path: "/briefings", element: <BriefingsPage />, protected: true },
+  { path: "/codigos", element: <CodesPage />, protected: true },
+  { path: "/despesas", element: <DespesasPage />, protected: true },
+  { path: "/crm", element: <CRMPage />, protected: true },
+  { path: "/usuarios", element: <UsuariosPage />, protected: true },
   { path: "*", element: <NotFound />, protected: false }
 ];
 
@@ -128,22 +129,7 @@ const AppLayout = () => {
                   );
                 }
                 
-                // Se tem permissão específica, usar PermissionProtectedRoute
-                if (route.permission) {
-                  return (
-                    <Route 
-                      key={route.path} 
-                      path={route.path} 
-                      element={
-                        <PermissionProtectedRoute permission={route.permission as any}>
-                          {route.element}
-                        </PermissionProtectedRoute>
-                      } 
-                    />
-                  );
-                }
-                
-                // Fallback para ProtectedRoute básico
+                // All protected routes use simple ProtectedRoute
                 return (
                   <Route 
                     key={route.path} 

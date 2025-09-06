@@ -27,16 +27,7 @@ const UsuariosPage = () => {
     full_name: '',
     email: '',
     password: '',
-    position: '',
-    permissions: {
-      can_access_dashboard: false,
-      can_access_briefings: false,
-      can_access_codes: false,
-      can_access_projects: false,
-      can_access_expenses: false,
-      can_access_crm: false,
-      can_access_users: false
-    }
+    position: ''
   });
 
   const resetForm = () => {
@@ -44,16 +35,7 @@ const UsuariosPage = () => {
       full_name: '',
       email: '',
       password: '',
-      position: '',
-      permissions: {
-        can_access_dashboard: false,
-        can_access_briefings: false,
-        can_access_codes: false,
-        can_access_projects: false,
-        can_access_expenses: false,
-        can_access_crm: false,
-        can_access_users: false
-      }
+      position: ''
     });
   };
 
@@ -65,16 +47,6 @@ const UsuariosPage = () => {
 
     setIsCreating(true);
     try {
-      const permissions = newUser.position === 'Administrador' ? {
-        can_access_dashboard: true,
-        can_access_briefings: true,
-        can_access_codes: true,
-        can_access_projects: true,
-        can_access_expenses: true,
-        can_access_crm: true,
-        can_access_users: true
-      } : newUser.permissions;
-
       await createUser({
         email: newUser.email,
         password_hash: newUser.password, // Será hasheado no backend
@@ -82,8 +54,7 @@ const UsuariosPage = () => {
         position: newUser.position || null,
         bio: null,
         avatar_url: null,
-        is_active: true,
-        ...permissions
+        is_active: true
       });
 
       toast({
@@ -135,31 +106,12 @@ const UsuariosPage = () => {
 
     setIsUpdating(true);
     try {
-      const permissions = selectedUser.position === 'Administrador' ? {
-        can_access_dashboard: true,
-        can_access_briefings: true,
-        can_access_codes: true,
-        can_access_projects: true,
-        can_access_expenses: true,
-        can_access_crm: true,
-        can_access_users: true
-      } : {
-        can_access_dashboard: selectedUser.can_access_dashboard,
-        can_access_briefings: selectedUser.can_access_briefings,
-        can_access_codes: selectedUser.can_access_codes,
-        can_access_projects: selectedUser.can_access_projects,
-        can_access_expenses: selectedUser.can_access_expenses,
-        can_access_crm: selectedUser.can_access_crm,
-        can_access_users: selectedUser.can_access_users
-      };
-
       await updateUser(selectedUser.id, {
         full_name: selectedUser.full_name,
         email: selectedUser.email,
         position: selectedUser.position,
-        is_active: selectedUser.is_active,
+        is_active: selectedUser.is_active
         // password_hash será mantido como está no banco
-        ...permissions
       });
 
       if (user && selectedUser.id === user.id) {
@@ -182,15 +134,7 @@ const UsuariosPage = () => {
     }
   };
 
-  const handlePermissionChange = (permission: string, checked: boolean) => {
-    setNewUser(prev => ({
-      ...prev,
-      permissions: {
-        ...prev.permissions,
-        [permission]: checked
-      }
-    }));
-  };
+
 
   if (loading) {
     return (
@@ -313,36 +257,7 @@ const UsuariosPage = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-3">
-                  <Label className="text-sm font-medium">Permissões de Acesso</Label>
-                  
-                  {newUser.position === 'Administrador' ? (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                      <p className="text-sm text-red-700 font-medium">Administradores têm acesso total a todas as funcionalidades automaticamente.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {Object.entries({
-                        can_access_dashboard: 'Dashboard',
-                        can_access_briefings: 'Briefings',
-                        can_access_codes: 'Códigos',
-                        can_access_projects: 'Projetos',
-                        can_access_expenses: 'Despesas',
-                        can_access_crm: 'CRM',
-                        can_access_users: 'Usuários'
-                      }).map(([key, label]) => (
-                        <div key={key} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={key}
-                            checked={newUser.permissions[key as keyof typeof newUser.permissions]}
-                            onCheckedChange={(checked) => handlePermissionChange(key, checked as boolean)}
-                          />
-                          <Label htmlFor={key} className="text-sm">{label}</Label>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -532,74 +447,7 @@ const UsuariosPage = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium">Permissões de Acesso</Label>
-                  
-                  {selectedUser?.position === 'Administrador' ? (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                      <p className="text-sm text-red-700 font-medium">Administradores têm acesso total a todas as funcionalidades automaticamente.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 border rounded-lg p-4">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="edit-can_access_dashboard"
-                          checked={selectedUser.can_access_dashboard}
-                          onCheckedChange={(checked) => setSelectedUser(prev => ({ ...prev!, can_access_dashboard: checked as boolean }))}
-                        />
-                        <Label htmlFor="edit-can_access_dashboard" className="text-sm">Dashboard</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="edit-can_access_briefings"
-                          checked={selectedUser.can_access_briefings}
-                          onCheckedChange={(checked) => setSelectedUser(prev => ({ ...prev!, can_access_briefings: checked as boolean }))}
-                        />
-                        <Label htmlFor="edit-can_access_briefings" className="text-sm">Briefings</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="edit-can_access_codes"
-                          checked={selectedUser.can_access_codes}
-                          onCheckedChange={(checked) => setSelectedUser(prev => ({ ...prev!, can_access_codes: checked as boolean }))}
-                        />
-                        <Label htmlFor="edit-can_access_codes" className="text-sm">Códigos</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="edit-can_access_projects"
-                          checked={selectedUser.can_access_projects}
-                          onCheckedChange={(checked) => setSelectedUser(prev => ({ ...prev!, can_access_projects: checked as boolean }))}
-                        />
-                        <Label htmlFor="edit-can_access_projects" className="text-sm">Projetos</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="edit-can_access_expenses"
-                          checked={selectedUser.can_access_expenses}
-                          onCheckedChange={(checked) => setSelectedUser(prev => ({ ...prev!, can_access_expenses: checked as boolean }))}
-                        />
-                        <Label htmlFor="edit-can_access_expenses" className="text-sm">Despesas</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="edit-can_access_crm"
-                          checked={selectedUser.can_access_crm}
-                          onCheckedChange={(checked) => setSelectedUser(prev => ({ ...prev!, can_access_crm: checked as boolean }))}
-                        />
-                        <Label htmlFor="edit-can_access_crm" className="text-sm">CRM</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="edit-can_access_users"
-                          checked={selectedUser.can_access_users}
-                          onCheckedChange={(checked) => setSelectedUser(prev => ({ ...prev!, can_access_users: checked as boolean }))}
-                        />
-                        <Label htmlFor="edit-can_access_users" className="text-sm">Usuários</Label>
-                      </div>
-                    </div>
-                  )}
-                </div>
+
               </div>
             </div>
             <DialogFooter>
