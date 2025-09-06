@@ -28,6 +28,22 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // Parsing manual do body para Vercel
+  if ((req.method === 'POST' || req.method === 'PUT') && !req.body) {
+    try {
+      let body = '';
+      for await (const chunk of req) {
+        body += chunk;
+      }
+      if (body) {
+        req.body = JSON.parse(body);
+      }
+    } catch (error) {
+      console.error('❌ [BODY-PARSE] Erro ao fazer parse do body:', error);
+      req.body = {};
+    }
+  }
+
   // Log para debug
   console.log('🔍 [API] Request:', {
     method: req.method,
