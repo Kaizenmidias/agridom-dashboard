@@ -58,57 +58,96 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Verificar se há dados de usuário salvos no localStorage e validar token
   useEffect(() => {
+    let isMounted = true; // Flag para evitar atualizações de estado em componente desmontado
+    let hasInitialized = false; // Flag para evitar múltiplas inicializações
+    
     const initAuth = async () => {
+      // Evitar múltiplas execuções simultâneas
+      if (hasInitialized || !isMounted) return;
+      hasInitialized = true;
+      
       try {
         const userData = localStorage.getItem('user_data')
         const token = localStorage.getItem('auth_token')
+        const lastVerification = localStorage.getItem('last_token_verification')
+        const now = Date.now()
+        
+        // Verificar token apenas se passou mais de 5 minutos desde a última verificação
+        const shouldVerifyToken = !lastVerification || (now - parseInt(lastVerification)) > 300000; // 5 minutos
         
         if (userData && token) {
           try {
-            // Primeiro, verificar se o token é válido
-            const validUser = await verifyToken(token)
-            
-            if (validUser) {
-              // Token válido, usar dados mais recentes do servidor
-              localStorage.setItem('user_data', JSON.stringify(validUser))
-              setUser(validUser)
-              console.log('Usuário autenticado com sucesso:', validUser.email)
+            if (shouldVerifyToken) {
+              // Verificar se o token é válido apenas se necessário
+              const validUser = await verifyToken(token)
+              
+              if (validUser && isMounted) {
+                // Token válido, usar dados mais recentes do servidor
+                localStorage.setItem('user_data', JSON.stringify(validUser))
+                localStorage.setItem('last_token_verification', now.toString())
+                setUser(validUser)
+                console.log('Usuário autenticado com sucesso:', validUser.email)
+              } else if (isMounted) {
+                // Token inválido, limpar dados e forçar novo login
+                console.warn('Token inválido detectado, limpando dados de autenticação')
+                localStorage.removeItem('user_data')
+                localStorage.removeItem('auth_token')
+                localStorage.removeItem('token') // Limpar possíveis tokens antigos
+                localStorage.removeItem('user') // Limpar possíveis dados antigos
+                localStorage.removeItem('last_token_verification')
+                setUser(null)
+              }
             } else {
-              // Token inválido, limpar dados e forçar novo login
-              console.warn('Token inválido detectado, limpando dados de autenticação')
-              localStorage.removeItem('user_data')
-              localStorage.removeItem('auth_token')
-              localStorage.removeItem('token') // Limpar possíveis tokens antigos
-              localStorage.removeItem('user') // Limpar possíveis dados antigos
-              setUser(null)
+              // Usar dados do localStorage sem verificar token (ainda válido)
+              const parsedUser = JSON.parse(userData)
+              if (isMounted) {
+                setUser(parsedUser)
+                console.log('Usando dados de autenticação em cache:', parsedUser.email)
+              }
             }
           } catch (tokenError) {
             // Erro na verificação do token - limpar dados para forçar novo login
             console.error('Erro na verificação do token, limpando autenticação:', tokenError)
-            localStorage.removeItem('user_data')
-            localStorage.removeItem('auth_token')
-            localStorage.removeItem('token')
-            localStorage.removeItem('user')
-            setUser(null)
+            if (isMounted) {
+              localStorage.removeItem('user_data')
+              localStorage.removeItem('auth_token')
+              localStorage.removeItem('token')
+              localStorage.removeItem('user')
+              localStorage.removeItem('last_token_verification')
+              setUser(null)
+            }
           }
         } else {
           // Não há dados salvos, garantir que está limpo
-          setUser(null)
+          if (isMounted) {
+            setUser(null)
+          }
         }
       } catch (error) {
         console.error('Erro ao verificar autenticação:', error)
         // Limpar todos os dados em caso de erro
-        localStorage.removeItem('user_data')
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        setUser(null)
+        if (isMounted) {
+          localStorage.removeItem('user_data')
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          localStorage.removeItem('last_token_verification')
+          setUser(null)
+        }
       } finally {
-        setLoading(false)
+        if (isMounted) {
+          setLoading(false)
+        }
       }
     }
 
-    initAuth()
+    // Usar timeout para evitar execução imediata e throttling
+    const timeoutId = setTimeout(initAuth, 100);
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [])
 
   // Polling para verificar atualizações de permissões (desabilitado para evitar throttling)

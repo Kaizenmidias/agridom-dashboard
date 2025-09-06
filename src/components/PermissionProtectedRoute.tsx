@@ -15,6 +15,7 @@ const PermissionProtectedRoute: React.FC<PermissionProtectedRouteProps> = ({
   fallbackPath = '/briefings' // Página padrão para usuários sem permissão
 }) => {
   const { user, loading } = useAuth();
+  const [hasRedirected, setHasRedirected] = React.useState(false);
 
   if (loading) {
     return (
@@ -39,17 +40,40 @@ const PermissionProtectedRoute: React.FC<PermissionProtectedRouteProps> = ({
   // Verificar se o usuário tem a permissão específica
   const hasPermission = user[permission] === true;
 
-  if (!hasPermission) {
+  if (!hasPermission && !hasRedirected) {
+    // Evitar loops infinitos de redirecionamento
+    setHasRedirected(true);
+    
     // Redirecionar para uma página que o usuário tem acesso
     // Primeiro, tentar briefings, depois códigos, depois login
-    if (user.can_access_briefings) {
+    if (user.can_access_briefings && window.location.pathname !== '/briefings') {
       return <Navigate to="/briefings" replace />;
-    } else if (user.can_access_codes) {
+    } else if (user.can_access_codes && window.location.pathname !== '/codigos') {
       return <Navigate to="/codigos" replace />;
-    } else {
+    } else if (window.location.pathname !== '/login') {
       // Se não tem acesso a nada, fazer logout
+      localStorage.removeItem('user_data');
+      localStorage.removeItem('auth_token');
       return <Navigate to="/login" replace />;
     }
+  }
+
+  // Se não tem permissão mas já redirecionou, mostrar mensagem de erro
+  if (!hasPermission) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Acesso Negado</h1>
+          <p className="text-gray-600 mb-4">Você não tem permissão para acessar esta página.</p>
+          <button 
+            onClick={() => window.location.href = '/briefings'}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Voltar ao Início
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;

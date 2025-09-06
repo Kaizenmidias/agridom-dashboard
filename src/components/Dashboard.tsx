@@ -77,33 +77,53 @@ const Dashboard = () => {
   
   // Load dashboard data from backend
   useEffect(() => {
+    let isMounted = true;
+    let hasLoaded = false;
+    
     const loadDashboardData = async () => {
+      // Evitar múltiplas execuções simultâneas
+      if (hasLoaded || !isMounted) return;
+      hasLoaded = true;
+      
       try {
-        setLoading(true);
+        if (isMounted) {
+          setLoading(true);
+        }
+        
         const stats = await getDashboardStats();
-        setDashboardStats(stats);
         
-        // Update state with real data - ensure proper number conversion with safe access
-        const revenue = parseFloat(String(stats?.projects?.total_paid_value || 0));
-        const expenses = parseFloat(String(stats?.current_period?.expenses || 0));
-        
-        setMonthlyRevenue(revenue);
-        setActiveProjects(Number(stats?.projects?.active_projects) || 0);
-        setCompletedProjects(Number(stats?.projects?.completed_projects) || 0);
-        setTotalExpenses(expenses);
-        
-
-        
+        if (isMounted) {
+          setDashboardStats(stats);
+          
+          // Update state with real data - ensure proper number conversion with safe access
+          const revenue = parseFloat(String(stats?.projects?.total_paid_value || 0));
+          const expenses = parseFloat(String(stats?.current_period?.expenses || 0));
+          
+          setMonthlyRevenue(revenue);
+          setActiveProjects(Number(stats?.projects?.active_projects) || 0);
+          setCompletedProjects(Number(stats?.projects?.completed_projects) || 0);
+          setTotalExpenses(expenses);
+        }
       } catch (error) {
         console.error('Erro ao carregar dados do dashboard:', error);
-        toast.error('Erro ao carregar dados do dashboard');
+        if (isMounted) {
+          toast.error('Erro ao carregar dados do dashboard');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     
-    loadDashboardData();
-  }, []);
+    // Usar timeout para evitar execução imediata e throttling
+     const timeoutId = setTimeout(loadDashboardData, 200);
+     
+     return () => {
+       isMounted = false;
+       clearTimeout(timeoutId);
+     };
+   }, []);
   
   // Handle changes
   const handleTitleChange = (value: string | number) => {
