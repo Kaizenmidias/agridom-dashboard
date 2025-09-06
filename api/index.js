@@ -104,17 +104,27 @@ export default async function handler(req, res) {
     }
 
     try {
+      console.log('🔍 [LOGIN] Iniciando processo de login');
+      console.log('🔍 [LOGIN] Tipo do body:', typeof req.body);
+      console.log('🔍 [LOGIN] Body raw:', req.body);
+      
       // Parse do body da requisição
       let body;
       if (typeof req.body === 'string') {
+        console.log('🔍 [LOGIN] Fazendo parse do body string');
         body = JSON.parse(req.body);
       } else {
+        console.log('🔍 [LOGIN] Body já é objeto');
         body = req.body;
       }
       
+      console.log('🔍 [LOGIN] Body parseado:', body);
       const { email, password } = body;
+      console.log('🔍 [LOGIN] Email extraído:', email);
+      console.log('🔍 [LOGIN] Password presente:', !!password);
 
       if (!email || !password) {
+        console.log('🔍 [LOGIN] Email ou senha ausentes');
         return res.status(400).json({ error: 'Email e senha são obrigatórios' });
       }
 
@@ -193,15 +203,22 @@ export default async function handler(req, res) {
         }
       };
 
+      console.log('🔍 [LOGIN] Login realizado com sucesso para:', email);
       return res.json({ 
         message: 'Login realizado com sucesso',
         user: authUser, 
         token 
       });
     } catch (error) {
+      console.error('❌ [LOGIN] Erro no processo de login:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       return res.status(500).json({ 
         error: 'Erro interno do servidor',
-        details: error.message
+        details: error.message,
+        errorName: error.name
       });
     }
   }
