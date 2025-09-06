@@ -14,7 +14,7 @@ const API_URLS = {
 // URLs específicas para autenticação
 const AUTH_API_URLS = {
   development: 'http://localhost:8080/api/auth',
-  production: '/api/auth' // API routes da Vercel no mesmo projeto
+  production: '/api' // API routes da Vercel no mesmo projeto
 };
 
 // Exporta a URL base da API baseada no ambiente
