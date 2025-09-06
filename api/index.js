@@ -60,6 +60,29 @@ export default async function handler(req, res) {
     });
   }
   
+  // Teste de login simples
+  if (url.includes('/api/test-login')) {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' });
+    }
+    
+    try {
+      console.log('🧪 [TEST-LOGIN] Headers:', req.headers);
+      console.log('🧪 [TEST-LOGIN] Body type:', typeof req.body);
+      console.log('🧪 [TEST-LOGIN] Body:', req.body);
+      
+      return res.json({ 
+        message: 'Teste de login funcionando',
+        bodyReceived: req.body,
+        bodyType: typeof req.body,
+        headers: req.headers
+      });
+    } catch (error) {
+      console.error('🧪 [TEST-LOGIN] Erro:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+  
   if (url.includes('/api/testdb')) {
     try {
       // Buscar todos os usuários ativos
