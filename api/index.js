@@ -33,7 +33,7 @@ export default async function handler(req, res) {
   }
 
   // Rota de login com fallback para credenciais específicas
-  if (req.url === '/api/login') {
+  if (req.url === '/api/login' || req.url === '/api/auth/login') {
     if (req.method === 'POST') {
       try {
         const { email, password } = req.body || {};
