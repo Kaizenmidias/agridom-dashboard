@@ -49,12 +49,14 @@ const ProjetosPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user]); // Removido toast das dependências para evitar re-renders
 
   // Carregar projetos quando o componente montar
   useEffect(() => {
-    loadProjects();
-  }, [user, toast, loadProjects]);
+    if (user) {
+      loadProjects();
+    }
+  }, [user]); // Simplificado para evitar loops de dependência
 
   const handleDeleteProject = async (id: string) => {
     try {

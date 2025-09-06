@@ -111,55 +111,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     initAuth()
   }, [])
 
-  // Polling para verificar atualizações de permissões (reduzido para evitar throttling)
+  // Polling para verificar atualizações de permissões (desabilitado para evitar throttling)
   useEffect(() => {
     if (!user) return
 
-    let isCheckingUpdates = false
+    // Polling desabilitado temporariamente para resolver problema de throttling
+    // As permissões serão atualizadas apenas no próximo login
+    console.log('Polling de permissões desabilitado para evitar throttling do navegador')
 
-    const checkForUpdates = async () => {
-      // Evitar múltiplas requisições simultâneas
-      if (isCheckingUpdates) return
-      isCheckingUpdates = true
-
-      try {
-        const token = localStorage.getItem('auth_token')
-        if (!token) {
-          isCheckingUpdates = false
-          return
-        }
-
-        const updatedUser = await verifyToken(token)
-        if (updatedUser) {
-          // Verificar se as permissões mudaram
-          const permissionsChanged = [
-            'can_access_dashboard',
-            'can_access_projects', 
-            'can_access_briefings',
-            'can_access_codes',
-            'can_access_expenses',
-            'can_access_crm',
-            'can_access_users'
-          ].some(permission => user[permission as keyof AuthUser] !== updatedUser[permission as keyof AuthUser])
-
-          if (permissionsChanged) {
-            localStorage.setItem('user_data', JSON.stringify(updatedUser))
-            setUser(updatedUser)
-            console.log('Permissões do usuário atualizadas automaticamente')
-          }
-        }
-      } catch (error) {
-        // Silenciar erros de polling para não interferir na experiência do usuário
-        console.debug('Erro no polling de permissões:', error)
-      } finally {
-        isCheckingUpdates = false
-      }
-    }
-
-    // Verificar a cada 5 minutos (300 segundos) em vez de 30 segundos para reduzir throttling
-    const interval = setInterval(checkForUpdates, 300000)
-
-    return () => clearInterval(interval)
+    // Se necessário reativar no futuro, usar intervalo muito maior (30+ minutos)
+    // const interval = setInterval(checkForUpdates, 1800000) // 30 minutos
+    // return () => clearInterval(interval)
   }, [user])
 
   // Carregar usuários quando o usuário logado mudar

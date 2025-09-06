@@ -234,13 +234,16 @@ export const useCRMContext = (): CRMContextState => {
     }
   }, [getModuleData, companyName]);
 
-  // Synchronisation initiale au chargement
+  // Synchronisation initiale au chargement (desabilitada para evitar throttling)
   useEffect(() => {
-    const initialSync = setTimeout(() => {
-      syncDataAcrossCRM();
-    }, 1000);
+    // Sincronização automática desabilitada para resolver problema de throttling
+    console.log('Sincronização automática do CRM desabilitada para evitar throttling do navegador');
     
-    return () => clearTimeout(initialSync);
+    // Se necessário reativar no futuro, usar delay maior
+    // const initialSync = setTimeout(() => {
+    //   syncDataAcrossCRM();
+    // }, 5000); // 5 segundos em vez de 1
+    // return () => clearTimeout(initialSync);
   }, [syncDataAcrossCRM]);
 
   return {
