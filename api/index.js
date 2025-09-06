@@ -28,6 +28,27 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // Middleware para parsing do body JSON no Vercel
+  if (req.method === 'POST' || req.method === 'PUT') {
+    if (!req.body && req.headers['content-type']?.includes('application/json')) {
+      let body = '';
+      req.on('data', chunk => {
+        body += chunk.toString();
+      });
+      req.on('end', () => {
+        try {
+          req.body = JSON.parse(body);
+        } catch (e) {
+          req.body = {};
+        }
+      });
+      // Aguardar o parsing do body
+      await new Promise(resolve => {
+        req.on('end', resolve);
+      });
+    }
+  }
+
   const { url } = req;
   
   if (url.includes('/api/simple-test')) {
