@@ -126,14 +126,26 @@ export default async function handler(req, res) {
 
     try {
       console.log('🔍 [LOGIN] Iniciando processo de login');
+      console.log('🔍 [LOGIN] Headers:', req.headers);
       console.log('🔍 [LOGIN] Tipo do body:', typeof req.body);
       console.log('🔍 [LOGIN] Body raw:', req.body);
+      
+      // Teste simples primeiro
+      if (!req.body) {
+        console.log('❌ [LOGIN] Body está vazio ou undefined');
+        return res.status(400).json({ error: 'Body da requisição está vazio' });
+      }
       
       // Parse do body da requisição
       let body;
       if (typeof req.body === 'string') {
         console.log('🔍 [LOGIN] Fazendo parse do body string');
-        body = JSON.parse(req.body);
+        try {
+          body = JSON.parse(req.body);
+        } catch (parseError) {
+          console.log('❌ [LOGIN] Erro ao fazer parse do JSON:', parseError.message);
+          return res.status(400).json({ error: 'JSON inválido' });
+        }
       } else {
         console.log('🔍 [LOGIN] Body já é objeto');
         body = req.body;
