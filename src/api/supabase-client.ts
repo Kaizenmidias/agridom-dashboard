@@ -487,15 +487,31 @@ export const crudAPI = {
       const userId = 1; // User_id fixo para evitar problemas de RLS
       console.log('🔍 DEBUG - Usando user_id fixo:', userId);
       
+      // Validar campos obrigatórios
+      if (!codeData.title || codeData.title.trim() === '') {
+        throw new Error('Title é obrigatório');
+      }
+      
+      if (!codeData.code_content && !codeData.content) {
+        throw new Error('Code content é obrigatório');
+      }
+      
+      // Validar language constraint (deve ser css, html ou javascript)
+      const validLanguages = ['css', 'html', 'javascript'];
+      const language = codeData.language || 'javascript';
+      if (!validLanguages.includes(language)) {
+        throw new Error(`Language deve ser um dos valores: ${validLanguages.join(', ')}`);
+      }
+      
       // Gerar identificador único mais robusto
       const uniqueId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
-        title: `${codeData.title}_${uniqueId}`, // Usar ID único mais robusto
-        language: codeData.language || 'javascript',
+        title: `${codeData.title.trim()}_${uniqueId}`, // Usar ID único mais robusto
+        language: language,
         code_content: codeData.code_content || codeData.content || '',
-        description: codeData.description || '',
+        description: codeData.description || null, // Usar null em vez de string vazia
         user_id: userId
       }
 
