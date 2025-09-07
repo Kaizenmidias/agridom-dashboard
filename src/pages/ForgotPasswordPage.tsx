@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Mail, ArrowLeft, KeyRound } from 'lucide-react';
+import { authAPI } from '@/api/supabase-client';
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
@@ -34,39 +35,26 @@ const ForgotPasswordPage = () => {
     setLoading(true);
     
     try {
-      console.log('Fazendo fetch para /api/forgot-password');
-    const response = await fetch('/api/forgot-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
+      const result = await authAPI.forgotPassword(email);
       
-      console.log('Response recebida:', response.status, response.statusText);
-      const data = await response.json();
-      console.log('Data recebida:', data);
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao enviar email de recuperação');
+      if (result.success) {
+        setShowSuccessMessage(true);
+        setEmail('');
+        toast({
+          title: "Email enviado!",
+          description: result.message || "Verifique sua caixa de entrada para redefinir sua senha.",
+        });
+      } else {
+        throw new Error(result.error || 'Erro ao enviar email de recuperação');
       }
-      
-      // Mostrar mensagem de sucesso personalizada
-      console.log('Mostrando mensagem de sucesso');
-      setShowSuccessMessage(true);
-      
-      // Limpar o campo de email após envio
-      setEmail('');
-      
     } catch (error: any) {
-      console.error('Erro ao solicitar recuperação:', error);
+      console.error('Erro no forgot password:', error);
       toast({
         title: "Erro",
         description: error.message || 'Erro ao enviar email de recuperação',
         variant: "destructive",
       });
     } finally {
-      console.log('Finalizando, setLoading(false)');
       setLoading(false);
     }
   };

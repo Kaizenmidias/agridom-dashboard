@@ -46,44 +46,26 @@ export const changePassword = async (currentPassword: string, newPassword: strin
 }
 
 export async function uploadAvatar(file: File): Promise<AuthUser | null> {
-  const token = localStorage.getItem('auth_token')
+  const result = await authAPI.uploadAvatar(file);
   
-  const formData = new FormData()
-  formData.append('avatar', file)
-  
-  const response = await fetch(`${API_BASE_URL}/upload/avatar`, {
-    method: 'POST',
-    headers: {
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-    },
-    body: formData,
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-    throw new Error(error.error || 'Erro ao fazer upload do avatar')
+  if (result.success) {
+    return result.user;
+  } else {
+    throw new Error(result.error || 'Erro ao fazer upload do avatar');
   }
-
-  const result = await response.json()
-  return result.user
 }
 
 export async function registerUser(credentials: RegisterCredentials): Promise<AuthResponse> {
-  const response = await fetch(`${AUTH_API_BASE_URL}/register`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(credentials),
-  })
-
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Erro no registro')
+  const result = await authAPI.register(credentials);
+  
+  if (result.success) {
+    if (result.token) {
+      localStorage.setItem('auth_token', result.token);
+    }
+    return result;
+  } else {
+    throw new Error(result.error || 'Erro ao registrar usuário');
   }
-
-  return data
 }
 
 // Função para verificar token
@@ -108,22 +90,11 @@ export async function updateUserProfile(userData: {
   bio?: string;
   avatar_url?: string;
 }): Promise<AuthUser> {
-  const token = localStorage.getItem('auth_token')
+  const result = await authAPI.updateProfile(userData);
   
-  const response = await fetch(`${AUTH_API_BASE_URL}/profile`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-    },
-    body: JSON.stringify(userData),
-  })
-
-  const data = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Erro ao atualizar perfil')
+  if (result.success) {
+    return result.user;
+  } else {
+    throw new Error(result.error || 'Erro ao atualizar perfil');
   }
-
-  return data
 }

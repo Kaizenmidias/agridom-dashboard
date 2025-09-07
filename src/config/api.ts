@@ -1,25 +1,17 @@
-// Configuração da API
-// Este arquivo centraliza as configurações de URL da API para facilitar
-// a mudança entre ambientes de desenvolvimento e produção
+// Configuração da aplicação
+// Este arquivo centraliza as configurações gerais da aplicação
 
 // Detecta automaticamente o ambiente baseado na URL atual
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+export const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 
-// URLs da API para diferentes ambientes
-const API_URLS = {
-  development: 'http://localhost:8080/api',
-  production: '/api' // API routes da Vercel no mesmo projeto
+// URLs base da aplicação
+export const APP_URLS = {
+  development: 'http://localhost:8080',
+  production: window.location.origin
 };
 
-// URLs específicas para autenticação
-const AUTH_API_URLS = {
-  development: 'http://localhost:8080/api/auth',
-  production: '/api/auth' // API routes da Vercel no mesmo projeto
-};
-
-// Exporta a URL base da API baseada no ambiente
-export const API_BASE_URL = isProduction ? API_URLS.production : API_URLS.development;
-export const AUTH_API_BASE_URL = isProduction ? AUTH_API_URLS.production : AUTH_API_URLS.development;
+// Exporta a URL base da aplicação baseada no ambiente
+export const APP_BASE_URL = isProduction ? APP_URLS.production : APP_URLS.development;
 
 // Configurações adicionais da API
 export const API_CONFIG = {

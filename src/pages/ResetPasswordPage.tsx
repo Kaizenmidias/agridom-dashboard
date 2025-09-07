@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, Lock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { authAPI } from '@/api/supabase-client';
 
 const ResetPasswordPage = () => {
   const [searchParams] = useSearchParams();
@@ -56,34 +57,23 @@ const ResetPasswordPage = () => {
     setError('');
 
     try {
-      const response = await fetch('/api/reset-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token,
-          newPassword,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao redefinir senha');
+      const result = await authAPI.resetPassword(token, newPassword);
+      
+      if (result.success) {
+        setSuccess(true);
+        toast.success(result.message || 'Senha redefinida com sucesso!');
+        
+        // Redirecionar para login após 2 segundos
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
+      } else {
+        throw new Error(result.error || 'Erro ao redefinir senha');
       }
 
-      setSuccess(true);
-      toast.success('Senha redefinida com sucesso!');
-      
-      // Redirecionar para login após 3 segundos
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
-
-    } catch (error) {
-      console.error('Erro ao redefinir senha:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao redefinir senha');
+    } catch (error: any) {
+      setError(error.message || 'Erro interno do servidor');
+      toast.error(error.message || 'Erro ao redefinir senha');
     } finally {
       setIsLoading(false);
     }
