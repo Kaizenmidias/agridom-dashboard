@@ -313,15 +313,37 @@ export const crudAPI = {
 
   async createProject(projectData: any) {
     try {
+      // Mapear campos do frontend para o schema do banco
+      const mappedData = {
+        name: projectData.name,
+        client: projectData.client || '',
+        project_type: projectData.project_type || 'website',
+        status: projectData.status || 'active',
+        description: projectData.description || '',
+        project_value: projectData.project_value || projectData.value || 0,
+        paid_value: projectData.paid_value || 0,
+        delivery_date: projectData.delivery_date || null,
+        completion_date: projectData.completion_date || null,
+        user_id: projectData.user_id || 1 // Usar user_id fornecido ou padrão
+      }
+
+      console.log('🔍 DEBUG Supabase - Dados do projeto mapeados:', mappedData)
+
       const { data, error } = await supabase
         .from('projects')
-        .insert([projectData])
+        .insert([mappedData])
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('🔍 DEBUG Supabase - Erro na inserção do projeto:', error)
+        throw error
+      }
+      
+      console.log('🔍 DEBUG Supabase - Projeto criado com sucesso:', data)
       return { data, success: true }
     } catch (error: any) {
+      console.error('🔍 DEBUG Supabase - Erro capturado no projeto:', error)
       return handleSupabaseError(error)
     }
   },
@@ -373,15 +395,35 @@ export const crudAPI = {
 
   async createExpense(expenseData: any) {
     try {
+      // Mapear campos do frontend para o schema do banco
+      const mappedData = {
+        description: expenseData.description,
+        value: expenseData.amount || expenseData.value, // Mapear 'amount' para 'value'
+        category: expenseData.category || 'Geral',
+        date: expenseData.date || expenseData.expense_date,
+        billing_type: expenseData.billing_type || 'unica',
+        project_id: expenseData.project_id || null,
+        user_id: expenseData.user_id || 1, // Usar user_id fornecido ou padrão
+        notes: expenseData.notes || ''
+      }
+
+      console.log('🔍 DEBUG Supabase - Dados mapeados para inserção:', mappedData)
+
       const { data, error } = await supabase
         .from('expenses')
-        .insert([expenseData])
+        .insert([mappedData])
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('🔍 DEBUG Supabase - Erro na inserção:', error)
+        throw error
+      }
+      
+      console.log('🔍 DEBUG Supabase - Despesa criada com sucesso:', data)
       return { data, success: true }
     } catch (error: any) {
+      console.error('🔍 DEBUG Supabase - Erro capturado:', error)
       return handleSupabaseError(error)
     }
   },
@@ -433,15 +475,32 @@ export const crudAPI = {
 
   async createCode(codeData: any) {
     try {
+      // Mapear campos do frontend para o schema do banco
+      const mappedData = {
+        title: codeData.title,
+        language: codeData.language || 'javascript',
+        code_content: codeData.code_content || codeData.content || '',
+        description: codeData.description || '',
+        user_id: codeData.user_id || 1 // Usar user_id fornecido ou padrão
+      }
+
+      console.log('🔍 DEBUG Supabase - Dados do código mapeados:', mappedData)
+
       const { data, error } = await supabase
         .from('codes')
-        .insert([codeData])
+        .insert([mappedData])
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('🔍 DEBUG Supabase - Erro na inserção do código:', error)
+        throw error
+      }
+      
+      console.log('🔍 DEBUG Supabase - Código criado com sucesso:', data)
       return { data, success: true }
     } catch (error: any) {
+      console.error('🔍 DEBUG Supabase - Erro capturado no código:', error)
       return handleSupabaseError(error)
     }
   },
