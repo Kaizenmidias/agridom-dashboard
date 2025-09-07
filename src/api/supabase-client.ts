@@ -487,9 +487,12 @@ export const crudAPI = {
       const userId = 1; // User_id fixo para evitar problemas de RLS
       console.log('🔍 DEBUG - Usando user_id fixo:', userId);
       
+      // Gerar identificador único mais robusto
+      const uniqueId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
-        title: `${codeData.title}_${Date.now()}`, // Adicionar timestamp para evitar duplicatas
+        title: `${codeData.title}_${uniqueId}`, // Usar ID único mais robusto
         language: codeData.language || 'javascript',
         code_content: codeData.code_content || codeData.content || '',
         description: codeData.description || '',
@@ -506,6 +509,12 @@ export const crudAPI = {
 
       if (error) {
         console.error('🔍 DEBUG Supabase - Erro na inserção do código:', error)
+        console.error('🔍 DEBUG Supabase - Detalhes do erro:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
         throw error
       }
       
