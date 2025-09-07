@@ -515,12 +515,9 @@ export const crudAPI = {
         throw new Error(`Language deve ser um dos valores: ${validLanguages.join(', ')}`);
       }
       
-      // Gerar identificador único mais robusto
-      const uniqueId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
       // Mapear campos do frontend para o schema do banco
       const insertData = {
-        title: `${codeData.title.trim()}_${uniqueId}`,
+        title: codeData.title.trim(),
         language: language,
         code_content: codeData.code_content || codeData.content || '',
         description: codeData.description || null,
