@@ -319,7 +319,7 @@ export const crudAPI = {
       
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
-        name: `${projectData.name}_${Date.now()}`, // Adicionar timestamp para evitar duplicatas
+        name: projectData.name.trim(), // Usar nome exato digitado pelo usuário
         client: projectData.client || '',
         project_type: projectData.project_type || 'website',
         status: projectData.status || 'active',
@@ -336,16 +336,14 @@ export const crudAPI = {
       const { data, error } = await supabase
         .from('projects')
         .insert([mappedData])
-        .select()
-        .single()
 
       if (error) {
         console.error('🔍 DEBUG Supabase - Erro na inserção do projeto:', error)
         throw error
       }
       
-      console.log('🔍 DEBUG Supabase - Projeto criado com sucesso:', data)
-      return { data, success: true }
+      console.log('🔍 DEBUG Supabase - Projeto criado com sucesso')
+      return { data: { id: 'created' }, success: true }
     } catch (error: any) {
       console.error('🔍 DEBUG Supabase - Erro capturado no projeto:', error)
       return handleSupabaseError(error)
