@@ -15,6 +15,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 async function debugSupabaseInserts() {
   console.log('🔍 Iniciando debug dos erros 409 Conflict...');
   
+  let validUserId = 1;
+  
   try {
     // 1. Verificar se user_id = 1 existe
     console.log('\n1️⃣ Verificando se user_id = 1 existe...');
@@ -40,9 +42,11 @@ async function debugSupabaseInserts() {
       } else {
         console.log('✅ Usuário encontrado:', anyUser);
         console.log('💡 Use user_id =', anyUser.id, 'nas inserções');
+        validUserId = anyUser.id;
       }
     } else {
       console.log('✅ User_id = 1 existe:', userData);
+      validUserId = userData.id;
     }
     
     // 2. Testar inserção de projeto
@@ -57,7 +61,7 @@ async function debugSupabaseInserts() {
       paid_value: 0,
       delivery_date: null,
       completion_date: null,
-      user_id: userData?.id || anyUser?.id || 1
+      user_id: validUserId
     };
     
     console.log('📤 Dados do projeto:', projectData);

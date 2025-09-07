@@ -27,7 +27,7 @@ const UsuariosPage = () => {
     full_name: '',
     email: '',
     password: '',
-    position: ''
+    role: ''
   });
 
   const resetForm = () => {
@@ -35,7 +35,7 @@ const UsuariosPage = () => {
       full_name: '',
       email: '',
       password: '',
-      position: ''
+      role: ''
     });
   };
 
@@ -51,7 +51,7 @@ const UsuariosPage = () => {
         email: newUser.email,
         password_hash: newUser.password, // Será hasheado no backend
         full_name: newUser.full_name || null,
-        position: newUser.position || null,
+        role: newUser.role || 'user',
         bio: null,
         avatar_url: null,
         is_active: true
@@ -74,7 +74,13 @@ const UsuariosPage = () => {
   };
 
   const handleEditUser = (usuario: AuthUser) => {
-    setSelectedUser(usuario);
+    setSelectedUser({
+      id: usuario.id,
+      email: usuario.email,
+      full_name: usuario.full_name,
+      role: usuario.role,
+      is_active: usuario.is_active
+    });
     setIsEditDialogOpen(true);
   };
 
@@ -109,7 +115,7 @@ const UsuariosPage = () => {
       await updateUser(selectedUser.id, {
         full_name: selectedUser.full_name,
         email: selectedUser.email,
-        position: selectedUser.position,
+        role: selectedUser.role,
         is_active: selectedUser.is_active
         // password_hash será mantido como está no banco
       });
@@ -164,11 +170,25 @@ const UsuariosPage = () => {
     { id: 5, nome: "Configurações", descricao: "Alterar configurações do sistema" }
   ];
 
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'Administrador';
+      case 'user':
+        return 'Colaborador';
+      default:
+        return role || 'Sem cargo';
+    }
+  };
+
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'Administrador': return 'bg-red-100 text-red-800';
-      case 'Web Designer': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'admin':
+        return 'bg-red-100 text-red-800';
+      case 'user':
+        return 'bg-blue-100 text-blue-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -183,7 +203,7 @@ const UsuariosPage = () => {
 
   const usuariosAtivos = usuarios?.filter(u => u.is_active).length || 0;
   const totalUsuarios = usuarios?.length || 0;
-  const administradores = usuarios?.filter(u => u.position === 'Administrador').length || 0;
+  const administradores = usuarios?.filter(u => u.role === 'admin').length || 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -244,16 +264,16 @@ const UsuariosPage = () => {
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="position" className="text-right">
+                  <Label htmlFor="role" className="text-right">
                     Cargo
                   </Label>
-                  <Select value={newUser.position} onValueChange={(value) => setNewUser(prev => ({ ...prev, position: value }))}>
+                  <Select value={newUser.role} onValueChange={(value) => setNewUser(prev => ({ ...prev, role: value }))}>
                     <SelectTrigger className="col-span-3">
                       <SelectValue placeholder="Selecione o cargo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Administrador">Administrador</SelectItem>
-                      <SelectItem value="Web Designer">Web Designer</SelectItem>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                      <SelectItem value="user">Colaborador</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -351,8 +371,8 @@ const UsuariosPage = () => {
                   <div className="flex items-center space-x-4">
                     <div className="text-right space-y-1">
                       <div className="flex space-x-2">
-                        <Badge className={getRoleColor(usuario.position || 'Sem cargo')}>
-                          {usuario.position || 'Sem cargo'}
+                        <Badge className={getRoleColor(usuario.role)}>
+                          {getRoleDisplayName(usuario.role)}
                         </Badge>
                         <Badge className={getStatusColor(usuario.is_active ? 'Ativo' : 'Inativo')}>
                           {usuario.is_active ? 'Ativo' : 'Inativo'}
@@ -420,16 +440,16 @@ const UsuariosPage = () => {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-position" className="block text-sm font-medium mb-2">
+                  <Label htmlFor="edit-role" className="block text-sm font-medium mb-2">
                     Cargo
                   </Label>
-                  <Select value={selectedUser.position} onValueChange={(value) => setSelectedUser(prev => ({ ...prev!, position: value }))}>
+                  <Select value={selectedUser.role} onValueChange={(value) => setSelectedUser(prev => ({ ...prev!, role: value }))}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione o cargo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Administrador">Administrador</SelectItem>
-                      <SelectItem value="Web Designer">Web Designer</SelectItem>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                      <SelectItem value="user">Colaborador</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -481,8 +501,8 @@ const UsuariosPage = () => {
                 <div>
                   <h3 className="font-medium">{selectedUser.full_name}</h3>
                   <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
-                  <Badge className={getRoleColor(selectedUser.position)}>
-                    {selectedUser.position}
+                  <Badge className={getRoleColor(selectedUser.role)}>
+                    {getRoleDisplayName(selectedUser.role)}
                   </Badge>
                 </div>
               </div>

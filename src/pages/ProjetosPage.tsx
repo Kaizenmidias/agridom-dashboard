@@ -60,20 +60,13 @@ const ProjetosPage = () => {
 
   const handleDeleteProject = async (id: string) => {
     try {
-      const success = await deleteProject(id);
-      if (success) {
-        setProjetos(projetos.filter(projeto => projeto.id !== id));
-        toast({
-          title: "Projeto excluído",
-          description: "O projeto foi removido com sucesso.",
-        });
-      } else {
-        toast({
-          title: "Erro",
-          description: "Não foi possível excluir o projeto.",
-          variant: "destructive"
-        });
-      }
+      await deleteProject(parseInt(id));
+      // Se chegou até aqui, a exclusão foi bem-sucedida
+      setProjetos(projetos.filter(projeto => projeto.id !== id));
+      toast({
+        title: "Projeto excluído",
+        description: "O projeto foi removido com sucesso.",
+      });
     } catch (error) {
       console.error('Erro ao excluir projeto:', error);
       toast({

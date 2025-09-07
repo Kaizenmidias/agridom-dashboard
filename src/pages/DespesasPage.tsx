@@ -183,7 +183,7 @@ const DespesasPage = () => {
                 };
               })}
               columns={[
-                { id: 'description', header: 'Descrição', accessorKey: 'description', isEditable: false },
+                { id: 'description', header: 'Despesa', accessorKey: 'description', isEditable: false },
                 { id: 'amount', header: 'Valor Original', accessorKey: 'amount', isEditable: false },
                 { id: 'monthly_amount', header: 'Valor Mensal', accessorKey: 'monthly_amount', isEditable: false },
                 { id: 'billing_type', header: 'Tipo de Cobrança', accessorKey: 'billing_type', isEditable: false },

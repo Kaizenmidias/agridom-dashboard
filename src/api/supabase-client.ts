@@ -158,7 +158,7 @@ export const authAPI = {
         options: {
           data: {
             full_name: credentials.full_name,
-            position: credentials.position,
+            role: credentials.role,
             bio: credentials.bio || '',
           }
         }
@@ -313,9 +313,9 @@ export const crudAPI = {
 
   async createProject(projectData: any) {
     try {
-      // Usar user_id padrão sem verificação para evitar erro 406 RLS
-      const userId = 1; // User_id fixo para evitar problemas de RLS
-      console.log('🔍 DEBUG - Usando user_id fixo para projeto:', userId);
+      // Usar user_id válido existente na tabela users
+      const userId = 25; // User_id válido (Ricardo) para evitar foreign key constraint
+      console.log('🔍 DEBUG - Usando user_id válido para projeto:', userId);
       
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
@@ -357,10 +357,15 @@ export const crudAPI = {
         .update(projectData)
         .eq('id', id)
         .select()
-        .single()
 
       if (error) throw error
-      return { data, success: true }
+      
+      // Verificar se algum registro foi atualizado
+      if (!data || data.length === 0) {
+        throw new Error('Projeto não encontrado ou não foi possível atualizar')
+      }
+      
+      return { data: data[0], success: true }
     } catch (error: any) {
       return handleSupabaseError(error)
     }
@@ -397,13 +402,13 @@ export const crudAPI = {
 
   async createExpense(expenseData: any) {
     try {
-      // Usar user_id padrão sem verificação para evitar erro 406 RLS
-      const userId = 1; // User_id fixo para evitar problemas de RLS
-      console.log('🔍 DEBUG - Usando user_id fixo para despesa:', userId);
+      // Usar user_id válido existente na tabela users
+      const userId = 25; // User_id válido para evitar erro de foreign key constraint
+      console.log('🔍 DEBUG - Usando user_id válido para despesa:', userId);
       
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
-        description: `${expenseData.description}_${Date.now()}`, // Adicionar timestamp para evitar duplicatas
+        description: expenseData.description, // Campo description sem timestamp
         value: expenseData.amount || expenseData.value, // Mapear 'amount' para 'value'
         category: expenseData.category || 'Geral',
         date: expenseData.date || expenseData.expense_date,

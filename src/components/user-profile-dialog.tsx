@@ -29,7 +29,7 @@ export function UserProfileDialog({ children }: UserProfileDialogProps) {
   const [userData, setUserData] = useState({
     nome: user?.full_name || "",
     email: user?.email || "",
-    cargo: user?.position || "",
+    cargo: user?.role || "",
     bio: user?.bio || "",
     avatar: user?.avatar_url || ""
   })
@@ -44,7 +44,7 @@ export function UserProfileDialog({ children }: UserProfileDialogProps) {
       setUserData({
         nome: user.full_name || "",
         email: user.email || "",
-        cargo: user.position || "",
+        cargo: user.role || "",
         bio: user.bio || "",
         avatar: user.avatar_url || ""
       })
@@ -75,7 +75,7 @@ export function UserProfileDialog({ children }: UserProfileDialogProps) {
       // Atualizar perfil
       await updateProfile({
         full_name: userData.nome,
-        position: userData.cargo,
+        role: userData.cargo,
         bio: userData.bio,
         avatar_url: userData.avatar
       })

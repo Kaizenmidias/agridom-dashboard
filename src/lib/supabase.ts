@@ -10,10 +10,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Helper function to handle Supabase errors
-export const handleSupabaseError = (error: any) => {
-  console.error('Supabase error:', error)
+export const handleSupabaseError = (error: any, ...args: any[]) => {
+  console.error('Supabase error:', error, ...args)
   return {
-    error: error.message || 'An error occurred',
+    error: error?.message || 'An error occurred',
     details: error
   }
 }

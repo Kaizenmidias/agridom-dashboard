@@ -86,7 +86,7 @@ export const verifyToken = async (token: string): Promise<{ user: AuthUser; vali
 
 export async function updateUserProfile(userData: {
   full_name?: string;
-  position?: string;
+  role?: string;
   bio?: string;
   avatar_url?: string;
 }): Promise<AuthUser> {
