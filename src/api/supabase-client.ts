@@ -150,85 +150,85 @@ export const authAPI = {
   }
 },
 
-async register(credentials: any) {
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email: credentials.email,
-      password: credentials.password,
-      options: {
-        data: {
-          full_name: credentials.full_name,
-          position: credentials.position,
-          bio: credentials.bio || '',
+  async register(credentials: any) {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: credentials.email,
+        password: credentials.password,
+        options: {
+          data: {
+            full_name: credentials.full_name,
+            position: credentials.position,
+            bio: credentials.bio || '',
+          }
         }
+      });
+
+      if (error) {
+        throw new Error(error.message);
       }
-    });
 
-    if (error) {
-      throw new Error(error.message);
+      return {
+        user: data.user,
+        session: data.session,
+        token: data.session?.access_token,
+      };
+    } catch (error: any) {
+      return handleSupabaseError(error);
     }
+  },
 
-    return {
-      user: data.user,
-      session: data.session,
-      token: data.session?.access_token,
-    };
-  } catch (error: any) {
-    return handleSupabaseError(error);
+  async uploadAvatar(file: File) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { avatar_url: publicUrl }
+      });
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      return { user: { ...user, avatar_url: publicUrl } };
+    } catch (error: any) {
+      return handleSupabaseError(error);
+    }
+  },
+
+  async updateProfile(userData: any) {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: userData
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      return { user };
+    } catch (error: any) {
+      return handleSupabaseError(error);
+    }
   }
-},
-
-async uploadAvatar(file: File) {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não autenticado');
-
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}.${fileExt}`;
-    const filePath = `avatars/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, { upsert: true });
-
-    if (uploadError) {
-      throw new Error(uploadError.message);
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
-
-    const { error: updateError } = await supabase.auth.updateUser({
-      data: { avatar_url: publicUrl }
-    });
-
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
-
-    return { user: { ...user, avatar_url: publicUrl } };
-  } catch (error: any) {
-    return handleSupabaseError(error);
-  }
-},
-
-async updateProfile(userData: any) {
-  try {
-    const { error } = await supabase.auth.updateUser({
-      data: userData
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const { data: { user } } = await supabase.auth.getUser();
-    return { user };
-  } catch (error: any) {
-    return handleSupabaseError(error);
-  }
-},  }
 }
 
 // CRUD functions using Supabase client
