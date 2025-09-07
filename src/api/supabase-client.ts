@@ -483,9 +483,21 @@ export const crudAPI = {
 
   async createCode(codeData: any) {
     try {
-      // Usar user_id padrão sem verificação para evitar erro 406 RLS
-      const userId = 1; // User_id fixo para evitar problemas de RLS
-      console.log('🔍 DEBUG - Usando user_id fixo:', userId);
+      // Primeiro, verificar se existe um usuário válido
+      console.log('🔍 DEBUG - Verificando usuário válido...');
+      
+      const { data: users, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('is_active', true)
+        .limit(1);
+      
+      if (userError || !users || users.length === 0) {
+        throw new Error('Nenhum usuário ativo encontrado. Verifique se existe pelo menos um usuário na tabela users.');
+      }
+      
+      const userId = users[0].id;
+      console.log('🔍 DEBUG - Usando user_id válido:', userId);
       
       // Validar campos obrigatórios
       if (!codeData.title || codeData.title.trim() === '') {
@@ -507,37 +519,49 @@ export const crudAPI = {
       const uniqueId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       
       // Mapear campos do frontend para o schema do banco
-      const mappedData = {
-        title: `${codeData.title.trim()}_${uniqueId}`, // Usar ID único mais robusto
+      const insertData = {
+        title: `${codeData.title.trim()}_${uniqueId}`,
         language: language,
         code_content: codeData.code_content || codeData.content || '',
-        description: codeData.description || null, // Usar null em vez de string vazia
+        description: codeData.description || null,
         user_id: userId
-      }
+      };
 
-      console.log('🔍 DEBUG Supabase - Dados do código mapeados:', mappedData)
+      console.log('🔍 DEBUG Supabase - Dados do código para inserção:', insertData);
 
+      // Usar SDK do Supabase corretamente (não REST API direta)
+      // Isso evita problemas com querystring ?columns=... em requisições POST
       const { data, error } = await supabase
         .from('codes')
-        .insert([mappedData])
-        .select()
-        .single()
+        .insert(insertData)
+        .select('*')
+        .single();
 
       if (error) {
-        console.error('🔍 DEBUG Supabase - Erro na inserção do código:', error)
+        console.error('🔍 DEBUG Supabase - Erro na inserção do código:', error);
         console.error('🔍 DEBUG Supabase - Detalhes do erro:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
           code: error.code
-        })
-        throw error
+        });
+        
+        // Fornecer mensagens de erro mais específicas
+        if (error.code === '23503') {
+          throw new Error('Erro de foreign key: user_id não existe na tabela users');
+        } else if (error.code === '23505') {
+          throw new Error('Erro de duplicação: já existe um registro com esses dados');
+        } else if (error.code === '23514') {
+          throw new Error('Erro de constraint: verifique se language é css, html ou javascript');
+        }
+        
+        throw error;
       }
       
-      console.log('🔍 DEBUG Supabase - Código criado com sucesso:', data)
-      return { data, success: true }
+      console.log('🔍 DEBUG Supabase - Código criado com sucesso:', data);
+      return { data, success: true };
     } catch (error: any) {
-      console.error('🔍 DEBUG Supabase - Erro capturado no código:', error)
+      console.error('🔍 DEBUG Supabase - Erro capturado no código:', error);
       return handleSupabaseError(error)
     }
   },
