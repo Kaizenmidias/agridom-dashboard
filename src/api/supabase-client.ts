@@ -313,9 +313,24 @@ export const crudAPI = {
 
   async createProject(projectData: any) {
     try {
+      // Verificar se user_id existe antes de inserir
+      const userId = projectData.user_id || 1;
+      console.log('🔍 DEBUG - Verificando user_id:', userId);
+      
+      const { data: userExists, error: userCheckError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+      
+      if (userCheckError || !userExists) {
+        console.error('❌ User_id não existe:', userId, userCheckError);
+        throw new Error(`User_id ${userId} não existe na tabela users`);
+      }
+      
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
-        name: projectData.name,
+        name: `${projectData.name}_${Date.now()}`, // Adicionar timestamp para evitar duplicatas
         client: projectData.client || '',
         project_type: projectData.project_type || 'website',
         status: projectData.status || 'active',
@@ -324,7 +339,7 @@ export const crudAPI = {
         paid_value: projectData.paid_value || 0,
         delivery_date: projectData.delivery_date || null,
         completion_date: projectData.completion_date || null,
-        user_id: projectData.user_id || 1 // Usar user_id fornecido ou padrão
+        user_id: userId
       }
 
       console.log('🔍 DEBUG Supabase - Dados do projeto mapeados:', mappedData)
@@ -395,15 +410,44 @@ export const crudAPI = {
 
   async createExpense(expenseData: any) {
     try {
+      // Verificar se user_id existe antes de inserir
+      const userId = expenseData.user_id || 1;
+      console.log('🔍 DEBUG - Verificando user_id para despesa:', userId);
+      
+      const { data: userExists, error: userCheckError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+      
+      if (userCheckError || !userExists) {
+        console.error('❌ User_id não existe:', userId, userCheckError);
+        throw new Error(`User_id ${userId} não existe na tabela users`);
+      }
+      
+      // Verificar se project_id existe (se fornecido)
+      if (expenseData.project_id) {
+        const { data: projectExists, error: projectCheckError } = await supabase
+          .from('projects')
+          .select('id')
+          .eq('id', expenseData.project_id)
+          .single();
+        
+        if (projectCheckError || !projectExists) {
+          console.error('❌ Project_id não existe:', expenseData.project_id, projectCheckError);
+          throw new Error(`Project_id ${expenseData.project_id} não existe na tabela projects`);
+        }
+      }
+      
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
-        description: expenseData.description,
+        description: `${expenseData.description}_${Date.now()}`, // Adicionar timestamp para evitar duplicatas
         value: expenseData.amount || expenseData.value, // Mapear 'amount' para 'value'
         category: expenseData.category || 'Geral',
         date: expenseData.date || expenseData.expense_date,
         billing_type: expenseData.billing_type || 'unica',
         project_id: expenseData.project_id || null,
-        user_id: expenseData.user_id || 1, // Usar user_id fornecido ou padrão
+        user_id: userId,
         notes: expenseData.notes || ''
       }
 
@@ -475,13 +519,28 @@ export const crudAPI = {
 
   async createCode(codeData: any) {
     try {
+      // Verificar se user_id existe antes de inserir
+      const userId = codeData.user_id || 1;
+      console.log('🔍 DEBUG - Verificando user_id para código:', userId);
+      
+      const { data: userExists, error: userCheckError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+      
+      if (userCheckError || !userExists) {
+        console.error('❌ User_id não existe:', userId, userCheckError);
+        throw new Error(`User_id ${userId} não existe na tabela users`);
+      }
+      
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
-        title: codeData.title,
+        title: `${codeData.title}_${Date.now()}`, // Adicionar timestamp para evitar duplicatas
         language: codeData.language || 'javascript',
         code_content: codeData.code_content || codeData.content || '',
         description: codeData.description || '',
-        user_id: codeData.user_id || 1 // Usar user_id fornecido ou padrão
+        user_id: userId
       }
 
       console.log('🔍 DEBUG Supabase - Dados do código mapeados:', mappedData)
