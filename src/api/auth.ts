@@ -1,59 +1,48 @@
-import { AuthUser } from '../types/database'
-import { AUTH_API_BASE_URL, API_BASE_URL } from '../config/api'
+import { authAPI } from './supabase-client'
+import { AuthUser, LoginCredentials, RegisterCredentials, AuthResponse } from '../types/database'
 
-interface LoginCredentials {
-  email: string
-  password: string
-}
+// Função para fazer login
+export const loginUser = async (credentials: LoginCredentials): Promise<AuthResponse> => {
+  try {
+    const result = await authAPI.login(credentials)
 
-interface RegisterCredentials {
-  email: string
-  password: string
-  full_name?: string
-}
+    if (result.error) {
+      throw new Error(result.error)
+    }
 
-interface AuthResponse {
-  user: AuthUser
-  token: string
-}
+    // Salvar token no localStorage
+    if (result.token) {
+      localStorage.setItem('authToken', result.token)
+    }
 
-export async function loginUser(credentials: LoginCredentials): Promise<AuthResponse> {
-  const response = await fetch(`${AUTH_API_BASE_URL}/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(credentials),
-  })
-
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Erro no login')
+    return result
+  } catch (error) {
+    console.error('Erro no login:', error)
+    throw error
   }
-
-  return data
 }
 
-export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
-  const token = localStorage.getItem('auth_token')
-  
-  const response = await fetch(`${AUTH_API_BASE_URL}/change-password`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-    },
-    body: JSON.stringify({ currentPassword, newPassword }),
-  })
+// Função para alterar senha
+export const changePassword = async (currentPassword: string, newPassword: string): Promise<{ success: boolean }> => {
+  try {
+    const token = localStorage.getItem('authToken')
+    if (!token) {
+      throw new Error('Token não encontrado')
+    }
 
-  const data = await response.json()
+    // Decode token to get user ID
+    const decoded = JSON.parse(atob(token))
+    const result = await authAPI.changePassword(decoded.id, currentPassword, newPassword)
 
-  if (!response.ok) {
-    throw new Error(data.error || 'Erro ao alterar senha')
+    if (result.error) {
+      throw new Error(result.error)
+    }
+
+    return result
+  } catch (error) {
+    console.error('Erro ao alterar senha:', error)
+    throw error
   }
-
-  return data
 }
 
 export async function uploadAvatar(file: File): Promise<AuthUser | null> {
@@ -97,20 +86,20 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Au
   return data
 }
 
-export async function verifyToken(token: string): Promise<AuthUser | null> {
-  const response = await fetch(`${AUTH_API_BASE_URL}/verify`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  })
+// Função para verificar token
+export const verifyToken = async (token: string): Promise<{ user: AuthUser; valid: boolean }> => {
+  try {
+    const result = await authAPI.verify(token)
 
-  if (!response.ok) {
-    return null
+    if (result.error) {
+      throw new Error(result.error)
+    }
+
+    return result
+  } catch (error) {
+    console.error('Erro na verificação do token:', error)
+    throw error
   }
-
-  return await response.json()
 }
 
 export async function updateUserProfile(userData: {

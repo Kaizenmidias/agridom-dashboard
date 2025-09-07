@@ -1,118 +1,59 @@
-import { User, Project, Expense, Code, InsertCode, UpdateCode } from '../types/database'
-import { API_BASE_URL } from '../config/api'
+import { crudAPI } from './supabase-client'
+import { User, Project, Expense, Code, InsertUser, InsertProject, InsertExpense, InsertCode } from '../types/database'
 
 // Re-exportar tipos para uso em outros componentes
 export type { User, Project, Expense, Code };
 
-// Função auxiliar para fazer requisições autenticadas
-const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('auth_token');
-  console.log('Frontend - Token de autenticação:', token ? 'Presente' : 'Ausente');
-  
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` }),
-    ...options.headers,
-  };
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    console.error('Frontend - Erro na requisição:', response.status, response.statusText);
-    const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
-    console.error('Frontend - Detalhes do erro:', error);
-    throw new Error(error.error || 'Erro na requisição');
+// Função auxiliar para verificar autenticação
+const checkAuth = () => {
+  const token = localStorage.getItem('authToken')
+  if (!token) {
+    throw new Error('Token de autenticação não encontrado')
   }
-
-  const data = await response.json();
-  console.log('Frontend - Resposta da API recebida:', data);
-  return data;
-};
-
-// ============= USERS API =============
-export async function getUsers(): Promise<User[]> {
-  return await fetchWithAuth(`${API_BASE_URL}/users`);
+  return token
 }
 
-export async function getUserById(id: string): Promise<User | null> {
-  try {
-    return await fetchWithAuth(`${API_BASE_URL}/users/${id}`);
-  } catch (error) {
-    return null;
+// === USUÁRIOS ===
+export const getUsers = async (): Promise<User[]> => {
+  checkAuth()
+  const result = await crudAPI.getUsers()
+  if (result.error) {
+    throw new Error(result.error)
   }
+  return result.data
 }
 
-export async function createUser(userData: Omit<User, 'id' | 'created_at' | 'updated_at'>): Promise<User> {
-  return await fetchWithAuth(`${API_BASE_URL}/users`, {
-    method: 'POST',
-    body: JSON.stringify(userData),
-  });
-}
-
-export async function updateUser(id: string, userData: Partial<User>): Promise<User | null> {
-  try {
-    return await fetchWithAuth(`${API_BASE_URL}/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(userData),
-    });
-  } catch (error) {
-    return null;
+export const createUser = async (userData: InsertUser): Promise<User> => {
+  checkAuth()
+  const result = await crudAPI.createUser(userData)
+  if (result.error) {
+    throw new Error(result.error)
   }
+  return result.data
 }
 
-export async function deleteUser(id: string): Promise<boolean> {
-  try {
-    await fetchWithAuth(`${API_BASE_URL}/users/${id}`, {
-      method: 'DELETE',
-    });
-    return true;
-  } catch (error) {
-    return false;
+export const updateUser = async (id: number, userData: Partial<User>): Promise<User> => {
+  checkAuth()
+  const result = await crudAPI.updateUser(id, userData)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
+}
+
+export const deleteUser = async (id: number): Promise<void> => {
+  checkAuth()
+  const result = await crudAPI.deleteUser(id)
+  if (result.error) {
+    throw new Error(result.error)
   }
 }
 
 // ============= DASHBOARD STATS API =============
 
-export interface DashboardStats {
-  projects: {
-    total_projects: number;
-    active_projects: number;
-    completed_projects: number;
-    paused_projects: number;
-    total_project_value: number;
-    total_paid_value: number;
-  };
-  expenses: {
-    total_expenses: number;
-    total_expenses_amount: number;
-    expense_categories: number;
-  };
-  previous_period: {
-    revenue: number;
-    expenses: number;
-    receivable: number;
-  };
-  current_receivable: number;
-  revenue_by_month: Array<{
-    month: string;
-    revenue: number;
-  }>;
-  expenses_by_category: Array<{
-    category: string;
-    total_amount: number;
-    count: number;
-  }>;
-  recent_projects: Array<{
-    id: string;
-    name: string;
-    status: string;
-    project_value: number;
-    created_at: string;
-  }>;
-}
+import { dashboardAPI, DashboardStats } from './supabase-client'
+
+export type { DashboardStats }
 
 export async function getDashboardStats(filters?: {
   startDate?: string;
@@ -120,165 +61,120 @@ export async function getDashboardStats(filters?: {
   previousStartDate?: string;
   previousEndDate?: string;
 }): Promise<DashboardStats> {
-  console.log('Frontend - getDashboardStats chamada com filtros:', filters);
-  
-  const params = new URLSearchParams();
-  if (filters?.startDate) params.append('startDate', filters.startDate);
-  if (filters?.endDate) params.append('endDate', filters.endDate);
-  if (filters?.previousStartDate) params.append('previousStartDate', filters.previousStartDate);
-  if (filters?.previousEndDate) params.append('previousEndDate', filters.previousEndDate);
-  
-  const url = `${API_BASE_URL}/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`;
-  console.log('Frontend - URL da requisição:', url);
-  
-  return await fetchWithAuth(url);
+  checkAuth()
+  const result = await dashboardAPI.getDashboardStats(filters)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
 }
 
-// ============= PROJECTS API =============
-export async function getProjects(filters?: { user_id?: string; status?: string }): Promise<Project[]> {
-  const params = new URLSearchParams();
-  if (filters?.user_id) params.append('user_id', filters.user_id);
-  if (filters?.status) params.append('status', filters.status);
-  
-  const url = `${API_BASE_URL}/projects${params.toString() ? `?${params.toString()}` : ''}`;
-  return await fetchWithAuth(url);
+// === PROJETOS ===
+export const getProjects = async (): Promise<Project[]> => {
+  checkAuth()
+  const result = await crudAPI.getProjects()
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
 }
 
-export async function getProjectById(id: string): Promise<Project | null> {
-  try {
-    return await fetchWithAuth(`${API_BASE_URL}/projects/${id}`);
-  } catch (error) {
-    return null;
+export const createProject = async (projectData: InsertProject): Promise<Project> => {
+  checkAuth()
+  const result = await crudAPI.createProject(projectData)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
+}
+
+export const updateProject = async (id: number, projectData: Partial<Project>): Promise<Project> => {
+  checkAuth()
+  const result = await crudAPI.updateProject(id, projectData)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
+}
+
+export const deleteProject = async (id: number): Promise<void> => {
+  checkAuth()
+  const result = await crudAPI.deleteProject(id)
+  if (result.error) {
+    throw new Error(result.error)
   }
 }
 
-export async function createProject(projectData: Omit<Project, 'id' | 'created_at' | 'updated_at'>): Promise<Project> {
-  return await fetchWithAuth(`${API_BASE_URL}/projects`, {
-    method: 'POST',
-    body: JSON.stringify(projectData),
-  });
-}
-
-export async function updateProject(id: string, projectData: Partial<Project>): Promise<Project | null> {
-  try {
-    return await fetchWithAuth(`${API_BASE_URL}/projects/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(projectData),
-    });
-  } catch (error) {
-    return null;
+// === DESPESAS ===
+export const getExpenses = async (): Promise<Expense[]> => {
+  checkAuth()
+  const result = await crudAPI.getExpenses()
+  if (result.error) {
+    throw new Error(result.error)
   }
+  return result.data
 }
 
-export async function deleteProject(id: string): Promise<boolean> {
-  try {
-    await fetchWithAuth(`${API_BASE_URL}/projects/${id}`, {
-      method: 'DELETE',
-    });
-    return true;
-  } catch (error) {
-    return false;
+export const createExpense = async (expenseData: InsertExpense): Promise<Expense> => {
+  checkAuth()
+  const result = await crudAPI.createExpense(expenseData)
+  if (result.error) {
+    throw new Error(result.error)
   }
+  return result.data
 }
 
-// ============= EXPENSES API =============
-
-export async function getExpenses(filters?: { project_id?: string; category?: string }): Promise<Expense[]> {
-  const params = new URLSearchParams();
-  if (filters?.project_id) params.append('project_id', filters.project_id);
-  if (filters?.category) params.append('category', filters.category);
-  
-  const url = `${API_BASE_URL}/expenses${params.toString() ? `?${params.toString()}` : ''}`;
-  return await fetchWithAuth(url);
-}
-
-export async function getExpenseById(id: string): Promise<Expense | null> {
-  try {
-    return await fetchWithAuth(`${API_BASE_URL}/expenses/${id}`);
-  } catch (error) {
-    return null;
+export const updateExpense = async (id: number, expenseData: Partial<Expense>): Promise<Expense> => {
+  checkAuth()
+  const result = await crudAPI.updateExpense(id, expenseData)
+  if (result.error) {
+    throw new Error(result.error)
   }
+  return result.data
 }
 
-export async function createExpense(expenseData: Omit<Expense, 'id' | 'created_at' | 'updated_at'>): Promise<Expense> {
-  // Garantir que a data esteja no formato correto
-  const processedData = {
-    ...expenseData,
-    date: expenseData.date
-  };
-  
-  return await fetchWithAuth(`${API_BASE_URL}/expenses`, {
-    method: 'POST',
-    body: JSON.stringify(processedData),
-  });
-}
-
-export async function updateExpense(id: string, expenseData: Partial<Expense>): Promise<Expense | null> {
-  try {
-    // Garantir que a data esteja no formato correto
-    const processedData = {
-      ...expenseData,
-      date: expenseData.date
-    };
-    
-    return await fetchWithAuth(`${API_BASE_URL}/expenses/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(processedData),
-    });
-  } catch (error) {
-    return null;
-  }
-}
-
-export async function deleteExpense(id: string): Promise<boolean> {
-  try {
-    await fetchWithAuth(`${API_BASE_URL}/expenses/${id}`, {
-      method: 'DELETE',
-    });
-    return true;
-  } catch (error) {
-    return false;
+export const deleteExpense = async (id: number): Promise<void> => {
+  checkAuth()
+  const result = await crudAPI.deleteExpense(id)
+  if (result.error) {
+    throw new Error(result.error)
   }
 }
 
 
 
-// ============= CODES API =============
-
-export async function getCodes(filters?: { search?: string; code_type?: string }): Promise<Code[]> {
-  const params = new URLSearchParams();
-  if (filters?.search) params.append('search', filters.search);
-  if (filters?.code_type) params.append('code_type', filters.code_type);
-  
-  const url = `${API_BASE_URL}/codes${params.toString() ? `?${params.toString()}` : ''}`;
-  return await fetchWithAuth(url);
+// === CÓDIGOS ===
+export const getCodes = async (): Promise<Code[]> => {
+  checkAuth()
+  const result = await crudAPI.getCodes()
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
 }
 
-export async function getCode(id: string): Promise<Code> {
-  return await fetchWithAuth(`${API_BASE_URL}/codes/${id}`);
+export const createCode = async (codeData: InsertCode): Promise<Code> => {
+  checkAuth()
+  const result = await crudAPI.createCode(codeData)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
 }
 
-export async function createCode(data: InsertCode): Promise<Code> {
-  return await fetchWithAuth(`${API_BASE_URL}/codes`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
+export const updateCode = async (id: number, codeData: Partial<Code>): Promise<Code> => {
+  checkAuth()
+  const result = await crudAPI.updateCode(id, codeData)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
 }
 
-export async function updateCode(id: string, data: UpdateCode): Promise<Code> {
-  return await fetchWithAuth(`${API_BASE_URL}/codes/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function deleteCode(id: string): Promise<boolean> {
-  try {
-    await fetchWithAuth(`${API_BASE_URL}/codes/${id}`, {
-      method: 'DELETE',
-    });
-    return true;
-  } catch (error) {
-    return false;
+export const deleteCode = async (id: number): Promise<void> => {
+  checkAuth()
+  const result = await crudAPI.deleteCode(id)
+  if (result.error) {
+    throw new Error(result.error)
   }
 }
