@@ -699,5 +699,4 @@ export const dashboardAPI = {
   }
 }
 
-// Exportar todas as APIs
-export { authAPI, crudAPI, dashboardAPI }
+// APIs já exportadas individualmente acima
