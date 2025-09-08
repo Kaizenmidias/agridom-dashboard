@@ -73,25 +73,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Verificar se há dados de usuário salvos no localStorage e validar token
   useEffect(() => {
-    let isMounted = true; // Flag para evitar atualizações de estado em componente desmontado
-    let hasInitialized = false; // Flag para evitar múltiplas inicializações
+    let isMounted = true;
     
     const initAuth = async () => {
-      // Evitar múltiplas execuções simultâneas
-      if (hasInitialized || !isMounted) return;
-      hasInitialized = true;
-      
       try {
         const userData = localStorage.getItem('user_data')
         const token = localStorage.getItem('token')
-    const lastVerification = localStorage.getItem('last_token_verification')
+        const lastVerification = localStorage.getItem('last_token_verification')
         const now = Date.now()
         
-        // Verificar token apenas se passou mais de 5 minutos desde a última verificação
-        const shouldVerifyToken = !lastVerification || (now - parseInt(lastVerification)) > 300000; // 5 minutos
+        // Verificar token apenas se passou mais de 30 minutos desde a última verificação
+        const shouldVerifyToken = !lastVerification || (now - parseInt(lastVerification)) > 1800000; // 30 minutos
         
         if (userData && token) {
           try {
+            const parsedUser = JSON.parse(userData)
+            
             if (shouldVerifyToken) {
               // Verificar se o token é válido apenas se necessário
               const result = await verifyToken(token)
@@ -101,27 +98,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 localStorage.setItem('user_data', JSON.stringify(result.user))
                 localStorage.setItem('last_token_verification', now.toString())
                 setUser(result.user)
-                console.log('Usuário autenticado com sucesso:', result.user.email)
+                console.log('Token verificado - usuário autenticado:', result.user.email)
               } else if (isMounted) {
-                // Token inválido, limpar dados e forçar novo login
+                // Token inválido, limpar dados
                 console.warn('Token inválido detectado, limpando dados de autenticação')
                 localStorage.removeItem('user_data')
                 localStorage.removeItem('token')
-                localStorage.removeItem('user') // Limpar possíveis dados antigos
+                localStorage.removeItem('user')
                 localStorage.removeItem('last_token_verification')
                 setUser(null)
               }
             } else {
-              // Usar dados do localStorage sem verificar token (ainda válido)
-              const parsedUser = JSON.parse(userData)
+              // Usar dados do localStorage sem verificar token (cache válido)
               if (isMounted) {
                 setUser(parsedUser)
                 console.log('Usando dados de autenticação em cache:', parsedUser.email)
               }
             }
           } catch (tokenError) {
-            // Erro na verificação do token - limpar dados para forçar novo login
-            console.error('Erro na verificação do token, limpando autenticação:', tokenError)
+            // Erro na verificação do token - limpar dados
+            console.error('Erro na verificação do token:', tokenError)
             if (isMounted) {
               localStorage.removeItem('user_data')
               localStorage.removeItem('token')
@@ -131,19 +127,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
           }
         } else {
-          // Não há dados salvos, garantir que está limpo
+          // Não há dados salvos
           if (isMounted) {
             setUser(null)
           }
         }
       } catch (error) {
         console.error('Erro ao verificar autenticação:', error)
-        // Limpar todos os dados em caso de erro
         if (isMounted) {
-          localStorage.removeItem('user_data')
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
-          localStorage.removeItem('last_token_verification')
           setUser(null)
         }
       } finally {
@@ -153,12 +144,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     }
 
-    // Usar timeout para evitar execução imediata e throttling
-    const timeoutId = setTimeout(initAuth, 100);
+    // Executar inicialização
+    initAuth();
     
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
     };
   }, [])
 
@@ -383,19 +373,8 @@ export function useAuth() {
   return context
 }
 
-// Hook para verificar se o usuário está autenticado
-export function useRequireAuth() {
-  const { user, loading } = useAuth()
-  
-  useEffect(() => {
-    if (!loading && !user) {
-      // Redirecionar para login se não estiver autenticado
-      window.location.href = '/login'
-    }
-  }, [user, loading])
-  
-  return { user, loading }
-}
+// Hook removido para evitar loops de redirecionamento
+// Use ProtectedRoute ou verificações condicionais no componente
 
 // Função utilitária para obter o token atual
 export function getAuthToken(): string | null {
