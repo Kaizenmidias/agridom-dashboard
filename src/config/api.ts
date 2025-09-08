@@ -7,7 +7,7 @@ export const isProduction = window.location.hostname !== 'localhost' && window.l
 // URLs base da aplicação
 export const APP_URLS = {
   development: 'http://localhost:8080',
-  production: import.meta.env.VITE_API_URL || 'https://agridom-dashboard.vercel.app/api'
+  production: import.meta.env.VITE_API_URL || 'https://agridom-dashboard.vercel.app'
 };
 
 // Exporta a URL base da aplicação baseada no ambiente
