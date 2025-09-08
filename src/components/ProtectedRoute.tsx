@@ -1,13 +1,31 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, getAuthToken, isTokenValid } from '@/contexts/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, isAuthenticated, logout } = useAuth();
+
+  // Verificar token válido quando o componente monta
+  useEffect(() => {
+    const checkTokenValidity = async () => {
+      const token = getAuthToken();
+      if (token && user) {
+        const valid = await isTokenValid(token);
+        if (!valid) {
+          console.warn('Token inválido detectado em ProtectedRoute, fazendo logout');
+          logout();
+        }
+      }
+    };
+
+    if (!loading && user) {
+      checkTokenValidity();
+    }
+  }, [user, loading, logout]);
 
   if (loading) {
     return (
@@ -20,7 +38,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  if (!user) {
+  // Verificar se está autenticado e tem token válido
+  if (!isAuthenticated || !user || !getAuthToken()) {
+    console.warn('Tentativa de acesso a rota protegida sem autenticação válida');
     return <Navigate to="/login" replace />;
   }
 

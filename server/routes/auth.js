@@ -189,15 +189,30 @@ router.post('/register', async (req, res) => {
 // GET /api/auth/verify
 router.get('/verify', async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
+    const authHeader = req.headers.authorization;
+    console.log('🔍 Authorization header:', authHeader);
+    
+    const token = authHeader?.replace('Bearer ', '');
+    console.log('🔍 Token extraído:', token ? `${token.substring(0, 20)}...` : 'null');
+    
     const query = getQuery(req);
 
     if (!token) {
+      console.log('❌ Token não fornecido');
       return res.status(401).json({ error: 'Token não fornecido' });
     }
 
+    // Verificar formato básico do token JWT
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      console.log('❌ Token malformado - partes:', tokenParts.length);
+      return res.status(401).json({ error: 'Token malformado' });
+    }
+
     const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+    console.log('🔑 Verificando token com secret...');
     const decoded = jwt.verify(token, jwtSecret);
+    console.log('✅ Token decodificado:', { userId: decoded.userId, email: decoded.email });
     
     // Buscar usuário atual com todas as permissões do banco
     const userResult = await query(
@@ -222,19 +237,22 @@ router.get('/verify', async (req, res) => {
     
     // Usar permissões diretas do banco de dados
     res.json({
-      id: user.id,
-      email: user.email,
-      name: user.full_name,
-      full_name: user.full_name,
-      role: user.role,
-      is_admin: isAdmin,
-      can_access_dashboard: isAdmin || user.can_access_dashboard || false,
-      can_access_projects: isAdmin || user.can_access_projects || false,
-      can_access_briefings: isAdmin || user.can_access_briefings || false,
-      can_access_codes: isAdmin || user.can_access_codes || false,
-      can_access_expenses: isAdmin || user.can_access_expenses || false,
-      can_access_crm: isAdmin || user.can_access_crm || false,
-      can_access_users: isAdmin || user.can_access_users || false
+      valid: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.full_name,
+        full_name: user.full_name,
+        role: user.role,
+        is_admin: isAdmin,
+        can_access_dashboard: isAdmin || user.can_access_dashboard || false,
+        can_access_projects: isAdmin || user.can_access_projects || false,
+        can_access_briefings: isAdmin || user.can_access_briefings || false,
+        can_access_codes: isAdmin || user.can_access_codes || false,
+        can_access_expenses: isAdmin || user.can_access_expenses || false,
+        can_access_crm: isAdmin || user.can_access_crm || false,
+        can_access_users: isAdmin || user.can_access_users || false
+      }
     });
   } catch (error) {
     console.error('Erro na verificação do token:', error);

@@ -10,8 +10,10 @@ import { getExpenses, deleteExpense, updateExpense } from '@/api/crud';
 import { Expense } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { calculateMonthlyAmount } from '@/utils/billing-calculations';
+import { useAuth } from '@/contexts/AuthContext';
 
 const DespesasPage = () => {
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
   const [despesas, setDespesas] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -19,6 +21,14 @@ const DespesasPage = () => {
   const { toast } = useToast();
 
   const fetchDespesas = async () => {
+    // Verificar se o usuário está autenticado antes de carregar dados
+    if (!isAuthenticated || !user) {
+      console.warn('Tentativa de carregar despesas sem autenticação válida');
+      setDespesas([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const data = await getExpenses();
@@ -28,19 +38,28 @@ const DespesasPage = () => {
       console.error('Erro ao carregar despesas:', error);
       // Em caso de erro, definir como array vazio
       setDespesas([]);
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar as despesas.",
-        variant: "destructive",
-      });
+      // Se for erro de token, não mostrar toast de erro (será tratado pela autenticação)
+      if (error?.message?.includes('Token') || error?.message?.includes('token')) {
+        console.warn('Erro de token ao carregar despesas, será tratado pela autenticação');
+      } else {
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar as despesas.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDespesas();
-  }, []);
+    if (!authLoading && isAuthenticated && user) {
+      fetchDespesas();
+    } else if (!authLoading && !isAuthenticated) {
+      setLoading(false);
+    }
+  }, [authLoading, isAuthenticated, user]);
 
   const handleDeleteExpense = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta despesa?')) {
@@ -70,15 +89,24 @@ const DespesasPage = () => {
   };
 
 
+  // Calcula total considerando recorrência para despesas não-únicas
   const totalDespesas = despesas.reduce((acc, despesa) => {
-    const totalExpenseDate = despesa.date;
+    const billingType = despesa.billing_type || 'unica';
+    
+    // Para despesas únicas, usa valor direto
+    if (billingType === 'unica' || billingType === 'one_time') {
+      return acc + (Number(despesa.value || despesa.amount) || 0);
+    }
+    
+    // Para despesas recorrentes, calcula valor mensal
     const monthlyAmount = calculateMonthlyAmount(
       Number(despesa.value || despesa.amount) || 0,
-      despesa.billing_type || 'unica',
-      totalExpenseDate,
+      billingType,
+      despesa.date,
       new Date().getFullYear(),
       new Date().getMonth() + 1
     );
+    
     return acc + (Number(monthlyAmount) || 0);
   }, 0);
 
@@ -146,13 +174,21 @@ const DespesasPage = () => {
             <EditableTable
               data={despesas.map(despesa => {
                 const expenseDate = despesa.date;
-                const monthlyAmount = calculateMonthlyAmount(
-                  Number(despesa.value || despesa.amount) || 0,
-                  despesa.billing_type || 'unica',
-                  expenseDate,
-                  new Date().getFullYear(),
-                  new Date().getMonth() + 1
-                );
+                const billingType = despesa.billing_type || 'unica';
+                
+                // Calcula valor mensal para despesas recorrentes
+                let monthlyAmount;
+                if (billingType === 'unica' || billingType === 'one_time') {
+                  monthlyAmount = Number(despesa.value || despesa.amount) || 0;
+                } else {
+                  monthlyAmount = calculateMonthlyAmount(
+                    Number(despesa.value || despesa.amount) || 0,
+                    billingType,
+                    expenseDate,
+                    new Date().getFullYear(),
+                    new Date().getMonth() + 1
+                  );
+                }
                 
                 let formattedDate = 'Data inválida';
                 
@@ -171,9 +207,7 @@ const DespesasPage = () => {
                   ...despesa,
                   date: formattedDate,
                   amount: `R$ ${(Number(despesa.value || despesa.amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-                  monthly_amount: despesa.monthly_value ? 
-                                 `R$ ${(Number(despesa.monthly_value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` :
-                                 `R$ ${(Number(monthlyAmount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                  monthly_amount: `R$ ${(Number(monthlyAmount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
                   billing_type: despesa.billing_type === 'one_time' ? 'Única' : 
                                despesa.billing_type === 'recurring' ? 'Recorrente' : 
                                despesa.billing_type === 'unica' ? 'Única' : 

@@ -28,10 +28,13 @@ import { Label } from './ui/label';
 import { Select } from './ui/select';
 import PageHeader from './layout/PageHeader';
 import { getDashboardStats, DashboardStats } from '../api/crud';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Dados fictícios removidos - agora usando apenas dados reais da API
 
 const Dashboard = () => {
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
+  
   // State for editable content
   const [title, setTitle] = useState('Dashboard de Projetos');
   const [description, setDescription] = useState('Visão geral dos seus projetos e despesas');
@@ -77,6 +80,11 @@ const Dashboard = () => {
   
   // Load dashboard data from backend
   useEffect(() => {
+    // Don't load data if not authenticated or still checking auth
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+    
     let isMounted = true;
     let hasLoaded = false;
     
@@ -84,6 +92,15 @@ const Dashboard = () => {
       // Evitar múltiplas execuções simultâneas
       if (hasLoaded || !isMounted) return;
       hasLoaded = true;
+      
+      // Verificar se o usuário está autenticado antes de carregar dados
+      if (!isAuthenticated || !user) {
+        console.warn('Tentativa de carregar dashboard sem autenticação válida');
+        if (isMounted) {
+          setLoading(false);
+        }
+        return;
+      }
       
       try {
         if (isMounted) {
@@ -107,7 +124,12 @@ const Dashboard = () => {
       } catch (error) {
         console.error('Erro ao carregar dados do dashboard:', error);
         if (isMounted) {
-          toast.error('Erro ao carregar dados do dashboard');
+          // Se for erro de token, não mostrar toast de erro (será tratado pela autenticação)
+          if (error?.message?.includes('Token') || error?.message?.includes('token')) {
+            console.warn('Erro de token ao carregar dashboard, será tratado pela autenticação');
+          } else {
+            toast.error('Erro ao carregar dados do dashboard');
+          }
         }
       } finally {
         if (isMounted) {
@@ -123,7 +145,7 @@ const Dashboard = () => {
        isMounted = false;
        clearTimeout(timeoutId);
      };
-   }, []);
+   }, [isAuthenticated, authLoading]);
   
   // Handle changes
   const handleTitleChange = (value: string | number) => {

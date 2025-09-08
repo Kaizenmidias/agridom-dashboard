@@ -1,5 +1,6 @@
 import { supabase, handleSupabaseError } from '../lib/supabase'
 import { AuthUser, LoginCredentials, RegisterCredentials } from '../types/database'
+import { calculateMonthlyAmount } from '../utils/billing-calculations'
 
 // Auth functions using Supabase client
 export const authAPI = {
@@ -17,25 +18,28 @@ export const authAPI = {
         throw new Error('Usuário não encontrado ou inativo')
       }
 
-      // For now, we'll use a simple password check
-      // In production, you should use proper password hashing
-      const bcrypt = await import('bcryptjs')
-      const isValidPassword = await bcrypt.compare(credentials.password, userData.password)
-      
-      if (!isValidPassword) {
-        throw new Error('Senha incorreta')
+      // Delegate authentication to backend API
+      const response = await fetch('http://localhost:8080/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: credentials.email,
+          password: credentials.password
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erro no login')
       }
 
-      // Create a session token (simplified)
-      const token = btoa(JSON.stringify({ 
-        id: userData.id, 
-        email: userData.email, 
-        exp: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
-      }))
-
+      const data = await response.json()
+      
       return {
-        user: userData,
-        token,
+        user: data.user,
+        token: data.token,
         success: true
       }
     } catch (error: any) {
@@ -45,29 +49,54 @@ export const authAPI = {
 
   async verify(token: string) {
     try {
-      const decoded = JSON.parse(atob(token))
+      // Verificação básica do formato do token
+      if (!token || typeof token !== 'string') {
+        throw new Error('Token inválido');
+      }
+
+      const tokenParts = token.split('.');
+      if (tokenParts.length !== 3) {
+        throw new Error('Token malformado');
+      }
+
+      // Usar a API do servidor para verificar o token JWT
+      const response = await fetch('http://localhost:8080/api/auth/verify', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Token inválido' }));
+        throw new Error(errorData.error || 'Token inválido');
+      }
+
+      const data = await response.json();
       
-      if (decoded.exp < Date.now()) {
-        throw new Error('Token expirado')
-      }
-
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', decoded.id)
-        .eq('is_active', true)
-        .single()
-
-      if (error || !userData) {
-        throw new Error('Usuário não encontrado')
-      }
-
-      return {
-        user: userData,
-        valid: true
+      if (data.valid && data.user) {
+        return {
+          user: data.user,
+          valid: true
+        };
+      } else {
+        throw new Error('Token inválido');
       }
     } catch (error: any) {
-      return handleSupabaseError(error)
+      // Limpar token inválido do localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user_data');
+        localStorage.removeItem('user');
+        localStorage.removeItem('last_token_verification');
+      }
+      console.error('Erro na verificação do token:', error);
+      return {
+        user: null,
+        valid: false,
+        error: error.message || 'Token inválido'
+      }
     }
   },
 
@@ -83,21 +112,28 @@ export const authAPI = {
         throw new Error('Usuário não encontrado')
       }
 
-      const bcrypt = await import('bcryptjs')
-      const isValidPassword = await bcrypt.compare(currentPassword, userData.password)
-      
-      if (!isValidPassword) {
-        throw new Error('Senha atual incorreta')
+      // Delegate password change to backend API
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:8080/api/auth/change-password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          userId,
+          currentPassword,
+          newPassword
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erro ao alterar senha')
       }
 
-      const hashedNewPassword = await bcrypt.hash(newPassword, 10)
-
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ password: hashedNewPassword })
-        .eq('id', userId)
-
-      if (updateError) {
+      const data = await response.json()
+      if (!data.success) {
         throw updateError
       }
 
@@ -236,31 +272,52 @@ export const crudAPI = {
   // Users
   async getUsers() {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false })
+      // Usar API do servidor backend que requer autenticação
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
+      const response = await fetch('http://localhost:8080/api/users', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
-      return handleSupabaseError(error)
+      return { data: null, error: error.message, success: false }
     }
   },
 
   async createUser(userData: any) {
     try {
-      const bcrypt = await import('bcryptjs')
-      const hashedPassword = await bcrypt.hash(userData.password, 10)
+      // Delegate user creation to backend API
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:8080/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(userData)
+      })
 
-      const { data, error } = await supabase
-        .from('users')
-        .insert([{ ...userData, password: hashedPassword }])
-        .select()
-        .single()
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erro ao criar usuário')
+      }
 
-      if (error) throw error
-      return { data, success: true }
+      const data = await response.json()
+      return { data: data.user, success: true }
     } catch (error: any) {
       return handleSupabaseError(error)
     }
@@ -720,16 +777,139 @@ export const dashboardAPI = {
       const completedProjects = projects?.filter(p => p.status === 'completed').length || 0
       const pausedProjects = projects?.filter(p => p.status === 'paused').length || 0
       const totalProjectValue = projects?.reduce((sum, p) => sum + (Number(p.project_value) || 0), 0) || 0
-      const totalPaidValue = projects?.reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
+      
+      // Calcular faturamento considerando filtros de data
+      let totalPaidValue = 0
+      
+      if (filters?.startDate && filters?.endDate) {
+        // Com filtros de data
+        const startDate = new Date(filters.startDate)
+        const endDate = new Date(filters.endDate)
+        
+        // Verificar se é filtro anual (janeiro a dezembro do mesmo ano)
+        const isYearlyFilter = startDate.getFullYear() === endDate.getFullYear() && 
+                              startDate.getMonth() === 0 && 
+                              endDate.getMonth() === 11
+        
+        if (isYearlyFilter) {
+          // Para filtro anual, calcular faturamento apenas até o mês atual
+          const filterYear = startDate.getFullYear()
+          const currentDate = new Date()
+          const currentYear = currentDate.getFullYear()
+          const currentMonth = currentDate.getMonth() + 1
+          
+          // Se é o ano atual, calcular apenas até o mês atual
+          // Se é ano passado ou futuro, calcular todos os 12 meses
+          const monthsToCalculate = filterYear === currentYear ? currentMonth : 12
+          
+          totalPaidValue = projects?.filter(p => {
+            const createdAt = new Date(p.created_at)
+            const projectYear = createdAt.getFullYear()
+            const projectMonth = createdAt.getMonth() + 1
+            
+            return projectYear === filterYear && projectMonth <= monthsToCalculate
+          }).reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
+        } else {
+          // Para filtro mensal, calcular apenas o mês específico
+          const year = startDate.getFullYear()
+          const month = startDate.getMonth() + 1
+          
+          totalPaidValue = projects?.filter(p => {
+            const createdAt = new Date(p.created_at)
+            return createdAt.getFullYear() === year && 
+                   (createdAt.getMonth() + 1) === month
+          }).reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
+        }
+      } else {
+        // Sem filtros - usar todos os projetos
+        totalPaidValue = projects?.reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
+      }
 
       // Calcular estatísticas das despesas
       const totalExpenses = expenses?.length || 0
-      const totalExpensesAmount = expenses?.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) || 0
+      const now = new Date()
+      
+      // Calcular valor total das despesas considerando recorrência e filtros
+      let totalExpensesAmount = 0
+      
+      if (filters?.startDate && filters?.endDate) {
+        // Com filtros de data
+        const startDate = new Date(filters.startDate)
+        const endDate = new Date(filters.endDate)
+        
+        // Verificar se é filtro anual (janeiro a dezembro do mesmo ano)
+        const isYearlyFilter = startDate.getFullYear() === endDate.getFullYear() && 
+                              startDate.getMonth() === 0 && 
+                              endDate.getMonth() === 11
+        
+        if (isYearlyFilter) {
+          // Para filtro anual, calcular despesas para o ano do filtro
+          const filterYear = startDate.getFullYear()
+          const currentDate = new Date()
+          const currentYear = currentDate.getFullYear()
+          const currentMonth = currentDate.getMonth() + 1
+          
+          // Se é o ano atual, calcular apenas até o mês atual
+          // Se é ano passado ou futuro, calcular todos os 12 meses
+          const monthsToCalculate = filterYear === currentYear ? currentMonth : 12
+          
+          for (let month = 1; month <= monthsToCalculate; month++) {
+              const monthlyTotal = expenses?.reduce((acc, expense) => {
+                const monthlyAmount = calculateMonthlyAmount(
+                  Number(expense.value || expense.amount) || 0,
+                  expense.billing_type || 'unica',
+                  expense.date,
+                  filterYear,
+                  month
+                )
+                return acc + (Number(monthlyAmount) || 0)
+              }, 0) || 0
+              
+              totalExpensesAmount += monthlyTotal
+            }
+        } else {
+          // Para filtro mensal, calcular apenas o mês específico
+          const year = startDate.getFullYear()
+          const month = startDate.getMonth() + 1
+          
+          totalExpensesAmount = expenses?.reduce((acc, expense) => {
+            const monthlyAmount = calculateMonthlyAmount(
+              Number(expense.value || expense.amount) || 0,
+              expense.billing_type || 'unica',
+              expense.date,
+              year,
+              month
+            )
+            return acc + (Number(monthlyAmount) || 0)
+          }, 0) || 0
+        }
+      } else {
+        // Sem filtros - usar mês atual
+        totalExpensesAmount = expenses?.reduce((acc, expense) => {
+          const billingType = expense.billing_type || 'unica'
+          
+          // Para despesas únicas, usa valor direto
+          if (billingType === 'unica' || billingType === 'one_time') {
+            return acc + (Number(expense.value || expense.amount) || 0)
+          }
+          
+          // Para despesas recorrentes, calcula valor mensal
+          const monthlyAmount = calculateMonthlyAmount(
+            Number(expense.value || expense.amount) || 0,
+            billingType,
+            expense.date,
+            now.getFullYear(),
+            now.getMonth() + 1
+          )
+          
+          return acc + (Number(monthlyAmount) || 0)
+        }, 0) || 0
+      }
+      
       const expenseCategories = new Set(expenses?.map(e => e.category)).size || 0
 
       // Calcular receita por mês (últimos 12 meses)
       const revenueByMonth = []
-      const now = new Date()
       for (let i = 11; i >= 0; i--) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
         const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`

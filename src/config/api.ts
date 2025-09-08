@@ -13,6 +13,9 @@ export const APP_URLS = {
 // Exporta a URL base da aplicação baseada no ambiente
 export const APP_BASE_URL = isProduction ? APP_URLS.production : APP_URLS.development;
 
+// Exporta API_BASE_URL para compatibilidade
+export const API_BASE_URL = APP_BASE_URL;
+
 // Configurações adicionais da API
 export const API_CONFIG = {
   timeout: 30000, // 30 segundos

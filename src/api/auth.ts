@@ -12,7 +12,7 @@ export const loginUser = async (credentials: LoginCredentials): Promise<AuthResp
 
     // Salvar token no localStorage
     if (result.token) {
-      localStorage.setItem('authToken', result.token)
+      localStorage.setItem('token', result.token)
     }
 
     return result
@@ -25,7 +25,7 @@ export const loginUser = async (credentials: LoginCredentials): Promise<AuthResp
 // Função para alterar senha
 export const changePassword = async (currentPassword: string, newPassword: string): Promise<{ success: boolean }> => {
   try {
-    const token = localStorage.getItem('authToken')
+    const token = localStorage.getItem('token')
     if (!token) {
       throw new Error('Token não encontrado')
     }
@@ -60,7 +60,7 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Au
   
   if (result.success) {
     if (result.token) {
-      localStorage.setItem('auth_token', result.token);
+      localStorage.setItem('token', result.token);
     }
     return result;
   } else {

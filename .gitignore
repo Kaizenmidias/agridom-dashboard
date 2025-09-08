@@ -14,9 +14,6 @@ dist-ssr
 
 # Environment variables
 *.local
-server/.env
-server/.env.production
-server/.env.development
 
 # Database
 *.db

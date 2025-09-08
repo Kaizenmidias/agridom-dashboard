@@ -16,6 +16,7 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import { useAuth } from '@/contexts/AuthContext';
 
 ChartJS.register(
   CategoryScale,
@@ -29,9 +30,10 @@ import { getDashboardStats, DashboardStats } from '@/api/crud';
 import { toast } from 'sonner';
 
 const DashboardWithFilter: React.FC = () => {
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
     const now = new Date();
-    return `${now.getFullYear()}-${now.getMonth() + 1}`;
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedMetric, setSelectedMetric] = useState<string>('faturamento');
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
@@ -65,12 +67,28 @@ const DashboardWithFilter: React.FC = () => {
   }) => {
     try {
       setLoading(true);
+      
+      // Verificar se o usuário está autenticado antes de carregar dados
+      if (!isAuthenticated || !user) {
+        console.warn('Tentativa de carregar dashboard sem autenticação válida')
+        setDashboardStats(null)
+        return
+      }
+      
       console.log('Frontend - Enviando filtros para API:', filters);
       const data = await getDashboardStats(filters);
       setDashboardStats(data);
-    } catch (error) {
+      console.log('Dados do dashboard carregados com sucesso');
+    } catch (error: any) {
       console.error('Erro ao carregar dados do dashboard:', error);
-      toast.error('Erro ao carregar dados do dashboard');
+      
+      // Se for erro de token, não mostrar toast de erro (será tratado pela autenticação)
+      if (error?.message?.includes('Token') || error?.message?.includes('token')) {
+        console.warn('Erro de token ao carregar dashboard, será tratado pela autenticação')
+        setDashboardStats(null)
+      } else {
+        toast.error('Erro ao carregar dados do dashboard');
+      }
     } finally {
       setLoading(false);
     }
@@ -175,22 +193,42 @@ const DashboardWithFilter: React.FC = () => {
   };
 
   useEffect(() => {
-    // Aplicar filtro do período inicial automaticamente apenas uma vez
-    // Evitar loops infinitos que causam throttling do navegador
-    const loadInitialData = () => {
-      const now = new Date();
-      const initialPeriod = `${now.getFullYear()}-${now.getMonth() + 1}`;
+    // Carregar dados iniciais apenas quando a autenticação estiver completa
+    if (!authLoading && isAuthenticated && user) {
+      const loadInitialData = () => {
+        // Carregar dados do mês atual por padrão
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        
+        const startOfCurrentMonth = startOfMonth(new Date(currentYear, currentMonth, 1));
+        const endOfCurrentMonth = endOfMonth(new Date(currentYear, currentMonth, 1));
+        
+        const startOfPrevMonth = startOfMonth(new Date(currentYear, currentMonth - 1, 1));
+        const endOfPrevMonth = endOfMonth(new Date(currentYear, currentMonth - 1, 1));
+        
+        const filters = {
+          startDate: format(startOfCurrentMonth, 'yyyy-MM-dd'),
+          endDate: format(endOfCurrentMonth, 'yyyy-MM-dd'),
+          previousStartDate: format(startOfPrevMonth, 'yyyy-MM-dd'),
+          previousEndDate: format(endOfPrevMonth, 'yyyy-MM-dd')
+        };
+        
+        console.log('🔄 CARREGAMENTO INICIAL - Filtros calculados:', filters);
+        console.log('🔄 CARREGAMENTO INICIAL - selectedPeriod atual:', selectedPeriod);
+        loadDashboardData(filters);
+      };
       
-      if (selectedPeriod === initialPeriod) {
-        handlePeriodChange(selectedPeriod);
-      }
-    };
-    
-    // Usar timeout para evitar execução imediata e throttling
-    const timeoutId = setTimeout(loadInitialData, 100);
-    
-    return () => clearTimeout(timeoutId);
-  }, []); // Dependências vazias para executar apenas uma vez
+      // Usar timeout para evitar execução imediata e throttling
+      const timeoutId = setTimeout(loadInitialData, 100);
+      
+      return () => clearTimeout(timeoutId);
+    } else if (!authLoading && !isAuthenticated) {
+      // Se não estiver autenticado, limpar dados
+      setDashboardStats(null);
+      setLoading(false);
+    }
+  }, [authLoading, isAuthenticated, user]); // Dependências para reagir a mudanças de autenticação
 
   const getMetricLabel = () => {
     switch (selectedMetric) {

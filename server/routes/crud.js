@@ -438,7 +438,14 @@ router.get('/expenses', authenticateToken, async (req, res) => {
       // Usar tipo original para calcular valor mensal
       switch (originalBillingType) {
         case 'semanal':
-          monthlyValue = expense.value * 4; // 4 semanas por mês
+          // Usar função que calcula corretamente as ocorrências do dia da semana no mês
+          monthlyValue = calculateMonthlyAmount(
+            expense.value,
+            'semanal',
+            expense.date,
+            new Date().getFullYear(),
+            new Date().getMonth() + 1
+          );
           break;
         case 'anual':
           monthlyValue = expense.value / 12;
@@ -495,7 +502,14 @@ router.get('/expenses/:id', authenticateToken, async (req, res) => {
     // Usar tipo original para calcular valor mensal
     switch (originalBillingType) {
       case 'semanal':
-        monthlyValue = expense.value * 4; // 4 semanas por mês
+        // Usar função que calcula corretamente as ocorrências do dia da semana no mês
+        monthlyValue = calculateMonthlyAmount(
+          expense.value,
+          'semanal',
+          expense.date,
+          new Date().getFullYear(),
+          new Date().getMonth() + 1
+        );
         break;
       case 'anual':
         monthlyValue = expense.value / 12;
@@ -1220,24 +1234,27 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
                             endDateObj.getMonth() === 11;
       
       if (isYearlyFilter) {
-        // Filtro anual - calcular despesas mensais multiplicadas pelos meses passados
+        // Filtro anual - calcular despesas de cada mês individualmente
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth(); // 0-based
+        const currentMonth = currentDate.getMonth() + 1; // 1-based
         
-        // Se o filtro é para o ano atual, usar meses passados até agora
-        // Se for ano passado, usar 12 meses
-        const monthsPassed = startDateObj.getFullYear() === currentYear ? 
-                           currentMonth + 1 : 12;
+        // Se o filtro é para o ano atual, calcular apenas até o mês atual
+        // Se for ano passado, calcular todos os 12 meses
+        const monthsToCalculate = startDateObj.getFullYear() === currentYear ? 
+                                currentMonth : 12;
         
-        // Calcular despesas mensais para janeiro (mês 1)
-        const monthlyExpenses = calculateTotalMonthlyExpenses(
-          mappedExpenses,
-          startDateObj.getFullYear(),
-          1
-        );
+        totalExpensesAmount = 0;
         
-        totalExpensesAmount = monthlyExpenses * monthsPassed;
+        // Calcular cada mês individualmente
+        for (let month = 1; month <= monthsToCalculate; month++) {
+          const monthlyExpenses = calculateTotalMonthlyExpenses(
+            mappedExpenses,
+            startDateObj.getFullYear(),
+            month
+          );
+          totalExpensesAmount += monthlyExpenses;
+        }
       } else {
         // Período mensal - usar cálculo mensal
         const filterYear = startDateObj.getFullYear();
@@ -1502,19 +1519,33 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     };
     const previousExpensesStats = previousExpenseStats[0] || { total_expenses_amount: 0 };
     
-    // Buscar valores a receber (todos os projetos ativos do usuário)
+    // Buscar valores a receber do período atual
+    // Considera projetos ativos que ainda não foram concluídos no período
     const currentReceivableStats = await query(
       `SELECT 
         COALESCE(SUM(project_value - paid_value), 0) as total_receivable
        FROM projects 
-       WHERE user_id = $1 AND status = 'active'`,
-      [req.userId]
+       WHERE user_id = $1 
+       AND status = 'active' 
+       AND (completion_date IS NULL OR DATE(completion_date) > $3)`,
+      [req.userId, currentStart, currentEnd]
     );
     
     const currentReceivable = Math.max(0, parseFloat(currentReceivableStats.rows?.[0]?.total_receivable || 0));
     
-    // Para o período anterior, manter o mesmo valor (projetos ativos não mudam por período)
-    const previousReceivable = currentReceivable;
+    // Buscar valores a receber do período anterior
+    // Considera projetos que estavam ativos no período anterior
+    const previousReceivableStats = await query(
+      `SELECT 
+        COALESCE(SUM(project_value - paid_value), 0) as total_receivable
+       FROM projects 
+       WHERE user_id = $1 
+       AND status = 'active' 
+       AND (completion_date IS NULL OR DATE(completion_date) > $3)`,
+      [req.userId, prevStart, prevEnd]
+    );
+    
+    const previousReceivable = Math.max(0, parseFloat(previousReceivableStats.rows?.[0]?.total_receivable || 0));
 
     // Calcular receita (faturamento) diretamente dos projetos do período
     const createdProjectsRevenue = (projectsCreatedInPeriod.rows || []).reduce((sum, project) => {

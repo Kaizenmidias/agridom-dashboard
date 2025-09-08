@@ -42,15 +42,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Função para carregar lista de usuários
   const loadUsuarios = async () => {
     try {
+      // Verificar se há token antes de tentar carregar usuários
+      const token = localStorage.getItem('token')
+      if (!token) {
+        console.warn('Tentativa de carregar usuários sem token de autenticação')
+        setUsuarios([])
+        setError(null) // Não é um erro se não há token
+        return
+      }
+      
       const usuariosList = await getUsers()
       // Garantir que usuariosList seja sempre um array
       setUsuarios(Array.isArray(usuariosList) ? usuariosList : [])
       setError(null)
-    } catch (err) {
+      console.log('Usuários carregados com sucesso:', usuariosList?.length || 0)
+    } catch (err: any) {
       console.error('Erro ao carregar usuários:', err)
       // Em caso de erro, definir como array vazio
       setUsuarios([])
-      setError('Erro ao carregar usuários')
+      
+      // Se for erro de token, não mostrar erro para o usuário (será tratado pela autenticação)
+      if (err?.message?.includes('Token') || err?.message?.includes('token')) {
+        console.warn('Erro de token ao carregar usuários, será tratado pela autenticação')
+        setError(null)
+      } else {
+        setError('Erro ao carregar usuários')
+      }
     }
   }
 
@@ -66,8 +83,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       try {
         const userData = localStorage.getItem('user_data')
-        const token = localStorage.getItem('auth_token')
-        const lastVerification = localStorage.getItem('last_token_verification')
+        const token = localStorage.getItem('token')
+    const lastVerification = localStorage.getItem('last_token_verification')
         const now = Date.now()
         
         // Verificar token apenas se passou mais de 5 minutos desde a última verificação
@@ -77,20 +94,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
           try {
             if (shouldVerifyToken) {
               // Verificar se o token é válido apenas se necessário
-              const validUser = await verifyToken(token)
+              const result = await verifyToken(token)
               
-              if (validUser && isMounted) {
+              if (result && result.user && result.valid && isMounted) {
                 // Token válido, usar dados mais recentes do servidor
-                localStorage.setItem('user_data', JSON.stringify(validUser))
+                localStorage.setItem('user_data', JSON.stringify(result.user))
                 localStorage.setItem('last_token_verification', now.toString())
-                setUser(validUser)
-                console.log('Usuário autenticado com sucesso:', validUser.email)
+                setUser(result.user)
+                console.log('Usuário autenticado com sucesso:', result.user.email)
               } else if (isMounted) {
                 // Token inválido, limpar dados e forçar novo login
                 console.warn('Token inválido detectado, limpando dados de autenticação')
                 localStorage.removeItem('user_data')
-                localStorage.removeItem('auth_token')
-                localStorage.removeItem('token') // Limpar possíveis tokens antigos
+                localStorage.removeItem('token')
                 localStorage.removeItem('user') // Limpar possíveis dados antigos
                 localStorage.removeItem('last_token_verification')
                 setUser(null)
@@ -108,7 +124,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
             console.error('Erro na verificação do token, limpando autenticação:', tokenError)
             if (isMounted) {
               localStorage.removeItem('user_data')
-              localStorage.removeItem('auth_token')
               localStorage.removeItem('token')
               localStorage.removeItem('user')
               localStorage.removeItem('last_token_verification')
@@ -126,7 +141,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Limpar todos os dados em caso de erro
         if (isMounted) {
           localStorage.removeItem('user_data')
-          localStorage.removeItem('auth_token')
           localStorage.removeItem('token')
           localStorage.removeItem('user')
           localStorage.removeItem('last_token_verification')
@@ -181,7 +195,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (response.user) {
         // Salvar dados do usuário no localStorage
         localStorage.setItem('user_data', JSON.stringify(response.user))
-        localStorage.setItem('auth_token', response.token)
+        localStorage.setItem('token', response.token)
         
         setUser(response.user)
       }
@@ -206,7 +220,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (response.user) {
         // Salvar dados do usuário no localStorage
         localStorage.setItem('user_data', JSON.stringify(response.user))
-        localStorage.setItem('auth_token', response.token)
+        localStorage.setItem('token', response.token)
         
         setUser(response.user)
       }
@@ -224,7 +238,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = () => {
     // Limpar todos os dados de autenticação possíveis
     localStorage.removeItem('user_data')
-    localStorage.removeItem('auth_token')
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     
@@ -316,19 +329,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Função para recarregar dados do usuário atual
   const refreshUserData = async (): Promise<void> => {
     try {
-      const token = localStorage.getItem('auth_token')
+      const token = localStorage.getItem('token')
       
       if (!token || !user) {
         return
       }
       
       // Verificar token e obter dados atualizados do usuário
-      const updatedUser = await verifyToken(token)
+      const result = await verifyToken(token)
       
-      if (updatedUser) {
+      if (result && result.user && result.valid) {
         // Atualizar dados no localStorage e no estado
-        localStorage.setItem('user_data', JSON.stringify(updatedUser))
-        setUser(updatedUser)
+        localStorage.setItem('user_data', JSON.stringify(result.user))
+        setUser(result.user)
+      } else {
+        // Token inválido, fazer logout
+        logout()
       }
     } catch (error) {
       console.error('Erro ao recarregar dados do usuário:', error)
@@ -383,14 +399,14 @@ export function useRequireAuth() {
 
 // Função utilitária para obter o token atual
 export function getAuthToken(): string | null {
-  return localStorage.getItem('auth_token')
+  return localStorage.getItem('token')
 }
 
 // Função utilitária para verificar se o token é válido
 export async function isTokenValid(token: string): Promise<boolean> {
   try {
-    const user = await verifyToken(token)
-    return user !== null
+    const result = await verifyToken(token)
+    return result && result.valid === true
   } catch {
     return false
   }

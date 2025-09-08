@@ -23,6 +23,7 @@ import { Code } from "@/types/database"
 import { CodeDialog } from "@/components/code-dialog"
 import { deleteCode, getCodes } from "@/api/crud"
 import { ToastNotification, useToastNotification } from "@/components/ui/toast-notification"
+import { useAuth } from "@/contexts/AuthContext"
 
 const codeTypeLabels = {
   css: "CSS",
@@ -37,6 +38,7 @@ const codeTypeColors = {
 }
 
 export function CodesPage() {
+  const { isAuthenticated, user, loading: authLoading } = useAuth()
   const [codes, setCodes] = useState<Code[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
@@ -45,12 +47,24 @@ export function CodesPage() {
   const [editingCode, setEditingCode] = useState<Code | null>(null)
   const { toast: toastNotification, showToast, hideToast } = useToastNotification()
 
-  // Carregar códigos da API
+  // Carregar códigos da API apenas quando autenticado
   useEffect(() => {
-    loadCodes()
-  }, [])
+    if (!authLoading && isAuthenticated && user) {
+      loadCodes()
+    } else if (!authLoading && !isAuthenticated) {
+      setIsLoading(false)
+    }
+  }, [authLoading, isAuthenticated, user])
 
   const loadCodes = async () => {
+    // Verificar se o usuário está autenticado antes de carregar dados
+    if (!isAuthenticated || !user) {
+      console.warn('Tentativa de carregar códigos sem autenticação válida')
+      setCodes([])
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       const codesData = await getCodes()
@@ -60,7 +74,12 @@ export function CodesPage() {
       console.error('Erro ao carregar códigos:', error)
       // Em caso de erro, definir como array vazio
       setCodes([])
-      showToast('Erro ao carregar códigos')
+      // Se for erro de token, não mostrar toast de erro (será tratado pela autenticação)
+      if (error?.message?.includes('Token') || error?.message?.includes('token')) {
+        console.warn('Erro de token ao carregar códigos, será tratado pela autenticação')
+      } else {
+        showToast('Erro ao carregar códigos')
+      }
     } finally {
       setIsLoading(false)
     }

@@ -87,9 +87,13 @@ export function DatePickerWithRange({
                 variant="outline" 
                 size="sm"
                 onClick={() => {
-                  const today = new Date()
+                  // Usar UTC para evitar problemas de fuso horário
+                  const today = new Date(new Date().toISOString().split('T')[0] + 'T00:00:00.000Z')
+                  const fromDate = new Date(today)
+                  fromDate.setUTCDate(today.getUTCDate() - preset.days)
+                  
                   setDate({
-                    from: addDays(today, -preset.days),
+                    from: fromDate,
                     to: today,
                   })
                 }}

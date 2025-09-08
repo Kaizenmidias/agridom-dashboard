@@ -294,10 +294,14 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
               <PopoverContent className="w-auto p-0">
                 <Calendar
                   mode="single"
-                  selected={projetoForm.delivery_date ? new Date(projetoForm.delivery_date) : undefined}
+                  selected={projetoForm.delivery_date ? new Date(projetoForm.delivery_date + 'T00:00:00.000Z') : undefined}
                   onSelect={(date) => {
                     if (date) {
-                      setProjetoForm(prev => ({ ...prev, delivery_date: format(date, 'yyyy-MM-dd') }));
+                      // Usar UTC para evitar problemas de fuso horário
+                      const year = date.getFullYear();
+                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                      const day = String(date.getDate()).padStart(2, '0');
+                      setProjetoForm(prev => ({ ...prev, delivery_date: `${year}-${month}-${day}` }));
                     }
                   }}
                   initialFocus
