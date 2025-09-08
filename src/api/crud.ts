@@ -105,7 +105,7 @@ export async function getDashboardStats(filters?: {
   if (filters?.previousStartDate) params.append('previousStartDate', filters.previousStartDate)
   if (filters?.previousEndDate) params.append('previousEndDate', filters.previousEndDate)
 
-  const url = `${API_BASE_URL}/api/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`
+  const url = `${API_BASE_URL}/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`
   
   const response = await fetch(url, {
     method: 'GET',

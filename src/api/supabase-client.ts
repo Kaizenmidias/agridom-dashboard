@@ -8,7 +8,7 @@ export const authAPI = {
   async login(credentials: LoginCredentials) {
     try {
       // Delegate authentication to backend API first
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -49,7 +49,7 @@ export const authAPI = {
       }
 
       // Usar a API do servidor para verificar o token JWT
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
+      const response = await fetch(`${API_BASE_URL}/auth/verify`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -103,7 +103,7 @@ export const authAPI = {
 
       // Delegate password change to backend API
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -267,7 +267,7 @@ export const crudAPI = {
         throw new Error('Token de autenticação não encontrado')
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/users`, {
+      const response = await fetch(`${API_BASE_URL}/users`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -291,7 +291,7 @@ export const crudAPI = {
     try {
       // Delegate user creation to backend API
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

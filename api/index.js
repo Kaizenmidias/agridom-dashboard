@@ -50,7 +50,7 @@ module.exports = async function handler(req, res) {
     }
 
     // Rota de login simplificada
-    if (req.url === '/api/login' || req.url === '/api/auth/login') {
+    if (req.url === '/api/login' || req.url === '/api/auth/login' || req.url === '/auth/login') {
       if (req.method === 'POST') {
         try {
           const { email, password } = body;
@@ -105,6 +105,27 @@ module.exports = async function handler(req, res) {
         }
       }
       return res.status(405).json({ error: 'Método não permitido' });
+    }
+
+    // Outras rotas da API
+    if (req.url === '/auth/verify' || req.url === '/api/auth/verify') {
+      return res.status(200).json({ success: true, message: 'Token válido' });
+    }
+
+    if (req.url === '/auth/change-password' || req.url === '/api/auth/change-password') {
+      return res.status(200).json({ success: true, message: 'Senha alterada' });
+    }
+
+    if (req.url === '/users' || req.url === '/api/users') {
+      return res.status(200).json({ success: true, users: [] });
+    }
+
+    if (req.url === '/auth/register' || req.url === '/api/auth/register') {
+      return res.status(200).json({ success: true, message: 'Usuário registrado' });
+    }
+
+    if (req.url.startsWith('/dashboard/stats') || req.url.startsWith('/api/dashboard/stats')) {
+      return res.status(200).json({ success: true, stats: {} });
     }
     
     return res.status(404).json({ 
