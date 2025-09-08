@@ -193,51 +193,33 @@ const DashboardWithFilter: React.FC = () => {
   };
 
   useEffect(() => {
-    let isMounted = true;
-    
     // Carregar dados iniciais apenas quando a autenticação estiver completa
-    if (!authLoading && isAuthenticated && user && isMounted) {
-      const loadInitialData = () => {
-        if (!isMounted) return;
-        
-        // Carregar dados do mês atual por padrão
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        
-        const startOfCurrentMonth = startOfMonth(new Date(currentYear, currentMonth, 1));
-        const endOfCurrentMonth = endOfMonth(new Date(currentYear, currentMonth, 1));
-        
-        const startOfPrevMonth = startOfMonth(new Date(currentYear, currentMonth - 1, 1));
-        const endOfPrevMonth = endOfMonth(new Date(currentYear, currentMonth - 1, 1));
-        
-        const filters = {
-          startDate: format(startOfCurrentMonth, 'yyyy-MM-dd'),
-          endDate: format(endOfCurrentMonth, 'yyyy-MM-dd'),
-          previousStartDate: format(startOfPrevMonth, 'yyyy-MM-dd'),
-          previousEndDate: format(endOfPrevMonth, 'yyyy-MM-dd')
-        };
-        
-        console.log('🔄 CARREGAMENTO INICIAL - Filtros calculados:', filters);
-        loadDashboardData(filters);
+    if (!authLoading && isAuthenticated && user) {
+      // Carregar dados do mês atual por padrão
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      
+      const startOfCurrentMonth = startOfMonth(new Date(currentYear, currentMonth, 1));
+      const endOfCurrentMonth = endOfMonth(new Date(currentYear, currentMonth, 1));
+      
+      const startOfPrevMonth = startOfMonth(new Date(currentYear, currentMonth - 1, 1));
+      const endOfPrevMonth = endOfMonth(new Date(currentYear, currentMonth - 1, 1));
+      
+      const filters = {
+        startDate: format(startOfCurrentMonth, 'yyyy-MM-dd'),
+        endDate: format(endOfCurrentMonth, 'yyyy-MM-dd'),
+        previousStartDate: format(startOfPrevMonth, 'yyyy-MM-dd'),
+        previousEndDate: format(endOfPrevMonth, 'yyyy-MM-dd')
       };
       
-      // Aumentar timeout para evitar throttling do navegador
-      const timeoutId = setTimeout(loadInitialData, 1000);
-      
-      return () => {
-        clearTimeout(timeoutId);
-        isMounted = false;
-      };
-    } else if (!authLoading && !isAuthenticated && isMounted) {
+      console.log('🔄 CARREGAMENTO INICIAL - Filtros calculados:', filters);
+      loadDashboardData(filters);
+    } else if (!authLoading && !isAuthenticated) {
       // Se não estiver autenticado, limpar dados
       setDashboardStats(null);
       setLoading(false);
     }
-    
-    return () => {
-      isMounted = false;
-    };
   }, [authLoading, isAuthenticated, user]); // Dependências para reagir a mudanças de autenticação
 
   const getMetricLabel = () => {

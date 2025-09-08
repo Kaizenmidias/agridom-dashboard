@@ -73,13 +73,8 @@ export const authAPI = {
         throw new Error('Token inválido');
       }
     } catch (error: any) {
-      // Limpar token inválido do localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user_data');
-        localStorage.removeItem('user');
-        localStorage.removeItem('last_token_verification');
-      }
+      // NÃO limpar localStorage automaticamente - deixar para o AuthContext decidir
+      // Isso evita loops de redirecionamento
       console.error('Erro na verificação do token:', error);
       return {
         user: null,

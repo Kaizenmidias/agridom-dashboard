@@ -1,43 +1,16 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth, getAuthToken, isTokenValid } from '@/contexts/AuthContext';
+import { useAuth, getAuthToken } from '@/contexts/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, loading, isAuthenticated, logout } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
 
-  // Verificar token válido apenas uma vez quando o componente monta
-  useEffect(() => {
-    let isMounted = true;
-    
-    const checkTokenValidity = async () => {
-      const token = getAuthToken();
-      if (token && user && isMounted) {
-        const valid = await isTokenValid(token);
-        if (!valid && isMounted) {
-          console.warn('Token inválido detectado em ProtectedRoute, fazendo logout');
-          logout();
-        }
-      }
-    };
-
-    // Verificar apenas se não está carregando e tem usuário
-    // Usar timeout para evitar verificações excessivas
-    if (!loading && user) {
-      const timeoutId = setTimeout(checkTokenValidity, 500);
-      return () => {
-        clearTimeout(timeoutId);
-        isMounted = false;
-      };
-    }
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [user, loading]); // Removido logout das dependências
+  // Removido useEffect que verificava token - isso estava causando loops
+  // A verificação de token já é feita no AuthContext de forma controlada
 
   if (loading) {
     return (

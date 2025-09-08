@@ -82,42 +82,61 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const lastVerification = localStorage.getItem('last_token_verification')
         const now = Date.now()
         
-        // Verificar token apenas se passou mais de 30 minutos desde a última verificação
-        const shouldVerifyToken = !lastVerification || (now - parseInt(lastVerification)) > 1800000; // 30 minutos
+        // Verificar token apenas se passou mais de 2 horas desde a última verificação
+        const shouldVerifyToken = !lastVerification || (now - parseInt(lastVerification)) > 7200000; // 2 horas
         
         if (userData && token) {
           try {
             const parsedUser = JSON.parse(userData)
             
-            if (shouldVerifyToken) {
-              // Verificar se o token é válido apenas se necessário
-              const result = await verifyToken(token)
-              
-              if (result && result.user && result.valid && isMounted) {
-                // Token válido, usar dados mais recentes do servidor
-                localStorage.setItem('user_data', JSON.stringify(result.user))
-                localStorage.setItem('last_token_verification', now.toString())
-                setUser(result.user)
-                console.log('Token verificado - usuário autenticado:', result.user.email)
-              } else if (isMounted) {
-                // Token inválido, limpar dados
-                console.warn('Token inválido detectado, limpando dados de autenticação')
-                localStorage.removeItem('user_data')
-                localStorage.removeItem('token')
-                localStorage.removeItem('user')
-                localStorage.removeItem('last_token_verification')
-                setUser(null)
-              }
-            } else {
-              // Usar dados do localStorage sem verificar token (cache válido)
-              if (isMounted) {
-                setUser(parsedUser)
-                console.log('Usando dados de autenticação em cache:', parsedUser.email)
-              }
+            // Sempre definir o usuário primeiro para evitar loops
+            if (isMounted) {
+              setUser(parsedUser)
+              console.log('Usando dados de autenticação em cache:', parsedUser.email)
             }
-          } catch (tokenError) {
-            // Erro na verificação do token - limpar dados
-            console.error('Erro na verificação do token:', tokenError)
+            
+            // Só verificar token se realmente necessário e com delay
+            if (shouldVerifyToken && isMounted) {
+              const timeoutId = setTimeout(async () => {
+                if (!isMounted) return;
+                
+                try {
+                  const result = await verifyToken(token)
+                  
+                  if (result && result.user && result.valid && isMounted) {
+                    // Token válido, atualizar dados se necessário
+                    localStorage.setItem('user_data', JSON.stringify(result.user))
+                    localStorage.setItem('last_token_verification', now.toString())
+                    setUser(result.user)
+                    console.log('Token verificado - dados atualizados:', result.user.email)
+                  } else if (isMounted) {
+                    // Token inválido, limpar dados sem redirecionamento automático
+                    console.warn('Token inválido detectado, limpando dados de autenticação')
+                    localStorage.removeItem('user_data')
+                    localStorage.removeItem('token')
+                    localStorage.removeItem('user')
+                    localStorage.removeItem('last_token_verification')
+                    setUser(null)
+                  }
+                } catch (tokenError) {
+                  console.error('Erro na verificação do token:', tokenError)
+                  // Em caso de erro de rede, manter usuário logado temporariamente
+                  // Só deslogar se for erro de autenticação específico
+                  if (tokenError?.message?.includes('Token inválido') && isMounted) {
+                    localStorage.removeItem('user_data')
+                    localStorage.removeItem('token')
+                    localStorage.removeItem('user')
+                    localStorage.removeItem('last_token_verification')
+                    setUser(null)
+                  }
+                }
+              }, 3000); // Delay de 3 segundos
+              
+              return () => clearTimeout(timeoutId);
+            }
+          } catch (parseError) {
+            // Erro ao parsear dados - limpar dados
+            console.error('Erro ao parsear dados do usuário:', parseError)
             if (isMounted) {
               localStorage.removeItem('user_data')
               localStorage.removeItem('token')
