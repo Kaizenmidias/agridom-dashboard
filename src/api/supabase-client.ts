@@ -1,25 +1,14 @@
 import { supabase, handleSupabaseError } from '../lib/supabase'
 import { AuthUser, LoginCredentials, RegisterCredentials } from '../types/database'
 import { calculateMonthlyAmount } from '../utils/billing-calculations'
+import { API_BASE_URL } from '../config/api'
 
 // Auth functions using Supabase client
 export const authAPI = {
   async login(credentials: LoginCredentials) {
     try {
-      // First, get user by email to check custom user table
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', credentials.email)
-        .eq('is_active', true)
-        .single()
-
-      if (userError || !userData) {
-        throw new Error('Usuário não encontrado ou inativo')
-      }
-
-      // Delegate authentication to backend API
-      const response = await fetch('http://localhost:8080/api/auth/login', {
+      // Delegate authentication to backend API first
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -60,7 +49,7 @@ export const authAPI = {
       }
 
       // Usar a API do servidor para verificar o token JWT
-      const response = await fetch('http://localhost:8080/api/auth/verify', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -114,7 +103,7 @@ export const authAPI = {
 
       // Delegate password change to backend API
       const token = localStorage.getItem('token')
-      const response = await fetch('http://localhost:8080/api/auth/change-password', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -278,7 +267,7 @@ export const crudAPI = {
         throw new Error('Token de autenticação não encontrado')
       }
 
-      const response = await fetch('http://localhost:8080/api/users', {
+      const response = await fetch(`${API_BASE_URL}/api/users`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -302,7 +291,7 @@ export const crudAPI = {
     try {
       // Delegate user creation to backend API
       const token = localStorage.getItem('token')
-      const response = await fetch('http://localhost:8080/api/auth/register', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
