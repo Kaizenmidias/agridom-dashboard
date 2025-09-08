@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useMemo, useRef } from "react";
 import Index from "./pages/Index";
 import ProjetosPage from "./pages/ProjetosPage";
@@ -54,10 +54,8 @@ const queryClient = new QueryClient({
   },
 });
 
-// Using HashRouter instead of BrowserRouter to prevent throttling issues
-// HashRouter is less prone to browser navigation throttling
-
-// Router change handler removido para evitar throttling
+// Using BrowserRouter for clean URLs without hash fragments
+// Vercel configuration handles SPA routing with rewrites
 
 // Layout component that conditionally shows sidebar
 const AppLayout = () => {
@@ -141,12 +139,12 @@ const App = () => {
       <AuthProvider>
         <AppSettingsProvider>
           <CRMProvider>
-            <HashRouter>
+            <BrowserRouter>
               <TooltipProvider>
                 <AppLayout />
                 <Toaster />
               </TooltipProvider>
-            </HashRouter>
+            </BrowserRouter>
           </CRMProvider>
         </AppSettingsProvider>
       </AuthProvider>
