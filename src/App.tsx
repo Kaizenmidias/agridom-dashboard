@@ -53,28 +53,14 @@ const queryClient = new QueryClient({
   },
 });
 
-// Router change handler component
-const RouterChangeHandler = () => {
-  const location = useLocation();
-  
-  useEffect(() => {
-    // Desabilitado scroll automático e analytics para resolver throttling
-    // window.scrollTo(0, 0);
-    // const currentPath = location.pathname;
-    // const pageName = currentPath === '/' ? 'dashboard' : currentPath.replace(/^//, '');
-    // trackPageView(pageName);
-  }, [location.pathname]);
-  
-  return null;
-};
+// Router change handler removido para evitar throttling
 
 // Layout component that conditionally shows sidebar
 const AppLayout = () => {
   const { isAuthenticated, loading } = useAuth();
-  const location = useLocation();
   
-  // Don't show sidebar on login page or when not authenticated
-  const showSidebar = isAuthenticated && location.pathname !== '/login';
+  // Don't show sidebar when not authenticated
+  const showSidebar = isAuthenticated;
   
   if (loading) {
     return (
@@ -87,7 +73,6 @@ const AppLayout = () => {
   if (!showSidebar) {
     return (
       <div className="min-h-screen w-full">
-        <RouterChangeHandler />
         <Routes>
           {routes.map((route) => (
             <Route 
@@ -114,7 +99,6 @@ const AppLayout = () => {
             <SidebarTrigger />
           </header>
           <div className="flex-1">
-            <RouterChangeHandler />
             <Routes>
               {routes.map((route) => {
                 if (!route.protected) {

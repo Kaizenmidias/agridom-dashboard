@@ -32,18 +32,10 @@ const allItems = [
 export function AppSidebar() {
   const { state } = useSidebar()
   const { user } = useAuth()
-  const location = useLocation()
-  const currentPath = location.pathname
-
+  
   // Mostrar todos os itens para usuários autenticados
   const items = user ? allItems : []
-
-  const isActive = (path: string) => {
-    if (path === "/" && currentPath === "/") return true
-    if (path !== "/" && currentPath.startsWith(path)) return true
-    return false
-  }
-
+  
   const isCollapsed = state === "collapsed"
 
   return (
@@ -68,7 +60,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                <SidebarMenuButton asChild>
                   <NavLink to={item.url} end>
                     <item.icon />
                     <span>{item.title}</span>
