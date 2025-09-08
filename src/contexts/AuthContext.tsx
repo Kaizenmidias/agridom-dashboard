@@ -82,58 +82,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const lastVerification = localStorage.getItem('last_token_verification')
         const now = Date.now()
         
-        // Verificar token apenas se passou mais de 2 horas desde a última verificação
-        const shouldVerifyToken = !lastVerification || (now - parseInt(lastVerification)) > 7200000; // 2 horas
+        // Verificação automática de token desabilitada para resolver throttling e logout no F5
+        // O token será verificado apenas no login e logout manual
         
         if (userData && token) {
           try {
             const parsedUser = JSON.parse(userData)
             
-            // Sempre definir o usuário primeiro para evitar loops
+            // Usar dados em cache sem verificação automática
             if (isMounted) {
               setUser(parsedUser)
-              console.log('Usando dados de autenticação em cache:', parsedUser.email)
+              console.log('Usando dados de autenticação em cache (verificação automática desabilitada):', parsedUser.email)
             }
             
-            // Só verificar token se realmente necessário e com delay
-            if (shouldVerifyToken && isMounted) {
-              const timeoutId = setTimeout(async () => {
-                if (!isMounted) return;
-                
-                try {
-                  const result = await verifyToken(token)
-                  
-                  if (result && result.user && result.valid && isMounted) {
-                    // Token válido, atualizar dados se necessário
-                    localStorage.setItem('user_data', JSON.stringify(result.user))
-                    localStorage.setItem('last_token_verification', now.toString())
-                    setUser(result.user)
-                    console.log('Token verificado - dados atualizados:', result.user.email)
-                  } else if (isMounted) {
-                    // Token inválido, limpar dados sem redirecionamento automático
-                    console.warn('Token inválido detectado, limpando dados de autenticação')
-                    localStorage.removeItem('user_data')
-                    localStorage.removeItem('token')
-                    localStorage.removeItem('user')
-                    localStorage.removeItem('last_token_verification')
-                    setUser(null)
-                  }
-                } catch (tokenError) {
-                  console.error('Erro na verificação do token:', tokenError)
-                  // Em caso de erro de rede, manter usuário logado temporariamente
-                  // Só deslogar se for erro de autenticação específico
-                  if (tokenError?.message?.includes('Token inválido') && isMounted) {
-                    localStorage.removeItem('user_data')
-                    localStorage.removeItem('token')
-                    localStorage.removeItem('user')
-                    localStorage.removeItem('last_token_verification')
-                    setUser(null)
-                  }
-                }
-              }, 3000); // Delay de 3 segundos
-              
-              return () => clearTimeout(timeoutId);
-            }
+            // Verificação automática de token desabilitada para evitar:
+            // 1. Throttling de navegação
+            // 2. Logout automático no F5
+            // 3. Loops de verificação
+            console.log('Verificação automática de token desabilitada para melhor performance')
           } catch (parseError) {
             // Erro ao parsear dados - limpar dados
             console.error('Erro ao parsear dados do usuário:', parseError)
