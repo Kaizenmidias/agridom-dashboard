@@ -15,7 +15,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const { login, user } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -34,9 +34,23 @@ const LoginPage = () => {
     }
   }, []);
 
-  // Se já estiver logado, redirecionar para dashboard
-  if (user) {
+  // Aguardar carregamento da autenticação antes de redirecionar
+  // Só redirecionar se não está carregando E tem usuário autenticado
+  if (!authLoading && user) {
+    console.log('Usuário já autenticado, redirecionando para dashboard');
     return <Navigate to="/" replace />;
+  }
+
+  // Mostrar loading enquanto verifica autenticação
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+          <p className="mt-4 text-gray-600">Verificando autenticação...</p>
+        </div>
+      </div>
+    );
   }
 
   // Função para obter mensagem de erro específica

@@ -74,35 +74,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Verificar se há dados de usuário salvos no localStorage e validar token
   useEffect(() => {
     let isMounted = true;
+    let initializationComplete = false;
     
     const initAuth = async () => {
+      // Evitar múltiplas execuções
+      if (initializationComplete) return;
+      initializationComplete = true;
+      
       try {
         const userData = localStorage.getItem('user_data')
         const token = localStorage.getItem('token')
-        const lastVerification = localStorage.getItem('last_token_verification')
-        const now = Date.now()
         
-        // Verificação automática de token desabilitada para resolver throttling e logout no F5
-        // O token será verificado apenas no login e logout manual
+        console.log('Inicializando autenticação...', { hasUserData: !!userData, hasToken: !!token });
         
         if (userData && token) {
           try {
             const parsedUser = JSON.parse(userData)
             
-            // Usar dados em cache sem verificação automática
+            // Usar dados em cache sem verificação automática para evitar loops
             if (isMounted) {
               setUser(parsedUser)
-              console.log('Usando dados de autenticação em cache (verificação automática desabilitada):', parsedUser.email)
+              console.log('Usuário autenticado carregado do cache:', parsedUser.email)
             }
-            
-            // Verificação automática de token desabilitada para evitar:
-            // 1. Throttling de navegação
-            // 2. Logout automático no F5
-            // 3. Loops de verificação
-            console.log('Verificação automática de token desabilitada para melhor performance')
           } catch (parseError) {
-            // Erro ao parsear dados - limpar dados
-            console.error('Erro ao parsear dados do usuário:', parseError)
+            // Erro ao parsear dados - limpar dados corrompidos
+            console.error('Dados de usuário corrompidos, limpando cache:', parseError)
             if (isMounted) {
               localStorage.removeItem('user_data')
               localStorage.removeItem('token')
@@ -112,9 +108,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
           }
         } else {
-          // Não há dados salvos
+          // Não há dados salvos - usuário não autenticado
           if (isMounted) {
             setUser(null)
+            console.log('Nenhum usuário autenticado encontrado')
           }
         }
       } catch (error) {
@@ -123,17 +120,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setUser(null)
         }
       } finally {
+        // Sempre definir loading como false após inicialização
         if (isMounted) {
           setLoading(false)
+          console.log('Inicialização de autenticação concluída')
         }
       }
     }
 
-    // Executar inicialização
-    initAuth();
+    // Executar inicialização com pequeno delay para evitar problemas de timing
+    const timeoutId = setTimeout(initAuth, 50);
     
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
     };
   }, [])
 
