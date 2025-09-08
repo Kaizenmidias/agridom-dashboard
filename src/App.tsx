@@ -31,7 +31,7 @@ const routes = [
   { path: "/forgot-password", element: <ForgotPasswordPage />, protected: false },
   { path: "/reset-password", element: <ResetPasswordPage />, protected: false },
   { path: "/", element: <Index />, protected: true },
-  { path: "/dashboard", element: <Navigate to="/" replace />, protected: false },
+  { path: "/dashboard", element: <Index />, protected: true },
   { path: "/projetos", element: <ProjetosPage />, protected: true },
   { path: "/briefings", element: <BriefingsPage />, protected: true },
   { path: "/codigos", element: <CodesPage />, protected: true },
@@ -58,13 +58,11 @@ const RouterChangeHandler = () => {
   const location = useLocation();
   
   useEffect(() => {
-    // Scroll to top on route change
-    window.scrollTo(0, 0);
-    
-    // Track page view for analytics
-    const currentPath = location.pathname;
-    const pageName = currentPath === '/' ? 'dashboard' : currentPath.replace(/^\//, '');
-    trackPageView(pageName);
+    // Desabilitado scroll automático e analytics para resolver throttling
+    // window.scrollTo(0, 0);
+    // const currentPath = location.pathname;
+    // const pageName = currentPath === '/' ? 'dashboard' : currentPath.replace(/^//, '');
+    // trackPageView(pageName);
   }, [location.pathname]);
   
   return null;

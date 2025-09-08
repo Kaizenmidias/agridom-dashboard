@@ -184,31 +184,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // return () => clearInterval(interval)
   }, [user])
 
-  // Carregar usuários quando o usuário logado mudar
+  // Carregamento automático de usuários desabilitado para resolver throttling
+  // Os usuários serão carregados apenas quando necessário nas páginas específicas
   useEffect(() => {
-    let isMounted = true;
-    
-    const loadUsersData = async () => {
-      if (!isMounted) return;
-      
-      if (user) {
-        try {
-          await loadUsuarios();
-        } catch (error) {
-          console.error('Erro ao carregar usuários:', error);
-        }
-      } else {
-        setUsuarios([]);
-      }
-    };
-    
-    // Usar timeout para evitar execuções excessivas
-    const timeoutId = setTimeout(loadUsersData, 500);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      isMounted = false;
-    };
+    // Desabilitado temporariamente para resolver problema de throttling
+    // if (user) {
+    //   loadUsuarios();
+    // } else {
+    //   setUsuarios([]);
+    // }
+    console.log('Carregamento automático de usuários desabilitado para evitar throttling');
   }, [user])
 
   // Função para fazer login
