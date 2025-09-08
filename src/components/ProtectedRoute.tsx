@@ -9,23 +9,35 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, loading, isAuthenticated, logout } = useAuth();
 
-  // Verificar token válido quando o componente monta
+  // Verificar token válido apenas uma vez quando o componente monta
   useEffect(() => {
+    let isMounted = true;
+    
     const checkTokenValidity = async () => {
       const token = getAuthToken();
-      if (token && user) {
+      if (token && user && isMounted) {
         const valid = await isTokenValid(token);
-        if (!valid) {
+        if (!valid && isMounted) {
           console.warn('Token inválido detectado em ProtectedRoute, fazendo logout');
           logout();
         }
       }
     };
 
+    // Verificar apenas se não está carregando e tem usuário
+    // Usar timeout para evitar verificações excessivas
     if (!loading && user) {
-      checkTokenValidity();
+      const timeoutId = setTimeout(checkTokenValidity, 500);
+      return () => {
+        clearTimeout(timeoutId);
+        isMounted = false;
+      };
     }
-  }, [user, loading, logout]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [user, loading]); // Removido logout das dependências
 
   if (loading) {
     return (

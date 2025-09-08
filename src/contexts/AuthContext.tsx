@@ -167,11 +167,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Carregar usuários quando o usuário logado mudar
   useEffect(() => {
-    if (user) {
-      loadUsuarios()
-    } else {
-      setUsuarios([])
-    }
+    let isMounted = true;
+    
+    const loadUsersData = async () => {
+      if (!isMounted) return;
+      
+      if (user) {
+        try {
+          await loadUsuarios();
+        } catch (error) {
+          console.error('Erro ao carregar usuários:', error);
+        }
+      } else {
+        setUsuarios([]);
+      }
+    };
+    
+    // Usar timeout para evitar execuções excessivas
+    const timeoutId = setTimeout(loadUsersData, 500);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      isMounted = false;
+    };
   }, [user])
 
   // Função para fazer login

@@ -193,9 +193,13 @@ const DashboardWithFilter: React.FC = () => {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    
     // Carregar dados iniciais apenas quando a autenticação estiver completa
-    if (!authLoading && isAuthenticated && user) {
+    if (!authLoading && isAuthenticated && user && isMounted) {
       const loadInitialData = () => {
+        if (!isMounted) return;
+        
         // Carregar dados do mês atual por padrão
         const now = new Date();
         const currentYear = now.getFullYear();
@@ -215,19 +219,25 @@ const DashboardWithFilter: React.FC = () => {
         };
         
         console.log('🔄 CARREGAMENTO INICIAL - Filtros calculados:', filters);
-        console.log('🔄 CARREGAMENTO INICIAL - selectedPeriod atual:', selectedPeriod);
         loadDashboardData(filters);
       };
       
-      // Usar timeout para evitar execução imediata e throttling
-      const timeoutId = setTimeout(loadInitialData, 100);
+      // Aumentar timeout para evitar throttling do navegador
+      const timeoutId = setTimeout(loadInitialData, 1000);
       
-      return () => clearTimeout(timeoutId);
-    } else if (!authLoading && !isAuthenticated) {
+      return () => {
+        clearTimeout(timeoutId);
+        isMounted = false;
+      };
+    } else if (!authLoading && !isAuthenticated && isMounted) {
       // Se não estiver autenticado, limpar dados
       setDashboardStats(null);
       setLoading(false);
     }
+    
+    return () => {
+      isMounted = false;
+    };
   }, [authLoading, isAuthenticated, user]); // Dependências para reagir a mudanças de autenticação
 
   const getMetricLabel = () => {
