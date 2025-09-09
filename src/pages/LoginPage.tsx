@@ -36,9 +36,29 @@ const LoginPage = () => {
 
   // Aguardar carregamento da autenticação antes de redirecionar
   // Só redirecionar se não está carregando E tem usuário autenticado
-  if (!authLoading && user) {
-    console.log('Usuário já autenticado, redirecionando para dashboard');
-    return <Navigate to="/" replace />;
+  // Adicionar throttle para evitar navegações muito rápidas
+  const [hasRedirected, setHasRedirected] = React.useState(false);
+  
+  React.useEffect(() => {
+    if (!authLoading && user && !hasRedirected) {
+      setHasRedirected(true);
+      // Pequeno delay para evitar throttling
+      setTimeout(() => {
+        console.log('Usuário já autenticado, redirecionando para dashboard');
+        window.location.replace('/');
+      }, 100);
+    }
+  }, [authLoading, user, hasRedirected]);
+  
+  if (!authLoading && user && hasRedirected) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+          <p className="mt-4 text-gray-600">Redirecionando...</p>
+        </div>
+      </div>
+    );
   }
 
   // Mostrar loading enquanto verifica autenticação

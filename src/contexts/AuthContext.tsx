@@ -77,9 +77,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let initializationComplete = false;
     
     const initAuth = async () => {
-      // Evitar múltiplas execuções
+      // Evitar múltiplas execuções e throttling
       if (initializationComplete) return;
       initializationComplete = true;
+      
+      // Verificar se já foi inicializado recentemente para evitar loops
+      const lastInit = sessionStorage.getItem('auth_last_init');
+      const now = Date.now();
+      if (lastInit && (now - parseInt(lastInit)) < 1000) {
+        console.log('Inicialização de auth muito recente, pulando para evitar throttling');
+        if (isMounted) {
+          setLoading(false);
+        }
+        return;
+      }
+      sessionStorage.setItem('auth_last_init', now.toString());
       
       try {
         const userData = localStorage.getItem('user_data')
