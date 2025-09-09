@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auto Login - Agridom Dashboard</title>
+</head>
+<body>
+    <h1>Fazendo login automático...</h1>
+    <div id="status">Aguarde...</div>
+    
+    <script>
+        async function autoLogin() {
+            try {
+                const response = await fetch('http://localhost:8080/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'agenciakaizendesign@gmail.com',
+                        password: '123456'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.token) {
+                    // Salvar token no localStorage
+                    localStorage.setItem('token', data.token);
+                    
+                    // Salvar dados do usuário
+                    const userData = {
+                        id: 26,
+                        email: 'agenciakaizendesign@gmail.com',
+                        name: 'Administrador',
+                        role: 'admin',
+                        avatar_url: null,
+                        is_active: true,
+                        is_admin: true
+                    };
+                    
+                    localStorage.setItem('user_data', JSON.stringify(userData));
+                    localStorage.setItem('user', JSON.stringify(userData));
+                    
+                    document.getElementById('status').innerHTML = 
+                        '<p style="color: green;">Login realizado com sucesso!</p>' +
+                        '<p>Token salvo: ' + data.token.substring(0, 50) + '...</p>' +
+                        '<p><a href="http://localhost:5173" target="_blank">Abrir Dashboard</a></p>';
+                } else {
+                    document.getElementById('status').innerHTML = 
+                        '<p style="color: red;">Erro no login: ' + (data.error || 'Erro desconhecido') + '</p>';
+                }
+            } catch (error) {
+                document.getElementById('status').innerHTML = 
+                    '<p style="color: red;">Erro de conexão: ' + error.message + '</p>';
+            }
+        }
+        
+        // Executar login automático quando a página carregar
+        window.onload = autoLogin;
+    </script>
+</body>
+</html>
