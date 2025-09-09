@@ -269,7 +269,7 @@ module.exports = async function handler(req, res) {
     // Rota de projetos
     if (req.url === '/projects' || req.url === '/api/projects') {
       try {
-        authenticateToken(req);
+        const decoded = authenticateToken(req);
         
         if (!supabase) {
           return res.status(200).json({ 
@@ -278,9 +278,12 @@ module.exports = async function handler(req, res) {
           });
         }
         
+        console.log('🔍 [API] Buscando projetos para user_id:', decoded.userId);
+        
         const { data: projects, error } = await supabase
           .from('projects')
           .select('*')
+          .eq('user_id', decoded.userId)
           .order('created_at', { ascending: false });
           
         if (error) {
@@ -290,6 +293,8 @@ module.exports = async function handler(req, res) {
             error: 'Erro ao buscar projetos'
           });
         }
+        
+        console.log('📊 [API] Projetos encontrados:', projects?.length || 0);
         
         return res.status(200).json({ 
           success: true, 
@@ -306,7 +311,7 @@ module.exports = async function handler(req, res) {
     // Rota de despesas
     if (req.url === '/expenses' || req.url === '/api/expenses') {
       try {
-        authenticateToken(req);
+        const decoded = authenticateToken(req);
         
         if (!supabase) {
           return res.status(200).json({ 
@@ -315,9 +320,12 @@ module.exports = async function handler(req, res) {
           });
         }
         
+        console.log('🔍 [API] Buscando despesas para user_id:', decoded.userId);
+        
         const { data: expenses, error } = await supabase
           .from('expenses')
           .select('*')
+          .eq('user_id', decoded.userId)
           .order('created_at', { ascending: false });
           
         if (error) {
@@ -327,6 +335,8 @@ module.exports = async function handler(req, res) {
             error: 'Erro ao buscar despesas'
           });
         }
+        
+        console.log('📊 [API] Despesas encontradas:', expenses?.length || 0);
         
         return res.status(200).json({ 
           success: true, 
@@ -343,7 +353,7 @@ module.exports = async function handler(req, res) {
     // Rota de códigos
     if (req.url === '/codes' || req.url === '/api/codes') {
       try {
-        authenticateToken(req);
+        const decoded = authenticateToken(req);
         
         if (!supabase) {
           return res.status(200).json({ 
@@ -352,9 +362,12 @@ module.exports = async function handler(req, res) {
           });
         }
         
+        console.log('🔍 [API] Buscando códigos para user_id:', decoded.userId);
+        
         const { data: codes, error } = await supabase
           .from('codes')
           .select('*')
+          .eq('user_id', decoded.userId)
           .order('created_at', { ascending: false });
           
         if (error) {
@@ -364,6 +377,8 @@ module.exports = async function handler(req, res) {
             error: 'Erro ao buscar códigos'
           });
         }
+        
+        console.log('📊 [API] Códigos encontrados:', codes?.length || 0);
         
         return res.status(200).json({ 
           success: true, 

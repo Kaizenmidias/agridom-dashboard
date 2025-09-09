@@ -2,7 +2,20 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-
+  "functions": {
+    "api/index.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "env": {
+    "NODE_ENV": "production",
+    "SUPABASE_URL": "https://qwbpruywwfjadkudegcj.supabase.co",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3YnBydXl3d2ZqYWRrdWRlZ2NqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1Njk2MzI1MCwiZXhwIjoyMDcyNTM5MjUwfQ.5q5dHv8Xn5QMtiTPJEpEIg8gcCM_tKstzCsEuBV2dwM",
+    "JWT_SECRET": "X0SyOctdJX522yiVbTnywu+ulxOH15GyRjbwr3+5LAQcIYx1i8Vo0qA1OSrzPuWmGFC66Kk6C7luznv+dRQ5Vg==",
+    "VITE_SUPABASE_URL": "https://qwbpruywwfjadkudegcj.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3YnBydXl3d2ZqYWRrdWRlZ2NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NjMyNTAsImV4cCI6MjA3MjUzOTI1MH0.dyXrYaREdizc-UZM6NJP1Dp7RpDlzbU4pxHutJhGoy8",
+    "VITE_API_URL": "https://agridom-dashboard.vercel.app"
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
