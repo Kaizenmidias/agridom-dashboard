@@ -340,13 +340,26 @@ export const crudAPI = {
   // Projects
   async getProjects() {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
-      return { data, success: true }
+      const response = await fetch(`${API_BASE_URL}/api/projects`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const result = await response.json()
+      return { data: result.data || [], success: true }
     } catch (error: any) {
       return handleSupabaseError(error)
     }
@@ -429,13 +442,26 @@ export const crudAPI = {
   // Expenses
   async getExpenses() {
     try {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
-      return { data, success: true }
+      const response = await fetch(`${API_BASE_URL}/api/expenses`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const result = await response.json()
+      return { data: result.data || [], success: true }
     } catch (error: any) {
       return handleSupabaseError(error)
     }
