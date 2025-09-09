@@ -16,12 +16,8 @@ const checkAuth = async () => {
   // Verificação básica do formato do token JWT
   const tokenParts = token.split('.')
   if (tokenParts.length !== 3) {
-    // Token malformado, limpar localStorage
-    console.warn('Token malformado detectado, limpando dados de autenticação')
-    localStorage.removeItem('token')
-    localStorage.removeItem('user_data')
-    localStorage.removeItem('user')
-    localStorage.removeItem('last_token_verification')
+    // Token malformado - apenas logar o erro, não limpar automaticamente
+    console.warn('Token malformado detectado')
     throw new Error('Token inválido')
   }
   
@@ -29,11 +25,7 @@ const checkAuth = async () => {
   try {
     const payload = JSON.parse(atob(tokenParts[1]))
     if (payload.exp && payload.exp < Date.now() / 1000) {
-      console.warn('Token expirado detectado, limpando dados de autenticação')
-      localStorage.removeItem('token')
-      localStorage.removeItem('user_data')
-      localStorage.removeItem('user')
-      localStorage.removeItem('last_token_verification')
+      console.warn('Token expirado detectado')
       throw new Error('Token expirado')
     }
   } catch (e) {

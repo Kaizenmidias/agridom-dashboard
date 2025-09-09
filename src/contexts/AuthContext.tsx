@@ -333,8 +333,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         localStorage.setItem('user_data', JSON.stringify(result.user))
         setUser(result.user)
       } else {
-        // Token inválido, fazer logout
-        logout()
+        // Token inválido - apenas logar o erro, não fazer logout automático
+        // O logout deve ser feito apenas quando o usuário explicitamente sair
+        console.warn('Token inválido detectado em refreshUserData, mas mantendo sessão ativa')
       }
     } catch (error) {
       console.error('Erro ao recarregar dados do usuário:', error)
