@@ -367,7 +367,36 @@ export const crudAPI = {
 
   async createProject(projectData: any) {
     try {
-      // Usar user_id válido existente na tabela users
+      // Usar API do servidor backend que usa o user_id do token JWT
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/projects`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(projectData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: null, error: error.message, success: false }
+    }
+  },
+
+  async createProjectOld(projectData: any) {
+    try {
+      // Código antigo mantido como backup
       const userId = 25; // User_id válido (Ricardo) para evitar foreign key constraint
       console.log('🔍 DEBUG - Usando user_id válido para projeto:', userId);
       
@@ -469,7 +498,36 @@ export const crudAPI = {
 
   async createExpense(expenseData: any) {
     try {
-      // Usar user_id válido existente na tabela users
+      // Usar API do servidor backend que usa o user_id do token JWT
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/expenses`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(expenseData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: null, error: error.message, success: false }
+    }
+  },
+
+  async createExpenseOld(expenseData: any) {
+    try {
+      // Código antigo mantido como backup
       const userId = 25; // User_id válido para evitar erro de foreign key constraint
       console.log('🔍 DEBUG - Usando user_id válido para despesa:', userId);
       
