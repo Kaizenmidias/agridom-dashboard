@@ -14,17 +14,58 @@ if (supabaseUrl && supabaseKey) {
 }
 
 module.exports = async function handler(req, res) {
+  // Garantir que sempre retornamos JSON válido
+  const sendResponse = (statusCode, data) => {
+    try {
+      res.status(statusCode);
+      res.setHeader('Content-Type', 'application/json');
+      const jsonString = JSON.stringify(data);
+      console.log(`📤 [API] Response ${statusCode}:`, jsonString.substring(0, 200));
+      return res.end(jsonString);
+    } catch (error) {
+      console.error('🚨 [API] Erro ao serializar resposta:', error);
+      res.status(500);
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: 'Falha na serialização da resposta'
+      }));
+    }
+  };
+
   try {
-    // Configuração CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Configuração CORS melhorada
+    const origin = req.headers.origin;
+    const allowedOrigins = [
+      'https://agridom-dashboard.vercel.app',
+      'http://localhost:8081',
+      'http://localhost:8080',
+      'http://localhost:3000',
+      'http://127.0.0.1:8081'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', 'https://agridom-dashboard.vercel.app');
+    }
+    
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
     
     if (req.method === 'OPTIONS') {
-      return res.status(200).end();
-    }
+        return sendResponse(200, { success: true, message: 'CORS preflight' });
+      }
 
     console.log('🔍 [API] Request received:', req.method, req.url);
+    console.log('🔍 [API] Headers:', {
+      origin: req.headers.origin,
+      'content-type': req.headers['content-type'],
+      authorization: req.headers.authorization ? 'Present' : 'Missing'
+    });
     console.log('🔍 [API] Environment variables:', {
       NODE_ENV: process.env.NODE_ENV,
       hasSupabaseUrl: !!supabaseUrl,
@@ -73,7 +114,7 @@ module.exports = async function handler(req, res) {
           console.log('Login attempt:', { email, hasPassword: !!password });
           
           if (!email || !password) {
-            return res.status(400).json({
+            return sendResponse(400, {
               success: false,
               message: 'Email e senha são obrigatórios',
               received: { email: !!email, password: !!password }
@@ -102,7 +143,7 @@ module.exports = async function handler(req, res) {
                 jwtSecret
               );
 
-              return res.status(200).json({
+              return sendResponse(200, {
                 success: true,
                 token: token,
                 user: {
@@ -113,7 +154,7 @@ module.exports = async function handler(req, res) {
               });
             }
 
-            return res.status(401).json({
+            return sendResponse(401, {
               success: false,
               message: 'Credenciais inválidas'
             });
@@ -128,7 +169,7 @@ module.exports = async function handler(req, res) {
 
           if (userError) {
             console.error('Erro ao buscar usuário:', userError);
-            return res.status(500).json({
+            return sendResponse(500, {
               success: false,
               message: 'Erro interno do servidor'
             });
@@ -163,7 +204,7 @@ module.exports = async function handler(req, res) {
             jwtSecret
           );
 
-          return res.status(200).json({
+          return sendResponse(200, {
             success: true,
             token: token,
             user: {
@@ -174,14 +215,166 @@ module.exports = async function handler(req, res) {
           });
         } catch (error) {
           console.error('Erro no login:', error);
-          return res.status(500).json({
+          return sendResponse(500, {
             success: false,
             message: 'Erro interno do servidor',
             error: error.message
           });
         }
       }
-      return res.status(405).json({ error: 'Método não permitido' });
+      return sendResponse(405, { success: false, error: 'Método não permitido' });
+    }
+
+    // Rota de registro
+    if (req.url === '/api/register' || req.url === '/api/auth/register') {
+      if (req.method === 'POST') {
+        try {
+          const { email, password, name } = body;
+          
+          if (!email || !password) {
+            return sendResponse(400, {
+              success: false,
+              message: 'Email e senha são obrigatórios'
+            });
+          }
+
+          if (!supabase) {
+            return sendResponse(500, {
+              success: false,
+              message: 'Serviço indisponível'
+            });
+          }
+
+          // Verificar se usuário já existe
+          const { data: existingUsers } = await supabase
+            .from('users')
+            .select('id')
+            .eq('email', email)
+            .limit(1);
+
+          if (existingUsers && existingUsers.length > 0) {
+            return sendResponse(400, {
+              success: false,
+              message: 'Usuário já existe'
+            });
+          }
+
+          // Hash da senha
+          const hashedPassword = await bcrypt.hash(password, 10);
+
+          // Criar usuário
+          const { data: newUser, error } = await supabase
+            .from('users')
+            .insert({
+              email,
+              password: hashedPassword,
+              name: name || email
+            })
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Erro ao criar usuário:', error);
+            return sendResponse(500, {
+              success: false,
+              message: 'Erro ao criar usuário'
+            });
+          }
+
+          return sendResponse(201, {
+            success: true,
+            user: {
+              id: newUser.id,
+              email: newUser.email,
+              name: newUser.name
+            }
+          });
+        } catch (error) {
+          console.error('Erro no registro:', error);
+          return sendResponse(500, {
+            success: false,
+            message: 'Erro interno do servidor'
+          });
+        }
+      }
+      return sendResponse(405, { success: false, error: 'Método não permitido' });
+    }
+
+    // Rota de mudança de senha
+    if (req.url === '/api/change-password' || req.url === '/api/auth/change-password') {
+      if (req.method === 'POST') {
+        try {
+          const decoded = authenticateToken(req);
+          const { currentPassword, newPassword } = body;
+          
+          if (!currentPassword || !newPassword) {
+            return sendResponse(400, {
+              success: false,
+              message: 'Senha atual e nova senha são obrigatórias'
+            });
+          }
+
+          if (!supabase) {
+            return sendResponse(500, {
+              success: false,
+              message: 'Serviço indisponível'
+            });
+          }
+
+          // Buscar usuário
+          const { data: users } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', decoded.userId)
+            .limit(1);
+
+          const user = users && users.length > 0 ? users[0] : null;
+          if (!user) {
+            return sendResponse(404, {
+              success: false,
+              message: 'Usuário não encontrado'
+            });
+          }
+
+          // Verificar senha atual
+          const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+          if (!isValidPassword) {
+            return sendResponse(400, {
+              success: false,
+              message: 'Senha atual incorreta'
+            });
+          }
+
+          // Hash da nova senha
+          const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+          // Atualizar senha
+          const { error } = await supabase
+            .from('users')
+            .update({ password: hashedNewPassword })
+            .eq('id', decoded.userId);
+
+          if (error) {
+            console.error('Erro ao atualizar senha:', error);
+            return sendResponse(500, {
+              success: false,
+              message: 'Erro ao atualizar senha'
+            });
+          }
+
+          return sendResponse(200, {
+            success: true,
+            message: 'Senha atualizada com sucesso'
+          });
+        } catch (error) {
+          console.error('Erro na mudança de senha:', error);
+          return sendResponse(500, {
+            success: false,
+            message: 'Erro interno do servidor'
+          });
+        }
+      }
+      return sendResponse(405, { success: false, error: 'Método não permitido' });
     }
 
     // Middleware de autenticação
@@ -202,10 +395,10 @@ module.exports = async function handler(req, res) {
     };
 
     // Rota de verificação de token
-    if (req.url === '/auth/verify' || req.url === '/api/auth/verify') {
+    if (req.url === '/api/verify-token' || req.url === '/auth/verify' || req.url === '/api/auth/verify') {
       try {
         const decoded = authenticateToken(req);
-        return res.status(200).json({ 
+        return sendResponse(200, { 
           success: true, 
           valid: true,
           user: {
@@ -214,7 +407,7 @@ module.exports = async function handler(req, res) {
           }
         });
       } catch (error) {
-        return res.status(401).json({ 
+        return sendResponse(401, { 
           success: false, 
           valid: false,
           error: error.message 
@@ -228,7 +421,7 @@ module.exports = async function handler(req, res) {
         authenticateToken(req);
         
         if (!supabase) {
-          return res.status(200).json({ 
+          return sendResponse(200, { 
             success: true, 
             data: [
               {
@@ -248,18 +441,18 @@ module.exports = async function handler(req, res) {
           
         if (error) {
           console.error('Erro ao buscar usuários:', error);
-          return res.status(500).json({
+          return sendResponse(500, {
             success: false,
             error: 'Erro ao buscar usuários'
           });
         }
         
-        return res.status(200).json({ 
+        return sendResponse(200, { 
           success: true, 
           data: users || []
         });
       } catch (error) {
-        return res.status(401).json({ 
+        return sendResponse(401, { 
           success: false, 
           error: error.message 
         });
@@ -272,7 +465,7 @@ module.exports = async function handler(req, res) {
         const decoded = authenticateToken(req);
         
         if (!supabase) {
-          return res.status(200).json({ 
+          return sendResponse(200, { 
             success: true, 
             data: []
           });
@@ -288,7 +481,7 @@ module.exports = async function handler(req, res) {
           
         if (error) {
           console.error('Erro ao buscar projetos:', error);
-          return res.status(500).json({
+          return sendResponse(500, {
             success: false,
             error: 'Erro ao buscar projetos'
           });
@@ -296,12 +489,12 @@ module.exports = async function handler(req, res) {
         
         console.log('📊 [API] Projetos encontrados:', projects?.length || 0);
         
-        return res.status(200).json({ 
+        return sendResponse(200, { 
           success: true, 
           data: projects || []
         });
       } catch (error) {
-        return res.status(401).json({ 
+        return sendResponse(401, { 
           success: false, 
           error: error.message 
         });
@@ -314,7 +507,7 @@ module.exports = async function handler(req, res) {
         const decoded = authenticateToken(req);
         
         if (!supabase) {
-          return res.status(200).json({ 
+          return sendResponse(200, { 
             success: true, 
             data: []
           });
@@ -330,7 +523,7 @@ module.exports = async function handler(req, res) {
           
         if (error) {
           console.error('Erro ao buscar despesas:', error);
-          return res.status(500).json({
+          return sendResponse(500, {
             success: false,
             error: 'Erro ao buscar despesas'
           });
@@ -338,12 +531,12 @@ module.exports = async function handler(req, res) {
         
         console.log('📊 [API] Despesas encontradas:', expenses?.length || 0);
         
-        return res.status(200).json({ 
+        return sendResponse(200, { 
           success: true, 
           data: expenses || []
         });
       } catch (error) {
-        return res.status(401).json({ 
+        return sendResponse(401, { 
           success: false, 
           error: error.message 
         });
@@ -356,7 +549,7 @@ module.exports = async function handler(req, res) {
         const decoded = authenticateToken(req);
         
         if (!supabase) {
-          return res.status(200).json({ 
+          return sendResponse(200, { 
             success: true, 
             data: []
           });
@@ -372,7 +565,7 @@ module.exports = async function handler(req, res) {
           
         if (error) {
           console.error('Erro ao buscar códigos:', error);
-          return res.status(500).json({
+          return sendResponse(500, {
             success: false,
             error: 'Erro ao buscar códigos'
           });
@@ -380,19 +573,19 @@ module.exports = async function handler(req, res) {
         
         console.log('📊 [API] Códigos encontrados:', codes?.length || 0);
         
-        return res.status(200).json({ 
+        return sendResponse(200, { 
           success: true, 
           data: codes || []
         });
       } catch (error) {
-        return res.status(401).json({ 
+        return sendResponse(401, { 
           success: false, 
           error: error.message 
         });
       }
     }
     
-    return res.status(404).json({ 
+    return sendResponse(404, { 
       error: 'Rota não encontrada',
       url: req.url,
       method: req.method
@@ -400,7 +593,7 @@ module.exports = async function handler(req, res) {
     
   } catch (globalError) {
     console.error('🚨 [API] Erro global:', globalError);
-    return res.status(500).json({
+    return sendResponse(500, {
       success: false,
       message: 'Erro interno do servidor',
       error: globalError.message,

@@ -8,7 +8,7 @@ export const authAPI = {
   async login(credentials: LoginCredentials) {
     try {
       // Delegate authentication to backend API first
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -49,7 +49,7 @@ export const authAPI = {
       }
 
       // Usar a API do servidor para verificar o token JWT
-      const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+      const response = await fetch(`${API_BASE_URL}/api/verify-token`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -98,7 +98,7 @@ export const authAPI = {
 
       // Delegate password change to backend API
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      const response = await fetch(`${API_BASE_URL}/api/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -286,7 +286,7 @@ export const crudAPI = {
     try {
       // Delegate user creation to backend API
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const response = await fetch(`${API_BASE_URL}/api/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
