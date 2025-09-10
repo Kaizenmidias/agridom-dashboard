@@ -264,18 +264,26 @@ export const crudAPI = {
 
   // Projects
   async getProjects() {
+    console.log('🔍 SUPABASE-CLIENT - getProjects() iniciada');
+    console.log('🔗 Supabase URL:', supabase.supabaseUrl);
     try {
+      console.log('📡 Fazendo chamada: supabase.from("projects").select("*")');
       const { data, error } = await supabase
         .from('projects')
         .select('*')
         .order('created_at', { ascending: false })
 
+      console.log('📊 Resposta Supabase - data:', data?.length, 'error:', error);
+      
       if (error) {
+        console.error('❌ Erro ao buscar projetos:', error)
         throw error
       }
 
+      console.log('✅ getProjects Supabase concluída com sucesso');
       return { data: data || [], success: true }
     } catch (error: any) {
+      console.error('❌ Erro inesperado ao buscar projetos:', error)
       return handleSupabaseError(error)
     }
   },
