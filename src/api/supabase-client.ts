@@ -1,46 +1,23 @@
 import { supabase, handleSupabaseError } from '../lib/supabase'
 import { AuthUser, LoginCredentials, RegisterCredentials } from '../types/database'
 import { calculateMonthlyAmount } from '../utils/billing-calculations'
-import { API_BASE_URL } from '../config/api'
 
 // Auth functions using Supabase client
 export const authAPI = {
   async login(credentials: LoginCredentials) {
     try {
-      // Delegate authentication to backend API first
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: credentials.email,
-          password: credentials.password
-        })
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password
       })
 
-      if (!response.ok) {
-        let errorData
-        try {
-          errorData = await response.json()
-        } catch (jsonError) {
-          console.error('Erro ao fazer parse do JSON de erro:', jsonError)
-          throw new Error(`Erro no servidor: ${response.status} ${response.statusText}`)
-        }
-        throw new Error(errorData.error || 'Erro no login')
+      if (error) {
+        throw new Error(error.message)
       }
 
-      let data
-      try {
-        data = await response.json()
-      } catch (jsonError) {
-        console.error('Erro ao fazer parse do JSON de resposta:', jsonError)
-        throw new Error('Resposta inválida do servidor')
-      }
-      
       return {
         user: data.user,
-        token: data.token,
+        session: data.session,
         success: true
       }
     } catch (error: any) {
@@ -48,101 +25,36 @@ export const authAPI = {
     }
   },
 
-  async verify(token: string) {
+  async verify() {
     try {
-      // Verificação básica do formato do token
-      if (!token || typeof token !== 'string') {
-        throw new Error('Token inválido');
+      const { data: { user }, error } = await supabase.auth.getUser()
+
+      if (error) {
+        throw new Error(error.message)
       }
 
-      const tokenParts = token.split('.');
-      if (tokenParts.length !== 3) {
-        throw new Error('Token malformado');
-      }
-
-      // Usar a API do servidor para verificar o token JWT
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify-token`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        let errorData
-        try {
-          errorData = await response.json()
-        } catch (jsonError) {
-          console.error('Erro ao fazer parse do JSON de erro na verificação:', jsonError)
-          errorData = { error: 'Token inválido' }
-        }
-        throw new Error(errorData.error || 'Token inválido');
-      }
-
-      let data
-      try {
-        data = await response.json()
-      } catch (jsonError) {
-        console.error('Erro ao fazer parse do JSON de resposta na verificação:', jsonError)
-        throw new Error('Resposta inválida do servidor na verificação')
-      }
-      
-      if (data.valid && data.user) {
-        return {
-          user: data.user,
-          valid: true
-        };
-      } else {
-        throw new Error('Token inválido');
+      return {
+        user,
+        valid: !!user
       }
     } catch (error: any) {
-      // NÃO limpar localStorage automaticamente - deixar para o AuthContext decidir
-      // Isso evita loops de redirecionamento
-      console.error('Erro na verificação do token:', error);
+      console.error('Erro na verificação do usuário:', error)
       return {
         user: null,
         valid: false,
-        error: error.message || 'Token inválido'
+        error: error.message || 'Usuário não autenticado'
       }
     }
   },
 
-  async changePassword(userId: number, currentPassword: string, newPassword: string) {
+  async changePassword(newPassword: string) {
     try {
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('password')
-        .eq('id', userId)
-        .single()
-
-      if (userError || !userData) {
-        throw new Error('Usuário não encontrado')
-      }
-
-      // Delegate password change to backend API
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          userId,
-          currentPassword,
-          newPassword
-        })
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Erro ao alterar senha')
-      }
-
-      const data = await response.json()
-      if (!data.success) {
-        throw updateError
+      if (error) {
+        throw new Error(error.message)
       }
 
       return { success: true }
@@ -167,18 +79,8 @@ export const authAPI = {
     }
   },
 
-  async resetPassword(token: string, newPassword: string) {
+  async resetPassword(newPassword: string) {
     try {
-      // Primeiro, verificar se a sessão é válida com o token
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: token
-      })
-
-      if (sessionError) {
-        throw new Error('Token inválido ou expirado')
-      }
-
       // Atualizar a senha
       const { error } = await supabase.auth.updateUser({
         password: newPassword
@@ -189,36 +91,47 @@ export const authAPI = {
       }
 
       return { success: true, message: 'Senha alterada com sucesso!' };
-  } catch (error: any) {
-    return handleSupabaseError(error);
-  }
-},
+    } catch (error: any) {
+      return handleSupabaseError(error);
+    }
+  },
 
-  async register(credentials: any) {
+  async register(credentials: RegisterCredentials) {
     try {
       const { data, error } = await supabase.auth.signUp({
         email: credentials.email,
         password: credentials.password,
         options: {
           data: {
-            full_name: credentials.full_name,
-            role: credentials.role,
-            bio: credentials.bio || '',
+            name: credentials.name
           }
         }
-      });
+      })
 
       if (error) {
-        throw new Error(error.message);
+        throw new Error(error.message)
       }
 
       return {
         user: data.user,
         session: data.session,
-        token: data.session?.access_token,
-      };
+        success: true
+      }
     } catch (error: any) {
-      return handleSupabaseError(error);
+      console.error('Erro no registro:', error)
+      throw error
+    }
+  },
+
+  async logout() {
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      
+      return { success: true }
+    } catch (error: any) {
+      console.error('Erro no logout:', error)
+      throw error
     }
   },
 
@@ -280,52 +193,34 @@ export const crudAPI = {
   // Users
   async getUsers() {
     try {
-      // Usar API do servidor backend que requer autenticação
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/users`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return { data, success: true }
+      return { data: data || [], success: true }
     } catch (error: any) {
-      return { data: null, error: error.message, success: false }
+      return { data: [], error: error.message, success: false }
     }
   },
 
   async createUser(userData: any) {
     try {
-      // Delegate user creation to backend API
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(userData)
-      })
+      const { data, error } = await supabase
+        .from('users')
+        .insert([userData])
+        .select()
+        .single()
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Erro ao criar usuário')
+      if (error) {
+        throw error
       }
 
-      const data = await response.json()
-      return { data: data.user, success: true }
+      return { data, success: true }
     } catch (error: any) {
       return handleSupabaseError(error)
     }
@@ -333,26 +228,17 @@ export const crudAPI = {
 
   async updateUser(id: number, userData: any) {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('users')
+        .update(userData)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/users/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(userData)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
       return { data: null, error: error.message, success: false }
@@ -361,22 +247,13 @@ export const crudAPI = {
 
   async deleteUser(id: number) {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
-      }
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id)
 
-      const response = await fetch(`${API_BASE_URL}/api/users/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      if (error) {
+        throw error
       }
 
       return { success: true }
@@ -388,27 +265,16 @@ export const crudAPI = {
   // Projects
   async getProjects() {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/projects`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const result = await response.json()
-      // A API retorna um array diretamente, não um objeto com propriedade 'data'
-      return { data: Array.isArray(result) ? result : [], success: true }
+      return { data: data || [], success: true }
     } catch (error: any) {
       return handleSupabaseError(error)
     }
@@ -416,27 +282,16 @@ export const crudAPI = {
 
   async createProject(projectData: any) {
     try {
-      // Usar API do servidor backend que usa o user_id do token JWT
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('projects')
+        .insert([projectData])
+        .select()
+        .single()
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/projects`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(projectData)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
       return { data: null, error: error.message, success: false }
@@ -520,27 +375,16 @@ export const crudAPI = {
   // Expenses
   async getExpenses() {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/expenses`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const result = await response.json()
-      // A API retorna um array diretamente, não um objeto com propriedade 'data'
-      return { data: Array.isArray(result) ? result : [], success: true }
+      return { data: data || [], success: true }
     } catch (error: any) {
       return handleSupabaseError(error)
     }
@@ -548,27 +392,16 @@ export const crudAPI = {
 
   async createExpense(expenseData: any) {
     try {
-      // Usar API do servidor backend que usa o user_id do token JWT
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('expenses')
+        .insert([expenseData])
+        .select()
+        .single()
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/expenses`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(expenseData)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
       return { data: null, error: error.message, success: false }
@@ -616,26 +449,17 @@ export const crudAPI = {
 
   async updateExpense(id: number, expenseData: any) {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('expenses')
+        .update(expenseData)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/expenses/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(expenseData)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
       return { data: null, error: error.message, success: false }
@@ -644,22 +468,13 @@ export const crudAPI = {
 
   async deleteExpense(id: number) {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
-      }
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', id)
 
-      const response = await fetch(`${API_BASE_URL}/api/expenses/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      if (error) {
+        throw error
       }
 
       return { success: true }
@@ -671,26 +486,16 @@ export const crudAPI = {
   // Codes
   async getCodes() {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('codes')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/codes`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return { data, success: true }
+      return { data: data || [], success: true }
     } catch (error: any) {
       return { data: [], error: error.message, success: false }
     }
@@ -698,26 +503,16 @@ export const crudAPI = {
 
   async createCode(codeData: any) {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('codes')
+        .insert([codeData])
+        .select()
+        .single()
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/codes`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(codeData)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
       return { data: null, error: error.message, success: false }
@@ -726,26 +521,17 @@ export const crudAPI = {
 
   async updateCode(id: number, codeData: any) {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
+      const { data, error } = await supabase
+        .from('codes')
+        .update(codeData)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) {
+        throw error
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/codes/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(codeData)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
       return { data: null, error: error.message, success: false }
@@ -754,22 +540,13 @@ export const crudAPI = {
 
   async deleteCode(id: number) {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
-      }
+      const { error } = await supabase
+        .from('codes')
+        .delete()
+        .eq('id', id)
 
-      const response = await fetch(`${API_BASE_URL}/api/codes/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      if (error) {
+        throw error
       }
 
       return { success: true }
@@ -1123,149 +900,7 @@ export const dashboardAPI = {
     }
   },
 
-  // Briefings
-  async getBriefings(filters?: { search?: string; status?: string; priority?: string }) {
-    try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
-      }
 
-      const params = new URLSearchParams()
-      if (filters?.search) params.append('search', filters.search)
-      if (filters?.status) params.append('status', filters.status)
-      if (filters?.priority) params.append('priority', filters.priority)
-
-      const url = `${API_BASE_URL}/api/briefings${params.toString() ? '?' + params.toString() : ''}`
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return { data, success: true }
-    } catch (error: any) {
-      return { data: [], error: error.message, success: false }
-    }
-  },
-
-  async getBriefing(id: string) {
-    try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/briefings/${id}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return { data, success: true }
-    } catch (error: any) {
-      return { data: null, error: error.message, success: false }
-    }
-  },
-
-  async createBriefing(briefingData: any) {
-    try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/briefings`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(briefingData)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return { data, success: true }
-    } catch (error: any) {
-      return { data: null, error: error.message, success: false }
-    }
-  },
-
-  async updateBriefing(id: string, briefingData: any) {
-    try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/briefings/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(briefingData)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return { data, success: true }
-    } catch (error: any) {
-      return { data: null, error: error.message, success: false }
-    }
-  },
-
-  async deleteBriefing(id: string) {
-    try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/briefings/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
-      }
-
-      return { success: true }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  }
 }
 
 // APIs já exportadas individualmente acima
