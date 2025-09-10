@@ -53,7 +53,7 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
   } = useForm<DespesaFormData>({
     resolver: zodResolver(despesaSchema),
     defaultValues: {
-      date: new Date().toISOString().split('T')[0]
+      date: new Date().toLocaleDateString('en-CA')
       // Não definir valor padrão para billing_type
     }
   });
@@ -150,7 +150,7 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
       });
 
       reset({
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toLocaleDateString('en-CA'),
         description: '',
         amount: '',
         notes: ''

@@ -437,7 +437,7 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
         // Transformar o resultado para incluir project_name
         const transformedData = data?.map(expense => ({
           ...expense,
-          amount: expense.amount
+          amount: expense.amount,
           project_name: expense.projects?.name || null
         })) || [];
         

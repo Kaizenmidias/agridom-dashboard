@@ -72,10 +72,13 @@ const authenticateToken = (req, res, next) => {
 // GET /api/users
 router.get('/users', authenticateToken, async (req, res) => {
   try {
+    console.log('📋 Requisição GET /api/users recebida');
     const query = getQuery(req);
     const result = await query(
       'SELECT id, email, name as full_name, role, avatar_url, is_active, created_at, updated_at FROM users WHERE is_active = 1 ORDER BY created_at DESC'
     );
+    
+    console.log('📋 Usuários encontrados:', result.rows?.length || 0);
     
     // Mapear roles para nomes em português
     const users = (result.rows || []).map(user => ({
@@ -83,6 +86,7 @@ router.get('/users', authenticateToken, async (req, res) => {
       position: user.role === 'admin' ? 'Administrador' : user.role === 'user' ? 'Web Designer' : user.role
     }));
     
+    console.log('📋 Enviando resposta com usuários:', users.length);
     res.json(users);
   } catch (error) {
     console.error('Erro ao buscar usuários:', error);

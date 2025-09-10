@@ -110,7 +110,8 @@ const Dashboard = () => {
           setLoading(true);
         }
         
-        const result = await dashboardAPI.getDashboardStats();
+        // Usar a nova função que chama o backend Node.js com a lógica correta
+        const result = await dashboardAPI.getBackendDashboardStats();
         if (result.error) {
           throw new Error(result.error);
         }

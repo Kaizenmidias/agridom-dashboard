@@ -87,10 +87,10 @@ export function DatePickerWithRange({
                 variant="outline" 
                 size="sm"
                 onClick={() => {
-                  // Usar UTC para evitar problemas de fuso horário
-                  const today = new Date(new Date().toISOString().split('T')[0] + 'T00:00:00.000Z')
+                  // Usar data local para evitar problemas de fuso horário
+                  const today = new Date()
                   const fromDate = new Date(today)
-                  fromDate.setUTCDate(today.getUTCDate() - preset.days)
+                  fromDate.setDate(today.getDate() - preset.days)
                   
                   setDate({
                     from: fromDate,

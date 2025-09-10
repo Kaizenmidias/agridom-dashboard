@@ -204,19 +204,33 @@ export const authAPI = {
 
 // CRUD functions using Supabase client
 export const crudAPI = {
-  // Users
+  // Users - usando backend Node.js
   async getUsers() {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        throw error
+      // Obter o token de sessão do Supabase
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        return { data: [], error: 'Usuário não autenticado', success: false };
       }
 
-      return { data: data || [], success: true }
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://agridom-dashboard.vercel.app'
+        : 'http://localhost:3001';
+      
+      const response = await fetch(`${baseUrl}/api/users`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return { data: data || [], success: true };
     } catch (error: any) {
       return { data: [], error: error.message, success: false }
     }
@@ -757,6 +771,54 @@ export interface DashboardStats {
 }
 
 export const dashboardAPI = {
+  // Nova função que chama a API do backend Node.js com a lógica correta
+  async getBackendDashboardStats(filters?: {
+    startDate?: string;
+    endDate?: string;
+    previousStartDate?: string;
+    previousEndDate?: string;
+    targetYear?: number;
+  }): Promise<{ data: DashboardStats; error?: string }> {
+    try {
+      // Obter o token de sessão do Supabase
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        return { data: {} as DashboardStats, error: 'Usuário não autenticado' };
+      }
+
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://agridom-dashboard.vercel.app'
+        : 'http://localhost:3001';
+      
+      const params = new URLSearchParams();
+      if (filters?.startDate) params.append('startDate', filters.startDate);
+      if (filters?.endDate) params.append('endDate', filters.endDate);
+      if (filters?.previousStartDate) params.append('previousStartDate', filters.previousStartDate);
+      if (filters?.previousEndDate) params.append('previousEndDate', filters.previousEndDate);
+      if (filters?.targetYear) params.append('targetYear', filters.targetYear.toString());
+
+      const url = `${baseUrl}/api/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      console.error('Erro ao buscar estatísticas do backend:', error);
+      return { data: {} as DashboardStats, error: 'Erro ao buscar estatísticas do backend' };
+    }
+  },
+
   async getDashboardStats(filters?: {
     startDate?: string;
     endDate?: string;
@@ -781,6 +843,8 @@ export const dashboardAPI = {
       if (expensesError) {
         return { data: {} as DashboardStats, error: expensesError.message }
       }
+      
+
 
       // Calcular estatísticas dos projetos
       const totalProjects = projects?.length || 0
@@ -789,52 +853,8 @@ export const dashboardAPI = {
       const pausedProjects = projects?.filter(p => p.status === 'paused').length || 0
       const totalProjectValue = projects?.reduce((sum, p) => sum + (Number(p.project_value) || 0), 0) || 0
       
-      // Calcular faturamento considerando filtros de data
-      let totalPaidValue = 0
-      
-      if (filters?.startDate && filters?.endDate) {
-        // Com filtros de data
-        const startDate = new Date(filters.startDate)
-        const endDate = new Date(filters.endDate)
-        
-        // Verificar se é filtro anual (janeiro a dezembro do mesmo ano)
-        const isYearlyFilter = startDate.getFullYear() === endDate.getFullYear() && 
-                              startDate.getMonth() === 0 && 
-                              endDate.getMonth() === 11
-        
-        if (isYearlyFilter) {
-          // Para filtro anual, calcular faturamento apenas até o mês atual
-          const filterYear = startDate.getFullYear()
-          const currentDate = new Date()
-          const currentYear = currentDate.getFullYear()
-          const currentMonth = currentDate.getMonth() + 1
-          
-          // Se é o ano atual, calcular apenas até o mês atual
-          // Se é ano passado ou futuro, calcular todos os 12 meses
-          const monthsToCalculate = filterYear === currentYear ? currentMonth : 12
-          
-          totalPaidValue = projects?.filter(p => {
-            const createdAt = new Date(p.created_at)
-            const projectYear = createdAt.getFullYear()
-            const projectMonth = createdAt.getMonth() + 1
-            
-            return projectYear === filterYear && projectMonth <= monthsToCalculate
-          }).reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
-        } else {
-          // Para filtro mensal, calcular apenas o mês específico
-          const year = startDate.getFullYear()
-          const month = startDate.getMonth() + 1
-          
-          totalPaidValue = projects?.filter(p => {
-            const createdAt = new Date(p.created_at)
-            return createdAt.getFullYear() === year && 
-                   (createdAt.getMonth() + 1) === month
-          }).reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
-        }
-      } else {
-        // Sem filtros - usar todos os projetos
-        totalPaidValue = projects?.reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
-      }
+      // Calcular faturamento total (paid_value de todos os projetos)
+      const totalPaidValue = projects?.reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
 
       // Calcular estatísticas das despesas
       const totalExpenses = expenses?.length || 0
@@ -970,6 +990,8 @@ export const dashboardAPI = {
       const currentExpenses = totalExpensesAmount
       const currentProfit = currentRevenue - currentExpenses
       const currentReceivable = totalProjectValue - totalPaidValue
+      
+
 
       const dashboardStats: DashboardStats = {
         projects: {

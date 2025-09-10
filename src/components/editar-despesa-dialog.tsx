@@ -62,7 +62,7 @@ export function EditarDespesaDialog({ expense, open, onOpenChange, onExpenseUpda
       
       // Melhor tratamento da data
       const expenseDate = expense.date;
-      let formattedDate = new Date().toISOString().split('T')[0]; // Data atual como fallback
+      let formattedDate = new Date().toLocaleDateString('en-CA'); // Data atual como fallback
       
       if (expenseDate) {
         try {
@@ -77,18 +77,18 @@ export function EditarDespesaDialog({ expense, open, onOpenChange, onExpenseUpda
               // Tentar converter outros formatos
               dateObj = new Date(expenseDate);
               if (!isNaN(dateObj.getTime())) {
-                formattedDate = dateObj.toISOString().split('T')[0];
+                formattedDate = dateObj.toLocaleDateString('en-CA');
               }
             }
           } else if ((expenseDate as any) instanceof Date) {
             if (!isNaN((expenseDate as Date).getTime())) {
-              formattedDate = (expenseDate as Date).toISOString().split('T')[0];
+              formattedDate = (expenseDate as Date).toLocaleDateString('en-CA');
             }
           } else if (expenseDate) {
             // Tentar converter qualquer outro tipo para Date
             const dateObj = new Date(expenseDate as any);
             if (!isNaN(dateObj.getTime())) {
-              formattedDate = dateObj.toISOString().split('T')[0];
+              formattedDate = dateObj.toLocaleDateString('en-CA');
             }
           }
         } catch (error) {

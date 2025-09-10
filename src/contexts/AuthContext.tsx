@@ -51,12 +51,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Função para carregar lista de usuários
   const loadUsuarios = async () => {
     try {
-      // Verificar se há token antes de tentar carregar usuários
-      const token = localStorage.getItem('token')
-      if (!token) {
-        console.warn('Tentativa de carregar usuários sem token de autenticação')
+      // Verificar se há sessão ativa do Supabase
+      if (!session || !supabaseUser) {
+        console.warn('Tentativa de carregar usuários sem sessão ativa')
         setUsuarios([])
-        setError(null) // Não é um erro se não há token
+        setError(null) // Não é um erro se não há sessão
         return
       }
       
@@ -191,17 +190,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // return () => clearInterval(interval)
   }, [user])
 
-  // Carregamento automático de usuários desabilitado para resolver throttling
-  // Os usuários serão carregados apenas quando necessário nas páginas específicas
+  // Carregamento automático de usuários quando há sessão ativa
   useEffect(() => {
-    // Desabilitado temporariamente para resolver problema de throttling
-    // if (user) {
-    //   loadUsuarios();
-    // } else {
-    //   setUsuarios([]);
-    // }
-    console.log('Carregamento automático de usuários desabilitado para evitar throttling');
-  }, [user])
+    if (session && supabaseUser) {
+      loadUsuarios();
+    } else {
+      setUsuarios([]);
+    }
+  }, [session, supabaseUser])
 
   // Função para fazer login
   const login = async (credentials: LoginCredentials): Promise<AuthResponse | null> => {

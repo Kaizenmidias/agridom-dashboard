@@ -27,6 +27,7 @@ ChartJS.register(
   Legend
 );
 import { dashboardAPI, DashboardStats } from '@/api/supabase-client';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 const DashboardWithFilter: React.FC = () => {
@@ -77,10 +78,11 @@ const DashboardWithFilter: React.FC = () => {
       }
       
       console.log('Frontend - Enviando filtros para API:', filters);
-      const result = await dashboardAPI.getDashboardStats(filters);
+      const result = await dashboardAPI.getBackendDashboardStats(filters);
       if (result.error) {
         throw new Error(result.error);
       }
+
       setDashboardStats(result.data);
       console.log('Dados do dashboard carregados com sucesso');
     } catch (error: any) {
@@ -202,32 +204,30 @@ const DashboardWithFilter: React.FC = () => {
     }
   };
 
+
+
   useEffect(() => {
     // Carregar dados iniciais apenas quando a autenticação estiver completa
     if (!authLoading && isAuthenticated && user) {
-      // Carregar dados do mês atual por padrão
+      console.log('Usuário autenticado, carregando dados do dashboard');
+      
+      // Calcular filtros padrão (mês atual e anterior)
       const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
       
-      const startOfCurrentMonth = startOfMonth(new Date(currentYear, currentMonth, 1));
-      const endOfCurrentMonth = endOfMonth(new Date(currentYear, currentMonth, 1));
-      
-      const startOfPrevMonth = startOfMonth(new Date(currentYear, currentMonth - 1, 1));
-      const endOfPrevMonth = endOfMonth(new Date(currentYear, currentMonth - 1, 1));
-      
-      const filters = {
-        startDate: format(startOfCurrentMonth, 'yyyy-MM-dd'),
-        endDate: format(endOfCurrentMonth, 'yyyy-MM-dd'),
-        previousStartDate: format(startOfPrevMonth, 'yyyy-MM-dd'),
-        previousEndDate: format(endOfPrevMonth, 'yyyy-MM-dd'),
-        targetYear: currentYear
+      const defaultFilters = {
+        startDate: currentMonthStart.toLocaleDateString('en-CA'),
+        endDate: currentMonthEnd.toLocaleDateString('en-CA'),
+        previousStartDate: previousMonthStart.toLocaleDateString('en-CA'),
+        previousEndDate: previousMonthEnd.toLocaleDateString('en-CA')
       };
       
-      console.log('🔄 CARREGAMENTO INICIAL - Filtros calculados:', filters);
-      loadDashboardData(filters);
+      loadDashboardData(defaultFilters);
     } else if (!authLoading && !isAuthenticated) {
-      // Se não estiver autenticado, limpar dados
+      console.log('Usuário não autenticado, limpando dados do dashboard');
       setDashboardStats(null);
       setLoading(false);
     }
@@ -501,6 +501,8 @@ const DashboardWithFilter: React.FC = () => {
 
         </div>
       </div>
+
+
 
       {/* Resumo Financeiro */}
         {loading ? (
