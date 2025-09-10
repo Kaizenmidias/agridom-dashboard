@@ -6,34 +6,16 @@ import { verifyToken } from './auth'
 // Re-exportar tipos para uso em outros componentes
 export type { User, Project, Expense, Code };
 
-// Função auxiliar para verificar autenticação
+// Função auxiliar para verificar autenticação usando Supabase
 const checkAuth = async () => {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    throw new Error('Token de autenticação não encontrado')
-  }
+  const { verifyToken } = await import('./auth')
+  const result = await verifyToken()
   
-  // Verificação básica do formato do token JWT
-  const tokenParts = token.split('.')
-  if (tokenParts.length !== 3) {
-    // Token malformado - apenas logar o erro, não limpar automaticamente
-    console.warn('Token malformado detectado')
+  if (!result.valid || !result.user) {
     throw new Error('Token inválido')
   }
   
-  // Verificar se o token não está expirado (verificação básica)
-  try {
-    const payload = JSON.parse(atob(tokenParts[1]))
-    if (payload.exp && payload.exp < Date.now() / 1000) {
-      console.warn('Token expirado detectado')
-      throw new Error('Token expirado')
-    }
-  } catch (e) {
-    console.warn('Erro ao verificar expiração do token:', e)
-    // Se não conseguir verificar, continua com o token (pode ser formato diferente)
-  }
-  
-  return token
+  return result.user
 }
 
 // === USUÁRIOS ===

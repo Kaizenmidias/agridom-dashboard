@@ -25,8 +25,22 @@ export const authAPI = {
     }
   },
 
-  async verify() {
+  async verify(token?: string) {
     try {
+      // Se um token foi fornecido, verificar se é válido
+      if (token) {
+        // Para tokens JWT customizados, verificar se ainda são válidos
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          const now = Date.now() / 1000
+          if (payload.exp && payload.exp < now) {
+            throw new Error('Token expirado')
+          }
+        } catch {
+          throw new Error('Token inválido')
+        }
+      }
+
       const { data: { user }, error } = await supabase.auth.getUser()
 
       if (error) {
@@ -518,6 +532,12 @@ export const crudAPI = {
   // Codes
   async getCodes() {
     try {
+      // Verificar se o usuário está autenticado
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error('Usuário não autenticado');
+      }
+
       const { data, error } = await supabase
         .from('codes')
         .select('*')
@@ -565,6 +585,12 @@ export const crudAPI = {
 
   async updateCode(id: number, codeData: any) {
     try {
+      // Verificar se o usuário está autenticado
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error('Usuário não autenticado');
+      }
+
       const { data, error } = await supabase
         .from('codes')
         .update(codeData)
@@ -584,6 +610,12 @@ export const crudAPI = {
 
   async deleteCode(id: number) {
     try {
+      // Verificar se o usuário está autenticado
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error('Usuário não autenticado');
+      }
+
       const { error } = await supabase
         .from('codes')
         .delete()

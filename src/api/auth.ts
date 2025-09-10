@@ -69,7 +69,7 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Au
 }
 
 // Função para verificar token
-export const verifyToken = async (token: string): Promise<{ user: AuthUser; valid: boolean }> => {
+export const verifyToken = async (token?: string): Promise<{ user: AuthUser; valid: boolean }> => {
   try {
     const result = await authAPI.verify(token)
 
