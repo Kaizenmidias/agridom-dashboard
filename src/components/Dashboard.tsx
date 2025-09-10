@@ -38,7 +38,10 @@ const Dashboard = () => {
   // State for editable content
   const [title, setTitle] = useState('Dashboard de Projetos');
   const [description, setDescription] = useState('Visão geral dos seus projetos e despesas');
-  const [currentMonth, setCurrentMonth] = useState('Agosto 2024');
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  });
   
   // Dashboard stats from backend
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);

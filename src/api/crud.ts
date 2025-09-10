@@ -83,6 +83,7 @@ export async function getDashboardStats(filters?: {
   endDate?: string;
   previousStartDate?: string;
   previousEndDate?: string;
+  targetYear?: number;
 }): Promise<DashboardStats> {
   const token = await checkAuth()
   
@@ -96,8 +97,9 @@ export async function getDashboardStats(filters?: {
   if (filters?.endDate) params.append('endDate', filters.endDate)
   if (filters?.previousStartDate) params.append('previousStartDate', filters.previousStartDate)
   if (filters?.previousEndDate) params.append('previousEndDate', filters.previousEndDate)
+  if (filters?.targetYear) params.append('targetYear', filters.targetYear.toString())
 
-  const url = `${API_BASE_URL}/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`
+  const url = `${API_BASE_URL}/api/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`
   
   const response = await fetch(url, {
     method: 'GET',

@@ -58,9 +58,11 @@ const authenticateToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, jwtSecret);
     // Para tokens do Supabase, usar o campo 'sub' como userId
-    req.userId = decoded.sub || decoded.userId || 4; // Fallback para usuário 4 em desenvolvimento
+    req.userId = decoded.sub || decoded.userId || decoded.user_id || 4; // Fallback para usuário 4 em desenvolvimento
+    console.log('🔍 DEBUG - Token decodificado:', { sub: decoded.sub, userId: decoded.userId, user_id: decoded.user_id, final: req.userId });
     next();
   } catch (error) {
+    console.error('🔍 DEBUG - Erro ao verificar token:', error);
     return res.status(401).json({ error: 'Token inválido' });
   }
 };
@@ -429,6 +431,20 @@ router.get('/expenses', authenticateToken, async (req, res) => {
     );
     
     // 🔧 CALCULAR VALOR MENSAL e RECUPERAR TIPO ORIGINAL para cada despesa
+    // Obter ano e mês dos filtros ou usar atual como fallback
+    const { startDate, endDate } = req.query;
+    let targetYear, targetMonth;
+    
+    if (startDate) {
+      const filterDate = new Date(startDate);
+      targetYear = filterDate.getFullYear();
+      targetMonth = filterDate.getMonth() + 1;
+    } else {
+      const now = new Date();
+      targetYear = now.getFullYear();
+      targetMonth = now.getMonth() + 1;
+    }
+    
     const expensesWithMonthlyValue = (result.rows || []).map(expense => {
       // 🔧 TEMPORÁRIO: Recuperar tipo original do cache
       const originalBillingType = getOriginalBillingType(expense.id, expense.billing_type);
@@ -443,8 +459,8 @@ router.get('/expenses', authenticateToken, async (req, res) => {
             expense.value,
             'semanal',
             expense.date,
-            new Date().getFullYear(),
-            new Date().getMonth() + 1
+            targetYear,
+            targetMonth
           );
           break;
         case 'anual':
@@ -494,6 +510,20 @@ router.get('/expenses/:id', authenticateToken, async (req, res) => {
     // 🔧 CALCULAR VALOR MENSAL e RECUPERAR TIPO ORIGINAL para a despesa
     const expense = result.rows[0];
     
+    // Obter ano e mês dos filtros ou usar atual como fallback
+    const { startDate, endDate } = req.query;
+    let targetYear, targetMonth;
+    
+    if (startDate) {
+      const filterDate = new Date(startDate);
+      targetYear = filterDate.getFullYear();
+      targetMonth = filterDate.getMonth() + 1;
+    } else {
+      const now = new Date();
+      targetYear = now.getFullYear();
+      targetMonth = now.getMonth() + 1;
+    }
+    
     // 🔧 TEMPORÁRIO: Recuperar tipo original do cache
     const originalBillingType = getOriginalBillingType(expense.id, expense.billing_type);
     
@@ -507,8 +537,8 @@ router.get('/expenses/:id', authenticateToken, async (req, res) => {
           expense.value,
           'semanal',
           expense.date,
-          new Date().getFullYear(),
-          new Date().getMonth() + 1
+          targetYear,
+          targetMonth
         );
         break;
       case 'anual':
@@ -665,17 +695,14 @@ router.put('/expenses/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Despesa não encontrada' });
     }
     
-    // Tratar valores undefined como null
-    const params = [
-      description !== undefined ? description : null,
-      amount !== undefined ? amount : null,
-      category !== undefined ? category : null,
-      date !== undefined ? date : null,
-      billing_type !== undefined ? billing_type : null,
-      notes !== undefined ? notes : null,
-      new Date().toISOString(),
-      req.params.id
-    ];
+    // Converter amount para número se fornecido
+    const numericAmount = amount !== undefined ? 
+      (typeof amount === 'string' ? parseFloat(amount) : amount) : undefined;
+    
+    // Validar amount se fornecido
+    if (numericAmount !== undefined && (isNaN(numericAmount) || numericAmount <= 0)) {
+      return res.status(400).json({ error: 'Valor deve ser um número válido maior que zero' });
+    }
     
     await query(
       `UPDATE expenses 
@@ -689,7 +716,7 @@ router.put('/expenses/:id', authenticateToken, async (req, res) => {
        WHERE id = ?`,
       [
         description !== undefined ? description : null,
-        amount !== undefined ? amount : null,
+        numericAmount !== undefined ? numericAmount : null,
         category !== undefined ? category : null,
         date !== undefined ? date : null,
         billing_type !== undefined ? billing_type : null,
@@ -699,8 +726,14 @@ router.put('/expenses/:id', authenticateToken, async (req, res) => {
       ]
     );
     
+    // Buscar a despesa atualizada com dados do projeto
     const result = await query(
-      `SELECT * FROM expenses WHERE id = ?`,
+      `SELECT e.id, e.description, e.value, e.value as amount, e.category, e.date, 
+              e.billing_type, e.project_id, e.user_id, e.notes, e.created_at, e.updated_at,
+              p.name as project_name 
+       FROM expenses e 
+       LEFT JOIN projects p ON e.project_id = p.id 
+       WHERE e.id = ?`,
       [req.params.id]
     );
     
@@ -1090,13 +1123,14 @@ router.delete('/crops/:id', authenticateToken, async (req, res) => {
 router.get('/dashboard/stats', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
-    const { startDate, endDate, previousStartDate, previousEndDate } = req.query;
+    const { startDate, endDate, previousStartDate, previousEndDate, targetYear } = req.query;
     
     console.log('Backend - Filtros recebidos:', {
       startDate,
       endDate,
       previousStartDate,
-      previousEndDate
+      previousEndDate,
+      targetYear
     });
     
     // Se não há filtros de data, usar período atual (mês atual)
@@ -1247,17 +1281,18 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         totalExpensesAmount = 0;
         
         // Calcular cada mês individualmente
+        const yearToUse = targetYear ? parseInt(targetYear) : startDateObj.getFullYear();
         for (let month = 1; month <= monthsToCalculate; month++) {
           const monthlyExpenses = calculateTotalMonthlyExpenses(
             mappedExpenses,
-            startDateObj.getFullYear(),
+            yearToUse,
             month
           );
           totalExpensesAmount += monthlyExpenses;
         }
       } else {
         // Período mensal - usar cálculo mensal
-        const filterYear = startDateObj.getFullYear();
+        const filterYear = targetYear ? parseInt(targetYear) : startDateObj.getFullYear();
         const filterMonth = startDateObj.getMonth() + 1;
         totalExpensesAmount = calculateTotalMonthlyExpenses(
           mappedExpenses,
@@ -1268,7 +1303,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     } else {
       // Sem filtros - usar mês atual
       const now = new Date();
-      const currentYear = now.getFullYear();
+      const currentYear = targetYear ? parseInt(targetYear) : now.getFullYear();
       const currentMonth = now.getMonth() + 1;
       totalExpensesAmount = calculateTotalMonthlyExpenses(
         mappedExpenses,
@@ -1299,9 +1334,10 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     // Calcular estatísticas de despesas do período anterior
     const previousExpensesArray = previousExpenses?.rows || [];
     const prevDate = new Date(prevStart);
+    const prevYearToUse = targetYear ? parseInt(targetYear) - 1 : prevDate.getFullYear();
     const previousTotalExpensesAmount = calculateTotalMonthlyExpenses(
       previousExpensesArray,
-      prevDate.getFullYear(),
+      prevYearToUse,
       prevDate.getMonth() + 1
     );
     
@@ -1439,7 +1475,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
            monthlyAmount = parseFloat(expense.amount || 0);
          } else {
            // Período mensal - usar cálculo mensal
-           const filterYear = startDateObj.getFullYear();
+           const filterYear = targetYear ? parseInt(targetYear) : startDateObj.getFullYear();
            const filterMonth = startDateObj.getMonth() + 1;
            monthlyAmount = calculateTotalMonthlyExpenses(
              [expense],
@@ -1450,7 +1486,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
        } else {
          // Sem filtros - usar mês atual
          const now = new Date();
-         const currentYear = now.getFullYear();
+         const currentYear = targetYear ? parseInt(targetYear) : now.getFullYear();
          const currentMonth = now.getMonth() + 1;
          monthlyAmount = calculateTotalMonthlyExpenses(
            [expense],
@@ -1596,6 +1632,182 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     res.json(stats);
   } catch (error) {
     console.error('Erro ao buscar estatísticas do dashboard:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// ===== BRIEFINGS =====
+
+// GET /api/briefings
+router.get('/briefings', authenticateToken, async (req, res) => {
+  try {
+    const query = getQuery(req);
+    const { search, status, priority } = req.query;
+    
+    let sql = 'SELECT * FROM briefings WHERE user_id = ?';
+    const params = [req.userId];
+    
+    if (search) {
+      sql += ' AND (title LIKE ? OR client LIKE ? OR description LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    
+    if (status && status !== 'all') {
+      sql += ' AND status = ?';
+      params.push(status);
+    }
+    
+    if (priority && priority !== 'all') {
+      sql += ' AND priority = ?';
+      params.push(priority);
+    }
+    
+    sql += ' ORDER BY created_at DESC';
+    
+    const result = await query(sql, params);
+    res.json(result.rows || []);
+  } catch (error) {
+    console.error('Erro ao buscar briefings:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// GET /api/briefings/:id
+router.get('/briefings/:id', authenticateToken, async (req, res) => {
+  try {
+    const query = getQuery(req);
+    const result = await query(
+      'SELECT * FROM briefings WHERE id = ? AND user_id = ?',
+      [req.params.id, req.userId]
+    );
+    
+    if (!result.rows || result.rows.length === 0) {
+      return res.status(404).json({ error: 'Briefing não encontrado' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao buscar briefing:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// POST /api/briefings
+router.post('/briefings', authenticateToken, async (req, res) => {
+  try {
+    const { title, client, description, status, priority, deadline } = req.body;
+    
+    if (!title || !client) {
+      return res.status(400).json({ error: 'Título e cliente são obrigatórios' });
+    }
+    
+    if (status && !['pending', 'in_progress', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'Status inválido' });
+    }
+    
+    if (priority && !['low', 'medium', 'high', 'urgent'].includes(priority)) {
+      return res.status(400).json({ error: 'Prioridade inválida' });
+    }
+    
+    const query = getQuery(req);
+    const result = await query(
+      'INSERT INTO briefings (title, client, description, status, priority, deadline, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [title, client, description, status || 'pending', priority || 'medium', deadline, req.userId]
+    );
+    
+    const newBriefing = await query(
+      'SELECT * FROM briefings WHERE id = ?',
+      [result.insertId]
+    );
+    
+    res.status(201).json(newBriefing.rows[0]);
+  } catch (error) {
+    console.error('Erro ao criar briefing:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// PUT /api/briefings/:id
+router.put('/briefings/:id', authenticateToken, async (req, res) => {
+  try {
+    const { title, client, description, status, priority, deadline } = req.body;
+    const query = getQuery(req);
+    
+    // Verificar se o briefing existe e pertence ao usuário
+    const briefingCheck = await query(
+      'SELECT id FROM briefings WHERE id = ? AND user_id = ?',
+      [req.params.id, req.userId]
+    );
+    
+    if (!briefingCheck.rows || briefingCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Briefing não encontrado' });
+    }
+    
+    if (status && !['pending', 'in_progress', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'Status inválido' });
+    }
+    
+    if (priority && !['low', 'medium', 'high', 'urgent'].includes(priority)) {
+      return res.status(400).json({ error: 'Prioridade inválida' });
+    }
+    
+    await query(
+      `UPDATE briefings 
+       SET title = COALESCE(?, title),
+           client = COALESCE(?, client),
+           description = COALESCE(?, description),
+           status = COALESCE(?, status),
+           priority = COALESCE(?, priority),
+           deadline = COALESCE(?, deadline),
+           updated_at = ?
+       WHERE id = ?`,
+      [
+        title !== undefined ? title : null,
+        client !== undefined ? client : null,
+        description !== undefined ? description : null,
+        status !== undefined ? status : null,
+        priority !== undefined ? priority : null,
+        deadline !== undefined ? deadline : null,
+        new Date().toISOString(),
+        req.params.id
+      ]
+    );
+    
+    const result = await query(
+      'SELECT * FROM briefings WHERE id = ?',
+      [req.params.id]
+    );
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao atualizar briefing:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// DELETE /api/briefings/:id
+router.delete('/briefings/:id', authenticateToken, async (req, res) => {
+  try {
+    const query = getQuery(req);
+    
+    // Verificar se o briefing pertence ao usuário
+    const briefingCheck = await query(
+      'SELECT id FROM briefings WHERE id = ? AND user_id = ?',
+      [req.params.id, req.userId]
+    );
+    
+    if (!briefingCheck.rows || briefingCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Briefing não encontrado' });
+    }
+    
+    await query(
+      'DELETE FROM briefings WHERE id = ?',
+      [req.params.id]
+    );
+    
+    res.json({ message: 'Briefing excluído com sucesso' });
+  } catch (error) {
+    console.error('Erro ao excluir briefing:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });

@@ -192,7 +192,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
               :root {
-                --font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
                 --primary-color: ${isDarkMode ? '#8BADE3' : '#4CAF50'};
                 --border-color: ${isDarkMode ? '#3A3A3A' : '#e5e7eb'};
                 --bg-color: ${isDarkMode ? '#1F1F1F' : '#ffffff'};
@@ -331,7 +331,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     <style>
                       :root {
-                        --font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                        --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
                         --primary-color: ${settings.darkMode ? '#8BADE3' : '#4CAF50'};
                         --border-color: ${settings.darkMode ? '#3A3A3A' : '#e5e7eb'};
                         --bg-color: ${settings.darkMode ? '#1F1F1F' : '#ffffff'};

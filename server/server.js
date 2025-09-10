@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3001;
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://agridom-dashboard.vercel.app', process.env.CORS_ORIGIN].filter(Boolean)
-    : ['http://localhost:8080', 'http://localhost:8081', 'http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:8080', 'http://127.0.0.1:8081', 'http://127.0.0.1:5173'],
+    : ['http://localhost:8080', 'http://localhost:8081', 'http://localhost:8082', 'http://localhost:8083', 'http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:8080', 'http://127.0.0.1:8081', 'http://127.0.0.1:8082', 'http://127.0.0.1:8083', 'http://127.0.0.1:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -90,6 +90,29 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
         const result = { rows: data || [], rowCount: data?.length || 0 };
         
         return result;
+      }
+      
+      if (sql.includes('from expenses')) {
+        let query = supabase.from('expenses').select('*');
+        
+        if (sql.includes('where id =') && sql.includes('and user_id =')) {
+          // SELECT id FROM expenses WHERE id = ? AND user_id = ?
+          query = query.eq('id', params[0]).eq('user_id', params[1]);
+        } else if (sql.includes('where id =')) {
+          // SELECT * FROM expenses WHERE id = ?
+          query = query.eq('id', params[0]);
+        } else if (sql.includes('where user_id =')) {
+          // SELECT * FROM expenses WHERE user_id = ?
+          query = query.eq('user_id', params[0]);
+        }
+        
+        const { data, error } = await query;
+        if (error) {
+          console.error('❌ Erro na query Supabase expenses:', error);
+          throw error;
+        }
+        
+        return { rows: data || [], rowCount: data?.length || 0 };
       }
       
       if (sql.includes('from projects')) {
@@ -385,6 +408,42 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
         return { rows: data || [], rowCount: data?.length || 0 };
       }
       
+      if (sql.includes('expenses') && sql.includes('set')) {
+        // UPDATE expenses
+        const updateData = {};
+        
+        // Mapear parâmetros para campos do Supabase (baseado na ordem da query)
+        if (params[0] !== null && params[0] !== undefined) updateData.description = params[0];
+        if (params[1] !== null && params[1] !== undefined) updateData.value = params[1];
+        if (params[2] !== null && params[2] !== undefined) updateData.category = params[2];
+        if (params[3] !== null && params[3] !== undefined) updateData.date = params[3];
+        if (params[4] !== null && params[4] !== undefined) updateData.billing_type = params[4];
+        if (params[5] !== null && params[5] !== undefined) updateData.notes = params[5];
+        if (params[6] !== null && params[6] !== undefined) updateData.updated_at = params[6];
+        
+        const expenseId = params[7]; // O ID está no final
+        
+        const { data, error } = await supabase
+          .from('expenses')
+          .update(updateData)
+          .eq('id', expenseId)
+          .select(`
+            id, description, value, category, date, billing_type, notes, 
+            project_id, user_id, created_at, updated_at,
+            projects(name)
+          `);
+        if (error) throw error;
+        
+        // Transformar o resultado para incluir project_name
+        const transformedData = data?.map(expense => ({
+          ...expense,
+          amount: expense.value, // Alias para compatibilidade
+          project_name: expense.projects?.name || null
+        })) || [];
+        
+        return { rows: transformedData, rowCount: transformedData.length };
+      }
+      
       if (sql.includes('codes') && sql.includes('set')) {
         const updateData = {
           title: params[0],
@@ -515,8 +574,13 @@ app.use('/api/upload', uploadRoutes);
 // Rota de teste
 app.get('/api/health', async (req, res) => {
   try {
-    await query('SELECT 1');
-    res.json({ status: 'OK', message: 'Conexão com banco de dados funcionando' });
+    // Usar testConnection que já está implementada corretamente
+    const isConnected = await testConnection();
+    if (isConnected) {
+      res.json({ status: 'OK', message: 'Conexão com banco de dados funcionando' });
+    } else {
+      res.status(500).json({ status: 'ERROR', message: 'Erro na conexão com banco de dados' });
+    }
   } catch (error) {
     res.status(500).json({ status: 'ERROR', message: 'Erro na conexão com banco de dados' });
   }

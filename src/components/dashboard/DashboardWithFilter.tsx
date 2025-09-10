@@ -64,6 +64,7 @@ const DashboardWithFilter: React.FC = () => {
     endDate?: string;
     previousStartDate?: string;
     previousEndDate?: string;
+    targetYear?: number;
   }) => {
     try {
       setLoading(true);
@@ -150,12 +151,16 @@ const DashboardWithFilter: React.FC = () => {
       previousEndDate
     });
     
+    // Extrair ano do período selecionado
+    const targetYear = newPeriod === 'year' ? now.getFullYear() : parseInt(newPeriod.split('-')[0]);
+    
     // Carregar dados com filtros
     loadDashboardData({
       startDate,
       endDate,
       previousStartDate,
-      previousEndDate
+      previousEndDate,
+      targetYear
     });
   };
 
@@ -183,11 +188,13 @@ const DashboardWithFilter: React.FC = () => {
       });
       
       // Carregar dados com filtros personalizados
+      const targetYear = dateRange.from.getFullYear();
       loadDashboardData({
         startDate,
         endDate,
         previousStartDate: previousStartDateStr,
-        previousEndDate: previousEndDateStr
+        previousEndDate: previousEndDateStr,
+        targetYear
       });
     }
   };
@@ -210,7 +217,8 @@ const DashboardWithFilter: React.FC = () => {
         startDate: format(startOfCurrentMonth, 'yyyy-MM-dd'),
         endDate: format(endOfCurrentMonth, 'yyyy-MM-dd'),
         previousStartDate: format(startOfPrevMonth, 'yyyy-MM-dd'),
-        previousEndDate: format(endOfPrevMonth, 'yyyy-MM-dd')
+        previousEndDate: format(endOfPrevMonth, 'yyyy-MM-dd'),
+        targetYear: currentYear
       };
       
       console.log('🔄 CARREGAMENTO INICIAL - Filtros calculados:', filters);

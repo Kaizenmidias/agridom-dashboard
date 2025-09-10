@@ -7,6 +7,7 @@ import { Search, Plus, Calendar, User, FileText, Filter } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { crudAPI } from "@/api/supabase-client"
 
 interface Briefing {
   id: string
@@ -20,7 +21,7 @@ interface Briefing {
   updated_at: string
 }
 
-// Briefings serão carregados da API quando implementada
+
 
 const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -54,6 +55,36 @@ export default function BriefingsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
+  const [loading, setLoading] = useState(true)
+
+  // Carregar briefings da API
+  useEffect(() => {
+    loadBriefings()
+  }, [])
+
+  const loadBriefings = async () => {
+    try {
+      setLoading(true)
+      const result = await crudAPI.getBriefings()
+      if (result.success) {
+        setBriefings(result.data)
+      } else {
+        toast({
+          title: "Erro",
+          description: result.error || "Erro ao carregar briefings",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar briefings",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredBriefings = briefings.filter(briefing => {
     const matchesSearch = briefing.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -76,6 +107,19 @@ export default function BriefingsPage() {
       title: "Em desenvolvimento",
       description: "Funcionalidade de edição de briefings será implementada em breve."
     })
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Carregando briefings...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

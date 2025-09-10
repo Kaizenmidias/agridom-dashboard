@@ -74,7 +74,7 @@ export function calculateMonthlyAmount(
   targetMonth?: number
 ): number {
   const now = new Date();
-  const year = targetYear || now.getFullYear();
+  const year = targetYear || new Date().getFullYear();
   const month = targetMonth || (now.getMonth() + 1);
 
   switch (billingType) {

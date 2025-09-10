@@ -13,6 +13,11 @@ deploy-cpanel/
 dist-ssr
 
 # Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
 *.local
 
 # Database

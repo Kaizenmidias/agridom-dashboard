@@ -8,7 +8,7 @@ export const authAPI = {
   async login(credentials: LoginCredentials) {
     try {
       // Delegate authentication to backend API first
-      const response = await fetch(`${API_BASE_URL}/api/login`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -20,11 +20,23 @@ export const authAPI = {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        let errorData
+        try {
+          errorData = await response.json()
+        } catch (jsonError) {
+          console.error('Erro ao fazer parse do JSON de erro:', jsonError)
+          throw new Error(`Erro no servidor: ${response.status} ${response.statusText}`)
+        }
         throw new Error(errorData.error || 'Erro no login')
       }
 
-      const data = await response.json()
+      let data
+      try {
+        data = await response.json()
+      } catch (jsonError) {
+        console.error('Erro ao fazer parse do JSON de resposta:', jsonError)
+        throw new Error('Resposta inválida do servidor')
+      }
       
       return {
         user: data.user,
@@ -49,7 +61,7 @@ export const authAPI = {
       }
 
       // Usar a API do servidor para verificar o token JWT
-      const response = await fetch(`${API_BASE_URL}/api/verify-token`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/verify-token`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -58,11 +70,23 @@ export const authAPI = {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Token inválido' }));
+        let errorData
+        try {
+          errorData = await response.json()
+        } catch (jsonError) {
+          console.error('Erro ao fazer parse do JSON de erro na verificação:', jsonError)
+          errorData = { error: 'Token inválido' }
+        }
         throw new Error(errorData.error || 'Token inválido');
       }
 
-      const data = await response.json();
+      let data
+      try {
+        data = await response.json()
+      } catch (jsonError) {
+        console.error('Erro ao fazer parse do JSON de resposta na verificação:', jsonError)
+        throw new Error('Resposta inválida do servidor na verificação')
+      }
       
       if (data.valid && data.user) {
         return {
@@ -98,7 +122,7 @@ export const authAPI = {
 
       // Delegate password change to backend API
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/api/change-password`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -262,7 +286,7 @@ export const crudAPI = {
         throw new Error('Token de autenticação não encontrado')
       }
 
-      const response = await fetch(`${API_BASE_URL}/users`, {
+      const response = await fetch(`${API_BASE_URL}/api/users`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -286,7 +310,7 @@ export const crudAPI = {
     try {
       // Delegate user creation to backend API
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/api/register`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -309,31 +333,55 @@ export const crudAPI = {
 
   async updateUser(id: number, userData: any) {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .update(userData)
-        .eq('id', id)
-        .select()
-        .single()
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
+      const response = await fetch(`${API_BASE_URL}/api/users/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(userData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
-      return handleSupabaseError(error)
+      return { data: null, error: error.message, success: false }
     }
   },
 
   async deleteUser(id: number) {
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', id)
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
+      const response = await fetch(`${API_BASE_URL}/api/users/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
       return { success: true }
     } catch (error: any) {
-      return handleSupabaseError(error)
+      return { error: error.message, success: false }
     }
   },
 
@@ -359,7 +407,8 @@ export const crudAPI = {
       }
 
       const result = await response.json()
-      return { data: result.data || [], success: true }
+      // A API retorna um array diretamente, não um objeto com propriedade 'data'
+      return { data: Array.isArray(result) ? result : [], success: true }
     } catch (error: any) {
       return handleSupabaseError(error)
     }
@@ -490,7 +539,8 @@ export const crudAPI = {
       }
 
       const result = await response.json()
-      return { data: result.data || [], success: true }
+      // A API retorna um array diretamente, não um objeto com propriedade 'data'
+      return { data: Array.isArray(result) ? result : [], success: true }
     } catch (error: any) {
       return handleSupabaseError(error)
     }
@@ -566,158 +616,165 @@ export const crudAPI = {
 
   async updateExpense(id: number, expenseData: any) {
     try {
-      const { data, error } = await supabase
-        .from('expenses')
-        .update(expenseData)
-        .eq('id', id)
-        .select()
-        .single()
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
+      const response = await fetch(`${API_BASE_URL}/api/expenses/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(expenseData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
-      return handleSupabaseError(error)
+      return { data: null, error: error.message, success: false }
     }
   },
 
   async deleteExpense(id: number) {
     try {
-      const { error } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('id', id)
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
+      const response = await fetch(`${API_BASE_URL}/api/expenses/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
       return { success: true }
     } catch (error: any) {
-      return handleSupabaseError(error)
+      return { error: error.message, success: false }
     }
   },
 
   // Codes
   async getCodes() {
     try {
-      const { data, error } = await supabase
-        .from('codes')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
+      const response = await fetch(`${API_BASE_URL}/api/codes`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
-      return handleSupabaseError(error)
+      return { data: [], error: error.message, success: false }
     }
   },
 
   async createCode(codeData: any) {
     try {
-      // Primeiro, verificar se existe um usuário válido
-      console.log('🔍 DEBUG - Verificando usuário válido...');
-      
-      const { data: users, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('is_active', true)
-        .limit(1);
-      
-      if (userError || !users || users.length === 0) {
-        throw new Error('Nenhum usuário ativo encontrado. Verifique se existe pelo menos um usuário na tabela users.');
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
       }
-      
-      const userId = users[0].id;
-      console.log('🔍 DEBUG - Usando user_id válido:', userId);
-      
-      // Validar campos obrigatórios
-      if (!codeData.title || codeData.title.trim() === '') {
-        throw new Error('Title é obrigatório');
-      }
-      
-      if (!codeData.code_content && !codeData.content) {
-        throw new Error('Code content é obrigatório');
-      }
-      
-      // Validar language constraint (deve ser css, html ou javascript)
-      const validLanguages = ['css', 'html', 'javascript'];
-      const language = codeData.language || 'javascript';
-      if (!validLanguages.includes(language)) {
-        throw new Error(`Language deve ser um dos valores: ${validLanguages.join(', ')}`);
-      }
-      
-      // Mapear campos do frontend para o schema do banco
-      const insertData = {
-        title: codeData.title.trim(),
-        language: language,
-        code_content: codeData.code_content || codeData.content || '',
-        description: codeData.description || null,
-        user_id: userId
-      };
 
-      console.log('🔍 DEBUG Supabase - Dados do código para inserção:', insertData);
+      const response = await fetch(`${API_BASE_URL}/api/codes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(codeData)
+      })
 
-      // Usar SDK do Supabase corretamente (não REST API direta)
-      // Isso evita problemas com querystring ?columns=... em requisições POST
-      const { data, error } = await supabase
-        .from('codes')
-        .insert(insertData)
-        .select('*')
-        .single();
-
-      if (error) {
-        console.error('🔍 DEBUG Supabase - Erro na inserção do código:', error);
-        console.error('🔍 DEBUG Supabase - Detalhes do erro:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        
-        // Fornecer mensagens de erro mais específicas
-        if (error.code === '23503') {
-          throw new Error('Erro de foreign key: user_id não existe na tabela users');
-        } else if (error.code === '23505') {
-          throw new Error('Erro de duplicação: já existe um registro com esses dados');
-        } else if (error.code === '23514') {
-          throw new Error('Erro de constraint: verifique se language é css, html ou javascript');
-        }
-        
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
       }
-      
-      console.log('🔍 DEBUG Supabase - Código criado com sucesso:', data);
-      return { data, success: true };
+
+      const data = await response.json()
+      return { data, success: true }
     } catch (error: any) {
-      console.error('🔍 DEBUG Supabase - Erro capturado no código:', error);
-      return handleSupabaseError(error)
+      return { data: null, error: error.message, success: false }
     }
   },
 
   async updateCode(id: number, codeData: any) {
     try {
-      const { data, error } = await supabase
-        .from('codes')
-        .update(codeData)
-        .eq('id', id)
-        .select()
-        .single()
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
+      const response = await fetch(`${API_BASE_URL}/api/codes/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(codeData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
       return { data, success: true }
     } catch (error: any) {
-      return handleSupabaseError(error)
+      return { data: null, error: error.message, success: false }
     }
   },
 
   async deleteCode(id: number) {
     try {
-      const { error } = await supabase
-        .from('codes')
-        .delete()
-        .eq('id', id)
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
 
-      if (error) throw error
+      const response = await fetch(`${API_BASE_URL}/api/codes/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
       return { success: true }
     } catch (error: any) {
-      return handleSupabaseError(error)
+      return { success: false, error: error.message }
     }
   },
 
@@ -1063,6 +1120,150 @@ export const dashboardAPI = {
     } catch (error) {
       console.error('Erro ao buscar estatísticas do dashboard:', error)
       return { data: {} as DashboardStats, error: 'Erro ao buscar estatísticas do dashboard' }
+    }
+  },
+
+  // Briefings
+  async getBriefings(filters?: { search?: string; status?: string; priority?: string }) {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
+      const params = new URLSearchParams()
+      if (filters?.search) params.append('search', filters.search)
+      if (filters?.status) params.append('status', filters.status)
+      if (filters?.priority) params.append('priority', filters.priority)
+
+      const url = `${API_BASE_URL}/api/briefings${params.toString() ? '?' + params.toString() : ''}`
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: [], error: error.message, success: false }
+    }
+  },
+
+  async getBriefing(id: string) {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/briefings/${id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: null, error: error.message, success: false }
+    }
+  },
+
+  async createBriefing(briefingData: any) {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/briefings`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(briefingData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: null, error: error.message, success: false }
+    }
+  },
+
+  async updateBriefing(id: string, briefingData: any) {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/briefings/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(briefingData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: null, error: error.message, success: false }
+    }
+  },
+
+  async deleteBriefing(id: string) {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/briefings/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+      }
+
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
     }
   }
 }
