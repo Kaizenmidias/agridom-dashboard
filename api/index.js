@@ -471,28 +471,63 @@ module.exports = async function handler(req, res) {
           });
         }
         
-        console.log('🔍 [API] Buscando projetos para user_id:', decoded.userId);
-        
-        const { data: projects, error } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('user_id', decoded.userId)
-          .order('created_at', { ascending: false });
+        if (req.method === 'GET') {
+          console.log('🔍 [API] Buscando projetos para user_id:', decoded.userId);
           
-        if (error) {
-          console.error('Erro ao buscar projetos:', error);
-          return sendResponse(500, {
-            success: false,
-            error: 'Erro ao buscar projetos'
+          const { data: projects, error } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('user_id', decoded.userId)
+            .order('created_at', { ascending: false });
+            
+          if (error) {
+            console.error('Erro ao buscar projetos:', error);
+            return sendResponse(500, {
+              success: false,
+              error: 'Erro ao buscar projetos'
+            });
+          }
+          
+          console.log('📊 [API] Projetos encontrados:', projects?.length || 0);
+          
+          return sendResponse(200, { 
+            success: true, 
+            data: projects || []
           });
         }
         
-        console.log('📊 [API] Projetos encontrados:', projects?.length || 0);
+        if (req.method === 'POST') {
+          console.log('➕ [API] Criando novo projeto para user_id:', decoded.userId);
+          console.log('📝 [API] Dados do projeto:', body);
+          
+          const projectData = {
+            ...body,
+            user_id: decoded.userId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          const { data: newProject, error } = await supabase
+            .from('projects')
+            .insert([projectData])
+            .select();
+            
+          if (error) {
+            console.error('Erro ao criar projeto:', error);
+            return sendResponse(500, {
+              success: false,
+              error: 'Erro ao criar projeto'
+            });
+          }
+          
+          console.log('✅ [API] Projeto criado:', newProject);
+          
+          return sendResponse(201, { 
+            success: true, 
+            data: newProject[0]
+          });
+        }
         
-        return sendResponse(200, { 
-          success: true, 
-          data: projects || []
-        });
       } catch (error) {
         return sendResponse(401, { 
           success: false, 
@@ -513,28 +548,63 @@ module.exports = async function handler(req, res) {
           });
         }
         
-        console.log('🔍 [API] Buscando despesas para user_id:', decoded.userId);
-        
-        const { data: expenses, error } = await supabase
-          .from('expenses')
-          .select('*')
-          .eq('user_id', decoded.userId)
-          .order('created_at', { ascending: false });
+        if (req.method === 'GET') {
+          console.log('🔍 [API] Buscando despesas para user_id:', decoded.userId);
           
-        if (error) {
-          console.error('Erro ao buscar despesas:', error);
-          return sendResponse(500, {
-            success: false,
-            error: 'Erro ao buscar despesas'
+          const { data: expenses, error } = await supabase
+            .from('expenses')
+            .select('*')
+            .eq('user_id', decoded.userId)
+            .order('created_at', { ascending: false });
+            
+          if (error) {
+            console.error('Erro ao buscar despesas:', error);
+            return sendResponse(500, {
+              success: false,
+              error: 'Erro ao buscar despesas'
+            });
+          }
+          
+          console.log('📊 [API] Despesas encontradas:', expenses?.length || 0);
+          
+          return sendResponse(200, { 
+            success: true, 
+            data: expenses || []
           });
         }
         
-        console.log('📊 [API] Despesas encontradas:', expenses?.length || 0);
+        if (req.method === 'POST') {
+          console.log('➕ [API] Criando nova despesa para user_id:', decoded.userId);
+          console.log('📝 [API] Dados da despesa:', body);
+          
+          const expenseData = {
+            ...body,
+            user_id: decoded.userId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          const { data: newExpense, error } = await supabase
+            .from('expenses')
+            .insert([expenseData])
+            .select();
+            
+          if (error) {
+            console.error('Erro ao criar despesa:', error);
+            return sendResponse(500, {
+              success: false,
+              error: 'Erro ao criar despesa'
+            });
+          }
+          
+          console.log('✅ [API] Despesa criada:', newExpense);
+          
+          return sendResponse(201, { 
+            success: true, 
+            data: newExpense[0]
+          });
+        }
         
-        return sendResponse(200, { 
-          success: true, 
-          data: expenses || []
-        });
       } catch (error) {
         return sendResponse(401, { 
           success: false, 
@@ -555,28 +625,62 @@ module.exports = async function handler(req, res) {
           });
         }
         
-        console.log('🔍 [API] Buscando códigos para user_id:', decoded.userId);
-        
-        const { data: codes, error } = await supabase
-          .from('codes')
-          .select('*')
-          .eq('user_id', decoded.userId)
-          .order('created_at', { ascending: false });
+        if (req.method === 'GET') {
+          console.log('🔍 [API] Buscando códigos para user_id:', decoded.userId);
           
-        if (error) {
-          console.error('Erro ao buscar códigos:', error);
-          return sendResponse(500, {
-            success: false,
-            error: 'Erro ao buscar códigos'
+          const { data: codes, error } = await supabase
+            .from('codes')
+            .select('*')
+            .eq('user_id', decoded.userId)
+            .order('created_at', { ascending: false });
+            
+          if (error) {
+            console.error('Erro ao buscar códigos:', error);
+            return sendResponse(500, {
+              success: false,
+              error: 'Erro ao buscar códigos'
+            });
+          }
+          
+          console.log('📊 [API] Códigos encontrados:', codes?.length || 0);
+          
+          return sendResponse(200, { 
+            success: true, 
+            data: codes || []
           });
         }
         
-        console.log('📊 [API] Códigos encontrados:', codes?.length || 0);
-        
-        return sendResponse(200, { 
-          success: true, 
-          data: codes || []
-        });
+        if (req.method === 'POST') {
+          console.log('➕ [API] Criando novo código para user_id:', decoded.userId);
+          console.log('📝 [API] Dados do código:', body);
+          
+          const codeData = {
+            ...body,
+            user_id: decoded.userId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          const { data: newCode, error } = await supabase
+            .from('codes')
+            .insert([codeData])
+            .select();
+            
+          if (error) {
+            console.error('Erro ao criar código:', error);
+            return sendResponse(500, {
+              success: false,
+              error: 'Erro ao criar código'
+            });
+          }
+          
+          console.log('✅ [API] Código criado:', newCode);
+          
+          return sendResponse(201, { 
+            success: true, 
+            data: newCode[0]
+          });
+        }
       } catch (error) {
         return sendResponse(401, { 
           success: false, 
