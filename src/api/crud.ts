@@ -56,30 +56,7 @@ export const deleteUser = async (id: number): Promise<void> => {
 
 // ============= DASHBOARD STATS API =============
 
-import { DashboardStats } from './supabase-client'
-
-export type { DashboardStats }
-
-export const getDashboardStats = async (filters?: {
-  startDate?: string;
-  endDate?: string;
-  previousStartDate?: string;
-  previousEndDate?: string;
-  targetYear?: number;
-}): Promise<DashboardStats> => {
-  await checkAuth()
-  
-  console.log('🔍 DEBUG - Buscando stats do dashboard via Supabase...');
-  
-  const result = await crudAPI.getDashboardStats()
-  if (result.error) {
-    console.error('❌ Erro ao buscar stats:', result.error);
-    throw new Error(result.error)
-  }
-  
-  console.log('✅ Stats do dashboard obtidas com sucesso:', result.data);
-  return result.data
-}
+// Dashboard stats are now handled directly by dashboardAPI
 
 // === PROJETOS ===
 export const getProjects = async (): Promise<Project[]> => {

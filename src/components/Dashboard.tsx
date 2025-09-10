@@ -27,7 +27,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select } from './ui/select';
 import PageHeader from './layout/PageHeader';
-import { getDashboardStats, DashboardStats } from '../api/crud';
+import { dashboardAPI, DashboardStats } from '../api/supabase-client';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Dados fictícios removidos - agora usando apenas dados reais da API
@@ -110,7 +110,11 @@ const Dashboard = () => {
           setLoading(true);
         }
         
-        const stats = await getDashboardStats();
+        const result = await dashboardAPI.getDashboardStats();
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        const stats = result.data;
         
         if (isMounted) {
           setDashboardStats(stats);

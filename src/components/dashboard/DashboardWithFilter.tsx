@@ -26,7 +26,7 @@ ChartJS.register(
   Tooltip,
   Legend
 );
-import { getDashboardStats, DashboardStats } from '@/api/crud';
+import { dashboardAPI, DashboardStats } from '@/api/supabase-client';
 import { toast } from 'sonner';
 
 const DashboardWithFilter: React.FC = () => {
@@ -77,8 +77,11 @@ const DashboardWithFilter: React.FC = () => {
       }
       
       console.log('Frontend - Enviando filtros para API:', filters);
-      const data = await getDashboardStats(filters);
-      setDashboardStats(data);
+      const result = await dashboardAPI.getDashboardStats(filters);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      setDashboardStats(result.data);
       console.log('Dados do dashboard carregados com sucesso');
     } catch (error: any) {
       console.error('Erro ao carregar dados do dashboard:', error);
