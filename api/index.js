@@ -657,7 +657,7 @@ module.exports = async function handler(req, res) {
           const codeData = {
             title: body.title,
             description: body.description,
-            content: body.code || body.content,
+            code_content: body.code || body.content || body.code_content,
             language: body.language || 'javascript',
             user_id: decoded.userId,
             created_at: new Date().toISOString(),
