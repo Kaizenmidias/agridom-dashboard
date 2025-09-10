@@ -691,6 +691,134 @@ module.exports = async function handler(req, res) {
         });
       }
     }
+
+    // Rota de estatísticas do dashboard
+    if (req.url === '/dashboard/stats' || req.url === '/api/dashboard/stats' || req.url.startsWith('/api/dashboard/stats?')) {
+      try {
+        const decoded = authenticateToken(req);
+        
+        if (!supabase) {
+          return sendResponse(200, {
+            success: true,
+            data: {
+              total_projects: 0,
+              total_value: 0,
+              total_paid: 0,
+              total_receivable: 0,
+              active_projects: 0,
+              completed_projects: 0,
+              total_expenses: 0,
+              monthly_expenses: 0,
+              current_period: {
+                revenue: 0,
+                expenses: 0,
+                receivable: 0,
+                profit: 0,
+                total_projects: 0,
+                total_project_value: 0
+              },
+              previous_period: {
+                revenue: 0,
+                expenses: 0,
+                receivable: 0
+              },
+              revenue_by_month: [],
+              expenses_by_category: [],
+              recent_projects: []
+            }
+          });
+        }
+        
+        console.log('📊 [API] Buscando estatísticas do dashboard para user_id:', decoded.userId);
+        
+        // Buscar projetos do usuário
+        const { data: projects, error: projectsError } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('user_id', decoded.userId);
+          
+        if (projectsError) {
+          console.error('Erro ao buscar projetos para stats:', projectsError);
+          return sendResponse(500, {
+            success: false,
+            error: 'Erro ao buscar projetos'
+          });
+        }
+        
+        // Buscar despesas do usuário
+        const { data: expenses, error: expensesError } = await supabase
+          .from('expenses')
+          .select('*')
+          .eq('user_id', decoded.userId);
+          
+        if (expensesError) {
+          console.error('Erro ao buscar despesas para stats:', expensesError);
+        }
+        
+        // Calcular estatísticas
+        const totalProjects = projects?.length || 0;
+        const totalValue = projects?.reduce((sum, p) => sum + (parseFloat(p.project_value) || 0), 0) || 0;
+        const totalPaid = projects?.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0) || 0;
+        const totalReceivable = totalValue - totalPaid;
+        
+        const activeProjects = projects?.filter(p => p.status === 'active')?.length || 0;
+        const completedProjects = projects?.filter(p => p.status === 'completed')?.length || 0;
+        
+        const totalExpenses = expenses?.reduce((sum, e) => sum + (parseFloat(e.amount) || parseFloat(e.value) || 0), 0) || 0;
+        
+        // Calcular despesas do mês atual
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const monthlyExpenses = expenses?.filter(e => {
+          const expenseDate = new Date(e.date || e.expense_date);
+          return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+        })?.reduce((sum, e) => sum + (parseFloat(e.amount) || parseFloat(e.value) || 0), 0) || 0;
+        
+        // Projetos recentes (últimos 5)
+        const recentProjects = projects?.slice(0, 5) || [];
+        
+        const stats = {
+          total_projects: totalProjects,
+          total_value: totalValue,
+          total_paid: totalPaid,
+          total_receivable: totalReceivable,
+          active_projects: activeProjects,
+          completed_projects: completedProjects,
+          total_expenses: totalExpenses,
+          monthly_expenses: monthlyExpenses,
+          current_period: {
+            revenue: totalPaid,
+            expenses: monthlyExpenses,
+            receivable: totalReceivable,
+            profit: totalPaid - monthlyExpenses,
+            total_projects: totalProjects,
+            total_project_value: totalValue
+          },
+          previous_period: {
+            revenue: 0,
+            expenses: 0,
+            receivable: 0
+          },
+          revenue_by_month: [],
+          expenses_by_category: [],
+          recent_projects: recentProjects
+        };
+        
+        console.log('📊 [API] Estatísticas calculadas:', stats);
+        
+        return sendResponse(200, {
+          success: true,
+          data: stats
+        });
+        
+      } catch (error) {
+        console.error('Erro ao buscar estatísticas:', error);
+        return sendResponse(401, {
+          success: false,
+          error: error.message
+        });
+      }
+    }
     
     return sendResponse(404, { 
       error: 'Rota não encontrada',
