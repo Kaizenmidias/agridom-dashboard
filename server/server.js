@@ -414,7 +414,7 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
         
         // Mapear parâmetros para campos do Supabase (baseado na ordem da query)
         if (params[0] !== null && params[0] !== undefined) updateData.description = params[0];
-        if (params[1] !== null && params[1] !== undefined) updateData.value = params[1];
+        if (params[1] !== null && params[1] !== undefined) updateData.amount = params[1];
         if (params[2] !== null && params[2] !== undefined) updateData.category = params[2];
         if (params[3] !== null && params[3] !== undefined) updateData.date = params[3];
         if (params[4] !== null && params[4] !== undefined) updateData.billing_type = params[4];
@@ -428,7 +428,7 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
           .update(updateData)
           .eq('id', expenseId)
           .select(`
-            id, description, value, category, date, billing_type, notes, 
+            id, description, amount, category, date, billing_type, notes, 
             project_id, user_id, created_at, updated_at,
             projects(name)
           `);
@@ -437,7 +437,7 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
         // Transformar o resultado para incluir project_name
         const transformedData = data?.map(expense => ({
           ...expense,
-          amount: expense.value, // Alias para compatibilidade
+          amount: expense.amount
           project_name: expense.projects?.name || null
         })) || [];
         
@@ -493,7 +493,7 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
       if (sql.toLowerCase().includes('expenses') && sql.toLowerCase().includes('set')) {
         const updateData = {};
         if (params[0] !== null && params[0] !== undefined) updateData.description = params[0];
-        if (params[1] !== null && params[1] !== undefined) updateData.value = params[1];
+        if (params[1] !== null && params[1] !== undefined) updateData.amount = params[1];
         if (params[2] !== null && params[2] !== undefined) updateData.category = params[2];
         if (params[3] !== null && params[3] !== undefined) updateData.date = params[3];
         if (params[4] !== null && params[4] !== undefined) updateData.billing_type = params[4];

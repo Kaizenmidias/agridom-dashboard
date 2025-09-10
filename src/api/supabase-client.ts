@@ -677,7 +677,7 @@ export const crudAPI = {
       // Get expenses stats
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('id, value')
+        .select('id, amount')
 
       if (expensesError) throw expensesError
 
@@ -692,7 +692,7 @@ export const crudAPI = {
       const totalProjects = projectsData?.length || 0
       const totalValue = projectsData?.reduce((sum, project) => sum + (project.project_value || 0), 0) || 0
       const activeProjects = projectsData?.filter(p => p.status === 'active').length || 0
-      const totalExpenses = expensesData?.reduce((sum, expense) => sum + (expense.value || 0), 0) || 0
+      const totalExpenses = expensesData?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
       const totalUsers = usersData?.length || 0
 
       return {
@@ -867,7 +867,7 @@ export const dashboardAPI = {
           for (let month = 1; month <= monthsToCalculate; month++) {
               const monthlyTotal = expenses?.reduce((acc, expense) => {
                 const monthlyAmount = calculateMonthlyAmount(
-                  Number(expense.value) || 0,
+                  Number(expense.amount) || 0,
                   expense.billing_type || 'unica',
                   expense.date,
                   filterYear,
@@ -885,7 +885,7 @@ export const dashboardAPI = {
           
           totalExpensesAmount = expenses?.reduce((acc, expense) => {
             const monthlyAmount = calculateMonthlyAmount(
-              Number(expense.value) || 0,
+              Number(expense.amount) || 0,
               expense.billing_type || 'unica',
               expense.date,
               year,
@@ -901,12 +901,12 @@ export const dashboardAPI = {
           
           // Para despesas únicas, usa valor direto
           if (billingType === 'unica' || billingType === 'one_time') {
-            return acc + (Number(expense.value) || 0)
+            return acc + (Number(expense.amount) || 0)
           }
           
           // Para despesas recorrentes, calcula valor mensal
           const monthlyAmount = calculateMonthlyAmount(
-            Number(expense.value) || 0,
+            Number(expense.amount) || 0,
             billingType,
             expense.date,
             now.getFullYear(),
@@ -943,7 +943,7 @@ export const dashboardAPI = {
         if (!acc[category]) {
           acc[category] = { total_amount: 0, count: 0 }
         }
-        acc[category].total_amount += Number(expense.value) || 0
+        acc[category].total_amount += Number(expense.amount) || 0
         acc[category].count += 1
         return acc
       }, {} as Record<string, { total_amount: number; count: number }>) || {}

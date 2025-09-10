@@ -420,7 +420,7 @@ router.get('/expenses', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
     const result = await query(
-      `SELECT e.id, e.description, e.value, e.value as amount, e.category, e.date, 
+      `SELECT e.id, e.description, e.amount, e.amount, e.category, e.date, 
               e.billing_type, e.project_id, e.user_id, e.notes, e.created_at, e.updated_at,
               p.name as project_name 
        FROM expenses e 
@@ -449,14 +449,14 @@ router.get('/expenses', authenticateToken, async (req, res) => {
       // 🔧 TEMPORÁRIO: Recuperar tipo original do cache
       const originalBillingType = getOriginalBillingType(expense.id, expense.billing_type);
       
-      let monthlyValue = expense.value;
+      let monthlyValue = expense.amount;
       
       // Usar tipo original para calcular valor mensal
       switch (originalBillingType) {
         case 'semanal':
           // Usar função que calcula corretamente as ocorrências do dia da semana no mês
           monthlyValue = calculateMonthlyAmount(
-            expense.value,
+            expense.amount,
             'semanal',
             expense.date,
             targetYear,
@@ -464,14 +464,14 @@ router.get('/expenses', authenticateToken, async (req, res) => {
           );
           break;
         case 'anual':
-          monthlyValue = expense.value / 12;
+          monthlyValue = expense.amount / 12;
           break;
         case 'mensal':
-          monthlyValue = expense.value;
+          monthlyValue = expense.amount;
           break;
         case 'unica':
         default:
-          monthlyValue = expense.value; // Para despesas únicas, valor mensal = valor total
+          monthlyValue = expense.amount; // Para despesas únicas, valor mensal = valor total
           break;
       }
       
@@ -494,7 +494,7 @@ router.get('/expenses/:id', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
     const result = await query(
-      `SELECT e.id, e.description, e.value, e.value as amount, e.category, e.date, 
+      `SELECT e.id, e.description, e.amount, e.amount, e.category, e.date, 
               e.billing_type, e.project_id, e.user_id, e.notes, e.created_at, e.updated_at,
               p.name as project_name 
        FROM expenses e 
@@ -527,31 +527,31 @@ router.get('/expenses/:id', authenticateToken, async (req, res) => {
     // 🔧 TEMPORÁRIO: Recuperar tipo original do cache
     const originalBillingType = getOriginalBillingType(expense.id, expense.billing_type);
     
-    let monthlyValue = expense.value;
-    
-    // Usar tipo original para calcular valor mensal
-    switch (originalBillingType) {
-      case 'semanal':
-        // Usar função que calcula corretamente as ocorrências do dia da semana no mês
-        monthlyValue = calculateMonthlyAmount(
-          expense.value,
-          'semanal',
-          expense.date,
-          targetYear,
-          targetMonth
-        );
-        break;
-      case 'anual':
-        monthlyValue = expense.value / 12;
-        break;
-      case 'mensal':
-        monthlyValue = expense.value;
-        break;
-      case 'unica':
-      default:
-        monthlyValue = expense.value; // Para despesas únicas, valor mensal = valor total
-        break;
-    }
+    let monthlyValue = expense.amount;
+        
+        // Usar tipo original para calcular valor mensal
+        switch (originalBillingType) {
+          case 'semanal':
+            // Usar função que calcula corretamente as ocorrências do dia da semana no mês
+            monthlyValue = calculateMonthlyAmount(
+              expense.amount,
+              'semanal',
+              expense.date,
+              targetYear,
+              targetMonth
+            );
+            break;
+          case 'anual':
+            monthlyValue = expense.amount / 12;
+            break;
+          case 'mensal':
+            monthlyValue = expense.amount;
+            break;
+          case 'unica':
+          default:
+            monthlyValue = expense.amount; // Para despesas únicas, valor mensal = valor total
+            break;
+        }
     
     const expenseWithMonthlyValue = {
       ...expense,
@@ -728,7 +728,7 @@ router.put('/expenses/:id', authenticateToken, async (req, res) => {
     
     // Buscar a despesa atualizada com dados do projeto
     const result = await query(
-      `SELECT e.id, e.description, e.value, e.value as amount, e.category, e.date, 
+      `SELECT e.id, e.description, e.amount, e.amount, e.category, e.date, 
               e.billing_type, e.project_id, e.user_id, e.notes, e.created_at, e.updated_at,
               p.name as project_name 
        FROM expenses e 
@@ -1242,7 +1242,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       // 🔧 TEMPORÁRIO: Recuperar tipo original do cache
       const originalBillingType = getOriginalBillingType(expense.id, expense.billing_type);
       return {
-        amount: expense.value,
+        amount: expense.amount,
         date: expense.date,
         category: expense.category,
         billing_type: originalBillingType
@@ -1323,7 +1323,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     // Buscar todas as despesas do usuário para cálculo do período anterior
     const previousExpenses = await query(
       `SELECT 
-        e.value as amount,
+        e.amount,
         e.date,
         e.billing_type
        FROM expenses e
@@ -1386,7 +1386,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     
     // Buscar todas as despesas do período para calcular por mês manualmente
     const allExpensesInPeriod = await query(
-      `SELECT e.value, e.date FROM expenses e
+      `SELECT e.amount, e.date FROM expenses e
        WHERE e.user_id = $1 AND DATE(e.date) BETWEEN $2 AND $3`,
       [req.userId, currentStart, currentEnd]
     );
@@ -1423,7 +1423,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         monthlyDataMap.set(monthKey, { month: monthKey, revenue: 0, expenses: 0 });
       }
       
-      monthlyDataMap.get(monthKey).expenses += parseFloat(expense.value) || 0;
+      monthlyDataMap.get(monthKey).expenses += parseFloat(expense.amount) || 0;
     });
     
     // Converter mapa para array ordenado
@@ -1440,7 +1440,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     // Buscar despesas por categoria do período atual usando Supabase
     const { data: expensesByCategoryRaw, error: categoryError } = await supabase
       .from('expenses')
-      .select('category, value, date, billing_type')
+      .select('category, amount, date, billing_type')
       .eq('user_id', req.userId)
       .gte('date', currentStart)
       .lte('date', currentEnd)
@@ -1457,7 +1457,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     // Mapear dados para compatibilidade
     const mappedCategoryExpenses = expensesByCategoryArray.map(expense => ({
       category: expense.category || 'Sem categoria',
-      amount: expense.value,
+      amount: expense.amount,
       date: expense.date,
       billing_type: expense.billing_type
     }));
@@ -1472,7 +1472,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
          
          if (daysDiff > 35) {
            // Período longo - usar valor direto
-           monthlyAmount = parseFloat(expense.value || 0);
+           monthlyAmount = parseFloat(expense.amount || 0);
          } else {
            // Período mensal - usar cálculo mensal
            const filterYear = targetYear ? parseInt(targetYear) : startDateObj.getFullYear();
