@@ -655,7 +655,10 @@ module.exports = async function handler(req, res) {
           console.log('📝 [API] Dados do código:', body);
           
           const codeData = {
-            ...body,
+            title: body.title,
+            description: body.description,
+            content: body.code || body.content,
+            language: body.language || 'javascript',
             user_id: decoded.userId,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
