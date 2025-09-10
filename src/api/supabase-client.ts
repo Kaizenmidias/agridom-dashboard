@@ -290,9 +290,21 @@ export const crudAPI = {
 
   async createProject(projectData: any) {
     try {
+      // Obter o usuário autenticado
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Adicionar user_id aos dados do projeto se não estiver presente
+      const projectWithUserId = {
+        ...projectData,
+        user_id: projectData.user_id || user.id
+      };
+
       const { data, error } = await supabase
         .from('projects')
-        .insert([projectData])
+        .insert([projectWithUserId])
         .select()
         .single()
 
@@ -400,9 +412,21 @@ export const crudAPI = {
 
   async createExpense(expenseData: any) {
     try {
+      // Obter o usuário autenticado
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Adicionar user_id aos dados da despesa se não estiver presente
+      const expenseWithUserId = {
+        ...expenseData,
+        user_id: expenseData.user_id || user.id
+      };
+
       const { data, error } = await supabase
         .from('expenses')
-        .insert([expenseData])
+        .insert([expenseWithUserId])
         .select()
         .single()
 
@@ -511,9 +535,21 @@ export const crudAPI = {
 
   async createCode(codeData: any) {
     try {
+      // Obter o usuário autenticado
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Adicionar user_id aos dados do código
+      const codeWithUserId = {
+        ...codeData,
+        user_id: user.id
+      };
+
       const { data, error } = await supabase
         .from('codes')
-        .insert([codeData])
+        .insert([codeWithUserId])
         .select()
         .single()
 

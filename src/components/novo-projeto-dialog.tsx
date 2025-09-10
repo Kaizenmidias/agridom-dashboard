@@ -30,6 +30,7 @@ import { pt } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { createProject, updateProject, Project } from "@/api/crud"
+import { useAuth } from "@/contexts/AuthContext"
 
 interface NovoProjetoDialogProps {
   children: React.ReactNode;
@@ -39,6 +40,7 @@ interface NovoProjetoDialogProps {
 
 export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoProjetoDialogProps) {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const isEditing = !!projeto
@@ -96,6 +98,15 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
           return parseFloat(value.replace(/[R$\s\.]/g, '').replace(',', '.'));
         };
 
+        if (!user) {
+          toast({
+            title: "Erro",
+            description: "Usuário não autenticado.",
+            variant: "destructive",
+          })
+          return
+        }
+
         const projectData = {
           name: projetoForm.name,
           client: projetoForm.client,
@@ -105,7 +116,7 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
           project_value: convertCurrencyToNumber(projetoForm.project_value),
           paid_value: convertCurrencyToNumber(projetoForm.paid_value),
           delivery_date: projetoForm.delivery_date || null,
-          user_id: '1', // ID do usuário padrão
+          user_id: user.id, // ID do usuário autenticado
           completion_date: null
         }
 
