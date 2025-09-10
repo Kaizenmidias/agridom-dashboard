@@ -1,6 +1,6 @@
 import { crudAPI } from './supabase-client'
 import { User, Project, Expense, Code, InsertUser, InsertProject, InsertExpense, InsertCode } from '../types/database'
-import { API_BASE_URL } from '../config/api'
+// API_BASE_URL removido - usando apenas Supabase agora
 import { verifyToken } from './auth'
 
 // Re-exportar tipos para uso em outros componentes
@@ -78,43 +78,25 @@ import { DashboardStats } from './supabase-client'
 
 export type { DashboardStats }
 
-export async function getDashboardStats(filters?: {
+export const getDashboardStats = async (filters?: {
   startDate?: string;
   endDate?: string;
   previousStartDate?: string;
   previousEndDate?: string;
   targetYear?: number;
-}): Promise<DashboardStats> {
-  const token = await checkAuth()
+}): Promise<DashboardStats> => {
+  await checkAuth()
   
-  // Usar a API do servidor que tem a lógica correta para período anterior
-  if (!token) {
-    throw new Error('Token de autenticação não encontrado')
-  }
-
-  const params = new URLSearchParams()
-  if (filters?.startDate) params.append('startDate', filters.startDate)
-  if (filters?.endDate) params.append('endDate', filters.endDate)
-  if (filters?.previousStartDate) params.append('previousStartDate', filters.previousStartDate)
-  if (filters?.previousEndDate) params.append('previousEndDate', filters.previousEndDate)
-  if (filters?.targetYear) params.append('targetYear', filters.targetYear.toString())
-
-  const url = `${API_BASE_URL}/api/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`
+  console.log('🔍 DEBUG - Buscando stats do dashboard via Supabase...');
   
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
-  })
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-    throw new Error(errorData.error || `Erro HTTP: ${response.status}`)
+  const result = await crudAPI.getDashboardStats()
+  if (result.error) {
+    console.error('❌ Erro ao buscar stats:', result.error);
+    throw new Error(result.error)
   }
-
-  return await response.json()
+  
+  console.log('✅ Stats do dashboard obtidas com sucesso:', result.data);
+  return result.data
 }
 
 // === PROJETOS ===
