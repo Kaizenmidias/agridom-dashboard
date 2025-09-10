@@ -310,10 +310,21 @@ export const crudAPI = {
         throw new Error('Usuário não autenticado');
       }
 
-      // Adicionar user_id aos dados do projeto se não estiver presente
+      // Buscar o ID integer do usuário na tabela users usando o email
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      if (userError || !userData) {
+        throw new Error('Usuário não encontrado na tabela users');
+      }
+
+      // Adicionar user_id aos dados do projeto (usando o ID integer da tabela users)
       const projectWithUserId = {
         ...projectData,
-        user_id: projectData.user_id || user.id
+        user_id: projectData.user_id || userData.id
       };
 
       const { data, error } = await supabase
@@ -432,10 +443,21 @@ export const crudAPI = {
         throw new Error('Usuário não autenticado');
       }
 
-      // Adicionar user_id aos dados da despesa se não estiver presente
+      // Buscar o ID integer do usuário na tabela users usando o email
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      if (userError || !userData) {
+        throw new Error('Usuário não encontrado na tabela users');
+      }
+
+      // Adicionar user_id aos dados da despesa (usando o ID integer da tabela users)
       const expenseWithUserId = {
         ...expenseData,
-        user_id: expenseData.user_id || user.id
+        user_id: expenseData.user_id || userData.id
       };
 
       const { data, error } = await supabase
@@ -561,10 +583,21 @@ export const crudAPI = {
         throw new Error('Usuário não autenticado');
       }
 
-      // Adicionar user_id aos dados do código
+      // Buscar o ID integer do usuário na tabela users usando o email
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      if (userError || !userData) {
+        throw new Error('Usuário não encontrado na tabela users');
+      }
+
+      // Adicionar user_id aos dados do código (usando o ID integer da tabela users)
       const codeWithUserId = {
         ...codeData,
-        user_id: user.id
+        user_id: userData.id
       };
 
       const { data, error } = await supabase
@@ -644,7 +677,7 @@ export const crudAPI = {
       // Get expenses stats
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('id, amount')
+        .select('id, value')
 
       if (expensesError) throw expensesError
 
