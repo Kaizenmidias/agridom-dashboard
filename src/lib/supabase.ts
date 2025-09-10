@@ -1,10 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+// Configuração do Supabase usando variáveis de ambiente do Vite
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+  console.error('Variáveis de ambiente do Supabase não encontradas:');
+  console.error('VITE_SUPABASE_URL:', supabaseUrl);
+  console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Definida' : 'Não definida');
+  throw new Error('Missing Supabase environment variables. Verifique se VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão configuradas na Vercel.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)

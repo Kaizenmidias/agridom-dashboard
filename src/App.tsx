@@ -18,6 +18,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import DebugEnv from "./components/DebugEnv";
 // Removed PermissionProtectedRoute - no longer needed
 import { useEffect } from "react";
 import { CRMProvider } from "./contexts/CRMContext";
@@ -143,6 +144,7 @@ const App = () => {
               <TooltipProvider>
                 <AppLayout />
                 <Toaster />
+                <DebugEnv />
               </TooltipProvider>
             </BrowserRouter>
           </CRMProvider>
