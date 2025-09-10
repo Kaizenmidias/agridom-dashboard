@@ -60,7 +60,7 @@ const ProjetosPage = () => {
 
   const handleDeleteProject = async (id: string) => {
     try {
-      await deleteProject(parseInt(id));
+      await deleteProject(id);
       // Se chegou até aqui, a exclusão foi bem-sucedida
       setProjetos(projetos.filter(projeto => projeto.id !== id));
       toast({

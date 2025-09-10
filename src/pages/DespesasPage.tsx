@@ -95,12 +95,12 @@ const DespesasPage = () => {
     
     // Para despesas únicas, usa valor direto
     if (billingType === 'unica' || billingType === 'one_time') {
-      return acc + (Number(despesa.value || despesa.amount) || 0);
+      return acc + (Number(despesa.value) || 0);
     }
     
     // Para despesas recorrentes, calcula valor mensal
     const monthlyAmount = calculateMonthlyAmount(
-      Number(despesa.value || despesa.amount) || 0,
+      Number(despesa.value) || 0,
       billingType,
       despesa.date,
       new Date().getFullYear(),
@@ -179,10 +179,10 @@ const DespesasPage = () => {
                 // Calcula valor mensal para despesas recorrentes
                 let monthlyAmount;
                 if (billingType === 'unica' || billingType === 'one_time') {
-                  monthlyAmount = Number(despesa.value || despesa.amount) || 0;
+                  monthlyAmount = Number(despesa.value) || 0;
                 } else {
                   monthlyAmount = calculateMonthlyAmount(
-                    Number(despesa.value || despesa.amount) || 0,
+                    Number(despesa.value) || 0,
                     billingType,
                     expenseDate,
                     new Date().getFullYear(),
@@ -206,7 +206,7 @@ const DespesasPage = () => {
                 return {
                   ...despesa,
                   date: formattedDate,
-                  amount: `R$ ${(Number(despesa.value || despesa.amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                  amount: `R$ ${(Number(despesa.value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
                   monthly_amount: `R$ ${(Number(monthlyAmount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
                   billing_type: despesa.billing_type === 'one_time' ? 'Única' : 
                                despesa.billing_type === 'recurring' ? 'Recorrente' : 

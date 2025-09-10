@@ -105,7 +105,7 @@ export const createProject = async (projectData: InsertProject): Promise<Project
   return result.data
 }
 
-export const updateProject = async (id: number, projectData: Partial<Project>): Promise<Project> => {
+export const updateProject = async (id: string, projectData: Partial<Project>): Promise<Project> => {
   await checkAuth()
   const result = await crudAPI.updateProject(id, projectData)
   if (result.error) {
@@ -114,7 +114,7 @@ export const updateProject = async (id: number, projectData: Partial<Project>): 
   return result.data
 }
 
-export const deleteProject = async (id: number): Promise<void> => {
+export const deleteProject = async (id: string): Promise<void> => {
   await checkAuth()
   const result = await crudAPI.deleteProject(id)
   if (result.error) {
@@ -146,7 +146,7 @@ export const createExpense = async (expenseData: InsertExpense): Promise<Expense
   return result.data
 }
 
-export const updateExpense = async (id: number, expenseData: Partial<Expense>): Promise<Expense> => {
+export const updateExpense = async (id: string, expenseData: Partial<Expense>): Promise<Expense> => {
   await checkAuth()
   const result = await crudAPI.updateExpense(id, expenseData)
   if (result.error) {
@@ -155,7 +155,7 @@ export const updateExpense = async (id: number, expenseData: Partial<Expense>): 
   return result.data
 }
 
-export const deleteExpense = async (id: number): Promise<void> => {
+export const deleteExpense = async (id: string): Promise<void> => {
   await checkAuth()
   const result = await crudAPI.deleteExpense(id)
   if (result.error) {
@@ -189,7 +189,7 @@ export const createCode = async (codeData: InsertCode): Promise<Code> => {
   return result.data
 }
 
-export const updateCode = async (id: number, codeData: Partial<Code>): Promise<Code> => {
+export const updateCode = async (id: string, codeData: Partial<Code>): Promise<Code> => {
   await checkAuth()
   const result = await crudAPI.updateCode(id, codeData)
   if (result.error) {
@@ -198,7 +198,7 @@ export const updateCode = async (id: number, codeData: Partial<Code>): Promise<C
   return result.data
 }
 
-export const deleteCode = async (id: number): Promise<void> => {
+export const deleteCode = async (id: string): Promise<void> => {
   await checkAuth()
   const result = await crudAPI.deleteCode(id)
   if (result.error) {

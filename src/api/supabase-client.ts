@@ -382,7 +382,7 @@ export const crudAPI = {
     }
   },
 
-  async updateProject(id: number, projectData: any) {
+  async updateProject(id: string, projectData: any) {
     try {
       const { data, error } = await supabase
         .from('projects')
@@ -403,7 +403,7 @@ export const crudAPI = {
     }
   },
 
-  async deleteProject(id: number) {
+  async deleteProject(id: string) {
     try {
       const { error } = await supabase
         .from('projects')
@@ -515,7 +515,7 @@ export const crudAPI = {
     }
   },
 
-  async updateExpense(id: number, expenseData: any) {
+  async updateExpense(id: string, expenseData: any) {
     try {
       const { data, error } = await supabase
         .from('expenses')
@@ -534,7 +534,7 @@ export const crudAPI = {
     }
   },
 
-  async deleteExpense(id: number) {
+  async deleteExpense(id: string) {
     try {
       const { error } = await supabase
         .from('expenses')
@@ -616,7 +616,7 @@ export const crudAPI = {
     }
   },
 
-  async updateCode(id: number, codeData: any) {
+  async updateCode(id: string, codeData: any) {
     try {
       // Verificar se o usuário está autenticado
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -641,7 +641,7 @@ export const crudAPI = {
     }
   },
 
-  async deleteCode(id: number) {
+  async deleteCode(id: string) {
     try {
       // Verificar se o usuário está autenticado
       const { data: { user }, error: authError } = await supabase.auth.getUser();
