@@ -58,7 +58,7 @@ export function EditarDespesaDialog({ expense, open, onOpenChange, onExpenseUpda
   useEffect(() => {
     if (expense) {
       setValue('description', expense.description);
-      setValue('amount', (expense.value || expense.amount) ? (expense.value || expense.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00');
+      setValue('amount', expense.value ? expense.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00');
       
       // Melhor tratamento da data
       const expenseDate = expense.date;

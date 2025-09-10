@@ -121,7 +121,7 @@ function calculateTotalMonthlyExpenses(expenses, targetYear, targetMonth) {
     // Usar date
     const expenseDate = expense.date;
     // Tentar acessar tanto 'amount' quanto 'value' para compatibilidade
-    const expenseValue = expense.amount || expense.value || 0;
+    const expenseValue = expense.value || 0;
     const monthlyAmount = calculateMonthlyAmount(
       parseFloat(expenseValue),
       expense.billing_type || 'unica',

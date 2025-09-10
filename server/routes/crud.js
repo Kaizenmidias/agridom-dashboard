@@ -1472,7 +1472,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
          
          if (daysDiff > 35) {
            // Período longo - usar valor direto
-           monthlyAmount = parseFloat(expense.amount || 0);
+           monthlyAmount = parseFloat(expense.value || 0);
          } else {
            // Período mensal - usar cálculo mensal
            const filterYear = targetYear ? parseInt(targetYear) : startDateObj.getFullYear();
