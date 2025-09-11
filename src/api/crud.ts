@@ -8,14 +8,25 @@ export type { User, Project, Expense, Code };
 
 // Função auxiliar para verificar autenticação usando Supabase
 const checkAuth = async () => {
-  const { verifyToken } = await import('./auth')
-  const result = await verifyToken()
-  
-  if (!result.valid || !result.user) {
-    throw new Error('Token inválido')
+  try {
+    const { supabase } = await import('../lib/supabase')
+    const { data: { session }, error } = await supabase.auth.getSession()
+    
+    if (error) {
+      console.error('Erro ao obter sessão:', error.message)
+      throw new Error('Erro de autenticação: ' + error.message)
+    }
+    
+    if (!session || !session.user) {
+      console.warn('Nenhuma sessão ativa encontrada')
+      throw new Error('Auth session missing!')
+    }
+    
+    return session.user
+  } catch (error: any) {
+    console.error('Erro na verificação de autenticação:', error.message)
+    throw new Error('Auth session missing!')
   }
-  
-  return result.user
 }
 
 // === USUÁRIOS ===

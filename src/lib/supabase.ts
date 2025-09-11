@@ -24,10 +24,9 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce'
-  },
-})
+    detectSessionInUrl: true
+  }
+  })
 
 // Verificar sessão inicial e configurar listeners
 const initializeAuth = async () => {
