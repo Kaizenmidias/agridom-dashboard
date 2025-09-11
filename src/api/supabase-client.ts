@@ -816,9 +816,43 @@ export const dashboardAPI = {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('Frontend - Dados recebidos da API:', data);
-      return { data: data || {} as DashboardStats };
+      const backendData = await response.json();
+      console.log('Frontend - Dados recebidos da API:', backendData);
+      
+      // Mapear dados do backend para estrutura esperada pelo frontend
+      const mappedData: DashboardStats = {
+        projects: {
+          total_projects: 0,
+          active_projects: 0,
+          completed_projects: 0,
+          paused_projects: 0,
+          total_project_value: backendData.faturamento || 0,
+          total_paid_value: (backendData.faturamento || 0) - (backendData.aReceber || 0)
+        },
+        expenses: {
+          total_expenses: 0,
+          total_expenses_amount: backendData.despesas || 0,
+          expense_categories: 0
+        },
+        previous_period: {
+          revenue: 0,
+          expenses: 0,
+          receivable: 0
+        },
+        current_period: {
+          revenue: backendData.faturamento || 0,
+          expenses: backendData.despesas || 0,
+          profit: backendData.lucro || 0,
+          receivable: backendData.aReceber || 0
+        },
+        current_receivable: backendData.aReceber || 0,
+        revenue_by_month: [],
+        expenses_by_category: [],
+        recent_projects: []
+      };
+      
+      console.log('Frontend - Dados mapeados:', mappedData);
+      return { data: mappedData };
     } catch (error: any) {
       console.error('Erro ao buscar estatísticas do backend:', error);
       return { data: {} as DashboardStats, error: error.message || 'Erro ao buscar estatísticas' };
