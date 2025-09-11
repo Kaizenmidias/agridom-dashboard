@@ -207,9 +207,9 @@ export const crudAPI = {
   // Users - usando backend Node.js
   async getUsers() {
     try {
-      // Obter o token JWT local do localStorage
-      const token = localStorage.getItem('token');
-      if (!token) {
+      // Obter o token de sessão do Supabase
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
         return { data: [], error: 'Usuário não autenticado', success: false };
       }
 
@@ -220,7 +220,7 @@ export const crudAPI = {
       const response = await fetch(`${baseUrl}/api/users`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -783,9 +783,9 @@ export const dashboardAPI = {
     targetYear?: number;
   }): Promise<{ data: DashboardStats; error?: string }> {
     try {
-      // Obter o token JWT local do localStorage
-      const token = localStorage.getItem('token');
-      if (!token) {
+      // Obter o token de sessão do Supabase
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
         return { data: {} as DashboardStats, error: 'Usuário não autenticado' };
       }
 
@@ -807,7 +807,7 @@ export const dashboardAPI = {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'
         }
       });
