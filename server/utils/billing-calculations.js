@@ -117,10 +117,10 @@ function calculateMonthlyAmount(
  * @returns {number} Total mensal calculado
  */
 function calculateTotalMonthlyExpenses(expenses, targetYear, targetMonth) {
+  if (!expenses || expenses.length === 0) return 0;
+  
   return expenses.reduce((total, expense) => {
-    // Usar date
     const expenseDate = expense.date;
-    // Usar amount
     const expenseValue = expense.amount || 0;
     const monthlyAmount = calculateMonthlyAmount(
       parseFloat(expenseValue),
@@ -133,11 +133,28 @@ function calculateTotalMonthlyExpenses(expenses, targetYear, targetMonth) {
   }, 0);
 }
 
+/**
+ * Calcula o total anual de um array de despesas
+ * @param {Array} expenses - Array de despesas
+ * @param {number} targetYear - Ano para o cálculo
+ * @returns {number} Total anual calculado
+ */
+function calculateTotalAnnualExpenses(expenses, targetYear) {
+  if (!expenses || expenses.length === 0) return 0;
+  
+  let total = 0;
+  for (let month = 1; month <= 12; month++) {
+    total += calculateTotalMonthlyExpenses(expenses, targetYear, month);
+  }
+  return total;
+}
+
 module.exports = {
   getWeekdayOccurrencesInMonth,
   calculateWeeklyMonthlyAmount,
   calculateAnnualMonthlyAmount,
   getDayOfWeekFromDate,
   calculateMonthlyAmount,
-  calculateTotalMonthlyExpenses
+  calculateTotalMonthlyExpenses,
+  calculateTotalAnnualExpenses
 };

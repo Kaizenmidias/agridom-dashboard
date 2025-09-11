@@ -400,6 +400,65 @@ module.exports = async function handler(req, res) {
       }
     };
 
+    // Função utilitária para calcular despesas de um mês específico
+    function calculateMonthlyExpenses(expenses, year, month) {
+      if (!expenses || expenses.length === 0) return 0;
+      
+      return expenses.reduce((sum, expense) => {
+        const billingType = expense.billing_type || 'unica';
+        let monthlyValue = 0;
+        
+        if (billingType === 'mensal') {
+          // Para despesas mensais, usar monthly_value se disponível, senão amount
+          monthlyValue = parseFloat(expense.monthly_value) || parseFloat(expense.amount) || 0;
+        } else if (billingType === 'semanal') {
+          // Calcular quantas vezes o dia da semana da despesa ocorre no mês específico
+          const expenseDate = new Date(expense.date);
+          const targetDayOfWeek = expenseDate.getDay(); // 0 = domingo, 1 = segunda, etc.
+          
+          // Calcular ocorrências do dia da semana no mês específico
+          const daysInMonth = new Date(year, month, 0).getDate();
+          let occurrences = 0;
+          
+          for (let day = 1; day <= daysInMonth; day++) {
+            const currentDate = new Date(year, month - 1, day); // month - 1 porque Date usa 0-11
+            if (currentDate.getDay() === targetDayOfWeek) {
+              occurrences++;
+            }
+          }
+          
+          monthlyValue = (parseFloat(expense.amount) || 0) * occurrences;
+        } else if (billingType === 'anual') {
+          // Para despesas anuais, dividir por 12 para obter valor mensal
+          monthlyValue = (parseFloat(expense.amount) || 0) / 12;
+        } else {
+          // Para despesas únicas, verificar se a despesa pertence ao mês específico
+          const expenseDate = new Date(expense.date);
+          const expenseYear = expenseDate.getFullYear();
+          const expenseMonth = expenseDate.getMonth() + 1; // +1 porque getMonth() retorna 0-11
+          
+          if (expenseYear === year && expenseMonth === month) {
+            monthlyValue = parseFloat(expense.amount) || 0;
+          } else {
+            monthlyValue = 0;
+          }
+        }
+        
+        return sum + monthlyValue;
+      }, 0);
+    }
+
+    // Função para calcular despesas anuais (soma dos 12 meses)
+    function calculateAnnualExpenses(expenses, year) {
+      let totalAnnual = 0;
+      
+      for (let month = 1; month <= 12; month++) {
+        totalAnnual += calculateMonthlyExpenses(expenses, year, month);
+      }
+      
+      return totalAnnual;
+    }
+
     // Rota de verificação de token
     if (req.url === '/api/verify-token' || req.url === '/auth/verify' || req.url === '/api/auth/verify') {
       try {
@@ -735,12 +794,18 @@ module.exports = async function handler(req, res) {
         const endDate = url.searchParams.get('endDate');
         const previousStartDate = url.searchParams.get('previousStartDate');
         const previousEndDate = url.searchParams.get('previousEndDate');
+        const period = url.searchParams.get('period') || 'monthly'; // 'monthly' ou 'annual'
+        const year = url.searchParams.get('year') || new Date().getFullYear();
+        const month = url.searchParams.get('month') || (new Date().getMonth() + 1);
         
         console.log('📊 [API] Dashboard stats - Filtros recebidos:', {
           startDate,
           endDate,
           previousStartDate,
           previousEndDate,
+          period,
+          year: parseInt(year),
+          month: parseInt(month),
           authUserId: decoded.userId,
           numericUserId: numericUserId,
           email: decoded.email
@@ -779,19 +844,11 @@ module.exports = async function handler(req, res) {
           }))
         });
         
-        // Buscar despesas do período atual (usando amount conforme schema real)
-        let expensesQuery = supabase
+        // Buscar todas as despesas do usuário (sem filtro de data, pois o cálculo será feito dinamicamente)
+        const { data: expenses, error: expensesError } = await supabase
           .from('expenses')
           .select('id, description, amount, billing_type, date, monthly_value')
           .eq('user_id', numericUserId);
-        
-        if (startDate && endDate) {
-          expensesQuery = expensesQuery
-            .gte('date', startDate)
-            .lte('date', endDate);
-        }
-        
-        const { data: expenses, error: expensesError } = await expensesQuery;
         
         if (expensesError) {
           console.error('❌ [API] Erro ao buscar despesas:', expensesError);
@@ -818,44 +875,18 @@ module.exports = async function handler(req, res) {
           const paidValue = parseFloat(p.paid_value) || 0;
           return sum + (projectValue - paidValue);
         }, 0) || 0;
-        // despesas = soma considerando billing_type (usar monthly_value se disponível)
-    const despesas = expenses?.reduce((sum, e) => {
-      const billingType = e.billing_type || 'unica';
-      let valorMensal = 0;
-      
-      if (billingType === 'mensal') {
-        // Para despesas mensais, usar monthly_value se disponível, senão amount
-        valorMensal = parseFloat(e.monthly_value) || parseFloat(e.amount) || 0;
-      } else if (billingType === 'semanal') {
-        // Calcular quantas vezes o dia da semana ocorre no mês atual
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const createdAt = e.date || new Date().toISOString();
-        const targetDay = new Date(createdAt).getDay();
+        // Calcular despesas usando as novas funções utilitárias
+        let despesas = 0;
         
-        // Calcular ocorrências do dia da semana no mês
-        let occurrences = 0;
-        for (let day = 1; day <= daysInMonth; day++) {
-          const currentDay = new Date(year, month, day).getDay();
-          if (currentDay === targetDay) {
-            occurrences++;
-          }
+        if (period === 'annual') {
+          // Para filtro anual, somar os 12 meses do ano selecionado
+          despesas = calculateAnnualExpenses(expenses, parseInt(year));
+          console.log(`💰 [API] Despesas anuais calculadas para ${year}: ${despesas}`);
+        } else {
+          // Para filtro mensal, calcular apenas o mês selecionado
+          despesas = calculateMonthlyExpenses(expenses, parseInt(year), parseInt(month));
+          console.log(`💰 [API] Despesas mensais calculadas para ${month}/${year}: ${despesas}`);
         }
-        
-        valorMensal = (parseFloat(e.amount) || 0) * occurrences;
-      } else if (billingType === 'anual') {
-        // Para despesas anuais, multiplicar por 12 para obter valor anual total
-        valorMensal = (parseFloat(e.amount) || 0) * 12;
-      } else {
-        // Para despesas únicas, usar amount
-        valorMensal = parseFloat(e.amount) || 0;
-      }
-      
-      console.log(`💰 [API] Despesa ${e.description}: ${e.amount} (${billingType}) = ${valorMensal} mensal`);
-      return sum + valorMensal;
-    }, 0) || 0;
         // lucro = faturamento - despesas
         const lucro = faturamento - despesas;
         
