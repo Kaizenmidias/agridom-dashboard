@@ -207,9 +207,9 @@ export const crudAPI = {
   // Users - usando backend Node.js
   async getUsers() {
     try {
-      // Obter o token de sessão do Supabase
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.access_token) {
+      // Obter o token JWT local do localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
         return { data: [], error: 'Usuário não autenticado', success: false };
       }
 
@@ -220,18 +220,20 @@ export const crudAPI = {
       const response = await fetch(`${baseUrl}/api/users`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
       const data = await response.json();
       return { data: data || [], success: true };
     } catch (error: any) {
+      console.error('Erro ao buscar usuários:', error);
       return { data: [], error: error.message, success: false }
     }
   },
@@ -780,80 +782,45 @@ export const dashboardAPI = {
     targetYear?: number;
   }): Promise<{ data: DashboardStats; error?: string }> {
     try {
-      // Verificar autenticação
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
+      // Obter o token de sessão do Supabase
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
         return { data: {} as DashboardStats, error: 'Usuário não autenticado' };
       }
 
-      // Buscar dados diretamente do Supabase
-      const [usersResult, projectsResult, expensesResult] = await Promise.all([
-        supabase.from('users').select('id, created_at, is_active'),
-        supabase.from('projects').select('id, created_at, status, project_value, paid_value'),
-        supabase.from('expenses').select('id, created_at, amount, category').limit(1000)
-      ]);
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://agridom-dashboard.vercel.app'
+        : 'http://localhost:3001';
+      
+      // Construir URL com parâmetros de filtro
+      const params = new URLSearchParams();
+      if (filters?.startDate) params.append('startDate', filters.startDate);
+      if (filters?.endDate) params.append('endDate', filters.endDate);
+      if (filters?.previousStartDate) params.append('previousStartDate', filters.previousStartDate);
+      if (filters?.previousEndDate) params.append('previousEndDate', filters.previousEndDate);
+      if (filters?.targetYear) params.append('targetYear', filters.targetYear.toString());
+      
+      const url = `${baseUrl}/api/dashboard-stats${params.toString() ? '?' + params.toString() : ''}`;
+      console.log('Frontend - Chamando API do backend:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-      if (usersResult.error || projectsResult.error) {
-        throw new Error('Erro ao buscar dados do banco');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const users = usersResult.data || [];
-      const projects = projectsResult.data || [];
-      const expenses = expensesResult.data || [];
-
-      // Calcular estatísticas
-      const totalUsers = users.length;
-      const activeUsers = users.filter(u => u.is_active).length;
-      const totalProjects = projects.length;
-      const activeProjects = projects.filter(p => p.status === 'active' || p.status === 'em_andamento').length;
-      const completedProjects = projects.filter(p => p.status === 'completed' || p.status === 'concluido').length;
-      
-      const totalRevenue = projects.reduce((sum, p) => sum + (p.project_value || 0), 0);
-      const totalPaid = projects.reduce((sum, p) => sum + (p.paid_value || 0), 0);
-      const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-      const profit = totalPaid - totalExpenses;
-
-      const dashboardStats: DashboardStats = {
-         projects: {
-           total_projects: totalProjects,
-           active_projects: activeProjects,
-           completed_projects: completedProjects,
-           paused_projects: projects.filter(p => p.status === 'paused' || p.status === 'pausado').length,
-           total_project_value: totalRevenue,
-           total_paid_value: totalPaid
-         },
-         expenses: {
-           total_expenses: expenses.length,
-           total_expenses_amount: totalExpenses,
-           expense_categories: [...new Set(expenses.map(e => e.category))].length
-         },
-         previous_period: {
-           revenue: 0,
-           expenses: 0,
-           receivable: 0
-         },
-         current_period: {
-           revenue: totalPaid,
-           expenses: totalExpenses,
-           profit: profit,
-           receivable: totalRevenue - totalPaid
-         },
-         current_receivable: totalRevenue - totalPaid,
-         revenue_by_month: [],
-         expenses_by_category: [],
-         recent_projects: projects.slice(-5).map(p => ({
-           id: p.id,
-           name: p.name || 'Projeto sem nome',
-           status: p.status || 'indefinido',
-           project_value: p.project_value || 0,
-           created_at: p.created_at
-         }))
-       };
-
-      return { data: dashboardStats };
-    } catch (error) {
-      console.error('Erro ao buscar estatísticas:', error);
-      return { data: {} as DashboardStats, error: 'Erro ao buscar estatísticas' };
+      const data = await response.json();
+      console.log('Frontend - Dados recebidos da API:', data);
+      return { data: data || {} as DashboardStats };
+    } catch (error: any) {
+      console.error('Erro ao buscar estatísticas do backend:', error);
+      return { data: {} as DashboardStats, error: error.message || 'Erro ao buscar estatísticas' };
     }
   },
 
