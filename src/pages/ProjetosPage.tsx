@@ -12,6 +12,8 @@ import { NovoProjetoDialog } from '@/components/novo-projeto-dialog';
 import { getProjects, deleteProject, updateProject } from '@/api/crud';
 import { Project } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
+import { usePagination } from '@/hooks/use-pagination';
 
 const ProjetosPage = () => {
   const { toast } = useToast();
@@ -152,6 +154,20 @@ const ProjetosPage = () => {
     const matchesStatus = statusFilter === 'all' || projeto.status === statusFilter;
     
     return matchesSearch && matchesTab && matchesStatus;
+  });
+
+  // Configurar paginação
+  const {
+    currentPage,
+    itemsPerPage,
+    totalPages,
+    totalItems,
+    paginatedData: paginatedProjects,
+    setCurrentPage,
+    setItemsPerPage
+  } = usePagination({
+    data: filteredProjects,
+    initialItemsPerPage: 10
   });
   
   // Função para marcar projeto como concluído
@@ -491,8 +507,7 @@ const ProjetosPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProjects.map((projeto) => (
-                  <TableRow key={projeto.id}>
+                {paginatedProjects.map((projeto) => (
                     <TableCell>
                       <Checkbox
                         checked={selectedProjects.includes(projeto.id)}
@@ -577,6 +592,18 @@ const ProjetosPage = () => {
                 ))}
               </TableBody>
             </Table>
+          )}
+          
+          {/* Componente de Paginação */}
+          {filteredProjects.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
           )}
         </CardContent>
       </Card>

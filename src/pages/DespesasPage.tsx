@@ -11,6 +11,8 @@ import { Expense } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { calculateMonthlyAmount } from '@/utils/billing-calculations';
 import { useAuth } from '@/contexts/AuthContext';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
+import { usePagination } from '@/hooks/use-pagination';
 
 const DespesasPage = () => {
   const { isAuthenticated, user, loading: authLoading } = useAuth();
@@ -19,6 +21,20 @@ const DespesasPage = () => {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  // Configurar paginação
+  const {
+    currentPage,
+    itemsPerPage,
+    totalPages,
+    totalItems,
+    paginatedData: paginatedDespesas,
+    setCurrentPage,
+    setItemsPerPage
+  } = usePagination({
+    data: despesas,
+    initialItemsPerPage: 10
+  });
 
   const fetchDespesas = async () => {
     // Verificar se o usuário está autenticado antes de carregar dados
@@ -172,7 +188,7 @@ const DespesasPage = () => {
             </div>
           ) : (
             <EditableTable
-              data={despesas.map(despesa => {
+              data={paginatedDespesas.map(despesa => {
                 const expenseDate = despesa.date;
                 const billingType = despesa.billing_type || 'unica';
                 
@@ -225,7 +241,7 @@ const DespesasPage = () => {
               ]}
               onUpdate={() => {}}
               onDelete={(rowIndex) => {
-                const despesa = despesas[rowIndex];
+                const despesa = paginatedDespesas[rowIndex];
                 handleDeleteExpense(despesa.id);
               }}
               actions={[
@@ -233,13 +249,25 @@ const DespesasPage = () => {
                   icon: <Edit className="h-4 w-4" />,
                   label: 'Editar',
                   onClick: (rowIndex) => {
-                    const despesa = despesas[rowIndex];
+                    const despesa = paginatedDespesas[rowIndex];
                     handleEditExpense(despesa);
                   }
                 }
               ]}
               className="mt-4"
             />
+            
+            {/* Componente de Paginação */}
+            {despesas.length > 0 && (
+              <DataTablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={setItemsPerPage}
+              />
+            )}
           )}
         </CardContent>
       </Card>

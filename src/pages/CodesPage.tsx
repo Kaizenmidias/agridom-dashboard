@@ -24,6 +24,8 @@ import { CodeDialog } from "@/components/code-dialog"
 import { deleteCode, getCodes } from "@/api/crud"
 import { ToastNotification, useToastNotification } from "@/components/ui/toast-notification"
 import { useAuth } from "@/contexts/AuthContext"
+import { DataTablePagination } from "@/components/ui/data-table-pagination"
+import { usePagination } from "@/hooks/use-pagination"
 
 const codeTypeLabels = {
   css: "CSS",
@@ -90,6 +92,20 @@ export function CodesPage() {
                          (code.description && code.description.toLowerCase().includes(searchTerm.toLowerCase()))
     const matchesType = selectedType === "all" || code.language === selectedType
     return matchesSearch && matchesType
+  })
+
+  // Configurar paginação
+  const {
+    currentPage,
+    itemsPerPage,
+    totalPages,
+    totalItems,
+    paginatedData: paginatedCodes,
+    setCurrentPage,
+    setItemsPerPage
+  } = usePagination({
+    data: filteredCodes,
+    initialItemsPerPage: 10
   })
 
   const copyToClipboard = async (content: string, name: string) => {
@@ -208,7 +224,7 @@ export function CodesPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredCodes.map((code) => (
+              paginatedCodes.map((code) => (
                 <TableRow key={code.id}>
                   <TableCell className="font-medium">{code.title}</TableCell>
                   <TableCell>
@@ -264,6 +280,18 @@ export function CodesPage() {
             )}
           </TableBody>
         </Table>
+        
+        {/* Componente de Paginação */}
+        {filteredCodes.length > 0 && (
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+          />
+        )}
       </div>
 
       <ToastNotification
