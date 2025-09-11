@@ -788,11 +788,18 @@ module.exports = async function handler(req, res) {
           }))
         });
         
-        // Calcular valores dos cards conforme especificação
-        const faturamento = projects?.reduce((sum, p) => sum + (parseFloat(p.project_value) || 0), 0) || 0;
-        const totalPaid = projects?.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0) || 0;
-        const aReceber = faturamento - totalPaid;
+        // Calcular valores dos cards conforme especificação correta
+        // faturamento = soma de paid_value dos projetos do período
+        const faturamento = projects?.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0) || 0;
+        // aReceber = soma de (project_value - paid_value) dos projetos do período
+        const aReceber = projects?.reduce((sum, p) => {
+          const projectValue = parseFloat(p.project_value) || 0;
+          const paidValue = parseFloat(p.paid_value) || 0;
+          return sum + (projectValue - paidValue);
+        }, 0) || 0;
+        // despesas = soma de amount da tabela expenses no período
         const despesas = expenses?.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0) || 0;
+        // lucro = faturamento - despesas
         const lucro = faturamento - despesas;
         
         console.log('📈 [API] Valores calculados dos cards:', {
