@@ -256,18 +256,18 @@ const DespesasPage = () => {
               ]}
               className="mt-4"
             />
+          )}
             
-            {/* Componente de Paginação */}
-            {despesas.length > 0 && (
-              <DataTablePagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                onPageChange={setCurrentPage}
-                onItemsPerPageChange={setItemsPerPage}
-              />
-            )}
+          {/* Componente de Paginação */}
+          {despesas.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
           )}
         </CardContent>
       </Card>

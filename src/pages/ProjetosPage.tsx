@@ -508,6 +508,7 @@ const ProjetosPage = () => {
               </TableHeader>
               <TableBody>
                 {paginatedProjects.map((projeto) => (
+                  <TableRow key={projeto.id}>
                     <TableCell>
                       <Checkbox
                         checked={selectedProjects.includes(projeto.id)}
