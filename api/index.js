@@ -712,6 +712,23 @@ module.exports = async function handler(req, res) {
           });
         }
         
+        // Buscar o ID numérico do usuário baseado no email
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', decoded.email)
+          .single();
+          
+        if (userError || !userData) {
+          console.error('❌ [API] Erro ao buscar usuário:', userError);
+          return sendResponse(404, {
+            success: false,
+            error: 'Usuário não encontrado'
+          });
+        }
+        
+        const numericUserId = userData.id;
+        
         // Parse dos query params para filtros de data
         const url = new URL(req.url, `http://${req.headers.host}`);
         const startDate = url.searchParams.get('startDate');
@@ -724,7 +741,9 @@ module.exports = async function handler(req, res) {
           endDate,
           previousStartDate,
           previousEndDate,
-          userId: decoded.userId
+          authUserId: decoded.userId,
+          numericUserId: numericUserId,
+          email: decoded.email
         });
         
         // Buscar projetos do período atual (usando created_at para filtro de período)
@@ -764,7 +783,7 @@ module.exports = async function handler(req, res) {
         let expensesQuery = supabase
           .from('expenses')
           .select('id, description, amount, billing_type, date')
-          .eq('user_id', decoded.userId);
+          .eq('user_id', numericUserId);
         
         if (startDate && endDate) {
           expensesQuery = expensesQuery
