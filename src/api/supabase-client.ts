@@ -832,19 +832,35 @@ export const dashboardAPI = {
     previousEndDate?: string;
   }): Promise<{ data: DashboardStats; error?: string }> {
     try {
-      // Buscar projetos
-      const { data: projects, error: projectsError } = await supabase
+      // Buscar projetos com filtro de data (usando delivery_date)
+      let projectsQuery = supabase
         .from('projects')
         .select('*')
+      
+      if (filters?.startDate && filters?.endDate) {
+        projectsQuery = projectsQuery
+          .gte('delivery_date', filters.startDate)
+          .lte('delivery_date', filters.endDate)
+      }
+
+      const { data: projects, error: projectsError } = await projectsQuery
 
       if (projectsError) {
         return { data: {} as DashboardStats, error: projectsError.message }
       }
 
-      // Buscar despesas
-      const { data: expenses, error: expensesError } = await supabase
+      // Buscar despesas com filtro de data
+      let expensesQuery = supabase
         .from('expenses')
         .select('*')
+      
+      if (filters?.startDate && filters?.endDate) {
+        expensesQuery = expensesQuery
+          .gte('date', filters.startDate)
+          .lte('date', filters.endDate)
+      }
+
+      const { data: expenses, error: expensesError } = await expensesQuery
 
       if (expensesError) {
         return { data: {} as DashboardStats, error: expensesError.message }
@@ -852,95 +868,52 @@ export const dashboardAPI = {
       
 
 
-      // Calcular estatísticas dos projetos
+      // Calcular estatísticas dos projetos (já filtrados por período)
       const totalProjects = projects?.length || 0
       const activeProjects = projects?.filter(p => p.status === 'active').length || 0
       const completedProjects = projects?.filter(p => p.status === 'completed').length || 0
       const pausedProjects = projects?.filter(p => p.status === 'paused').length || 0
+      
+      // Faturamento: soma de project_value dos projetos no período filtrado
       const totalProjectValue = projects?.reduce((sum, p) => sum + (Number(p.project_value) || 0), 0) || 0
       
-      // Calcular faturamento total (paid_value de todos os projetos)
+      // Valor Pago: soma de paid_value dos projetos no período filtrado
       const totalPaidValue = projects?.reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
-
-      // Calcular estatísticas das despesas
-      const totalExpenses = expenses?.length || 0
-      const now = new Date()
       
-      // Calcular valor total das despesas considerando recorrência e filtros
+      // A Receber: diferença entre project_value e paid_value no período filtrado
+      const totalReceivable = totalProjectValue - totalPaidValue
+
+      // Calcular estatísticas das despesas (já filtradas por período)
+      const totalExpenses = expenses?.length || 0
+      
+      // Calcular valor total das despesas usando a coluna 'amount'
       let totalExpensesAmount = 0
       
-      if (filters?.startDate && filters?.endDate) {
-        // Com filtros de data
-        const startDate = new Date(filters.startDate)
-        const endDate = new Date(filters.endDate)
-        
-        // Verificar se é filtro anual (janeiro a dezembro do mesmo ano)
-        const isYearlyFilter = startDate.getFullYear() === endDate.getFullYear() && 
-                              startDate.getMonth() === 0 && 
-                              endDate.getMonth() === 11
-        
-        if (isYearlyFilter) {
-          // Para filtro anual, calcular despesas para o ano do filtro
-          const filterYear = startDate.getFullYear()
-          const currentDate = new Date()
-          const currentYear = currentDate.getFullYear()
-          const currentMonth = currentDate.getMonth() + 1
-          
-          // Se é o ano atual, calcular apenas até o mês atual
-          // Se é ano passado ou futuro, calcular todos os 12 meses
-          const monthsToCalculate = filterYear === currentYear ? currentMonth : 12
-          
-          for (let month = 1; month <= monthsToCalculate; month++) {
-              const monthlyTotal = expenses?.reduce((acc, expense) => {
-                const monthlyAmount = calculateMonthlyAmount(
-                  Number(expense.amount) || 0,
-                  expense.billing_type || 'unica',
-                  expense.date,
-                  filterYear,
-                  month
-                )
-                return acc + (Number(monthlyAmount) || 0)
-              }, 0) || 0
-              
-              totalExpensesAmount += monthlyTotal
-            }
-        } else {
-          // Para filtro mensal, calcular apenas o mês específico
-          const year = startDate.getFullYear()
-          const month = startDate.getMonth() + 1
-          
-          totalExpensesAmount = expenses?.reduce((acc, expense) => {
-            const monthlyAmount = calculateMonthlyAmount(
-              Number(expense.amount) || 0,
-              expense.billing_type || 'unica',
-              expense.date,
-              year,
-              month
-            )
-            return acc + (Number(monthlyAmount) || 0)
-          }, 0) || 0
-        }
-      } else {
-        // Sem filtros - usar mês atual
-        totalExpensesAmount = expenses?.reduce((acc, expense) => {
-          const billingType = expense.billing_type || 'unica'
-          
-          // Para despesas únicas, usa valor direto
-          if (billingType === 'unica' || billingType === 'one_time') {
-            return acc + (Number(expense.amount) || 0)
+      if (expenses && expenses.length > 0) {
+        for (const expense of expenses) {
+          if (expense.billing_type === 'yearly') {
+            // Para despesas anuais, usar valor total
+            totalExpensesAmount += Number(expense.amount) || 0
+          } else if (expense.billing_type === 'monthly') {
+             // Para despesas mensais, calcular valor proporcional no período
+             if (filters?.startDate && filters?.endDate) {
+               const monthlyAmount = calculateMonthlyAmount(
+                 Number(expense.amount) || 0,
+                 'mensal',
+                 expense.date,
+                 new Date(filters.startDate).getFullYear(),
+                 new Date(filters.startDate).getMonth() + 1
+               )
+               totalExpensesAmount += monthlyAmount
+             } else {
+               // Se não há filtros, usar valor mensal
+               totalExpensesAmount += Number(expense.amount) || 0
+             }
+          } else {
+            // Para despesas únicas, usar valor total (já filtradas pela query)
+            totalExpensesAmount += Number(expense.amount) || 0
           }
-          
-          // Para despesas recorrentes, calcula valor mensal
-          const monthlyAmount = calculateMonthlyAmount(
-            Number(expense.amount) || 0,
-            billingType,
-            expense.date,
-            now.getFullYear(),
-            now.getMonth() + 1
-          )
-          
-          return acc + (Number(monthlyAmount) || 0)
-        }, 0) || 0
+        }
       }
       
       const expenseCategories = new Set(expenses?.map(e => e.category)).size || 0
@@ -991,11 +964,57 @@ export const dashboardAPI = {
         created_at: p.created_at
       })) || []
 
-      // Calcular período atual e anterior
-      const currentRevenue = totalPaidValue
+      // Calcular período anterior se os filtros estiverem disponíveis
+      let previousRevenue = 0
+      let previousExpenses = 0
+      let previousReceivable = 0
+      
+      if (filters?.previousStartDate && filters?.previousEndDate) {
+        // Buscar projetos do período anterior
+        const { data: previousProjects } = await supabase
+          .from('projects')
+          .select('*')
+          .gte('delivery_date', filters.previousStartDate)
+          .lte('delivery_date', filters.previousEndDate)
+        
+        // Buscar despesas do período anterior
+        const { data: previousExpensesData } = await supabase
+          .from('expenses')
+          .select('*')
+          .gte('date', filters.previousStartDate)
+          .lte('date', filters.previousEndDate)
+        
+        // Calcular valores do período anterior
+        previousRevenue = previousProjects?.reduce((sum, p) => sum + (Number(p.project_value) || 0), 0) || 0
+        const previousPaidValue = previousProjects?.reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
+        previousReceivable = previousRevenue - previousPaidValue
+        
+        // Calcular despesas do período anterior
+        if (previousExpensesData && previousExpensesData.length > 0) {
+          for (const expense of previousExpensesData) {
+            if (expense.billing_type === 'yearly') {
+              previousExpenses += Number(expense.amount) || 0
+            } else if (expense.billing_type === 'monthly') {
+              const monthlyAmount = calculateMonthlyAmount(
+                Number(expense.amount) || 0,
+                'mensal',
+                expense.date,
+                new Date(filters.previousStartDate).getFullYear(),
+                new Date(filters.previousStartDate).getMonth() + 1
+              )
+              previousExpenses += monthlyAmount
+            } else {
+              previousExpenses += Number(expense.amount) || 0
+            }
+          }
+        }
+      }
+      
+      // Calcular período atual
+      const currentRevenue = totalProjectValue // Faturamento = soma de project_value
       const currentExpenses = totalExpensesAmount
-      const currentProfit = currentRevenue - currentExpenses
-      const currentReceivable = totalProjectValue - totalPaidValue
+      const currentProfit = currentRevenue - currentExpenses // Lucro = Faturamento - Despesas
+      const currentReceivable = totalReceivable // A Receber = project_value - paid_value
       
 
 
@@ -1014,9 +1033,9 @@ export const dashboardAPI = {
           expense_categories: expenseCategories
         },
         previous_period: {
-          revenue: 0, // Seria necessário implementar lógica de período anterior
-          expenses: 0,
-          receivable: 0
+          revenue: previousRevenue,
+          expenses: previousExpenses,
+          receivable: previousReceivable
         },
         current_period: {
           revenue: currentRevenue,
