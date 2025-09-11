@@ -832,20 +832,42 @@ export const dashboardAPI = {
     previousEndDate?: string;
   }): Promise<{ data: DashboardStats; error?: string }> {
     try {
-      // Buscar projetos com filtro de data (usando delivery_date)
+      // DEBUG: Log dos filtros aplicados
+      console.log('🔍 DEBUG getDashboardStats - Filtros aplicados:', {
+        startDate: filters?.startDate,
+        endDate: filters?.endDate,
+        previousStartDate: filters?.previousStartDate,
+        previousEndDate: filters?.previousEndDate
+      })
+
+      // Buscar projetos com filtro de data (usando created_at se delivery_date não existir)
       let projectsQuery = supabase
         .from('projects')
         .select('*')
       
       if (filters?.startDate && filters?.endDate) {
         projectsQuery = projectsQuery
-          .gte('delivery_date', filters.startDate)
-          .lte('delivery_date', filters.endDate)
+          .gte('created_at', filters.startDate)
+          .lte('created_at', filters.endDate)
       }
 
       const { data: projects, error: projectsError } = await projectsQuery
 
+      // DEBUG: Log dos projetos retornados
+      console.log('📊 DEBUG getDashboardStats - Projetos retornados:', {
+        count: projects?.length || 0,
+        projects: projects?.map(p => ({
+          id: p.id,
+          name: p.name,
+          project_value: p.project_value,
+          paid_value: p.paid_value,
+          delivery_date: p.delivery_date,
+          created_at: p.created_at
+        })) || []
+      })
+
       if (projectsError) {
+        console.error('❌ DEBUG getDashboardStats - Erro nos projetos:', projectsError)
         return { data: {} as DashboardStats, error: projectsError.message }
       }
 
@@ -862,7 +884,20 @@ export const dashboardAPI = {
 
       const { data: expenses, error: expensesError } = await expensesQuery
 
+      // DEBUG: Log das despesas retornadas
+      console.log('💰 DEBUG getDashboardStats - Despesas retornadas:', {
+        count: expenses?.length || 0,
+        expenses: expenses?.map(e => ({
+          id: e.id,
+          description: e.description,
+          value: e.value,
+          billing_type: e.billing_type,
+          date: e.date
+        })) || []
+      })
+
       if (expensesError) {
+        console.error('❌ DEBUG getDashboardStats - Erro nas despesas:', expensesError)
         return { data: {} as DashboardStats, error: expensesError.message }
       }
       
@@ -886,19 +921,19 @@ export const dashboardAPI = {
       // Calcular estatísticas das despesas (já filtradas por período)
       const totalExpenses = expenses?.length || 0
       
-      // Calcular valor total das despesas usando a coluna 'amount'
+      // Calcular valor total das despesas usando a coluna 'value'
       let totalExpensesAmount = 0
       
       if (expenses && expenses.length > 0) {
         for (const expense of expenses) {
           if (expense.billing_type === 'yearly') {
             // Para despesas anuais, usar valor total
-            totalExpensesAmount += Number(expense.amount) || 0
+            totalExpensesAmount += Number(expense.value) || 0
           } else if (expense.billing_type === 'monthly') {
              // Para despesas mensais, calcular valor proporcional no período
              if (filters?.startDate && filters?.endDate) {
                const monthlyAmount = calculateMonthlyAmount(
-                 Number(expense.amount) || 0,
+                 Number(expense.value) || 0,
                  'mensal',
                  expense.date,
                  new Date(filters.startDate).getFullYear(),
@@ -907,11 +942,11 @@ export const dashboardAPI = {
                totalExpensesAmount += monthlyAmount
              } else {
                // Se não há filtros, usar valor mensal
-               totalExpensesAmount += Number(expense.amount) || 0
+               totalExpensesAmount += Number(expense.value) || 0
              }
           } else {
             // Para despesas únicas, usar valor total (já filtradas pela query)
-            totalExpensesAmount += Number(expense.amount) || 0
+            totalExpensesAmount += Number(expense.value) || 0
           }
         }
       }
@@ -942,7 +977,7 @@ export const dashboardAPI = {
         if (!acc[category]) {
           acc[category] = { total_amount: 0, count: 0 }
         }
-        acc[category].total_amount += Number(expense.amount) || 0
+        acc[category].total_amount += Number(expense.value) || 0
         acc[category].count += 1
         return acc
       }, {} as Record<string, { total_amount: number; count: number }>) || {}
@@ -974,10 +1009,10 @@ export const dashboardAPI = {
         const { data: previousProjects } = await supabase
           .from('projects')
           .select('*')
-          .gte('delivery_date', filters.previousStartDate)
-          .lte('delivery_date', filters.previousEndDate)
+          .gte('created_at', filters.previousStartDate)
+          .lte('created_at', filters.previousEndDate)
         
-        // Buscar despesas do período anterior
+        // Buscar despesas do período anterior (usando 'value' conforme schema)
         const { data: previousExpensesData } = await supabase
           .from('expenses')
           .select('*')
@@ -993,10 +1028,10 @@ export const dashboardAPI = {
         if (previousExpensesData && previousExpensesData.length > 0) {
           for (const expense of previousExpensesData) {
             if (expense.billing_type === 'yearly') {
-              previousExpenses += Number(expense.amount) || 0
+              previousExpenses += Number(expense.value) || 0
             } else if (expense.billing_type === 'monthly') {
               const monthlyAmount = calculateMonthlyAmount(
-                Number(expense.amount) || 0,
+                Number(expense.value) || 0,
                 'mensal',
                 expense.date,
                 new Date(filters.previousStartDate).getFullYear(),
@@ -1004,17 +1039,38 @@ export const dashboardAPI = {
               )
               previousExpenses += monthlyAmount
             } else {
-              previousExpenses += Number(expense.amount) || 0
+              previousExpenses += Number(expense.value) || 0
             }
           }
         }
       }
+      
+      // DEBUG: Log dos cálculos intermediários
+      console.log('🧮 DEBUG getDashboardStats - Cálculos intermediários:', {
+        totalProjects,
+        totalProjectValue,
+        totalPaidValue,
+        totalReceivable,
+        totalExpenses,
+        totalExpensesAmount
+      })
       
       // Calcular período atual
       const currentRevenue = totalProjectValue // Faturamento = soma de project_value
       const currentExpenses = totalExpensesAmount
       const currentProfit = currentRevenue - currentExpenses // Lucro = Faturamento - Despesas
       const currentReceivable = totalReceivable // A Receber = project_value - paid_value
+      
+      // DEBUG: Log dos valores finais dos cards
+      console.log('📈 DEBUG getDashboardStats - Valores finais dos cards:', {
+        currentRevenue,
+        currentExpenses,
+        currentProfit,
+        currentReceivable,
+        previousRevenue,
+        previousExpenses,
+        previousReceivable
+      })
       
 
 
