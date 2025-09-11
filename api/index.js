@@ -797,8 +797,8 @@ module.exports = async function handler(req, res) {
           const paidValue = parseFloat(p.paid_value) || 0;
           return sum + (projectValue - paidValue);
         }, 0) || 0;
-        // despesas = soma de value da tabela expenses no período
-        const despesas = expenses?.reduce((sum, e) => sum + (parseFloat(e.value) || 0), 0) || 0;
+        // despesas = soma de amount da tabela expenses no período
+    const despesas = expenses?.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0) || 0;
         // lucro = faturamento - despesas
         const lucro = faturamento - despesas;
         

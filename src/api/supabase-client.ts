@@ -962,12 +962,12 @@ export const dashboardAPI = {
         for (const expense of expenses) {
           if (expense.billing_type === 'yearly') {
             // Para despesas anuais, usar valor total
-            totalExpensesAmount += Number(expense.value) || 0
+            totalExpensesAmount += Number(expense.amount) || 0
           } else if (expense.billing_type === 'monthly') {
              // Para despesas mensais, calcular valor proporcional no período
              if (filters?.startDate && filters?.endDate) {
                const monthlyAmount = calculateMonthlyAmount(
-                 Number(expense.value) || 0,
+                 Number(expense.amount) || 0,
                  'mensal',
                  expense.date,
                  new Date(filters.startDate).getFullYear(),
@@ -976,11 +976,11 @@ export const dashboardAPI = {
                totalExpensesAmount += monthlyAmount
              } else {
                // Se não há filtros, usar valor mensal
-               totalExpensesAmount += Number(expense.value) || 0
+               totalExpensesAmount += Number(expense.amount) || 0
              }
           } else {
             // Para despesas únicas, usar valor total (já filtradas pela query)
-            totalExpensesAmount += Number(expense.value) || 0
+            totalExpensesAmount += Number(expense.amount) || 0
           }
         }
       }
@@ -1062,10 +1062,10 @@ export const dashboardAPI = {
         if (previousExpensesData && previousExpensesData.length > 0) {
           for (const expense of previousExpensesData) {
             if (expense.billing_type === 'yearly') {
-              previousExpenses += Number(expense.value) || 0
+              previousExpenses += Number(expense.amount) || 0
             } else if (expense.billing_type === 'monthly') {
               const monthlyAmount = calculateMonthlyAmount(
-                Number(expense.value) || 0,
+                Number(expense.amount) || 0,
                 'mensal',
                 expense.date,
                 new Date(filters.previousStartDate).getFullYear(),
@@ -1073,7 +1073,7 @@ export const dashboardAPI = {
               )
               previousExpenses += monthlyAmount
             } else {
-              previousExpenses += Number(expense.value) || 0
+              previousExpenses += Number(expense.amount) || 0
             }
           }
         }
