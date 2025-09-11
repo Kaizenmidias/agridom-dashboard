@@ -727,16 +727,16 @@ module.exports = async function handler(req, res) {
           userId: decoded.userId
         });
         
-        // Buscar projetos do período atual
+        // Buscar projetos do período atual (usando delivery_date conforme especificação)
         let projectsQuery = supabase
           .from('projects')
-          .select('id, name, project_value, paid_value, status, delivery_date, created_at')
+          .select('id, name, project_value, paid_value, status, delivery_date')
           .eq('user_id', decoded.userId);
         
         if (startDate && endDate) {
           projectsQuery = projectsQuery
-            .gte('created_at', startDate)
-            .lte('created_at', endDate);
+            .gte('delivery_date', startDate)
+            .lte('delivery_date', endDate);
         }
         
         const { data: projects, error: projectsError } = await projectsQuery;
@@ -760,10 +760,10 @@ module.exports = async function handler(req, res) {
           }))
         });
         
-        // Buscar despesas do período atual
+        // Buscar despesas do período atual (usando amount conforme especificação)
         let expensesQuery = supabase
           .from('expenses')
-          .select('id, description, value, billing_type, date')
+          .select('id, description, amount, billing_type, date')
           .eq('user_id', decoded.userId);
         
         if (startDate && endDate) {
@@ -783,16 +783,16 @@ module.exports = async function handler(req, res) {
           expenses: expenses?.map(e => ({
             id: e.id,
             description: e.description,
-            value: e.value,
+            amount: e.amount,
             date: e.date
           }))
         });
         
-        // Calcular valores dos cards
+        // Calcular valores dos cards conforme especificação
         const faturamento = projects?.reduce((sum, p) => sum + (parseFloat(p.project_value) || 0), 0) || 0;
         const totalPaid = projects?.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0) || 0;
         const aReceber = faturamento - totalPaid;
-        const despesas = expenses?.reduce((sum, e) => sum + (parseFloat(e.value) || 0), 0) || 0;
+        const despesas = expenses?.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0) || 0;
         const lucro = faturamento - despesas;
         
         console.log('📈 [API] Valores calculados dos cards:', {
