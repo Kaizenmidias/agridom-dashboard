@@ -13,18 +13,27 @@ const getQuery = (req) => req.app.locals.query;
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const query = getQuery(req);
+    const supabase = req.app.locals.supabase;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    // Buscar usuário no banco de dados
-    // Buscando usuário
-    const result = await query(
-      'SELECT id, email, password, name, role, avatar_url, is_active FROM users WHERE email = $1 AND is_active = $2',
-      [email, true]
-    );
+    // Buscar usuário no Supabase
+    console.log('🔍 Buscando usuário no Supabase:', email);
+    const { data: users, error: searchError } = await supabase
+      .from('users')
+      .select('id, email, password, name, role, is_active')
+      .eq('email', email)
+      .eq('is_active', true)
+      .limit(1);
+
+    if (searchError) {
+      console.error('❌ Erro ao buscar usuário:', searchError);
+      return res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+
+    const result = { rows: users || [] };
 
     if (!result.rows || result.rows.length === 0) {
       // Fallback para credenciais de desenvolvimento
@@ -109,7 +118,6 @@ router.post('/login', async (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
-      avatar_url: user.avatar_url,
       is_active: user.is_active,
       is_admin: isAdmin
     };

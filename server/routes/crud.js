@@ -44,8 +44,8 @@ const getOriginalBillingType = (expenseId, dbType) => {
   return dbType;
 };
 
-// Middleware de autenticação
-const authenticateToken = (req, res, next) => {
+// Middleware de autenticação usando Supabase e JWT local
+const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
   
@@ -53,13 +53,42 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ error: 'Token não fornecido' });
   }
 
-  const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
-
   try {
-    const decoded = jwt.verify(token, jwtSecret);
-    // Para tokens do Supabase, usar o campo 'sub' como userId
-    req.userId = decoded.sub || decoded.userId || decoded.user_id || 4; // Fallback para usuário 4 em desenvolvimento
-    console.log('🔍 DEBUG - Token decodificado:', { sub: decoded.sub, userId: decoded.userId, user_id: decoded.user_id, final: req.userId });
+    // Primeiro, tentar verificar como token JWT local
+    const jwt = require('jsonwebtoken');
+    const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
+    
+    try {
+      const decoded = jwt.verify(token, jwtSecret);
+      // Token JWT local válido
+      req.userId = decoded.userId || decoded.sub || decoded.user_id;
+      req.user = { id: req.userId, email: decoded.email };
+      console.log('🔍 DEBUG - Usuário autenticado via JWT local:', { id: req.userId, email: decoded.email });
+      return next();
+    } catch (jwtError) {
+      // Se falhar, tentar com Supabase
+      console.log('🔍 DEBUG - Token JWT local inválido, tentando Supabase...');
+    }
+    
+    // Usar o Supabase para verificar o token
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY
+    );
+    
+    // Verificar o token com o Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.error('🔍 DEBUG - Erro ao verificar token com Supabase:', error);
+      return res.status(401).json({ error: 'Token inválido' });
+    }
+    
+    // Definir o userId baseado no usuário do Supabase
+    req.userId = user.id;
+    req.user = user;
+    console.log('🔍 DEBUG - Usuário autenticado via Supabase:', { id: user.id, email: user.email });
     next();
   } catch (error) {
     console.error('🔍 DEBUG - Erro ao verificar token:', error);
@@ -110,6 +139,78 @@ router.get('/users/:id', authenticateToken, async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Erro ao buscar usuário:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// PUT /api/users/change-password-by-email
+router.put('/users/change-password-by-email', authenticateToken, async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+    const bcrypt = require('bcryptjs');
+
+    console.log('🔍 Iniciando alteração de senha para:', email);
+
+    if (!email || !newPassword) {
+      console.log('❌ Email ou senha não fornecidos');
+      return res.status(400).json({ error: 'Email e nova senha são obrigatórios' });
+    }
+
+    // Buscar usuário por email no Supabase
+    console.log('🔍 Buscando usuário no Supabase...');
+    const { data: users, error: searchError } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('email', email)
+      .eq('is_active', true);
+
+    console.log('🔍 Resultado da busca:', users);
+
+    if (searchError) {
+      console.error('❌ Erro ao buscar usuário:', searchError);
+      return res.status(500).json({ error: 'Erro ao buscar usuário' });
+    }
+
+    if (!users || users.length === 0) {
+      console.log('❌ Usuário não encontrado');
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    const user = users[0];
+    console.log('✅ Usuário encontrado:', user);
+
+    // Hash da nova senha
+    console.log('🔍 Gerando hash da nova senha...');
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    console.log('✅ Hash gerado:', hashedPassword);
+
+    // Atualizar senha no Supabase
+    console.log('🔍 Atualizando senha no Supabase...');
+    const { data: updateData, error: updateError } = await supabase
+      .from('users')
+      .update({ 
+        password: hashedPassword,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+      .select();
+
+    console.log('🔍 Resultado da atualização:', updateData);
+
+    if (updateError) {
+      console.error('❌ Erro ao atualizar senha:', updateError);
+      return res.status(500).json({ error: 'Erro ao atualizar senha' });
+    }
+
+    if (!updateData || updateData.length === 0) {
+      console.log('❌ Nenhuma linha foi atualizada');
+      return res.status(500).json({ error: 'Erro ao atualizar senha' });
+    }
+
+    console.log(`🔐 Senha alterada com sucesso para o usuário: ${email}`);
+    res.json({ message: 'Senha alterada com sucesso', email: user.email });
+  } catch (error) {
+    console.error('Erro ao alterar senha por email:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });

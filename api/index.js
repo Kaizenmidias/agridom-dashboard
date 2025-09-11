@@ -75,7 +75,7 @@ module.exports = async function handler(req, res) {
 
     // Rota de teste simples
     if (req.url === '/api/test' || req.url === '/api/test-login' || req.url === '/api/test-env') {
-      return sendResponse(res, 200, { 
+      return sendResponse(200, { 
         success: true, 
         message: 'API funcionando!',
         timestamp: new Date().toISOString()
@@ -171,7 +171,7 @@ module.exports = async function handler(req, res) {
           const user = users && users.length > 0 ? users[0] : null;
 
           if (!user) {
-            return sendResponse(res, 401, {
+            return sendResponse(401, {
               success: false,
               message: 'Credenciais inválidas'
             });
@@ -181,7 +181,7 @@ module.exports = async function handler(req, res) {
           const isValidPassword = await bcrypt.compare(password, user.password);
           
           if (!isValidPassword) {
-            return sendResponse(res, 401, {
+            return sendResponse(401, {
               success: false,
               message: 'Credenciais inválidas'
             });

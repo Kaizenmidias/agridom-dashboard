@@ -215,7 +215,7 @@ export const crudAPI = {
 
       const baseUrl = process.env.NODE_ENV === 'production' 
         ? 'https://agridom-dashboard.vercel.app'
-        : 'http://localhost:8080';
+        : 'http://localhost:3001';
       
       const response = await fetch(`${baseUrl}/api/users`, {
         method: 'GET',

@@ -323,5 +323,6 @@ module.exports = {
   query,
   testConnection,
   closeConnection,
-  getPool
+  getPool,
+  getSupabaseClient
 };

@@ -565,6 +565,10 @@ const convertSQLToSupabaseAPI = async (supabase, sqlText, params) => {
 // Disponibilizar a função query inteligente para as rotas
 app.locals.query = smartQuery;
 
+// Disponibilizar o cliente Supabase para as rotas
+const { getSupabaseClient } = require('./config/database');
+app.locals.supabase = getSupabaseClient();
+
 // Usar rotas
 app.use('/api/auth', authRoutes);
 app.use('/api', crudRoutes);
