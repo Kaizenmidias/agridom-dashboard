@@ -40,7 +40,36 @@ const DashboardWithFilter: React.FC = () => {
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
 
   // Estados para dados reais do dashboard
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>({
+    projects: {
+      total_projects: 0,
+      active_projects: 0,
+      completed_projects: 0,
+      paused_projects: 0,
+      total_project_value: 0,
+      total_paid_value: 0
+    },
+    expenses: {
+      total_expenses: 0,
+      total_expenses_amount: 0,
+      expense_categories: 0
+    },
+    previous_period: {
+      revenue: 0,
+      expenses: 0,
+      receivable: 0
+    },
+    current_period: {
+      revenue: 0,
+      expenses: 0,
+      profit: 0,
+      receivable: 0
+    },
+    current_receivable: 0,
+    revenue_by_month: [],
+    expenses_by_category: [],
+    recent_projects: []
+  });
   const [loading, setLoading] = useState(true);
   
   // Dados financeiros calculados a partir dos dados reais
@@ -280,7 +309,7 @@ const DashboardWithFilter: React.FC = () => {
         const monthStr = `${currentYear}-${String(month + 1).padStart(2, '0')}`;
         
         // Buscar dados reais para este mês
-        const monthData = dashboardStats.revenue_by_month.find(item => 
+        const monthData = dashboardStats.revenue_by_month?.find(item => 
           item.month === monthStr
         );
         

@@ -44,89 +44,50 @@ const getOriginalBillingType = (expenseId, dbType) => {
   return dbType;
 };
 
-// Middleware de autenticação usando Supabase e JWT local
+// Middleware de autenticação usando apenas Supabase Auth
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
   
   if (!token) {
-    return res.status(401).json({ error: 'Token não fornecido' });
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Token não fornecido' 
+    });
   }
 
   try {
-    // Primeiro tentar JWT local
-    const jwt = require('jsonwebtoken');
-    const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
-    
-    try {
-      const decoded = jwt.verify(token, jwtSecret);
-      // Token JWT local válido - buscar UUID do Supabase Auth usando email
-      const { createClient } = require('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_ANON_KEY
-      );
-      
-      // Buscar usuário no Supabase Auth pelo email
-      const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
-      
-      if (listError) {
-         console.error('🔍 DEBUG - Erro ao listar usuários do Supabase:', listError);
-         // Fallback: gerar UUID determinístico baseado no ID
-         const crypto = require('crypto');
-         const hash = crypto.createHash('md5').update(decoded.userId.toString()).digest('hex');
-         const uuid = `${hash.substr(0,8)}-${hash.substr(8,4)}-${hash.substr(12,4)}-${hash.substr(16,4)}-${hash.substr(20,12)}`;
-         req.userId = uuid;
-         req.user = { id: req.userId, email: decoded.email };
-         console.log('🔍 DEBUG - Usuário autenticado via JWT local (UUID gerado):', { id: req.userId, email: decoded.email });
-         return next();
-       }
-       
-       const supabaseUser = users?.find(u => u.email === decoded.email);
-       if (supabaseUser) {
-         req.userId = supabaseUser.id; // UUID do Supabase Auth
-         req.user = supabaseUser;
-         console.log('🔍 DEBUG - Usuário autenticado via JWT local + Supabase UUID:', { userId: supabaseUser.id, email: decoded.email });
-       } else {
-         // Fallback: gerar UUID determinístico baseado no ID
-         const crypto = require('crypto');
-         const hash = crypto.createHash('md5').update(decoded.userId.toString()).digest('hex');
-         const uuid = `${hash.substr(0,8)}-${hash.substr(8,4)}-${hash.substr(12,4)}-${hash.substr(16,4)}-${hash.substr(20,12)}`;
-         req.userId = uuid;
-         req.user = { id: req.userId, email: decoded.email };
-         console.log('🔍 DEBUG - Usuário autenticado via JWT local (UUID gerado):', { id: req.userId, email: decoded.email });
-       }
-      return next();
-    } catch (jwtError) {
-      console.log('🔍 DEBUG - Token JWT local inválido, tentando Supabase Auth...');
-    }
-    
-    // Se JWT local falhar, tentar Supabase Auth
+    // Verificar o token com o Supabase Auth
     const { createClient } = require('@supabase/supabase-js');
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_ANON_KEY
     );
     
-    // Verificar o token com o Supabase
     const { data: { user }, error } = await supabase.auth.getUser(token);
     
     if (error || !user) {
-      console.error('🔍 DEBUG - Erro ao verificar token com Supabase:', error);
-      return res.status(401).json({ error: 'Token inválido' });
+      console.error('🔍 DEBUG - Erro ao verificar token com Supabase:', error?.message || 'Usuário não encontrado');
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Token inválido: ' + (error?.message || 'Usuário não encontrado')
+      });
     }
     
     // Usar o UUID do Supabase Auth diretamente
-    req.userId = user.id; // UUID do Supabase Auth
+    req.userId = user.id;
     req.user = user;
-    console.log('🔍 DEBUG - Usuário autenticado via Supabase:', { 
+    console.log('✅ Usuário autenticado via Supabase:', { 
       userId: user.id, 
       email: user.email
     });
     next();
   } catch (error) {
-    console.error('🔍 DEBUG - Erro ao verificar token:', error);
-    return res.status(401).json({ error: 'Token inválido' });
+    console.error('🔍 DEBUG - Erro ao verificar token:', error.message);
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Token inválido: ' + error.message 
+    });
   }
 };
 

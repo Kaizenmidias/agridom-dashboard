@@ -44,7 +44,36 @@ const Dashboard = () => {
   });
   
   // Dashboard stats from backend
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>({
+    projects: {
+      total_projects: 0,
+      active_projects: 0,
+      completed_projects: 0,
+      paused_projects: 0,
+      total_project_value: 0,
+      total_paid_value: 0
+    },
+    expenses: {
+      total_expenses: 0,
+      total_expenses_amount: 0,
+      expense_categories: 0
+    },
+    previous_period: {
+      revenue: 0,
+      expenses: 0,
+      receivable: 0
+    },
+    current_period: {
+      revenue: 0,
+      expenses: 0,
+      profit: 0,
+      receivable: 0
+    },
+    current_receivable: 0,
+    revenue_by_month: [],
+    expenses_by_category: [],
+    recent_projects: []
+  });
   const [loading, setLoading] = useState(true);
   
   // Stats cards (will be populated from backend data)
@@ -652,9 +681,64 @@ const Dashboard = () => {
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <p className="text-gray-500">Carregando projetos...</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
               </div>
-            ) : dashboardStats?.recent_projects && dashboardStats.recent_projects.length > 0 ? (
-              dashboardStats.recent_projects.map((project, index) => {
+            ) : dashboardStats?.recent_projects && dashboardStats?.recent_projects.length > 0 ? (
+              dashboardStats?.recent_projects.map((project, index) => {
                 const getStatusColor = (status: string) => {
                   switch (status) {
                     case 'ativo': return 'bg-green-500';

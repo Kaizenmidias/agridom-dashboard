@@ -757,6 +757,7 @@ export interface DashboardStats {
   revenue_by_month: Array<{
     month: string;
     revenue: number;
+    expenses?: number;
   }>;
   expenses_by_category: Array<{
     category: string;
