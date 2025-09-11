@@ -760,10 +760,10 @@ module.exports = async function handler(req, res) {
           }))
         });
         
-        // Buscar despesas do período atual (usando value conforme schema real)
+        // Buscar despesas do período atual (usando amount conforme schema real)
         let expensesQuery = supabase
           .from('expenses')
-          .select('id, description, value, billing_type, date')
+          .select('id, description, amount, billing_type, date')
           .eq('user_id', decoded.userId);
         
         if (startDate && endDate) {
@@ -783,7 +783,7 @@ module.exports = async function handler(req, res) {
           expenses: expenses?.map(e => ({
             id: e.id,
             description: e.description,
-            value: e.value,
+            amount: e.amount,
             date: e.date
           }))
         });
