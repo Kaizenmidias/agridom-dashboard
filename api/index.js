@@ -727,16 +727,16 @@ module.exports = async function handler(req, res) {
           userId: decoded.userId
         });
         
-        // Buscar projetos do período atual (usando delivery_date conforme especificação)
+        // Buscar projetos do período atual (usando created_at para filtro de período)
         let projectsQuery = supabase
           .from('projects')
-          .select('id, name, project_value, paid_value, status, delivery_date')
+          .select('id, name, project_value, paid_value, status, created_at, delivery_date')
           .eq('user_id', decoded.userId);
         
         if (startDate && endDate) {
           projectsQuery = projectsQuery
-            .gte('delivery_date', startDate)
-            .lte('delivery_date', endDate);
+            .gte('created_at', startDate)
+            .lte('created_at', endDate);
         }
         
         const { data: projects, error: projectsError } = await projectsQuery;
@@ -760,10 +760,10 @@ module.exports = async function handler(req, res) {
           }))
         });
         
-        // Buscar despesas do período atual (usando amount conforme especificação)
+        // Buscar despesas do período atual (usando value conforme schema real)
         let expensesQuery = supabase
           .from('expenses')
-          .select('id, description, amount, billing_type, date')
+          .select('id, description, value, billing_type, date')
           .eq('user_id', decoded.userId);
         
         if (startDate && endDate) {
@@ -783,7 +783,7 @@ module.exports = async function handler(req, res) {
           expenses: expenses?.map(e => ({
             id: e.id,
             description: e.description,
-            amount: e.amount,
+            value: e.value,
             date: e.date
           }))
         });
@@ -797,8 +797,8 @@ module.exports = async function handler(req, res) {
           const paidValue = parseFloat(p.paid_value) || 0;
           return sum + (projectValue - paidValue);
         }, 0) || 0;
-        // despesas = soma de amount da tabela expenses no período
-        const despesas = expenses?.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0) || 0;
+        // despesas = soma de value da tabela expenses no período
+        const despesas = expenses?.reduce((sum, e) => sum + (parseFloat(e.value) || 0), 0) || 0;
         // lucro = faturamento - despesas
         const lucro = faturamento - despesas;
         
