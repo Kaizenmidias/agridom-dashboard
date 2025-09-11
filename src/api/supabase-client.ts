@@ -782,9 +782,9 @@ export const dashboardAPI = {
     targetYear?: number;
   }): Promise<{ data: DashboardStats; error?: string }> {
     try {
-      // Obter o token de sessão do Supabase
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.access_token) {
+      // Obter o token JWT local do localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
         return { data: {} as DashboardStats, error: 'Usuário não autenticado' };
       }
 
@@ -800,13 +800,13 @@ export const dashboardAPI = {
       if (filters?.previousEndDate) params.append('previousEndDate', filters.previousEndDate);
       if (filters?.targetYear) params.append('targetYear', filters.targetYear.toString());
       
-      const url = `${baseUrl}/api/dashboard-stats${params.toString() ? '?' + params.toString() : ''}`;
+      const url = `${baseUrl}/api/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`;
       console.log('Frontend - Chamando API do backend:', url);
       
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
