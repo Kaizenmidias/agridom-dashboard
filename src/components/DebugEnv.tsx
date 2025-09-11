@@ -12,8 +12,8 @@ export const DebugEnv: React.FC = () => {
     PROD: import.meta.env.PROD
   };
 
-  // Só mostrar em desenvolvimento ou se houver erro
-  const shouldShow = import.meta.env.DEV || !import.meta.env.VITE_SUPABASE_URL;
+  // Desabilitado temporariamente para teste de inputs
+  const shouldShow = false; // import.meta.env.DEV || !import.meta.env.VITE_SUPABASE_URL;
 
   if (!shouldShow) return null;
 

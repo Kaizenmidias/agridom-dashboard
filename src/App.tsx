@@ -16,9 +16,10 @@ import UsuariosPage from "./pages/UsuariosPage";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import TestInputPage from "./pages/TestInputPage";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
-// import DebugEnv from "./components/DebugEnv";
+import DebugEnv from "./components/DebugEnv";
 // Removed PermissionProtectedRoute - no longer needed
 import { useEffect } from "react";
 import { CRMProvider } from "./contexts/CRMContext";
@@ -30,6 +31,7 @@ import { trackPageView } from "./utils/analytics";
 // Define routes configuration without permissions
 const routes = [
   { path: "/login", element: <LoginPage />, protected: false },
+  { path: "/test-input", element: <TestInputPage />, protected: false },
   { path: "/forgot-password", element: <ForgotPasswordPage />, protected: false },
   { path: "/reset-password", element: <ResetPasswordPage />, protected: false },
   { path: "/", element: <Index />, protected: true },
@@ -144,7 +146,7 @@ const App = () => {
               <TooltipProvider>
                 <AppLayout />
                 <Toaster />
-                {/* <DebugEnv /> */}
+                <DebugEnv />
               </TooltipProvider>
             </BrowserRouter>
           </CRMProvider>
