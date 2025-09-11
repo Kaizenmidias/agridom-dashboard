@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const handler = require('./index.js');
 
