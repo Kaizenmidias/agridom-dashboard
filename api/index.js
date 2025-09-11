@@ -17,14 +17,14 @@ module.exports = async function handler(req, res) {
   // Garantir que sempre retornamos JSON válido
   const sendResponse = (statusCode, data) => {
     try {
-      res.status(statusCode);
+      res.statusCode = statusCode;
       res.setHeader('Content-Type', 'application/json');
       const jsonString = JSON.stringify(data);
       console.log(`📤 [API] Response ${statusCode}:`, jsonString.substring(0, 200));
       return res.end(jsonString);
     } catch (error) {
       console.error('🚨 [API] Erro ao serializar resposta:', error);
-      res.status(500);
+      res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
       return res.end(JSON.stringify({
         success: false,
@@ -75,17 +75,10 @@ module.exports = async function handler(req, res) {
 
     // Rota de teste simples
     if (req.url === '/api/test' || req.url === '/api/test-login' || req.url === '/api/test-env') {
-      return res.status(200).json({ 
+      return sendResponse(res, 200, { 
         success: true, 
         message: 'API funcionando!',
-        timestamp: new Date().toISOString(),
-        method: req.method,
-        url: req.url,
-        environment: {
-          NODE_ENV: process.env.NODE_ENV,
-          SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'NOT_SET',
-          JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT_SET'
-        }
+        timestamp: new Date().toISOString()
       });
     }
 
@@ -178,7 +171,7 @@ module.exports = async function handler(req, res) {
           const user = users && users.length > 0 ? users[0] : null;
 
           if (!user) {
-            return res.status(401).json({
+            return sendResponse(res, 401, {
               success: false,
               message: 'Credenciais inválidas'
             });
@@ -188,7 +181,7 @@ module.exports = async function handler(req, res) {
           const isValidPassword = await bcrypt.compare(password, user.password);
           
           if (!isValidPassword) {
-            return res.status(401).json({
+            return sendResponse(res, 401, {
               success: false,
               message: 'Credenciais inválidas'
             });
@@ -377,8 +370,8 @@ module.exports = async function handler(req, res) {
       return sendResponse(405, { success: false, error: 'Método não permitido' });
     }
 
-    // Middleware de autenticação
-    const authenticateToken = (req) => {
+    // Middleware de autenticação usando Supabase
+    const authenticateToken = async (req) => {
       const authHeader = req.headers.authorization;
       const token = authHeader && authHeader.split(' ')[1];
       
@@ -386,18 +379,31 @@ module.exports = async function handler(req, res) {
         throw new Error('Token não fornecido');
       }
       
+      if (!supabase) {
+        throw new Error('Supabase não configurado');
+      }
+      
       try {
-        const decoded = jwt.verify(token, jwtSecret);
-        return decoded;
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+        
+        if (error || !user) {
+          throw new Error('Token inválido ou usuário não encontrado');
+        }
+        
+        return {
+          userId: user.id,
+          email: user.email,
+          user: user
+        };
       } catch (error) {
-        throw new Error('Token inválido');
+        throw new Error('Token inválido: ' + error.message);
       }
     };
 
     // Rota de verificação de token
     if (req.url === '/api/verify-token' || req.url === '/auth/verify' || req.url === '/api/auth/verify') {
       try {
-        const decoded = authenticateToken(req);
+        const decoded = await authenticateToken(req);
         return sendResponse(200, { 
           success: true, 
           valid: true,
@@ -418,7 +424,7 @@ module.exports = async function handler(req, res) {
     // Rota de usuários
     if (req.url === '/users' || req.url === '/api/users') {
       try {
-        authenticateToken(req);
+        await authenticateToken(req);
         
         if (!supabase) {
           return sendResponse(200, { 
@@ -695,7 +701,7 @@ module.exports = async function handler(req, res) {
     // Rota de estatísticas do dashboard
     if (req.url === '/dashboard/stats' || req.url === '/api/dashboard/stats' || req.url.startsWith('/api/dashboard/stats?')) {
       try {
-        const decoded = authenticateToken(req);
+        const decoded = await authenticateToken(req);
         
         if (!supabase) {
           return sendResponse(200, {

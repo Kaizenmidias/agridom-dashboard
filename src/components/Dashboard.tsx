@@ -128,6 +128,13 @@ const Dashboard = () => {
           setActiveProjects(Number(stats?.projects?.active_projects) || 0);
           setCompletedProjects(Number(stats?.projects?.completed_projects) || 0);
           setTotalExpenses(expenses);
+          
+          console.log('📊 Dashboard Stats carregadas:', {
+            revenue,
+            expenses,
+            receivable: stats?.projects?.total_receivable,
+            profit: stats?.financial_summary?.net_profit
+          });
         }
       } catch (error) {
         console.error('Erro ao carregar dados do dashboard:', error);
@@ -370,7 +377,7 @@ const Dashboard = () => {
           <p className="stat-label">A Receber</p>
           <div className="flex items-baseline justify-between mt-2">
             <p className="stat-value">
-              {loading ? 'Carregando...' : Number(dashboardStats?.current_receivable || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              {loading ? 'Carregando...' : Number(dashboardStats?.projects?.total_receivable || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
             <span className="text-orange-600 text-sm font-medium">
               Pendente
@@ -382,12 +389,12 @@ const Dashboard = () => {
           <p className="stat-label">Lucro</p>
           <div className="flex items-baseline justify-between mt-2">
             <p className="stat-value">
-              {loading ? 'Carregando...' : (Number(monthlyRevenue || 0) - Number(totalExpenses || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              {loading ? 'Carregando...' : Number(dashboardStats?.financial_summary?.net_profit || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
             <span className={`text-sm font-medium ${
-              (Number(monthlyRevenue || 0) - Number(totalExpenses || 0)) >= 0 ? 'text-green-600' : 'text-red-600'
+              (dashboardStats?.financial_summary?.net_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
-              {(Number(monthlyRevenue || 0) - Number(totalExpenses || 0)) >= 0 ? 'Positivo' : 'Negativo'}
+              {(dashboardStats?.financial_summary?.net_profit || 0) >= 0 ? 'Positivo' : 'Negativo'}
             </span>
           </div>
         </div>
