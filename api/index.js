@@ -779,10 +779,10 @@ module.exports = async function handler(req, res) {
           }))
         });
         
-        // Buscar despesas do período atual (usando valor_mensal conforme solicitado)
+        // Buscar despesas do período atual (usando amount conforme schema real)
         let expensesQuery = supabase
           .from('expenses')
-          .select('id, description, valor_mensal, billing_type, date')
+          .select('id, description, amount, billing_type, date, monthly_value')
           .eq('user_id', numericUserId);
         
         if (startDate && endDate) {
@@ -802,7 +802,9 @@ module.exports = async function handler(req, res) {
           expenses: expenses?.map(e => ({
             id: e.id,
             description: e.description,
-            valor_mensal: e.valor_mensal,
+            amount: e.amount,
+            billing_type: e.billing_type,
+            monthly_value: e.monthly_value,
             date: e.date
           }))
         });
@@ -816,8 +818,44 @@ module.exports = async function handler(req, res) {
           const paidValue = parseFloat(p.paid_value) || 0;
           return sum + (projectValue - paidValue);
         }, 0) || 0;
-        // despesas = soma de valor_mensal da tabela expenses no período
-    const despesas = expenses?.reduce((sum, e) => sum + (parseFloat(e.valor_mensal) || 0), 0) || 0;
+        // despesas = soma considerando billing_type (usar monthly_value se disponível)
+    const despesas = expenses?.reduce((sum, e) => {
+      const billingType = e.billing_type || 'unica';
+      let valorMensal = 0;
+      
+      if (billingType === 'mensal') {
+        // Para despesas mensais, usar monthly_value se disponível, senão amount
+        valorMensal = parseFloat(e.monthly_value) || parseFloat(e.amount) || 0;
+      } else if (billingType === 'semanal') {
+        // Calcular quantas vezes o dia da semana ocorre no mês atual
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const createdAt = e.date || new Date().toISOString();
+        const targetDay = new Date(createdAt).getDay();
+        
+        // Calcular ocorrências do dia da semana no mês
+        let occurrences = 0;
+        for (let day = 1; day <= daysInMonth; day++) {
+          const currentDay = new Date(year, month, day).getDay();
+          if (currentDay === targetDay) {
+            occurrences++;
+          }
+        }
+        
+        valorMensal = (parseFloat(e.amount) || 0) * occurrences;
+      } else if (billingType === 'anual') {
+        // Para despesas anuais, multiplicar por 12 para obter valor anual total
+        valorMensal = (parseFloat(e.amount) || 0) * 12;
+      } else {
+        // Para despesas únicas, usar amount
+        valorMensal = parseFloat(e.amount) || 0;
+      }
+      
+      console.log(`💰 [API] Despesa ${e.description}: ${e.amount} (${billingType}) = ${valorMensal} mensal`);
+      return sum + valorMensal;
+    }, 0) || 0;
         // lucro = faturamento - despesas
         const lucro = faturamento - despesas;
         
