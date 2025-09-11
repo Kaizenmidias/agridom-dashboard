@@ -413,16 +413,17 @@ module.exports = async function handler(req, res) {
           monthlyValue = parseFloat(expense.monthly_value) || parseFloat(expense.amount) || 0;
         } else if (billingType === 'semanal') {
           // Calcular quantas vezes o dia da semana da despesa ocorre no mês específico
-          const expenseDate = new Date(expense.date);
-          const targetDayOfWeek = expenseDate.getDay(); // 0 = domingo, 1 = segunda, etc.
+          // Usar UTC para evitar problemas de fuso horário
+          const expenseDate = new Date(expense.date + 'T12:00:00.000Z');
+          const targetDayOfWeek = expenseDate.getUTCDay(); // 0 = domingo, 1 = segunda, etc.
           
           // Calcular ocorrências do dia da semana no mês específico
           const daysInMonth = new Date(year, month, 0).getDate();
           let occurrences = 0;
           
           for (let day = 1; day <= daysInMonth; day++) {
-            const currentDate = new Date(year, month - 1, day); // month - 1 porque Date usa 0-11
-            if (currentDate.getDay() === targetDayOfWeek) {
+            const currentDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // month - 1 porque Date usa 0-11
+            if (currentDate.getUTCDay() === targetDayOfWeek) {
               occurrences++;
             }
           }
@@ -794,9 +795,33 @@ module.exports = async function handler(req, res) {
         const endDate = url.searchParams.get('endDate');
         const previousStartDate = url.searchParams.get('previousStartDate');
         const previousEndDate = url.searchParams.get('previousEndDate');
-        const period = url.searchParams.get('period') || 'monthly'; // 'monthly' ou 'annual'
-        const year = url.searchParams.get('year') || new Date().getFullYear();
-        const month = url.searchParams.get('month') || (new Date().getMonth() + 1);
+        const targetYear = url.searchParams.get('targetYear');
+        
+        // Determinar se é filtro anual ou mensal baseado nas datas
+        let period = 'monthly';
+        let year = new Date().getFullYear();
+        let month = new Date().getMonth() + 1;
+        
+        if (startDate && endDate) {
+          const startDateObj = new Date(startDate);
+          const endDateObj = new Date(endDate);
+          
+          // Detectar filtro anual: mesmo ano e período de janeiro a dezembro
+          const isYearlyFilter = startDateObj.getFullYear() === endDateObj.getFullYear() && 
+                                startDateObj.getMonth() === 0 && 
+                                endDateObj.getMonth() === 11;
+          
+          if (isYearlyFilter) {
+            period = 'annual';
+            year = startDateObj.getFullYear();
+          } else {
+            period = 'monthly';
+            year = startDateObj.getFullYear();
+            month = startDateObj.getMonth() + 1;
+          }
+        } else if (targetYear) {
+          year = parseInt(targetYear);
+        }
         
         console.log('📊 [API] Dashboard stats - Filtros recebidos:', {
           startDate,

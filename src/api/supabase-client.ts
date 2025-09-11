@@ -781,6 +781,9 @@ export const dashboardAPI = {
     previousStartDate?: string;
     previousEndDate?: string;
     targetYear?: number;
+    period?: string;
+    year?: number;
+    month?: number;
   }): Promise<{ data: DashboardStats; error?: string }> {
     try {
       // Obter o token de sessão do Supabase
@@ -800,6 +803,9 @@ export const dashboardAPI = {
       if (filters?.previousStartDate) params.append('previousStartDate', filters.previousStartDate);
       if (filters?.previousEndDate) params.append('previousEndDate', filters.previousEndDate);
       if (filters?.targetYear) params.append('targetYear', filters.targetYear.toString());
+      if (filters?.period) params.append('period', filters.period);
+      if (filters?.year) params.append('year', filters.year.toString());
+      if (filters?.month) params.append('month', filters.month.toString());
       
       const url = `${baseUrl}/api/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`;
       console.log('Frontend - Chamando API do backend:', url);

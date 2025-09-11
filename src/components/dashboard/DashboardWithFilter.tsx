@@ -95,6 +95,9 @@ const DashboardWithFilter: React.FC = () => {
     previousStartDate?: string;
     previousEndDate?: string;
     targetYear?: number;
+    period?: string;
+    year?: number;
+    month?: number;
   }) => {
     try {
       setLoading(true);
@@ -185,8 +188,10 @@ const DashboardWithFilter: React.FC = () => {
       previousEndDate
     });
     
-    // Extrair ano do período selecionado
+    // Extrair ano e mês do período selecionado
     const targetYear = newPeriod === 'year' ? now.getFullYear() : parseInt(newPeriod.split('-')[0]);
+    const targetMonth = newPeriod === 'year' ? undefined : parseInt(newPeriod.split('-')[1]);
+    const period = newPeriod === 'year' ? 'annual' : 'monthly';
     
     // Carregar dados com filtros
     loadDashboardData({
@@ -194,7 +199,10 @@ const DashboardWithFilter: React.FC = () => {
       endDate,
       previousStartDate,
       previousEndDate,
-      targetYear
+      targetYear,
+      period,
+      year: targetYear,
+      month: targetMonth
     });
   };
 
