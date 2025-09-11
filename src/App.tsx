@@ -17,7 +17,9 @@ import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
+import AccessDeniedPage from "./pages/AccessDeniedPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RicardoAccessControl from "./components/RicardoAccessControl";
 import DebugEnv from "./components/DebugEnv";
 // Removed PermissionProtectedRoute - no longer needed
 import { useEffect } from "react";
@@ -27,21 +29,27 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
 import { trackPageView } from "./utils/analytics";
 
-// Define routes configuration without permissions
+// Define routes configuration with Ricardo access control
 const routes = [
-  { path: "/login", element: <LoginPage />, protected: false },
-  { path: "/forgot-password", element: <ForgotPasswordPage />, protected: false },
-  { path: "/reset-password", element: <ResetPasswordPage />, protected: false },
-  { path: "/", element: <Index />, protected: true },
-  { path: "/dashboard", element: <Index />, protected: true },
-  { path: "/projetos", element: <ProjetosPage />, protected: true },
-  { path: "/briefings", element: <BriefingsPage />, protected: true },
-  { path: "/codigos", element: <CodesPage />, protected: true },
-  { path: "/despesas", element: <DespesasPage />, protected: true },
-  { path: "/crm", element: <CRMPage />, protected: true },
-  { path: "/usuarios", element: <UsuariosPage />, protected: true },
-  { path: "*", element: <NotFound />, protected: false }
+  { path: "/login", element: <LoginPage />, protected: false, restrictedForRicardo: false },
+  { path: "/forgot-password", element: <ForgotPasswordPage />, protected: false, restrictedForRicardo: false },
+  { path: "/reset-password", element: <ResetPasswordPage />, protected: false, restrictedForRicardo: false },
+  { path: "/", element: <Index />, protected: true, restrictedForRicardo: true },
+  { path: "/dashboard", element: <Index />, protected: true, restrictedForRicardo: true },
+  { path: "/projetos", element: <ProjetosPage />, protected: true, restrictedForRicardo: true },
+  { path: "/briefings", element: <BriefingsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/codigos", element: <CodesPage />, protected: true, restrictedForRicardo: false },
+  { path: "/despesas", element: <DespesasPage />, protected: true, restrictedForRicardo: true },
+  { path: "/crm", element: <CRMPage />, protected: true, restrictedForRicardo: false },
+  { path: "/usuarios", element: <UsuariosPage />, protected: true, restrictedForRicardo: true },
+  { path: "/access-denied", element: <AccessDeniedPage />, protected: true, restrictedForRicardo: false },
+  { path: "*", element: <NotFound />, protected: false, restrictedForRicardo: false }
 ];
+
+// Rotas restritas para Ricardo
+const ricardoRestrictedPaths = routes
+  .filter(route => route.restrictedForRicardo)
+  .map(route => route.path);
 
 // Create query client with enhanced configuration
 const queryClient = new QueryClient({
@@ -82,7 +90,11 @@ const AppLayout = () => {
               key={route.path} 
               path={route.path} 
               element={route.protected ? (
-                <ProtectedRoute>{route.element}</ProtectedRoute>
+                <ProtectedRoute>
+                  <RicardoAccessControl restrictedPaths={ricardoRestrictedPaths}>
+                    {route.element}
+                  </RicardoAccessControl>
+                </ProtectedRoute>
               ) : (
                 route.element
               )} 
@@ -114,13 +126,17 @@ const AppLayout = () => {
                   );
                 }
                 
-                // All protected routes use simple ProtectedRoute
+                // All protected routes use ProtectedRoute with Ricardo access control
                 return (
                   <Route 
                     key={route.path} 
                     path={route.path} 
                     element={
-                      <ProtectedRoute>{route.element}</ProtectedRoute>
+                      <ProtectedRoute>
+                        <RicardoAccessControl restrictedPaths={ricardoRestrictedPaths}>
+                          {route.element}
+                        </RicardoAccessControl>
+                      </ProtectedRoute>
                     } 
                   />
                 );

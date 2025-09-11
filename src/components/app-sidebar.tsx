@@ -33,8 +33,24 @@ export function AppSidebar() {
   const { state } = useSidebar()
   const { user } = useAuth()
   
-  // Mostrar todos os itens para usuários autenticados
-  const items = user ? allItems : []
+  // Filtrar itens baseado no usuário
+  const getFilteredItems = () => {
+    if (!user) return []
+    
+    // Para o usuário Ricardo, mostrar apenas Briefings, Códigos e CRM
+    if (user.email === 'ricardorpc11@gmail.com') {
+      return allItems.filter(item => 
+        item.title === 'Briefings' || 
+        item.title === 'Códigos' || 
+        item.title === 'CRM'
+      )
+    }
+    
+    // Para outros usuários, mostrar todos os itens
+    return allItems
+  }
+  
+  const items = getFilteredItems()
   
   const isCollapsed = state === "collapsed"
 
