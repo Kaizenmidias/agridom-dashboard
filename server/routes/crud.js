@@ -1278,7 +1278,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         COUNT(*) as delivered_projects,
         COALESCE(SUM(project_value - paid_value), 0) as delivered_paid_value
        FROM projects 
-       WHERE user_id = $1 AND DATE(delivery_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
+       WHERE user_id = $1 AND status = 'completed' AND completion_date IS NOT NULL AND DATE(completion_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
       [req.userId, currentStart, currentEnd]
     );
     
@@ -1312,7 +1312,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       `SELECT 
         COALESCE(SUM(project_value - paid_value), 0) as delivered_paid_value
        FROM projects 
-       WHERE user_id = $1 AND DATE(delivery_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
+       WHERE user_id = $1 AND status = 'completed' AND completion_date IS NOT NULL AND DATE(completion_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
       [req.userId, prevStart, prevEnd]
     );
     
@@ -1494,12 +1494,13 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     
     // Projetos criados no período
     
-    const projectsDeliveredInPeriod = await query(
+    // Projetos concluídos no período (usando completion_date)
+    const projectsCompletedInPeriod = await query(
       `SELECT 
         (project_value - paid_value) as period_revenue,
-        delivery_date as revenue_date
+        completion_date as revenue_date
        FROM projects 
-       WHERE user_id = $1 AND DATE(delivery_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
+       WHERE user_id = $1 AND status = 'completed' AND completion_date IS NOT NULL AND DATE(completion_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
       [req.userId, currentStart, currentEnd]
     );
     
@@ -1509,7 +1510,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     const allProjectsInPeriod = {
       rows: [
         ...(projectsCreatedInPeriod.rows || []),
-        ...(projectsDeliveredInPeriod.rows || [])
+        ...(projectsCompletedInPeriod.rows || [])
       ]
     };
     

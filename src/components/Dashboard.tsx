@@ -150,20 +150,25 @@ const Dashboard = () => {
           setDashboardStats(stats);
           
           // Update state with real data - ensure proper number conversion with safe access
-          const revenue = parseFloat(String(stats?.projects?.total_paid_value || 0));
-          const expenses = parseFloat(String(stats?.current_period?.expenses || 0));
+          const revenue = Number(stats?.current_period?.revenue || stats?.projects?.total_paid_value || 0);
+          const expenses = Number(stats?.current_period?.expenses || 0);
+          const receivable = Number(stats?.current_period?.receivable || stats?.current_receivable || 0);
+          const profit = Number(stats?.current_period?.profit || 0);
           
           setMonthlyRevenue(revenue);
           setActiveProjects(Number(stats?.projects?.active_projects) || 0);
           setCompletedProjects(Number(stats?.projects?.completed_projects) || 0);
           setTotalExpenses(expenses);
-          
-          console.log('📊 Dashboard Stats carregadas:', {
-            revenue,
-            expenses,
-            receivable: stats?.projects?.total_receivable,
-            profit: stats?.financial_summary?.net_profit
-          });
+          // Atualizar dashboardStats para refletir valores calculados corretamente
+          setDashboardStats(prev => prev ? {
+            ...prev,
+            current_period: {
+              revenue,
+              expenses,
+              receivable,
+              profit
+            }
+          } : stats);
         }
       } catch (error) {
         console.error('Erro ao carregar dados do dashboard:', error);
@@ -353,242 +358,102 @@ const Dashboard = () => {
       </header>
 
       {/* Quick Stats Row - Dados reais dos projetos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
         <div className="stat-card card-hover">
-          <p className="stat-label">Faturamento Total</p>
-          <div className="flex items-baseline justify-between mt-2">
-            <p className="stat-value">
+          <p className="stat-label text-xs sm:text-sm">Valor pago</p>
+          <div className="flex items-baseline justify-between mt-1 sm:mt-2">
+            <p className="stat-value text-lg sm:text-xl lg:text-2xl">
               {loading ? 'Carregando...' : Number(monthlyRevenue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
-            <span className="text-green-600 text-sm font-medium">
+            <span className="text-green-600 text-xs sm:text-sm font-medium">
               Total acumulado
             </span>
           </div>
         </div>
         
         <div className="stat-card card-hover">
-          <p className="stat-label">Projetos Ativos</p>
-          <div className="flex items-baseline justify-between mt-2">
-            <p className="stat-value">
+          <p className="stat-label text-xs sm:text-sm">Projetos Ativos</p>
+          <div className="flex items-baseline justify-between mt-1 sm:mt-2">
+            <p className="stat-value text-lg sm:text-xl lg:text-2xl">
               {loading ? 'Carregando...' : activeProjects}
             </p>
-            <span className="text-blue-600 text-sm font-medium">
+            <span className="text-blue-600 text-xs sm:text-sm font-medium">
               Em andamento
             </span>
           </div>
         </div>
         
         <div className="stat-card card-hover">
-          <p className="stat-label">Projetos Concluídos</p>
-          <div className="flex items-baseline justify-between mt-2">
-            <p className="stat-value">
+          <p className="stat-label text-xs sm:text-sm">Projetos Concluídos</p>
+          <div className="flex items-baseline justify-between mt-1 sm:mt-2">
+            <p className="stat-value text-lg sm:text-xl lg:text-2xl">
               {loading ? 'Carregando...' : completedProjects}
             </p>
-            <span className="text-green-600 text-sm font-medium flex items-center">
-              <Check className="h-4 w-4 mr-1" /> Finalizados
+            <span className="text-green-600 text-xs sm:text-sm font-medium flex items-center">
+              <Check className="h-3 w-3 sm:h-4 sm:w-4 mr-1" /> Finalizados
             </span>
           </div>
         </div>
         
         <div className="stat-card card-hover">
-          <p className="stat-label">Total de Despesas</p>
-          <div className="flex items-baseline justify-between mt-2">
-            <p className="stat-value">
+          <p className="stat-label text-xs sm:text-sm">Total de Despesas</p>
+          <div className="flex items-baseline justify-between mt-1 sm:mt-2">
+            <p className="stat-value text-lg sm:text-xl lg:text-2xl">
               {loading ? 'Carregando...' : Number(totalExpenses || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
-            <span className="text-red-600 text-sm font-medium flex items-center">
-              <Wallet className="h-4 w-4 mr-1" /> Gastos
+            <span className="text-red-600 text-xs sm:text-sm font-medium flex items-center">
+              <Wallet className="h-3 w-3 sm:h-4 sm:w-4 mr-1" /> Gastos
             </span>
           </div>
         </div>
         
         <div className="stat-card card-hover">
-          <p className="stat-label">A Receber</p>
-          <div className="flex items-baseline justify-between mt-2">
-            <p className="stat-value">
-              {loading ? 'Carregando...' : Number(dashboardStats?.projects?.total_receivable || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          <p className="stat-label text-xs sm:text-sm">A Receber</p>
+          <div className="flex items-baseline justify-between mt-1 sm:mt-2">
+            <p className="stat-value text-lg sm:text-xl lg:text-2xl">
+              {loading ? 'Carregando...' : Number(dashboardStats?.current_period?.receivable || dashboardStats?.current_receivable || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
-            <span className="text-orange-600 text-sm font-medium">
+            <span className="text-orange-600 text-xs sm:text-sm font-medium">
               Pendente
             </span>
           </div>
         </div>
         
         <div className="stat-card card-hover">
-          <p className="stat-label">Lucro</p>
-          <div className="flex items-baseline justify-between mt-2">
-            <p className="stat-value">
-              {loading ? 'Carregando...' : Number(dashboardStats?.financial_summary?.net_profit || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          <p className="stat-label text-xs sm:text-sm">Lucro</p>
+          <div className="flex items-baseline justify-between mt-1 sm:mt-2">
+            <p className="stat-value text-lg sm:text-xl lg:text-2xl">
+              {loading ? 'Carregando...' : Number(dashboardStats?.current_period?.profit || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
-            <span className={`text-sm font-medium ${
-              (dashboardStats?.financial_summary?.net_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+            <span className={`text-xs sm:text-sm font-medium ${
+              (dashboardStats?.current_period?.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
-              {(dashboardStats?.financial_summary?.net_profit || 0) >= 0 ? 'Positivo' : 'Negativo'}
+              {(dashboardStats?.current_period?.profit || 0) >= 0 ? 'Positivo' : 'Negativo'}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Weather alerts section */}
-      <div className="bg-white rounded-xl border p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Alertes Météorologiques</h2>
-          <Button 
-            onClick={() => setShowAddAlertDialog(true)}
-            className="bg-agri-primary hover:bg-agri-primary-dark"
-          >
-            <Plus size={16} className="mr-2" /> Ajouter une alerte
-          </Button>
-        </div>
-        <p className="text-muted-foreground mb-6">
-          Acompanhe os alertas meteorológicos que impactam a agricultura na Guadalupe
-        </p>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted text-xs uppercase">
-              <tr>
-                <th className="px-4 py-3 text-left">Type</th>
-                <th className="px-4 py-3 text-left">Região</th>
-        <th className="px-4 py-3 text-left">Período</th>
-                <th className="px-4 py-3 text-left">Sévérité</th>
-                <th className="px-4 py-3 text-left">Description</th>
-                <th className="px-4 py-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {weatherAlerts.map(alert => (
-                <tr key={alert.id} className="border-t hover:bg-muted/30">
-                  <td className="px-4 py-3 flex items-center">
-                    {alert.type === 'Cyclone' ? (
-                      <span className="flex items-center text-red-500">
-                        <AlertTriangle size={16} className="mr-1" /> {alert.type}
-                      </span>
-                    ) : alert.type === 'Pluie' ? (
-                      <span className="flex items-center text-blue-500">
-                        <CloudRain size={16} className="mr-1" /> {alert.type}
-                      </span>
-                    ) : (
-                      <span className="flex items-center">
-                        <Wind size={16} className="mr-1" /> {alert.type}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <EditableField
-                      value={alert.region}
-                      onSave={(value) => {
-                        setWeatherAlerts(weatherAlerts.map(a => 
-                          a.id === alert.id ? { ...a, region: String(value) } : a
-                        ));
-                        toast.success('Região atualizada');
-                      }}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <div>
-                        <span className="text-xs text-muted-foreground">Início:</span>
-                        <EditableField
-                          value={alert.startDate}
-                          type="date"
-                          onSave={(value) => {
-                            setWeatherAlerts(weatherAlerts.map(a => 
-                              a.id === alert.id ? { ...a, startDate: String(value) } : a
-                            ));
-                            toast.success('Data de início atualizada');
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <span className="text-xs text-muted-foreground">Fim:</span>
-                        <EditableField
-                          value={alert.endDate}
-                          type="date"
-                          onSave={(value) => {
-                            setWeatherAlerts(weatherAlerts.map(a => 
-                              a.id === alert.id ? { ...a, endDate: String(value) } : a
-                            ));
-                            toast.success('Data de fim atualizada');
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
-                      alert.severity === 'critique' 
-                        ? 'bg-red-100 text-red-800' 
-                        : alert.severity === 'modérée'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-green-100 text-green-800'
-                    }`}>
-                      <EditableField
-                        value={alert.severity}
-                        onSave={(value) => {
-                          setWeatherAlerts(weatherAlerts.map(a => 
-                            a.id === alert.id ? { ...a, severity: String(value) } : a
-                          ));
-                          toast.success('Sévérité mise à jour');
-                        }}
-                      />
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <EditableField
-                      value={alert.description}
-                      onSave={(value) => {
-                        setWeatherAlerts(weatherAlerts.map(a => 
-                          a.id === alert.id ? { ...a, description: String(value) } : a
-                        ));
-                        toast.success('Description mise à jour');
-                      }}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => handleDeleteWeatherAlert(alert.id)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {weatherAlerts.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-4 text-center text-muted-foreground">
-                    Aucune alerte météorologique disponible
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       {/* Main Content Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* Revenue Chart - Dados reais de faturamento */}
-        <div className="dashboard-card col-span-full lg:col-span-2 card-hover">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold">Evolução do Faturamento</h3>
+        <div className="dashboard-card col-span-full xl:col-span-2 card-hover">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-2">
+            <h3 className="font-semibold text-base sm:text-lg">Evolução do Faturamento</h3>
             <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-600">Período:</span>
+              <span className="text-xs sm:text-sm text-gray-600">Período:</span>
               <EditableField
                 value={currentMonth}
                 type="text"
                 onSave={handleMonthChange}
-                className="text-sm font-medium"
+                className="text-xs sm:text-sm font-medium"
               />
             </div>
           </div>
-          <div className="h-80">
+          <div className="h-64 sm:h-72 md:h-80">
             {loading ? (
               <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">Carregando dados...</p>
+                <p className="text-gray-500 text-sm">Carregando dados...</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -625,19 +490,19 @@ const Dashboard = () => {
 
         {/* Expenses by Category Chart */}
         <div className="dashboard-card card-hover">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold">Despesas por Categoria</h3>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-2">
+            <h3 className="font-semibold text-base sm:text-lg">Despesas por Categoria</h3>
             <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-600">Total:</span>
-              <span className="text-sm font-medium">
+              <span className="text-xs sm:text-sm text-gray-600">Total:</span>
+              <span className="text-xs sm:text-sm font-medium">
                 R$ {dashboardStats?.expenses_by_category.reduce((sum, item) => sum + item.total_amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
               </span>
             </div>
           </div>
-          <div className="h-80">
+          <div className="h-64 sm:h-72 md:h-80">
             {loading ? (
               <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">Carregando dados...</p>
+                <p className="text-gray-500 text-sm">Carregando dados...</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -673,131 +538,111 @@ const Dashboard = () => {
       </div>
 
       {/* Bottom Cards Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Recent Projects */}
-        <div className="dashboard-card card-hover">
-          <h3 className="font-semibold mb-4">Projetos Recentes</h3>
-          <div className="space-y-3">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <p className="text-gray-500">Carregando projetos...</p>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-              </div>
-            ) : dashboardStats?.recent_projects && dashboardStats?.recent_projects.length > 0 ? (
-              dashboardStats?.recent_projects.map((project, index) => {
-                const getStatusColor = (status: string) => {
-                  switch (status) {
-                    case 'ativo': return 'bg-green-500';
-                    case 'concluido': return 'bg-blue-500';
-                    case 'pausado': return 'bg-yellow-500';
-                    default: return 'bg-gray-500';
-                  }
-                };
-                
-                const getStatusText = (status: string) => {
-                  switch (status) {
-                    case 'ativo': return 'Ativo';
-                    case 'concluido': return 'Concluído';
-                    case 'pausado': return 'Pausado';
-                    default: return 'Indefinido';
-                  }
-                };
-                
-                const getProgressPercentage = (status: string) => {
-                  switch (status) {
-                    case 'ativo': return 50;
-                    case 'concluido': return 100;
-                    case 'pausado': return 25;
-                    default: return 0;
-                  }
-                };
-                
-                const progress = getProgressPercentage(project.status);
-                
-                return (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{project.name}</p>
-                      <p className="text-xs text-gray-600">{getStatusText(project.status)}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Valor: R$ {Number(project.project_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{progress}%</p>
-                      <div className="w-16 h-2 bg-gray-200 rounded-full mt-1">
-                        <div 
-                          className={`h-full rounded-full ${getStatusColor(project.status)}`}
-                          style={{ width: `${progress}%` }}
-                        ></div>
+        <div className="dashboard-card card-hover lg:col-span-2">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-2">
+            <h3 className="font-semibold text-base sm:text-lg">Projetos Recentes</h3>
+            <button 
+              className="text-xs sm:text-sm text-agri-primary hover:text-agri-primary-dark font-medium"
+              onClick={() => window.location.href = '/projetos'}
+            >
+              Ver todos →
+            </button>
+          </div>
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full text-xs sm:text-sm">
+              <thead className="bg-muted text-xs uppercase">
+                <tr>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Projeto</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left hidden sm:table-cell">Cliente</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Valor</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Status</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left hidden md:table-cell">Data</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboardStats?.recent_projects.slice(0, 5).map(project => (
+                  <tr key={project.id} className="border-t hover:bg-muted/30">
+                    <td className="px-3 sm:px-4 py-2 sm:py-3">
+                      <div className="font-medium text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">
+                        {project.name}
                       </div>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-500">Nenhum projeto encontrado</p>
-              </div>
-            )}
+                    </td>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 hidden sm:table-cell">
+                      <span className="text-xs sm:text-sm text-muted-foreground">-</span>
+                    </td>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3">
+                      <span className="text-xs sm:text-sm font-medium">
+                        R$ {Number(project.project_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </td>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                        project.status === 'active' ? 'bg-green-100 text-green-800' :
+                        project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                        project.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {project.status === 'active' ? 'Ativo' :
+                         project.status === 'completed' ? 'Concluído' :
+                         project.status === 'paused' ? 'Pausado' :
+                         'Pendente'}
+                      </span>
+                    </td>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 text-muted-foreground hidden md:table-cell">
+                      <span className="text-xs">
+                        {new Date(project.created_at).toLocaleDateString('pt-BR', { 
+                          day: '2-digit', 
+                          month: '2-digit' 
+                        })}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {dashboardStats?.recent_projects.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 sm:px-4 py-6 text-center text-muted-foreground">
+                      Nenhum projeto recente encontrado
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Upcoming Tasks - Adapté au contexte agricole guadeloupéen */}
+        {/* Financial Summary */}
+        <div className="dashboard-card card-hover">
+          <h3 className="font-semibold text-base sm:text-lg mb-4">Resumo Financeiro</h3>
+          <div className="space-y-3 sm:space-y-4">
+            <div className="flex justify-between items-center text-xs sm:text-sm">
+              <span className="text-muted-foreground">Faturamento</span>
+              <span className="font-medium">R$ {Number(dashboardStats?.current_period?.revenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs sm:text-sm">
+              <span className="text-muted-foreground">Despesas</span>
+              <span className="font-medium text-red-600">R$ {Number(dashboardStats?.current_period?.expenses || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs sm:text-sm">
+              <span className="text-muted-foreground">A Receber</span>
+              <span className="font-medium text-orange-600">R$ {Number(dashboardStats?.current_period?.receivable || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div className="border-t pt-3 sm:pt-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xs sm:text-sm font-medium">Lucro</span>
+                <span className={`text-sm sm:text-base font-bold ${
+                  (dashboardStats?.current_period?.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  R$ {Number(dashboardStats?.current_period?.profit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Upcoming Tasks - Adapté au contexte agricole guadeloupéen */}
         <div className="dashboard-card card-hover">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Tâches à venir</h3>

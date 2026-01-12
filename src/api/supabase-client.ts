@@ -828,33 +828,47 @@ export const dashboardAPI = {
       // Mapear dados do backend para estrutura esperada pelo frontend
       const mappedData: DashboardStats = {
         projects: {
-          total_projects: 0,
-          active_projects: 0,
-          completed_projects: 0,
-          paused_projects: 0,
-          total_project_value: backendData.faturamento || 0,
-          total_paid_value: (backendData.faturamento || 0) - (backendData.aReceber || 0)
+          total_projects: Number(backendData?.projects?.total_projects || 0),
+          active_projects: Number(backendData?.projects?.active_projects || 0),
+          completed_projects: Number(backendData?.projects?.completed_projects || 0),
+          paused_projects: Number(backendData?.projects?.paused_projects || 0),
+          total_project_value: Number(backendData?.projects?.total_project_value || backendData?.current_period?.total_project_value || 0),
+          total_paid_value: Number(backendData?.projects?.total_paid_value || backendData?.current_period?.revenue || 0)
         },
         expenses: {
-          total_expenses: 0,
-          total_expenses_amount: backendData.despesas || 0,
-          expense_categories: 0
+          total_expenses: Number(backendData?.expenses?.total_expenses || 0),
+          total_expenses_amount: Number(backendData?.expenses?.total_expenses_amount || backendData?.current_period?.expenses || 0),
+          expense_categories: Number(backendData?.expenses?.expense_categories || 0)
         },
         previous_period: {
-          revenue: 0,
-          expenses: 0,
-          receivable: 0
+          revenue: Number(backendData?.previous_period?.revenue || 0),
+          expenses: Number(backendData?.previous_period?.expenses || 0),
+          receivable: Number(backendData?.previous_period?.receivable || 0)
         },
         current_period: {
-          revenue: backendData.faturamento || 0,
-          expenses: backendData.despesas || 0,
-          profit: backendData.lucro || 0,
-          receivable: backendData.aReceber || 0
+          revenue: Number(backendData?.current_period?.revenue || 0),
+          expenses: Number(backendData?.current_period?.expenses || 0),
+          profit: Number(backendData?.current_period?.profit || 0),
+          receivable: Number(backendData?.current_period?.receivable || backendData?.current_receivable || 0)
         },
-        current_receivable: backendData.aReceber || 0,
-        revenue_by_month: [],
-        expenses_by_category: [],
-        recent_projects: []
+        current_receivable: Number(backendData?.current_receivable || backendData?.current_period?.receivable || 0),
+        revenue_by_month: Array.isArray(backendData?.revenue_by_month) ? backendData.revenue_by_month.map((item: any) => ({
+          month: String(item.month),
+          revenue: Number(item.revenue || 0),
+          expenses: Number(item.expenses || 0)
+        })) : [],
+        expenses_by_category: Array.isArray(backendData?.expenses_by_category) ? backendData.expenses_by_category.map((item: any) => ({
+          category: String(item.category || 'Sem categoria'),
+          total_amount: Number((item.total_amount ?? item.total) || 0),
+          count: Number(item.count || 0)
+        })) : [],
+        recent_projects: Array.isArray(backendData?.recent_projects) ? backendData.recent_projects.map((p: any) => ({
+          id: String(p.id),
+          name: String(p.name || 'Projeto sem nome'),
+          status: String(p.status || 'indefinido'),
+          project_value: Number(p.project_value || 0),
+          created_at: String(p.created_at || '')
+        })) : []
       };
       
       console.log('Frontend - Dados mapeados:', mappedData);
