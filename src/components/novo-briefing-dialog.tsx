@@ -41,7 +41,7 @@ export function NovoBriefingDialog({ children, briefing, onBriefingChange }: Nov
     content: briefing?.content || "",
     budget: briefing?.budget?.toString() || "",
     deadline: briefing?.deadline || "",
-    status: briefing?.status || "pending",
+    status: briefing?.status || "new",
     priority: briefing?.priority || "medium"
   })
 
@@ -53,7 +53,7 @@ export function NovoBriefingDialog({ children, briefing, onBriefingChange }: Nov
         content: "",
         budget: "",
         deadline: "",
-        status: "pending",
+        status: "new",
         priority: "medium"
       })
     }
@@ -185,10 +185,11 @@ export function NovoBriefingDialog({ children, briefing, onBriefingChange }: Nov
                   <SelectValue placeholder="Selecione o status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">Pendente</SelectItem>
-                  <SelectItem value="in_progress">Em Andamento</SelectItem>
+                  <SelectItem value="new">Novos projetos</SelectItem>
+                  <SelectItem value="developing">Desenvolvendo</SelectItem>
+                  <SelectItem value="changes">Alterações</SelectItem>
                   <SelectItem value="completed">Concluído</SelectItem>
-                  <SelectItem value="cancelled">Cancelado</SelectItem>
+                  <SelectItem value="standby">Stand By</SelectItem>
                 </SelectContent>
               </Select>
             </div>

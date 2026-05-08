@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Calendar, User, MoreVertical, GripVertical, Edit, Trash2 } from "lucide-react"
+import { Search, Plus, Calendar, User, MoreVertical, GripVertical, Edit, Trash2, Mail, MessageSquare, Paperclip, Share2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { format } from "date-fns"
+import { format, isPast } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { getBriefings, updateBriefing, deleteBriefing, Briefing } from "@/api/crud"
 import { NovoBriefingDialog } from "@/components/novo-briefing-dialog"
@@ -17,22 +17,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 const KANBAN_COLUMNS = [
-  { id: 'pending', title: 'Pendentes', color: 'bg-yellow-500' },
-  { id: 'in_progress', title: 'Em Andamento', color: 'bg-blue-500' },
-  { id: 'completed', title: 'Concluídos', color: 'bg-green-500' },
-  { id: 'cancelled', title: 'Cancelados', color: 'bg-red-500' }
+  { id: 'new', title: 'Novos projetos', color: 'bg-blue-400' },
+  { id: 'developing', title: 'Desenvolvendo', color: 'bg-purple-500' },
+  { id: 'changes', title: 'Alterações', color: 'bg-orange-500' },
+  { id: 'completed', title: 'Concluído', color: 'bg-green-500' },
+  { id: 'standby', title: 'Stand By', color: 'bg-gray-500' }
 ]
 
 const priorityColors = {
-  low: 'bg-gray-100 text-gray-800 border-gray-200',
-  medium: 'bg-orange-100 text-orange-800 border-orange-200',
-  high: 'bg-red-100 text-red-800 border-red-200'
-}
-
-const priorityLabels = {
-  low: 'Baixa',
-  medium: 'Média',
-  high: 'Alta'
+  low: 'bg-green-500',
+  medium: 'bg-yellow-500',
+  high: 'bg-red-500'
 }
 
 export default function BriefingsPage() {
@@ -65,10 +60,6 @@ export default function BriefingsPage() {
     try {
       const updated = await updateBriefing(id, { status: newStatus })
       setBriefings(prev => prev.map(b => b.id === id ? updated : b))
-      toast({
-        title: "Status atualizado",
-        description: `Briefing movido para ${newStatus}.`
-      })
     } catch (error) {
       toast({
         title: "Erro",
@@ -104,120 +95,144 @@ export default function BriefingsPage() {
   )
 
   const getBriefingsByStatus = (status: string) => {
-    return filteredBriefings.filter(b => b.status === status)
+    // Mapear status antigos para novos se necessário para visualização
+    const mappedStatus = status === 'pending' ? 'new' : 
+                         status === 'in_progress' ? 'developing' :
+                         status === 'cancelled' ? 'standby' : status;
+    
+    return filteredBriefings.filter(b => {
+      const bStatus = b.status === 'pending' ? 'new' : 
+                      b.status === 'in_progress' ? 'developing' :
+                      b.status === 'cancelled' ? 'standby' : b.status;
+      return bStatus === status;
+    })
   }
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center justify-center h-[60vh]">
+      <div className="p-6 flex items-center justify-center h-[60vh] bg-[#0d1117]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
 
-  if (briefings.length === 0) {
-    return (
-      <div className="h-[calc(100vh-3rem)] flex flex-col items-center justify-center bg-muted/20 p-6">
-        <div className="max-w-md w-full text-center space-y-6 bg-white p-10 rounded-xl shadow-sm border">
-          <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
-            <Plus className="h-8 w-8 text-primary" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold">Nenhum briefing encontrado</h2>
-            <p className="text-muted-foreground">Comece criando o seu primeiro briefing para gerenciar seus projetos no estilo Kanban.</p>
-          </div>
-          <NovoBriefingDialog onBriefingChange={loadBriefings}>
-            <Button className="w-full py-6 text-lg font-semibold gap-2">
-              <Plus className="h-5 w-5" />
-              Criar Primeiro Briefing
-            </Button>
-          </NovoBriefingDialog>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="h-[calc(100vh-3rem)] flex flex-col overflow-hidden bg-muted/20">
-      {/* Sub-header fixo */}
-      <div className="p-6 pb-2 space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Briefings</h1>
-            <p className="text-muted-foreground text-sm">Quadro estilo Kanban para gestão de projetos</p>
+    <div className="h-[calc(100vh-3rem)] flex flex-col overflow-hidden bg-[#0d1117] text-gray-200">
+      {/* Sub-header */}
+      <div className="px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold">Projetos Web</h1>
+          <div className="p-1 hover:bg-white/10 rounded cursor-pointer transition-colors">
+            <Share2 className="h-4 w-4 text-gray-400" />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+            <Input
+              placeholder="Buscar no quadro..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-[#161b22] border-none text-gray-200 placeholder:text-gray-500 focus-visible:ring-1 focus-visible:ring-gray-700 h-9"
+            />
           </div>
           <NovoBriefingDialog onBriefingChange={loadBriefings}>
-            <Button className="bg-primary hover:bg-primary/90 flex items-center gap-2">
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
               <Plus className="h-4 w-4" />
               Novo Briefing
             </Button>
           </NovoBriefingDialog>
         </div>
-
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
-            placeholder="Buscar briefings..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 bg-white"
-          />
-        </div>
       </div>
 
-      {/* Kanban Board Container */}
-      <div className="flex-1 overflow-x-auto p-6 pt-2">
-        <div className="flex gap-6 h-full min-w-max pb-4">
+      {/* Kanban Board */}
+      <div className="flex-1 overflow-x-auto px-6 pb-6">
+        <div className="flex gap-4 h-full min-w-max">
           {KANBAN_COLUMNS.map((column) => (
-            <div key={column.id} className="w-80 flex flex-col bg-muted/50 rounded-lg border border-border/50">
+            <div key={column.id} className="w-[280px] flex flex-col bg-[#161b22] rounded-xl h-full max-h-full">
               {/* Column Header */}
-              <div className="p-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${column.color}`}></div>
-                  <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">
-                    {column.title}
-                  </h3>
-                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] font-bold">
+              <div className="p-3 flex items-center justify-between group">
+                <h3 className="font-semibold text-sm px-2 text-gray-300 truncate">
+                  {column.title}
+                </h3>
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] font-medium text-gray-500 mr-1">
                     {getBriefingsByStatus(column.id).length}
-                  </Badge>
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:bg-white/10 hover:text-gray-300">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
+              </div>
+
+              {/* Logo Placeholder (Similar to the image) */}
+              <div className="px-3 mb-2">
+                <div className="aspect-video bg-[#0d1117] rounded-lg flex items-center justify-center border border-white/5 overflow-hidden group relative">
+                  <div className="text-4xl font-bold bg-gradient-to-br from-white to-gray-500 bg-clip-text text-transparent">K.</div>
+                  <div className="absolute bottom-2 left-3 right-3 text-[10px] font-bold text-gray-400 uppercase tracking-tighter truncate">
+                    {column.title}
+                  </div>
+                </div>
               </div>
 
               {/* Column Content */}
-              <div className="flex-1 overflow-y-auto p-2 space-y-3 scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 transition-colors">
+              <div className="flex-1 overflow-y-auto px-3 py-1 space-y-2 scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 transition-colors">
                 {getBriefingsByStatus(column.id).map((briefing) => (
-                  <Card key={briefing.id} className="group hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing bg-white shadow-sm hover:shadow-md">
+                  <Card key={briefing.id} className="bg-[#21262d] border-none shadow-sm hover:ring-1 hover:ring-blue-500/50 transition-all cursor-pointer group">
                     <CardContent className="p-3 space-y-3">
-                      <div className="flex justify-between items-start">
-                        <Badge className={`text-[10px] px-1.5 py-0 ${priorityColors[briefing.priority || 'medium']}`}>
-                          {priorityLabels[briefing.priority || 'medium']}
-                        </Badge>
-                        <div className="flex gap-1">
+                      {/* Priority Tag */}
+                      <div className={`w-8 h-1 rounded-full ${priorityColors[briefing.priority || 'medium']}`} />
+                      
+                      <div className="space-y-1.5">
+                        <h4 className="text-[13px] font-medium text-gray-200 leading-snug line-clamp-3">
+                          {briefing.title}
+                        </h4>
+                        
+                        <div className="flex items-center gap-2 text-gray-400 text-[11px]">
+                          <span className="truncate">{briefing.client || briefing.client_name || 'Sem cliente'}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-2">
+                          {briefing.deadline && (
+                            <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${isPast(new Date(briefing.deadline)) ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-400'}`}>
+                              <Calendar className="h-3 w-3" />
+                              {format(new Date(briefing.deadline), 'd MMM', { locale: ptBR })}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5 text-gray-500">
+                             <Mail className="h-3 w-3" />
+                             <MessageSquare className="h-3 w-3" />
+                             <Paperclip className="h-3 w-3" />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <NovoBriefingDialog briefing={briefing} onBriefingChange={loadBriefings}>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Edit className="h-3 w-3 text-blue-500" />
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10">
+                              <Edit className="h-3 w-3" />
                             </Button>
                           </NovoBriefingDialog>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <GripVertical className="h-3 w-3 text-muted-foreground" />
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10">
+                                <GripVertical className="h-3 w-3" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="bg-[#161b22] border-gray-800 text-gray-300">
                               {KANBAN_COLUMNS.filter(c => c.id !== column.id).map(c => (
                                 <DropdownMenuItem 
                                   key={c.id} 
                                   onClick={() => handleMoveBriefing(briefing.id, c.id as Briefing['status'])}
+                                  className="hover:bg-white/5 focus:bg-white/5"
                                 >
                                   Mover para {c.title}
                                 </DropdownMenuItem>
                               ))}
                               <DropdownMenuItem 
-                                className="text-destructive"
+                                className="text-red-400 hover:bg-red-500/10 focus:bg-red-500/10"
                                 onClick={() => handleDeleteBriefing(briefing.id)}
                               >
                                 <Trash2 className="h-3 w-3 mr-2" />
@@ -227,39 +242,45 @@ export default function BriefingsPage() {
                           </DropdownMenu>
                         </div>
                       </div>
-
-                      <div className="space-y-1">
-                        <h4 className="font-medium text-sm leading-tight line-clamp-2">{briefing.title}</h4>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <User className="h-3 w-3" />
-                          <span className="truncate">{briefing.client || briefing.client_name || 'Sem cliente'}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1 border-t border-border/40">
-                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
-                          <Calendar className="h-3 w-3" />
-                          {briefing.deadline ? format(new Date(briefing.deadline), 'dd MMM', { locale: ptBR }) : 'S/ prazo'}
-                        </div>
-                        {briefing.budget && (
-                          <div className="text-[10px] font-bold text-green-600">
-                            R$ {Number(briefing.budget).toLocaleString('pt-BR')}
-                          </div>
-                        )}
-                      </div>
                     </CardContent>
                   </Card>
                 ))}
-                
-                {/* Empty State in Column */}
-                {getBriefingsByStatus(column.id).length === 0 && (
-                  <div className="h-24 border-2 border-dashed border-muted-foreground/10 rounded-lg flex items-center justify-center">
-                    <span className="text-xs text-muted-foreground/50 italic">Vazio</span>
-                  </div>
-                )}
+              </div>
+
+              {/* Column Footer */}
+              <div className="p-2 mt-auto">
+                <NovoBriefingDialog onBriefingChange={loadBriefings}>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full justify-start text-gray-400 hover:bg-white/5 hover:text-gray-200 text-[13px] font-normal gap-2 h-9 px-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Adicionar um cartão
+                  </Button>
+                </NovoBriefingDialog>
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Footer Navigation (Like in the image) */}
+      <div className="h-12 border-t border-white/5 bg-[#0d1117] flex items-center justify-center px-6 gap-8">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer hover:text-gray-300">
+          <Mail className="h-3.5 w-3.5" />
+          Caixa de entrada
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer hover:text-gray-300">
+          <Calendar className="h-3.5 w-3.5" />
+          Planejador
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-blue-500 border-b-2 border-blue-500 h-full px-2">
+          <GripVertical className="h-3.5 w-3.5" />
+          Quadro
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer hover:text-gray-300">
+          <Share2 className="h-3.5 w-3.5" />
+          Mudar de quadros
         </div>
       </div>
     </div>
