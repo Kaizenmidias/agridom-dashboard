@@ -184,6 +184,32 @@ export interface InsertBriefing {
   user_id: number;
 }
 
+// Tipos de acessos de empresas
+export interface CompanyAccess {
+  id: number;
+  company_name: string;
+  wordpress_login?: string;
+  wordpress_password?: string;
+  domain_login?: string;
+  domain_password?: string;
+  hosting_login?: string;
+  hosting_password?: string;
+  user_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InsertCompanyAccess {
+  company_name: string;
+  wordpress_login?: string;
+  wordpress_password?: string;
+  domain_login?: string;
+  domain_password?: string;
+  hosting_login?: string;
+  hosting_password?: string;
+  user_id: number;
+}
+
 // Tipos para estatísticas do dashboard
 export interface DashboardStats {
   total_projects: number;

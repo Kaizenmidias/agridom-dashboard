@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import ProjetosPage from "./pages/ProjetosPage";
 import BriefingsPage from "./pages/BriefingsPage";
 import { CodesPage } from "./pages/CodesPage";
+import AcessosPage from "./pages/AcessosPage";
 import DespesasPage from "./pages/DespesasPage";
 import CRMPage from "./pages/CRMPage";
 import UsuariosPage from "./pages/UsuariosPage";
@@ -39,6 +40,7 @@ const routes = [
   { path: "/projetos", element: <ProjetosPage />, protected: true, restrictedForRicardo: true },
   { path: "/briefings", element: <BriefingsPage />, protected: true, restrictedForRicardo: false },
   { path: "/codigos", element: <CodesPage />, protected: true, restrictedForRicardo: false },
+  { path: "/acessos", element: <AcessosPage />, protected: true, restrictedForRicardo: false },
   { path: "/despesas", element: <DespesasPage />, protected: true, restrictedForRicardo: true },
   { path: "/crm", element: <CRMPage />, protected: true, restrictedForRicardo: false },
   { path: "/usuarios", element: <UsuariosPage />, protected: true, restrictedForRicardo: true },

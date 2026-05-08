@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Home, FileText, Wallet, Users, Settings, User, Briefcase, Code } from "lucide-react"
+import { Home, FileText, Wallet, Users, Settings, User, Briefcase, Code, Key } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 
@@ -24,6 +24,7 @@ const allItems = [
   { title: "Projetos", url: "/projetos", icon: FileText },
   { title: "Briefings", url: "/briefings", icon: Briefcase },
   { title: "Códigos", url: "/codigos", icon: Code },
+  { title: "Acessos", url: "/acessos", icon: Key },
   { title: "Despesas", url: "/despesas", icon: Wallet },
   { title: "CRM", url: "/crm", icon: Users },
   { title: "Usuários", url: "/usuarios", icon: Settings },

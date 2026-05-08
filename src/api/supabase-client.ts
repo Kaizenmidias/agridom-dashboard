@@ -393,8 +393,94 @@ export const crudAPI = {
       console.log('🔍 DEBUG Supabase - Projeto criado com sucesso')
       return { data: { id: 'created' }, success: true }
     } catch (error: any) {
-      console.error('🔍 DEBUG Supabase - Erro capturado no projeto:', error)
+      console.log('🔍 DEBUG Supabase - Erro capturado no projeto:', error)
       return handleSupabaseError(error)
+    }
+  },
+
+  // Company Access
+  async getCompanyAccess() {
+    try {
+      const { data, error } = await supabase
+        .from('company_access')
+        .select('*')
+        .order('company_name', { ascending: true })
+
+      if (error) {
+        throw error
+      }
+
+      return { data: data || [], success: true }
+    } catch (error: any) {
+      return handleSupabaseError(error)
+    }
+  },
+
+  async createCompanyAccess(accessData: any) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      const accessWithUserId = {
+        ...accessData,
+        user_id: userData?.id || 25 // Fallback to Ricardo's ID if not found
+      };
+
+      const { data, error } = await supabase
+        .from('company_access')
+        .insert([accessWithUserId])
+        .select()
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: null, error: error.message, success: false }
+    }
+  },
+
+  async updateCompanyAccess(id: number, accessData: any) {
+    try {
+      const { data, error } = await supabase
+        .from('company_access')
+        .update(accessData)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: null, error: error.message, success: false }
+    }
+  },
+
+  async deleteCompanyAccess(id: number) {
+    try {
+      const { error } = await supabase
+        .from('company_access')
+        .delete()
+        .eq('id', id)
+
+      if (error) {
+        throw error
+      }
+
+      return { success: true }
+    } catch (error: any) {
+      return { error: error.message, success: false }
     }
   },
 

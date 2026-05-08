@@ -1,10 +1,10 @@
 import { crudAPI } from './supabase-client'
-import { User, Project, Expense, Code, InsertUser, InsertProject, InsertExpense, InsertCode } from '../types/database'
+import { User, Project, Expense, Code, InsertUser, InsertProject, InsertExpense, InsertCode, CompanyAccess, InsertCompanyAccess } from '../types/database'
 // API_BASE_URL removido - usando apenas Supabase agora
 import { verifyToken } from './auth'
 
 // Re-exportar tipos para uso em outros componentes
-export type { User, Project, Expense, Code };
+export type { User, Project, Expense, Code, CompanyAccess };
 
 // Função auxiliar para verificar autenticação usando Supabase
 const checkAuth = async () => {
@@ -60,6 +60,42 @@ export const updateUser = async (id: number, userData: Partial<User>): Promise<U
 export const deleteUser = async (id: number): Promise<void> => {
   await checkAuth()
   const result = await crudAPI.deleteUser(id)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+}
+
+// === ACESSOS DE EMPRESAS ===
+export const getCompanyAccesses = async (): Promise<CompanyAccess[]> => {
+  await checkAuth()
+  const result = await crudAPI.getCompanyAccess()
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
+}
+
+export const createCompanyAccess = async (accessData: InsertCompanyAccess): Promise<CompanyAccess> => {
+  await checkAuth()
+  const result = await crudAPI.createCompanyAccess(accessData)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
+}
+
+export const updateCompanyAccess = async (id: number, accessData: Partial<CompanyAccess>): Promise<CompanyAccess> => {
+  await checkAuth()
+  const result = await crudAPI.updateCompanyAccess(id, accessData)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
+}
+
+export const deleteCompanyAccess = async (id: number): Promise<void> => {
+  await checkAuth()
+  const result = await crudAPI.deleteCompanyAccess(id)
   if (result.error) {
     throw new Error(result.error)
   }
