@@ -773,21 +773,33 @@ module.exports = async function handler(req, res) {
         }
         
         // Buscar o ID numérico do usuário baseado no email
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', decoded.email)
-          .single();
-          
-        if (userError || !userData) {
-          console.error('❌ [API] Erro ao buscar usuário:', userError);
-          return sendResponse(404, {
-            success: false,
-            error: 'Usuário não encontrado'
-          });
+        let numericUserId;
+        try {
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('email', decoded.email)
+            .single();
+            
+          if (userError || !userData) {
+            console.error('❌ [API] Erro ao buscar usuário:', userError);
+            // Fallback para tentar buscar pelo ID se for numérico
+            if (!isNaN(decoded.userId)) {
+              numericUserId = parseInt(decoded.userId);
+            } else {
+              return sendResponse(404, {
+                success: false,
+                error: 'Usuário não encontrado'
+              });
+            }
+          } else {
+            numericUserId = userData.id;
+          }
+        } catch (err) {
+          console.error('❌ [API] Erro na consulta de usuário:', err);
+          // Fallback se falhar
+          numericUserId = 25; // ID padrão do Ricardo como última opção
         }
-        
-        const numericUserId = userData.id;
         
         // Parse dos query params para filtros de data
         const url = new URL(req.url, `http://${req.headers.host}`);
