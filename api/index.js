@@ -777,55 +777,53 @@ module.exports = async function handler(req, res) {
         }
         
         // 1. Obter o ID numérico do usuário (essencial para filtrar despesas)
-        let numericUserId = 25; // Default Ricardo
+        let numericUserId = null;
         try {
-          const { data: userData } = await supabase
+          // Tentar buscar o usuário pelo email do token
+          const { data: userData, error: userLookupError } = await supabase
             .from('users')
             .select('id')
             .eq('email', decoded.email)
             .single();
-          if (userData) numericUserId = userData.id;
+            
+          if (userData) {
+            numericUserId = userData.id;
+            console.log(`✅ [API] Usuário encontrado: ${decoded.email} -> ID: ${numericUserId}`);
+          } else {
+            console.warn(`⚠️ [API] Usuário não encontrado pelo email: ${decoded.email}`);
+          }
         } catch (e) {
-          console.error('❌ [API] Erro ao buscar numericUserId:', e.message);
+          console.error('❌ [API] Erro na busca de numericUserId:', e.message);
         }
         
-        // 2. Extrair parâmetros da URL de forma segura usando regex simples em vez de URL object
-        // O URL object pode falhar dependendo de como o host é passado na Vercel
+        // 2. Extrair parâmetros da URL de forma segura
         const startDateMatch = req.url.match(/startDate=([^&]+)/);
         const endDateMatch = req.url.match(/endDate=([^&]+)/);
         const startDate = startDateMatch ? startDateMatch[1] : null;
         const endDate = endDateMatch ? endDateMatch[1] : null;
-        
-        console.log(`📊 [API] Filtros: User=${numericUserId}, Periodo=${startDate} até ${endDate}`);
 
-        // 3. Buscar Projetos (Faturamento e A Receber)
-        // Buscamos TODOS os projetos do usuário para processamento local
-        const { data: projects, error: pError } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('user_id', numericUserId);
-
-        if (pError) {
-          console.error('❌ [API] Erro Supabase Projetos:', pError);
+        // 3. Buscar Projetos
+        // Se temos um numericUserId, filtramos por ele. Caso contrário, buscamos tudo (fallback)
+        let projectsQuery = supabase.from('projects').select('*');
+        if (numericUserId) {
+          projectsQuery = projectsQuery.eq('user_id', numericUserId);
         }
+
+        const { data: projects, error: pError } = await projectsQuery;
+
+        if (pError) console.error('❌ [API] Erro Supabase Projetos:', pError);
 
         // 4. Buscar Despesas
-        const { data: expenses, error: eError } = await supabase
-          .from('expenses')
-          .select('amount, billing_type, date, monthly_value')
-          .eq('user_id', numericUserId);
-
-        if (eError) {
-          console.error('❌ [API] Erro Supabase Despesas:', eError);
+        let expensesQuery = supabase.from('expenses').select('*');
+        if (numericUserId) {
+          expensesQuery = expensesQuery.eq('user_id', numericUserId);
         }
+        const { data: expenses, error: eError } = await expensesQuery;
+
+        if (eError) console.error('❌ [API] Erro Supabase Despesas:', eError);
 
         const allProjects = projects || [];
-        console.log(`📊 [API] Projetos brutos encontrados no banco: ${allProjects.length}`);
-        
-        // Log para depuração dos valores de cada projeto
-        allProjects.forEach(p => {
-          console.log(`   - Projeto: ${p.name}, Total: ${p.project_value}, Pago: ${p.paid_value}, Data: ${p.created_at}`);
-        });
+        console.log(`📊 [API] Projetos carregados: ${allProjects.length}`);
 
         // 5. Processar Projetos com filtros de data
         let filteredProjects = allProjects;
@@ -852,14 +850,25 @@ module.exports = async function handler(req, res) {
         let totalProjetos = 0;
 
         filteredProjects.forEach(p => {
-          // Converter para número garantindo que valores como "1.500,00" ou nulos sejam tratados
-          const paid = typeof p.paid_value === 'string' 
-            ? parseFloat(p.paid_value.replace(/\./g, '').replace(',', '.')) 
-            : (parseFloat(p.paid_value) || 0);
+          // Função interna para limpar valores monetários de forma agressiva
+          const cleanValue = (val) => {
+            if (val === null || val === undefined || val === "") return 0;
+            if (typeof val === 'number') return val;
             
-          const total = typeof p.project_value === 'string' 
-            ? parseFloat(p.project_value.replace(/\./g, '').replace(',', '.')) 
-            : (parseFloat(p.project_value) || 0);
+            // Se for string, remover R$, espaços e normalizar pontos/vírgulas
+            let cleaned = val.toString()
+              .replace(/R\$/g, '')
+              .replace(/\s/g, '')
+              .replace(/\./g, ''); // Remover pontos de milhar
+            
+            cleaned = cleaned.replace(',', '.'); // Trocar vírgula decimal por ponto
+            
+            const result = parseFloat(cleaned);
+            return isNaN(result) ? 0 : result;
+          };
+
+          const paid = cleanValue(p.paid_value);
+          const total = cleanValue(p.project_value);
 
           faturamento += paid;
           totalProjetos += total;
