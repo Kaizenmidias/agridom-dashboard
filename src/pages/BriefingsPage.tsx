@@ -3,11 +3,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Calendar, User, MoreVertical, GripVertical } from "lucide-react"
+import { Search, Plus, Calendar, User, MoreVertical, GripVertical, Edit, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { getBriefings, updateBriefing, Briefing } from "@/api/crud"
+import { getBriefings, updateBriefing, deleteBriefing, Briefing } from "@/api/crud"
+import { NovoBriefingDialog } from "@/components/novo-briefing-dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,6 +78,25 @@ export default function BriefingsPage() {
     }
   }
 
+  const handleDeleteBriefing = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este briefing?')) {
+      try {
+        await deleteBriefing(id)
+        setBriefings(prev => prev.filter(b => b.id !== id))
+        toast({
+          title: "Briefing excluído",
+          description: "O briefing foi removido com sucesso."
+        })
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Não foi possível excluir o briefing.",
+          variant: "destructive"
+        })
+      }
+    }
+  }
+
   const filteredBriefings = briefings.filter(briefing =>
     briefing.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (briefing.client_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -95,6 +115,28 @@ export default function BriefingsPage() {
     )
   }
 
+  if (briefings.length === 0) {
+    return (
+      <div className="h-[calc(100vh-3rem)] flex flex-col items-center justify-center bg-muted/20 p-6">
+        <div className="max-w-md w-full text-center space-y-6 bg-white p-10 rounded-xl shadow-sm border">
+          <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
+            <Plus className="h-8 w-8 text-primary" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold">Nenhum briefing encontrado</h2>
+            <p className="text-muted-foreground">Comece criando o seu primeiro briefing para gerenciar seus projetos no estilo Kanban.</p>
+          </div>
+          <NovoBriefingDialog onBriefingChange={loadBriefings}>
+            <Button className="w-full py-6 text-lg font-semibold gap-2">
+              <Plus className="h-5 w-5" />
+              Criar Primeiro Briefing
+            </Button>
+          </NovoBriefingDialog>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="h-[calc(100vh-3rem)] flex flex-col overflow-hidden bg-muted/20">
       {/* Sub-header fixo */}
@@ -104,10 +146,12 @@ export default function BriefingsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Briefings</h1>
             <p className="text-muted-foreground text-sm">Quadro estilo Kanban para gestão de projetos</p>
           </div>
-          <Button className="bg-primary hover:bg-primary/90 flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Novo Briefing
-          </Button>
+          <NovoBriefingDialog onBriefingChange={loadBriefings}>
+            <Button className="bg-primary hover:bg-primary/90 flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Novo Briefing
+            </Button>
+          </NovoBriefingDialog>
         </div>
 
         <div className="relative max-w-sm">
@@ -151,24 +195,37 @@ export default function BriefingsPage() {
                         <Badge className={`text-[10px] px-1.5 py-0 ${priorityColors[briefing.priority || 'medium']}`}>
                           {priorityLabels[briefing.priority || 'medium']}
                         </Badge>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                        <div className="flex gap-1">
+                          <NovoBriefingDialog briefing={briefing} onBriefingChange={loadBriefings}>
                             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <GripVertical className="h-3 w-3 text-muted-foreground" />
+                              <Edit className="h-3 w-3 text-blue-500" />
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {KANBAN_COLUMNS.filter(c => c.id !== column.id).map(c => (
+                          </NovoBriefingDialog>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <GripVertical className="h-3 w-3 text-muted-foreground" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {KANBAN_COLUMNS.filter(c => c.id !== column.id).map(c => (
+                                <DropdownMenuItem 
+                                  key={c.id} 
+                                  onClick={() => handleMoveBriefing(briefing.id, c.id as Briefing['status'])}
+                                >
+                                  Mover para {c.title}
+                                </DropdownMenuItem>
+                              ))}
                               <DropdownMenuItem 
-                                key={c.id} 
-                                onClick={() => handleMoveBriefing(briefing.id, c.id as Briefing['status'])}
+                                className="text-destructive"
+                                onClick={() => handleDeleteBriefing(briefing.id)}
                               >
-                                Mover para {c.title}
+                                <Trash2 className="h-3 w-3 mr-2" />
+                                Excluir
                               </DropdownMenuItem>
-                            ))}
-                            <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
 
                       <div className="space-y-1">
