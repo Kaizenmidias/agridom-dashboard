@@ -26,9 +26,9 @@ export function EmailToBoardDialog({ children }: { children: React.ReactNode }) 
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   
-  // URL simulada para o webhook (em produção seria a URL do Supabase Edge Function)
-  const webhookEmail = "kaizenwebdesign+msfvlom@agridom.com.br"
-  const webhookUrl = "https://qwbpruywwfjadkudegcj.supabase.co/functions/v1/create-briefing-from-form"
+  // URL real da API do Supabase para a tabela briefings
+  const webhookUrl = "https://qwbpruywwfjadkudegcj.supabase.co/rest/v1/briefings"
+  const supabaseKey = "SUA_CHAVE_ANON_AQUI" // Instrução para o usuário
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -138,7 +138,8 @@ export function EmailToBoardDialog({ children }: { children: React.ReactNode }) 
                   Dica de Integração
                 </div>
                 <p className="text-[10px] text-blue-300/80 leading-relaxed">
-                  Para integrar com o seu site, configure o seu formulário para enviar um POST JSON para a URL abaixo. Os campos do formulário serão mapeados automaticamente para o cartão.
+                  Para integrar com o seu site, configure o seu formulário para enviar um POST JSON para a URL abaixo. <br/>
+                  <strong>Importante:</strong> Você precisará adicionar o cabeçalho <code>apikey</code> com a sua chave do Supabase.
                 </p>
                 <div className="flex items-center gap-2 pt-1">
                   <Input 
