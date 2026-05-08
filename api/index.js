@@ -857,8 +857,13 @@ module.exports = async function handler(req, res) {
         let filteredProjects = projects || [];
         if (startDate && endDate) {
           filteredProjects = (projects || []).filter(p => {
-            const createdAt = p.created_at.split('T')[0];
-            return createdAt >= startDate && createdAt <= endDate;
+            if (!p.created_at) return false;
+            try {
+              const createdAt = p.created_at.split('T')[0];
+              return createdAt >= startDate && createdAt <= endDate;
+            } catch (e) {
+              return false;
+            }
           });
         }
         
@@ -874,19 +879,28 @@ module.exports = async function handler(req, res) {
           console.error('❌ [API] Erro ao buscar despesas:', expensesError);
         }
         
+        const safeExpenses = expenses || [];
+        
         // Calcular faturamento (soma de paid_value) e aReceber (soma de project_value - paid_value)
         const faturamento = filteredProjects.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0);
         const aReceber = filteredProjects.reduce((sum, p) => {
-          const val = (parseFloat(p.project_value) || 0) - (parseFloat(p.paid_value) || 0);
-          return sum + (val > 0 ? val : 0);
+          const projectVal = parseFloat(p.project_value) || 0;
+          const paidVal = parseFloat(p.paid_value) || 0;
+          const diff = projectVal - paidVal;
+          return sum + (diff > 0 ? diff : 0);
         }, 0);
         
-        // Calcular despesas do período
+        // Calcular despesas do período com proteção contra erros
         let despesas = 0;
-        if (period === 'annual') {
-          despesas = calculateAnnualExpenses(expenses, year);
-        } else {
-          despesas = calculateMonthlyExpenses(expenses, year, month);
+        try {
+          if (period === 'annual') {
+            despesas = calculateAnnualExpenses(safeExpenses, parseInt(year));
+          } else {
+            despesas = calculateMonthlyExpenses(safeExpenses, parseInt(year), parseInt(month));
+          }
+        } catch (calcError) {
+          console.error('❌ [API] Erro no cálculo de despesas:', calcError);
+          despesas = 0;
         }
         
         const lucro = faturamento - despesas;
