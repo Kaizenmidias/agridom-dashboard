@@ -56,15 +56,41 @@ const AcessosPage = () => {
     }
   };
 
-  const copyToClipboard = (text: string | undefined, fieldId: string) => {
+  const copyToClipboard = async (text: string | undefined, fieldId: string) => {
     if (!text) return;
-    navigator.clipboard.writeText(text);
-    setCopiedId(fieldId);
-    setTimeout(() => setCopiedId(null), 2000);
-    toast({
-      title: "Copiado",
-      description: "Informação copiada para a área de transferência.",
-    });
+    
+    try {
+      // Tentar usar a API moderna primeiro
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback para o método antigo se não estiver em contexto seguro ou API indisponível
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+      
+      setCopiedId(fieldId);
+      setTimeout(() => setCopiedId(null), 2000);
+      toast({
+        title: "Copiado",
+        description: "Informação copiada para a área de transferência.",
+      });
+    } catch (err) {
+      console.error('Erro ao copiar:', err);
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar automaticamente. Por favor, selecione e copie manualmente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const openUrl = (url: string | undefined) => {
@@ -194,7 +220,7 @@ const AcessosPage = () => {
                     <div className="p-2 bg-muted/50 rounded text-xs space-y-1 w-full">
                       <p className="text-muted-foreground uppercase text-[10px]">Senha</p>
                       <div className="flex justify-between items-center group">
-                        <span className="truncate font-medium">••••••••</span>
+                        <span className="truncate font-medium">{acesso.wordpress_password || '-'}</span>
                         {acesso.wordpress_password && (
                           <Button 
                             variant="ghost" 
@@ -249,7 +275,7 @@ const AcessosPage = () => {
                     <div className="p-2 bg-muted/50 rounded text-xs space-y-1 w-full">
                       <p className="text-muted-foreground uppercase text-[10px]">Senha</p>
                       <div className="flex justify-between items-center group">
-                        <span className="truncate font-medium">••••••••</span>
+                        <span className="truncate font-medium">{acesso.domain_password || '-'}</span>
                         {acesso.domain_password && (
                           <Button 
                             variant="ghost" 
@@ -304,7 +330,7 @@ const AcessosPage = () => {
                     <div className="p-2 bg-muted/50 rounded text-xs space-y-1 w-full">
                       <p className="text-muted-foreground uppercase text-[10px]">Senha</p>
                       <div className="flex justify-between items-center group">
-                        <span className="truncate font-medium">••••••••</span>
+                        <span className="truncate font-medium">{acesso.hosting_password || '-'}</span>
                         {acesso.hosting_password && (
                           <Button 
                             variant="ghost" 

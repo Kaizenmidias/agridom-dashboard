@@ -175,7 +175,6 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
                 <Label htmlFor="wordpress_password">Senha</Label>
                 <Input
                   id="wordpress_password"
-                  type="password"
                   value={acessoForm.wordpress_password}
                   onChange={(e) => setAcessoForm(prev => ({ ...prev, wordpress_password: e.target.value }))}
                   placeholder="Senha WordPress"
@@ -216,7 +215,6 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
                 <Label htmlFor="domain_password">Senha</Label>
                 <Input
                   id="domain_password"
-                  type="password"
                   value={acessoForm.domain_password}
                   onChange={(e) => setAcessoForm(prev => ({ ...prev, domain_password: e.target.value }))}
                   placeholder="Senha Domínio"
@@ -257,7 +255,6 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
                 <Label htmlFor="hosting_password">Senha</Label>
                 <Input
                   id="hosting_password"
-                  type="password"
                   value={acessoForm.hosting_password}
                   onChange={(e) => setAcessoForm(prev => ({ ...prev, hosting_password: e.target.value }))}
                   placeholder="Senha Hospedagem"
