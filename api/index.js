@@ -799,14 +799,14 @@ module.exports = async function handler(req, res) {
         console.log(`📊 [API] Filtros: User=${numericUserId}, Periodo=${startDate} até ${endDate}`);
 
         // 3. Buscar Projetos (Faturamento e A Receber)
+        // Buscamos TODOS os projetos do usuário para processamento local
         const { data: projects, error: pError } = await supabase
           .from('projects')
-          .select('project_value, paid_value, created_at, status')
+          .select('*')
           .eq('user_id', numericUserId);
 
         if (pError) {
           console.error('❌ [API] Erro Supabase Projetos:', pError);
-          // Não travar, continuar com array vazio
         }
 
         // 4. Buscar Despesas
@@ -819,48 +819,55 @@ module.exports = async function handler(req, res) {
           console.error('❌ [API] Erro Supabase Despesas:', eError);
         }
 
-        // 5. Processar Projetos com filtros de data
         const allProjects = projects || [];
+        console.log(`📊 [API] Projetos brutos encontrados no banco: ${allProjects.length}`);
+        
+        // Log para depuração dos valores de cada projeto
+        allProjects.forEach(p => {
+          console.log(`   - Projeto: ${p.name}, Total: ${p.project_value}, Pago: ${p.paid_value}, Data: ${p.created_at}`);
+        });
+
+        // 5. Processar Projetos com filtros de data
         let filteredProjects = allProjects;
         
-        console.log(`📊 [API] Total de projetos brutos: ${allProjects.length}`);
-
         if (startDate && endDate) {
           filteredProjects = allProjects.filter(p => {
             if (!p.created_at) return false;
-            // Pegar apenas a parte da data (YYYY-MM-DD)
-            const pDate = p.created_at.includes('T') ? p.created_at.split('T')[0] : p.created_at;
-            const match = pDate >= startDate && pDate <= endDate;
-            return match;
+            // Normalizar a data do projeto para YYYY-MM-DD
+            const pDate = p.created_at.split('T')[0];
+            return pDate >= startDate && pDate <= endDate;
           });
-          console.log(`📊 [API] Projetos após filtro de data (${startDate} a ${endDate}): ${filteredProjects.length}`);
+          
+          // Se o filtro resultou em zero, mas temos projetos, pode ser fuso horário. 
+          // Vamos tentar um filtro mais permissivo (apenas mês e ano)
+          if (filteredProjects.length === 0 && allProjects.length > 0) {
+            const [y, m] = startDate.split('-');
+            filteredProjects = allProjects.filter(p => p.created_at && p.created_at.startsWith(`${y}-${m}`));
+          }
         }
 
-        // Se o filtro de data resultou em zero projetos, mas existem projetos no banco, 
-        // vamos relaxar o filtro para o mês/ano para garantir que capturamos projetos criados no dia 1 ou com fuso horário
-        if (filteredProjects.length === 0 && allProjects.length > 0 && startDate) {
-          const [year, month] = startDate.split('-');
-          filteredProjects = allProjects.filter(p => {
-            if (!p.created_at) return false;
-            return p.created_at.startsWith(`${year}-${month}`);
-          });
-          console.log(`📊 [API] Projetos após filtro relaxado (Mês/Ano): ${filteredProjects.length}`);
-        }
+        // CÁLCULO DE FATURAMENTO: Soma de paid_value
+        // CÁLCULO DE A RECEBER: Soma de (project_value - paid_value)
+        let faturamento = 0;
+        let totalProjetos = 0;
 
-        // CALCULO DE FATURAMENTO: Soma de paid_value de TODOS os projetos (independente de quando foram criados)
-        // que tiveram pagamentos ou estão ativos, OU apenas os do período? 
-        // Para ser condizente com o filtro, usamos os projetos filtrados.
-        const faturamento = filteredProjects.reduce((sum, p) => {
-          const val = parseFloat(p.paid_value) || 0;
-          return sum + val;
-        }, 0);
+        filteredProjects.forEach(p => {
+          // Converter para número garantindo que valores como "1.500,00" ou nulos sejam tratados
+          const paid = typeof p.paid_value === 'string' 
+            ? parseFloat(p.paid_value.replace(/\./g, '').replace(',', '.')) 
+            : (parseFloat(p.paid_value) || 0);
+            
+          const total = typeof p.project_value === 'string' 
+            ? parseFloat(p.project_value.replace(/\./g, '').replace(',', '.')) 
+            : (parseFloat(p.project_value) || 0);
 
-        const totalGeral = filteredProjects.reduce((sum, p) => {
-          const val = parseFloat(p.project_value) || 0;
-          return sum + val;
-        }, 0);
+          faturamento += paid;
+          totalProjetos += total;
+        });
+
+        const aReceber = totalProjetos - faturamento;
         
-        const aReceber = totalGeral - faturamento;
+        console.log(`📈 [API] Resultado Final - Faturamento: ${faturamento}, A Receber: ${aReceber}, Filtro: ${startDate} a ${endDate}`);
 
         // 6. Processar Despesas (Mensal ou Anual)
         let totalDespesas = 0;
