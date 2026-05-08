@@ -822,16 +822,44 @@ module.exports = async function handler(req, res) {
         // 5. Processar Projetos com filtros de data
         const allProjects = projects || [];
         let filteredProjects = allProjects;
+        
+        console.log(`📊 [API] Total de projetos brutos: ${allProjects.length}`);
+
         if (startDate && endDate) {
           filteredProjects = allProjects.filter(p => {
             if (!p.created_at) return false;
-            const pDate = p.created_at.split('T')[0];
-            return pDate >= startDate && pDate <= endDate;
+            // Pegar apenas a parte da data (YYYY-MM-DD)
+            const pDate = p.created_at.includes('T') ? p.created_at.split('T')[0] : p.created_at;
+            const match = pDate >= startDate && pDate <= endDate;
+            return match;
           });
+          console.log(`📊 [API] Projetos após filtro de data (${startDate} a ${endDate}): ${filteredProjects.length}`);
         }
 
-        const faturamento = filteredProjects.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0);
-        const totalGeral = filteredProjects.reduce((sum, p) => sum + (parseFloat(p.project_value) || 0), 0);
+        // Se o filtro de data resultou em zero projetos, mas existem projetos no banco, 
+        // vamos relaxar o filtro para o mês/ano para garantir que capturamos projetos criados no dia 1 ou com fuso horário
+        if (filteredProjects.length === 0 && allProjects.length > 0 && startDate) {
+          const [year, month] = startDate.split('-');
+          filteredProjects = allProjects.filter(p => {
+            if (!p.created_at) return false;
+            return p.created_at.startsWith(`${year}-${month}`);
+          });
+          console.log(`📊 [API] Projetos após filtro relaxado (Mês/Ano): ${filteredProjects.length}`);
+        }
+
+        // CALCULO DE FATURAMENTO: Soma de paid_value de TODOS os projetos (independente de quando foram criados)
+        // que tiveram pagamentos ou estão ativos, OU apenas os do período? 
+        // Para ser condizente com o filtro, usamos os projetos filtrados.
+        const faturamento = filteredProjects.reduce((sum, p) => {
+          const val = parseFloat(p.paid_value) || 0;
+          return sum + val;
+        }, 0);
+
+        const totalGeral = filteredProjects.reduce((sum, p) => {
+          const val = parseFloat(p.project_value) || 0;
+          return sum + val;
+        }, 0);
+        
         const aReceber = totalGeral - faturamento;
 
         // 6. Processar Despesas (Mensal ou Anual)
