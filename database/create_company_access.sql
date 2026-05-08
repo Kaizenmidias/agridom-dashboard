@@ -2,10 +2,13 @@
 CREATE TABLE IF NOT EXISTS company_access (
     id SERIAL PRIMARY KEY,
     company_name VARCHAR(255) NOT NULL,
+    wordpress_url VARCHAR(255),
     wordpress_login VARCHAR(255),
     wordpress_password VARCHAR(255),
+    domain_url VARCHAR(255),
     domain_login VARCHAR(255),
     domain_password VARCHAR(255),
+    hosting_url VARCHAR(255),
     hosting_login VARCHAR(255),
     hosting_password VARCHAR(255),
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

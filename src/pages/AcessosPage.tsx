@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Key, Globe, Server, Laptop, Search, Copy, Check } from 'lucide-react';
+import { Plus, Edit, Trash2, Key, Globe, Server, Laptop, Search, Copy, Check, ExternalLink } from 'lucide-react';
 import { getCompanyAccesses, deleteCompanyAccess, CompanyAccess } from '@/api/crud';
 import { NovoAcessoDialog } from '@/components/novo-acesso-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -65,6 +65,12 @@ const AcessosPage = () => {
       title: "Copiado",
       description: "Informação copiada para a área de transferência.",
     });
+  };
+
+  const openUrl = (url: string | undefined) => {
+    if (!url) return;
+    const formattedUrl = url.startsWith('http') ? url : `https://${url}`;
+    window.open(formattedUrl, '_blank');
   };
 
   const filteredAcessos = acessos.filter(acesso => 
@@ -148,15 +154,28 @@ const AcessosPage = () => {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-4 space-y-4">
+              <CardContent className="pt-4 space-y-6">
                 {/* WordPress */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                    <Laptop className="h-4 w-4" />
-                    WordPress
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b pb-1">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                      <Laptop className="h-4 w-4" />
+                      WordPress
+                    </div>
+                    {acesso.wordpress_url && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2 text-[10px] gap-1"
+                        onClick={() => openUrl(acesso.wordpress_url)}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Acessar
+                      </Button>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1">
+                  <div className="flex flex-col gap-2">
+                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1 w-full">
                       <p className="text-muted-foreground uppercase text-[10px]">Login</p>
                       <div className="flex justify-between items-center group">
                         <span className="truncate font-medium">{acesso.wordpress_login || '-'}</span>
@@ -172,7 +191,7 @@ const AcessosPage = () => {
                         )}
                       </div>
                     </div>
-                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1">
+                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1 w-full">
                       <p className="text-muted-foreground uppercase text-[10px]">Senha</p>
                       <div className="flex justify-between items-center group">
                         <span className="truncate font-medium">••••••••</span>
@@ -192,13 +211,26 @@ const AcessosPage = () => {
                 </div>
 
                 {/* Domínio */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-green-600">
-                    <Globe className="h-4 w-4" />
-                    Domínio
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b pb-1">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-green-600">
+                      <Globe className="h-4 w-4" />
+                      Domínio
+                    </div>
+                    {acesso.domain_url && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2 text-[10px] gap-1"
+                        onClick={() => openUrl(acesso.domain_url)}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Acessar
+                      </Button>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1">
+                  <div className="flex flex-col gap-2">
+                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1 w-full">
                       <p className="text-muted-foreground uppercase text-[10px]">Login</p>
                       <div className="flex justify-between items-center group">
                         <span className="truncate font-medium">{acesso.domain_login || '-'}</span>
@@ -214,7 +246,7 @@ const AcessosPage = () => {
                         )}
                       </div>
                     </div>
-                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1">
+                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1 w-full">
                       <p className="text-muted-foreground uppercase text-[10px]">Senha</p>
                       <div className="flex justify-between items-center group">
                         <span className="truncate font-medium">••••••••</span>
@@ -234,13 +266,26 @@ const AcessosPage = () => {
                 </div>
 
                 {/* Hospedagem */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-orange-600">
-                    <Server className="h-4 w-4" />
-                    Hospedagem
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b pb-1">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-orange-600">
+                      <Server className="h-4 w-4" />
+                      Hospedagem
+                    </div>
+                    {acesso.hosting_url && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2 text-[10px] gap-1"
+                        onClick={() => openUrl(acesso.hosting_url)}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Acessar
+                      </Button>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1">
+                  <div className="flex flex-col gap-2">
+                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1 w-full">
                       <p className="text-muted-foreground uppercase text-[10px]">Login</p>
                       <div className="flex justify-between items-center group">
                         <span className="truncate font-medium">{acesso.hosting_login || '-'}</span>
@@ -256,7 +301,7 @@ const AcessosPage = () => {
                         )}
                       </div>
                     </div>
-                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1">
+                    <div className="p-2 bg-muted/50 rounded text-xs space-y-1 w-full">
                       <p className="text-muted-foreground uppercase text-[10px]">Senha</p>
                       <div className="flex justify-between items-center group">
                         <span className="truncate font-medium">••••••••</span>

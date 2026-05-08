@@ -29,10 +29,13 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
 
   const [acessoForm, setAcessoForm] = useState({
     company_name: acesso?.company_name || "",
+    wordpress_url: acesso?.wordpress_url || "",
     wordpress_login: acesso?.wordpress_login || "",
     wordpress_password: acesso?.wordpress_password || "",
+    domain_url: acesso?.domain_url || "",
     domain_login: acesso?.domain_login || "",
     domain_password: acesso?.domain_password || "",
+    hosting_url: acesso?.hosting_url || "",
     hosting_login: acesso?.hosting_login || "",
     hosting_password: acesso?.hosting_password || ""
   })
@@ -41,10 +44,13 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
     if (!isEditing) {
       setAcessoForm({
         company_name: "",
+        wordpress_url: "",
         wordpress_login: "",
         wordpress_password: "",
+        domain_url: "",
         domain_login: "",
         domain_password: "",
+        hosting_url: "",
         hosting_login: "",
         hosting_password: ""
       })
@@ -134,13 +140,26 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
               onChange={(e) => setAcessoForm(prev => ({ ...prev, company_name: e.target.value }))}
               placeholder="Digite o nome da empresa"
               disabled={loading}
+              className="w-full"
               required
             />
           </div>
 
+          {/* WordPress */}
           <div className="space-y-4 border p-4 rounded-lg bg-muted/30">
             <h3 className="font-semibold flex items-center gap-2">WordPress</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="wordpress_url">URL do Painel</Label>
+                <Input
+                  id="wordpress_url"
+                  value={acessoForm.wordpress_url}
+                  onChange={(e) => setAcessoForm(prev => ({ ...prev, wordpress_url: e.target.value }))}
+                  placeholder="https://exemplo.com.br/wp-admin"
+                  disabled={loading}
+                  className="w-full"
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="wordpress_login">Login</Label>
                 <Input
@@ -149,6 +168,7 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
                   onChange={(e) => setAcessoForm(prev => ({ ...prev, wordpress_login: e.target.value }))}
                   placeholder="Login WordPress"
                   disabled={loading}
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
@@ -160,14 +180,27 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
                   onChange={(e) => setAcessoForm(prev => ({ ...prev, wordpress_password: e.target.value }))}
                   placeholder="Senha WordPress"
                   disabled={loading}
+                  className="w-full"
                 />
               </div>
             </div>
           </div>
 
+          {/* Domínio */}
           <div className="space-y-4 border p-4 rounded-lg bg-muted/30">
             <h3 className="font-semibold flex items-center gap-2">Domínio</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="domain_url">URL da Registradora</Label>
+                <Input
+                  id="domain_url"
+                  value={acessoForm.domain_url}
+                  onChange={(e) => setAcessoForm(prev => ({ ...prev, domain_url: e.target.value }))}
+                  placeholder="https://registro.br ou https://godaddy.com"
+                  disabled={loading}
+                  className="w-full"
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="domain_login">Login</Label>
                 <Input
@@ -176,6 +209,7 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
                   onChange={(e) => setAcessoForm(prev => ({ ...prev, domain_login: e.target.value }))}
                   placeholder="Login Domínio"
                   disabled={loading}
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
@@ -187,14 +221,27 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
                   onChange={(e) => setAcessoForm(prev => ({ ...prev, domain_password: e.target.value }))}
                   placeholder="Senha Domínio"
                   disabled={loading}
+                  className="w-full"
                 />
               </div>
             </div>
           </div>
 
+          {/* Hospedagem */}
           <div className="space-y-4 border p-4 rounded-lg bg-muted/30">
             <h3 className="font-semibold flex items-center gap-2">Hospedagem</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="hosting_url">URL do Painel de Hospedagem</Label>
+                <Input
+                  id="hosting_url"
+                  value={acessoForm.hosting_url}
+                  onChange={(e) => setAcessoForm(prev => ({ ...prev, hosting_url: e.target.value }))}
+                  placeholder="https://cpanel.exemplo.com ou https://hpanel.hostinger.com"
+                  disabled={loading}
+                  className="w-full"
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="hosting_login">Login</Label>
                 <Input
@@ -203,6 +250,7 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
                   onChange={(e) => setAcessoForm(prev => ({ ...prev, hosting_login: e.target.value }))}
                   placeholder="Login Hospedagem"
                   disabled={loading}
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
@@ -214,6 +262,7 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
                   onChange={(e) => setAcessoForm(prev => ({ ...prev, hosting_password: e.target.value }))}
                   placeholder="Senha Hospedagem"
                   disabled={loading}
+                  className="w-full"
                 />
               </div>
             </div>
@@ -228,7 +277,7 @@ export function NovoAcessoDialog({ children, acesso, onAcessoChange }: NovoAcess
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading} className="px-8">
               {loading ? 'Salvando...' : 'Salvar Acessos'}
             </Button>
           </div>

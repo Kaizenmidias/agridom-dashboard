@@ -188,10 +188,13 @@ export interface InsertBriefing {
 export interface CompanyAccess {
   id: number;
   company_name: string;
+  wordpress_url?: string;
   wordpress_login?: string;
   wordpress_password?: string;
+  domain_url?: string;
   domain_login?: string;
   domain_password?: string;
+  hosting_url?: string;
   hosting_login?: string;
   hosting_password?: string;
   user_id: number;
@@ -201,10 +204,13 @@ export interface CompanyAccess {
 
 export interface InsertCompanyAccess {
   company_name: string;
+  wordpress_url?: string;
   wordpress_login?: string;
   wordpress_password?: string;
+  domain_url?: string;
   domain_login?: string;
   domain_password?: string;
+  hosting_url?: string;
   hosting_login?: string;
   hosting_password?: string;
   user_id: number;
