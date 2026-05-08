@@ -9,6 +9,7 @@ import { format, isPast } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { getBriefings, updateBriefing, deleteBriefing, Briefing } from "@/api/crud"
 import { NovoBriefingDialog } from "@/components/novo-briefing-dialog"
+import { EmailToBoardDialog } from "@/components/email-to-board-dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -278,6 +279,12 @@ export default function BriefingsPage() {
           <GripVertical className="h-3.5 w-3.5" />
           Quadro
         </div>
+        <EmailToBoardDialog>
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer hover:text-gray-300">
+            <Mail className="h-3.5 w-3.5" />
+            E-mail para quadro
+          </div>
+        </EmailToBoardDialog>
         <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer hover:text-gray-300">
           <Share2 className="h-3.5 w-3.5" />
           Mudar de quadros
