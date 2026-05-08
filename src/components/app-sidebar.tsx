@@ -38,11 +38,12 @@ export function AppSidebar() {
   const getFilteredItems = () => {
     if (!user) return []
     
-    // Para o usuário Ricardo, mostrar apenas Briefings, Códigos e CRM
+    // Para o usuário Ricardo, mostrar apenas Briefings, Códigos, Acessos e CRM
     if (user.email === 'ricardorpc11@gmail.com') {
       return allItems.filter(item => 
         item.title === 'Briefings' || 
         item.title === 'Códigos' || 
+        item.title === 'Acessos' || 
         item.title === 'CRM'
       )
     }
