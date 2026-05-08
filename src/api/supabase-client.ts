@@ -995,17 +995,17 @@ export const dashboardAPI = {
       // Mapear dados do backend para estrutura esperada pelo frontend
       const mappedData: DashboardStats = {
         projects: {
-          total_projects: Number(backendData?.projects?.total_projects || 0),
-          active_projects: Number(backendData?.projects?.active_projects || 0),
-          completed_projects: Number(backendData?.projects?.completed_projects || 0),
-          paused_projects: Number(backendData?.projects?.paused_projects || 0),
-          total_project_value: Number(backendData?.projects?.total_project_value || backendData?.current_period?.total_project_value || 0),
-          total_paid_value: Number(backendData?.projects?.total_paid_value || backendData?.current_period?.revenue || 0)
+          total_projects: Number(backendData?.total_projects || 0),
+          active_projects: Number(backendData?.active_projects || 0),
+          completed_projects: Number(backendData?.completed_projects || 0),
+          paused_projects: Number(backendData?.paused_projects || 0),
+          total_project_value: Number(backendData?.faturamento || 0) + Number(backendData?.aReceber || 0),
+          total_paid_value: Number(backendData?.faturamento || 0)
         },
         expenses: {
-          total_expenses: Number(backendData?.expenses?.total_expenses || 0),
-          total_expenses_amount: Number(backendData?.expenses?.total_expenses_amount || backendData?.current_period?.expenses || 0),
-          expense_categories: Number(backendData?.expenses?.expense_categories || 0)
+          total_expenses: Number(backendData?.total_expenses || 0),
+          total_expenses_amount: Number(backendData?.despesas || 0),
+          expense_categories: Number(backendData?.expense_categories || 0)
         },
         previous_period: {
           revenue: Number(backendData?.previous_period?.revenue || 0),
@@ -1013,12 +1013,12 @@ export const dashboardAPI = {
           receivable: Number(backendData?.previous_period?.receivable || 0)
         },
         current_period: {
-          revenue: Number(backendData?.current_period?.revenue || 0),
-          expenses: Number(backendData?.current_period?.expenses || 0),
-          profit: Number(backendData?.current_period?.profit || 0),
-          receivable: Number(backendData?.current_period?.receivable || backendData?.current_receivable || 0)
+          revenue: Number(backendData?.faturamento || 0),
+          expenses: Number(backendData?.despesas || 0),
+          profit: Number(backendData?.lucro || 0),
+          receivable: Number(backendData?.aReceber || 0)
         },
-        current_receivable: Number(backendData?.current_receivable || backendData?.current_period?.receivable || 0),
+        current_receivable: Number(backendData?.aReceber || 0),
         revenue_by_month: Array.isArray(backendData?.revenue_by_month) ? backendData.revenue_by_month.map((item: any) => ({
           month: String(item.month),
           revenue: Number(item.revenue || 0),

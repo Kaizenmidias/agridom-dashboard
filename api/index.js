@@ -793,11 +793,8 @@ module.exports = async function handler(req, res) {
         const url = new URL(req.url, `http://${req.headers.host}`);
         const startDate = url.searchParams.get('startDate');
         const endDate = url.searchParams.get('endDate');
-        const previousStartDate = url.searchParams.get('previousStartDate');
-        const previousEndDate = url.searchParams.get('previousEndDate');
-        const targetYear = url.searchParams.get('targetYear');
         
-        // Determinar se é filtro anual ou mensal baseado nas datas
+        // Determinar o período para despesas
         let period = 'monthly';
         let year = new Date().getFullYear();
         let month = new Date().getMonth() + 1;
@@ -819,57 +816,43 @@ module.exports = async function handler(req, res) {
             year = startDateObj.getFullYear();
             month = startDateObj.getMonth() + 1;
           }
-        } else if (targetYear) {
-          year = parseInt(targetYear);
         }
         
-        console.log('📊 [API] Dashboard stats - Filtros recebidos:', {
+        console.log('📊 [API] Dashboard stats - Filtros:', {
           startDate,
           endDate,
-          previousStartDate,
-          previousEndDate,
           period,
-          year: parseInt(year),
-          month: parseInt(month),
-          authUserId: decoded.userId,
-          numericUserId: numericUserId,
-          email: decoded.email
+          year,
+          month,
+          numericUserId
         });
         
-        // Buscar projetos do período atual (usando created_at para filtro de período)
+        // Buscar TODOS os projetos do usuário (sem filtro de data por enquanto para garantir que pegamos tudo)
+        // O filtro de data será aplicado via código para maior flexibilidade
         let projectsQuery = supabase
           .from('projects')
-          .select('id, name, project_value, paid_value, status, created_at, delivery_date')
-          .eq('user_id', decoded.userId);
-        
-        if (startDate && endDate) {
-          projectsQuery = projectsQuery
-            .gte('created_at', startDate)
-            .lte('created_at', endDate);
-        }
+          .select('id, name, project_value, paid_value, status, created_at')
+          .eq('user_id', numericUserId);
         
         const { data: projects, error: projectsError } = await projectsQuery;
         
         if (projectsError) {
           console.error('❌ [API] Erro ao buscar projetos:', projectsError);
-          return sendResponse(500, {
-            success: false,
-            error: 'Erro ao buscar projetos'
+          return sendResponse(500, { success: false, error: 'Erro ao buscar projetos' });
+        }
+        
+        // Filtrar projetos por data no código se necessário
+        let filteredProjects = projects || [];
+        if (startDate && endDate) {
+          filteredProjects = (projects || []).filter(p => {
+            const createdAt = p.created_at.split('T')[0];
+            return createdAt >= startDate && createdAt <= endDate;
           });
         }
         
-        console.log('📊 [API] Projetos encontrados:', {
-          count: projects?.length || 0,
-          projects: projects?.map(p => ({
-            id: p.id,
-            name: p.name,
-            project_value: p.project_value,
-            paid_value: p.paid_value,
-            created_at: p.created_at
-          }))
-        });
+        console.log(`📊 [API] Projetos filtrados (${filteredProjects.length}/${projects?.length || 0})`);
         
-        // Buscar todas as despesas do usuário (sem filtro de data, pois o cálculo será feito dinamicamente)
+        // Buscar todas as despesas do usuário
         const { data: expenses, error: expensesError } = await supabase
           .from('expenses')
           .select('id, description, amount, billing_type, date, monthly_value')
@@ -879,63 +862,39 @@ module.exports = async function handler(req, res) {
           console.error('❌ [API] Erro ao buscar despesas:', expensesError);
         }
         
-        console.log('💰 [API] Despesas encontradas:', {
-          count: expenses?.length || 0,
-          expenses: expenses?.map(e => ({
-            id: e.id,
-            description: e.description,
-            amount: e.amount,
-            billing_type: e.billing_type,
-            monthly_value: e.monthly_value,
-            date: e.date
-          }))
-        });
+        // Calcular faturamento (soma de paid_value) e aReceber (soma de project_value - paid_value)
+        const faturamento = filteredProjects.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0);
+        const aReceber = filteredProjects.reduce((sum, p) => {
+          const val = (parseFloat(p.project_value) || 0) - (parseFloat(p.paid_value) || 0);
+          return sum + (val > 0 ? val : 0);
+        }, 0);
         
-        // Calcular valores dos cards conforme especificação correta
-        // faturamento = soma de paid_value dos projetos do período
-        const faturamento = projects?.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0) || 0;
-        // aReceber = soma de (project_value - paid_value) dos projetos do período
-        const aReceber = projects?.reduce((sum, p) => {
-          const projectValue = parseFloat(p.project_value) || 0;
-          const paidValue = parseFloat(p.paid_value) || 0;
-          return sum + (projectValue - paidValue);
-        }, 0) || 0;
-        // Calcular despesas usando as novas funções utilitárias
+        // Calcular despesas do período
         let despesas = 0;
-        
         if (period === 'annual') {
-          // Para filtro anual, somar os 12 meses do ano selecionado
-          despesas = calculateAnnualExpenses(expenses, parseInt(year));
-          console.log(`💰 [API] Despesas anuais calculadas para ${year}: ${despesas}`);
+          despesas = calculateAnnualExpenses(expenses, year);
         } else {
-          // Para filtro mensal, calcular apenas o mês selecionado
-          despesas = calculateMonthlyExpenses(expenses, parseInt(year), parseInt(month));
-          console.log(`💰 [API] Despesas mensais calculadas para ${month}/${year}: ${despesas}`);
+          despesas = calculateMonthlyExpenses(expenses, year, month);
         }
-        // lucro = faturamento - despesas
+        
         const lucro = faturamento - despesas;
         
-        console.log('📈 [API] Valores calculados dos cards:', {
-          faturamento,
-          aReceber,
-          despesas,
-          lucro
-        });
+        console.log('📈 [API] Resultado:', { faturamento, aReceber, despesas, lucro });
         
-        // Retornar no formato esperado pelo frontend
         return sendResponse(200, {
           faturamento,
           aReceber,
           despesas,
-          lucro
+          lucro,
+          total_projects: filteredProjects.length,
+          active_projects: filteredProjects.filter(p => p.status === 'active').length,
+          completed_projects: filteredProjects.filter(p => p.status === 'completed').length,
+          paused_projects: filteredProjects.filter(p => p.status === 'paused').length
         });
         
       } catch (error) {
-        console.error('❌ [API] Erro ao buscar estatísticas:', error);
-        return sendResponse(401, {
-          success: false,
-          error: error.message
-        });
+        console.error('❌ [API] Erro fatal:', error);
+        return sendResponse(401, { success: false, error: error.message });
       }
     }
     
