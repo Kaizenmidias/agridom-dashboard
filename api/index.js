@@ -759,168 +759,97 @@ module.exports = async function handler(req, res) {
     }
 
     // Rota de estatísticas do dashboard
-    if (req.url === '/dashboard/stats' || req.url === '/api/dashboard/stats' || req.url.startsWith('/api/dashboard/stats?')) {
+    if (req.url.includes('/api/dashboard/stats')) {
       try {
+        console.log('📊 [API] Iniciando busca de estatísticas...');
         const decoded = await authenticateToken(req);
         
         if (!supabase) {
-          return sendResponse(200, {
-            faturamento: 0,
-            aReceber: 0,
-            despesas: 0,
-            lucro: 0
-          });
+          console.error('❌ [API] Supabase não inicializado');
+          return sendResponse(500, { success: false, error: 'Erro de configuração do banco' });
         }
         
-        // Buscar o ID numérico do usuário baseado no email
-        let numericUserId;
-        try {
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('id')
-            .eq('email', decoded.email)
-            .single();
-            
-          if (userError || !userData) {
-            console.error('❌ [API] Erro ao buscar usuário:', userError);
-            // Fallback para tentar buscar pelo ID se for numérico
-            if (!isNaN(decoded.userId)) {
-              numericUserId = parseInt(decoded.userId);
-            } else {
-              return sendResponse(404, {
-                success: false,
-                error: 'Usuário não encontrado'
-              });
-            }
-          } else {
-            numericUserId = userData.id;
-          }
-        } catch (err) {
-          console.error('❌ [API] Erro na consulta de usuário:', err);
-          // Fallback se falhar
-          numericUserId = 25; // ID padrão do Ricardo como última opção
-        }
-        
-        // Parse dos query params para filtros de data
-        const url = new URL(req.url, `http://${req.headers.host}`);
-        const startDate = url.searchParams.get('startDate');
-        const endDate = url.searchParams.get('endDate');
-        
-        // Determinar o período para despesas
-        let period = 'monthly';
-        let year = new Date().getFullYear();
-        let month = new Date().getMonth() + 1;
-        
-        if (startDate && endDate) {
-          const startDateObj = new Date(startDate);
-          const endDateObj = new Date(endDate);
+        // 1. Obter o ID numérico do usuário (essencial para filtrar despesas)
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', decoded.email)
+          .single();
           
-          // Detectar filtro anual: mesmo ano e período de janeiro a dezembro
-          const isYearlyFilter = startDateObj.getFullYear() === endDateObj.getFullYear() && 
-                                startDateObj.getMonth() === 0 && 
-                                endDateObj.getMonth() === 11;
-          
-          if (isYearlyFilter) {
-            period = 'annual';
-            year = startDateObj.getFullYear();
-          } else {
-            period = 'monthly';
-            year = startDateObj.getFullYear();
-            month = startDateObj.getMonth() + 1;
-          }
-        }
+        const numericUserId = userData?.id || 25; // Fallback para o ID do Ricardo
         
-        console.log('📊 [API] Dashboard stats - Filtros:', {
-          startDate,
-          endDate,
-          period,
-          year,
-          month,
-          numericUserId
-        });
+        // 2. Extrair parâmetros da URL de forma segura
+        const urlObj = new URL(req.url, `https://${req.headers.host || 'agridom-dashboard.vercel.app'}`);
+        const startDate = urlObj.searchParams.get('startDate');
+        const endDate = urlObj.searchParams.get('endDate');
         
-        // Buscar TODOS os projetos do usuário (sem filtro de data por enquanto para garantir que pegamos tudo)
-        // O filtro de data será aplicado via código para maior flexibilidade
-        let projectsQuery = supabase
+        console.log(`📊 [API] Filtros: User=${numericUserId}, Periodo=${startDate} até ${endDate}`);
+
+        // 3. Buscar Projetos (Faturamento e A Receber)
+        // Buscamos todos os projetos do usuário e filtramos no código para evitar erros de SQL
+        const { data: projects, error: pError } = await supabase
           .from('projects')
-          .select('id, name, project_value, paid_value, status, created_at')
+          .select('project_value, paid_value, created_at, status')
           .eq('user_id', numericUserId);
-        
-        const { data: projects, error: projectsError } = await projectsQuery;
-        
-        if (projectsError) {
-          console.error('❌ [API] Erro ao buscar projetos:', projectsError);
-          return sendResponse(500, { success: false, error: 'Erro ao buscar projetos' });
-        }
-        
-        // Filtrar projetos por data no código se necessário
+
+        if (pError) throw pError;
+
+        // 4. Buscar Despesas
+        const { data: expenses, error: eError } = await supabase
+          .from('expenses')
+          .select('amount, billing_type, date, monthly_value')
+          .eq('user_id', numericUserId);
+
+        if (eError) throw eError;
+
+        // 5. Processar Projetos com filtros de data
         let filteredProjects = projects || [];
         if (startDate && endDate) {
-          filteredProjects = (projects || []).filter(p => {
+          filteredProjects = filteredProjects.filter(p => {
             if (!p.created_at) return false;
-            try {
-              const createdAt = p.created_at.split('T')[0];
-              return createdAt >= startDate && createdAt <= endDate;
-            } catch (e) {
-              return false;
-            }
+            const pDate = p.created_at.split('T')[0];
+            return pDate >= startDate && pDate <= endDate;
           });
         }
+
+        const faturamento = filteredProjects.reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0);
+        const totalGeral = filteredProjects.reduce((sum, p) => sum + (Number(p.project_value) || 0), 0);
+        const aReceber = totalGeral - faturamento;
+
+        // 6. Processar Despesas (Mensal ou Anual)
+        let totalDespesas = 0;
+        const targetYear = startDate ? new Date(startDate).getUTCFullYear() : new Date().getFullYear();
+        const targetMonth = startDate ? new Date(startDate).getUTCMonth() + 1 : new Date().getMonth() + 1;
         
-        console.log(`📊 [API] Projetos filtrados (${filteredProjects.length}/${projects?.length || 0})`);
-        
-        // Buscar todas as despesas do usuário
-        const { data: expenses, error: expensesError } = await supabase
-          .from('expenses')
-          .select('id, description, amount, billing_type, date, monthly_value')
-          .eq('user_id', numericUserId);
-        
-        if (expensesError) {
-          console.error('❌ [API] Erro ao buscar despesas:', expensesError);
+        // Verificar se é filtro anual (Jan a Dez)
+        const isAnnual = startDate && endDate && startDate.endsWith('-01-01') && endDate.endsWith('-12-31');
+
+        if (isAnnual) {
+          totalDespesas = calculateAnnualExpenses(expenses || [], targetYear);
+        } else {
+          totalDespesas = calculateMonthlyExpenses(expenses || [], targetYear, targetMonth);
         }
-        
-        const safeExpenses = expenses || [];
-        
-        // Calcular faturamento (soma de paid_value) e aReceber (soma de project_value - paid_value)
-        const faturamento = filteredProjects.reduce((sum, p) => sum + (parseFloat(p.paid_value) || 0), 0);
-        const aReceber = filteredProjects.reduce((sum, p) => {
-          const projectVal = parseFloat(p.project_value) || 0;
-          const paidVal = parseFloat(p.paid_value) || 0;
-          const diff = projectVal - paidVal;
-          return sum + (diff > 0 ? diff : 0);
-        }, 0);
-        
-        // Calcular despesas do período com proteção contra erros
-        let despesas = 0;
-        try {
-          if (period === 'annual') {
-            despesas = calculateAnnualExpenses(safeExpenses, parseInt(year));
-          } else {
-            despesas = calculateMonthlyExpenses(safeExpenses, parseInt(year), parseInt(month));
-          }
-        } catch (calcError) {
-          console.error('❌ [API] Erro no cálculo de despesas:', calcError);
-          despesas = 0;
-        }
-        
-        const lucro = faturamento - despesas;
-        
-        console.log('📈 [API] Resultado:', { faturamento, aReceber, despesas, lucro });
-        
+
+        const lucro = faturamento - totalDespesas;
+
+        console.log('✅ [API] Estatísticas calculadas com sucesso');
+
         return sendResponse(200, {
-          faturamento,
-          aReceber,
-          despesas,
-          lucro,
+          faturamento: faturamento || 0,
+          aReceber: aReceber > 0 ? aReceber : 0,
+          despesas: totalDespesas || 0,
+          lucro: lucro || 0,
           total_projects: filteredProjects.length,
-          active_projects: filteredProjects.filter(p => p.status === 'active').length,
-          completed_projects: filteredProjects.filter(p => p.status === 'completed').length,
-          paused_projects: filteredProjects.filter(p => p.status === 'paused').length
+          active_projects: filteredProjects.filter(p => p.status === 'active').length
         });
-        
-      } catch (error) {
-        console.error('❌ [API] Erro fatal:', error);
-        return sendResponse(401, { success: false, error: error.message });
+
+      } catch (err) {
+        console.error('❌ [API] Erro Crítico no Dashboard:', err.message);
+        return sendResponse(500, { 
+          success: false, 
+          error: 'Falha ao processar estatísticas',
+          details: err.message 
+        });
       }
     }
     
