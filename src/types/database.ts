@@ -183,7 +183,7 @@ export interface InsertBriefing {
   project_type?: string;
   budget?: number;
   deadline?: string;
-  status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  status?: 'new' | 'developing' | 'changes' | 'completed' | 'standby' | 'pending' | 'in_progress' | 'cancelled';
   priority?: 'low' | 'medium' | 'high';
   user_id: number;
 }
