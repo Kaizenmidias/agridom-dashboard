@@ -766,6 +766,87 @@ export const crudAPI = {
     }
   },
 
+  // Briefings
+  async getBriefings() {
+    try {
+      const { data, error } = await supabase
+        .from('briefings')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Mapear campos para compatibilidade se necessário
+      const mappedData = data?.map(b => ({
+        ...b,
+        client: b.client || b.client_name // Fallback para client_name
+      }))
+
+      return { data: mappedData || [], success: true }
+    } catch (error: any) {
+      return handleSupabaseError(error)
+    }
+  },
+
+  async createBriefing(briefingData: any) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Usuário não autenticado')
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', user.email)
+        .single()
+
+      const briefingWithUserId = {
+        ...briefingData,
+        user_id: briefingData.user_id || userData?.id
+      }
+
+      const { data, error } = await supabase
+        .from('briefings')
+        .insert([briefingWithUserId])
+        .select()
+        .single()
+
+      if (error) throw error
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: null, error: error.message, success: false }
+    }
+  },
+
+  async updateBriefing(id: string, briefingData: any) {
+    try {
+      const { data, error } = await supabase
+        .from('briefings')
+        .update(briefingData)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return { data, success: true }
+    } catch (error: any) {
+      return { data: null, error: error.message, success: false }
+    }
+  },
+
+  async deleteBriefing(id: string) {
+    try {
+      const { error } = await supabase
+        .from('briefings')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      return { success: true }
+    } catch (error: any) {
+      return { error: error.message, success: false }
+    }
+  },
+
   // Dashboard stats
   async getDashboardStats() {
     try {

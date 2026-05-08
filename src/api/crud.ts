@@ -1,10 +1,10 @@
 import { crudAPI } from './supabase-client'
-import { User, Project, Expense, Code, InsertUser, InsertProject, InsertExpense, InsertCode, CompanyAccess, InsertCompanyAccess } from '../types/database'
+import { User, Project, Expense, Code, InsertUser, InsertProject, InsertExpense, InsertCode, CompanyAccess, InsertCompanyAccess, Briefing, InsertBriefing } from '../types/database'
 // API_BASE_URL removido - usando apenas Supabase agora
 import { verifyToken } from './auth'
 
 // Re-exportar tipos para uso em outros componentes
-export type { User, Project, Expense, Code, CompanyAccess };
+export type { User, Project, Expense, Code, CompanyAccess, Briefing };
 
 // Função auxiliar para verificar autenticação usando Supabase
 const checkAuth = async () => {
@@ -96,6 +96,42 @@ export const updateCompanyAccess = async (id: number, accessData: Partial<Compan
 export const deleteCompanyAccess = async (id: number): Promise<void> => {
   await checkAuth()
   const result = await crudAPI.deleteCompanyAccess(id)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+}
+
+// === BRIEFINGS ===
+export const getBriefings = async (): Promise<Briefing[]> => {
+  await checkAuth()
+  const result = await crudAPI.getBriefings()
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
+}
+
+export const createBriefing = async (briefingData: InsertBriefing): Promise<Briefing> => {
+  await checkAuth()
+  const result = await crudAPI.createBriefing(briefingData)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
+}
+
+export const updateBriefing = async (id: string, briefingData: Partial<Briefing>): Promise<Briefing> => {
+  await checkAuth()
+  const result = await crudAPI.updateBriefing(id, briefingData)
+  if (result.error) {
+    throw new Error(result.error)
+  }
+  return result.data
+}
+
+export const deleteBriefing = async (id: string): Promise<void> => {
+  await checkAuth()
+  const result = await crudAPI.deleteBriefing(id)
   if (result.error) {
     throw new Error(result.error)
   }

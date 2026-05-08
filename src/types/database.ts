@@ -160,14 +160,16 @@ export interface InsertCode {
 
 // Tipos de briefings
 export interface Briefing {
-  id: number;
+  id: string;
   title: string;
   content: string;
   client_name?: string;
+  client?: string; // Alias para client_name usado no frontend
   project_type?: string;
   budget?: number;
   deadline?: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  priority: 'low' | 'medium' | 'high';
   user_id: number;
   created_at: string;
   updated_at: string;
@@ -177,10 +179,12 @@ export interface InsertBriefing {
   title: string;
   content: string;
   client_name?: string;
+  client?: string;
   project_type?: string;
   budget?: number;
   deadline?: string;
   status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  priority?: 'low' | 'medium' | 'high';
   user_id: number;
 }
 

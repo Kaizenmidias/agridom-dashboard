@@ -1,41 +1,26 @@
 import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Calendar, User, FileText, Filter } from "lucide-react"
+import { Search, Plus, Calendar, User, MoreVertical, GripVertical } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { crudAPI } from "@/api/supabase-client"
+import { getBriefings, updateBriefing, Briefing } from "@/api/crud"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
-interface Briefing {
-  id: string
-  title: string
-  client: string
-  description: string
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
-  priority: 'low' | 'medium' | 'high'
-  deadline: string
-  created_at: string
-  updated_at: string
-}
-
-
-
-const statusColors = {
-  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
-  completed: 'bg-green-100 text-green-800 border-green-200',
-  cancelled: 'bg-red-100 text-red-800 border-red-200'
-}
-
-const statusLabels = {
-  pending: 'Pendente',
-  in_progress: 'Em Andamento',
-  completed: 'Concluído',
-  cancelled: 'Cancelado'
-}
+const KANBAN_COLUMNS = [
+  { id: 'pending', title: 'Pendentes', color: 'bg-yellow-500' },
+  { id: 'in_progress', title: 'Em Andamento', color: 'bg-blue-500' },
+  { id: 'completed', title: 'Concluídos', color: 'bg-green-500' },
+  { id: 'cancelled', title: 'Cancelados', color: 'bg-red-500' }
+]
 
 const priorityColors = {
   low: 'bg-gray-100 text-gray-800 border-gray-200',
@@ -53,11 +38,8 @@ export default function BriefingsPage() {
   const { toast } = useToast()
   const [briefings, setBriefings] = useState<Briefing[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
 
-  // Carregar briefings da API
   useEffect(() => {
     loadBriefings()
   }, [])
@@ -65,20 +47,12 @@ export default function BriefingsPage() {
   const loadBriefings = async () => {
     try {
       setLoading(true)
-      const result = await crudAPI.getBriefings()
-      if (result.success) {
-        setBriefings(result.data)
-      } else {
-        toast({
-          title: "Erro",
-          description: result.error || "Erro ao carregar briefings",
-          variant: "destructive"
-        })
-      }
+      const data = await getBriefings()
+      setBriefings(data)
     } catch (error) {
       toast({
         title: "Erro",
-        description: "Erro ao carregar briefings",
+        description: "Não foi possível carregar os briefings.",
         variant: "destructive"
       })
     } finally {
@@ -86,166 +60,151 @@ export default function BriefingsPage() {
     }
   }
 
-  const filteredBriefings = briefings.filter(briefing => {
-    const matchesSearch = briefing.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         briefing.client.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || briefing.status === statusFilter
-    const matchesPriority = priorityFilter === 'all' || briefing.priority === priorityFilter
-    
-    return matchesSearch && matchesStatus && matchesPriority
-  })
-
-  const handleCreateBriefing = () => {
-    toast({
-      title: "Em desenvolvimento",
-      description: "Funcionalidade de criação de briefings será implementada em breve."
-    })
+  const handleMoveBriefing = async (id: string, newStatus: Briefing['status']) => {
+    try {
+      const updated = await updateBriefing(id, { status: newStatus })
+      setBriefings(prev => prev.map(b => b.id === id ? updated : b))
+      toast({
+        title: "Status atualizado",
+        description: `Briefing movido para ${newStatus}.`
+      })
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar o status.",
+        variant: "destructive"
+      })
+    }
   }
 
-  const handleEditBriefing = (id: string) => {
-    toast({
-      title: "Em desenvolvimento",
-      description: "Funcionalidade de edição de briefings será implementada em breve."
-    })
+  const filteredBriefings = briefings.filter(briefing =>
+    briefing.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (briefing.client_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (briefing.client || '').toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const getBriefingsByStatus = (status: string) => {
+    return filteredBriefings.filter(b => b.status === status)
   }
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Carregando briefings...</p>
-          </div>
-        </div>
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Briefings</h1>
-          <p className="text-muted-foreground">
-            Gerencie seus briefings e solicitações de projetos
-          </p>
-        </div>
-        <Button onClick={handleCreateBriefing} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Briefing
-        </Button>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Buscar briefings..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-input bg-background rounded-md text-sm"
-              >
-                <option value="all">Todos os Status</option>
-                <option value="pending">Pendente</option>
-                <option value="in_progress">Em Andamento</option>
-                <option value="completed">Concluído</option>
-                <option value="cancelled">Cancelado</option>
-              </select>
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                className="px-3 py-2 border border-input bg-background rounded-md text-sm"
-              >
-                <option value="all">Todas as Prioridades</option>
-                <option value="low">Baixa</option>
-                <option value="medium">Média</option>
-                <option value="high">Alta</option>
-              </select>
-            </div>
+    <div className="h-[calc(100vh-3rem)] flex flex-col overflow-hidden bg-muted/20">
+      {/* Sub-header fixo */}
+      <div className="p-6 pb-2 space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Briefings</h1>
+            <p className="text-muted-foreground text-sm">Quadro estilo Kanban para gestão de projetos</p>
           </div>
-        </CardContent>
-      </Card>
+          <Button className="bg-primary hover:bg-primary/90 flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Briefing
+          </Button>
+        </div>
 
-      {/* Briefings Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredBriefings.map((briefing) => (
-          <Card key={briefing.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => handleEditBriefing(briefing.id)}>
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <CardTitle className="text-lg">{briefing.title}</CardTitle>
-                  <CardDescription className="flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    {briefing.client}
-                  </CardDescription>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Badge className={`text-xs ${statusColors[briefing.status]}`}>
-                    {statusLabels[briefing.status]}
-                  </Badge>
-                  <Badge className={`text-xs ${priorityColors[briefing.priority]}`}>
-                    {priorityLabels[briefing.priority]}
-                  </Badge>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {briefing.description}
-                </p>
-                
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    Prazo: {format(new Date(briefing.deadline), 'dd/MM/yyyy', { locale: ptBR })}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <FileText className="h-3 w-3" />
-                    Criado: {format(new Date(briefing.created_at), 'dd/MM', { locale: ptBR })}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Buscar briefings..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 bg-white"
+          />
+        </div>
       </div>
 
-      {filteredBriefings.length === 0 && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">Nenhum briefing encontrado</h3>
-              <p className="text-muted-foreground mb-4">
-                {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all'
-                  ? 'Tente ajustar os filtros de busca'
-                  : 'Comece criando seu primeiro briefing'}
-              </p>
-              {!searchTerm && statusFilter === 'all' && priorityFilter === 'all' && (
-                <Button onClick={handleCreateBriefing}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Criar Primeiro Briefing
+      {/* Kanban Board Container */}
+      <div className="flex-1 overflow-x-auto p-6 pt-2">
+        <div className="flex gap-6 h-full min-w-max pb-4">
+          {KANBAN_COLUMNS.map((column) => (
+            <div key={column.id} className="w-80 flex flex-col bg-muted/50 rounded-lg border border-border/50">
+              {/* Column Header */}
+              <div className="p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${column.color}`}></div>
+                  <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">
+                    {column.title}
+                  </h3>
+                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] font-bold">
+                    {getBriefingsByStatus(column.id).length}
+                  </Badge>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                  <MoreVertical className="h-4 w-4" />
                 </Button>
-              )}
+              </div>
+
+              {/* Column Content */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-3 scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 transition-colors">
+                {getBriefingsByStatus(column.id).map((briefing) => (
+                  <Card key={briefing.id} className="group hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing bg-white shadow-sm hover:shadow-md">
+                    <CardContent className="p-3 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <Badge className={`text-[10px] px-1.5 py-0 ${priorityColors[briefing.priority || 'medium']}`}>
+                          {priorityLabels[briefing.priority || 'medium']}
+                        </Badge>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <GripVertical className="h-3 w-3 text-muted-foreground" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {KANBAN_COLUMNS.filter(c => c.id !== column.id).map(c => (
+                              <DropdownMenuItem 
+                                key={c.id} 
+                                onClick={() => handleMoveBriefing(briefing.id, c.id as Briefing['status'])}
+                              >
+                                Mover para {c.title}
+                              </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      <div className="space-y-1">
+                        <h4 className="font-medium text-sm leading-tight line-clamp-2">{briefing.title}</h4>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <User className="h-3 w-3" />
+                          <span className="truncate">{briefing.client || briefing.client_name || 'Sem cliente'}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-border/40">
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                          <Calendar className="h-3 w-3" />
+                          {briefing.deadline ? format(new Date(briefing.deadline), 'dd MMM', { locale: ptBR }) : 'S/ prazo'}
+                        </div>
+                        {briefing.budget && (
+                          <div className="text-[10px] font-bold text-green-600">
+                            R$ {Number(briefing.budget).toLocaleString('pt-BR')}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                
+                {/* Empty State in Column */}
+                {getBriefingsByStatus(column.id).length === 0 && (
+                  <div className="h-24 border-2 border-dashed border-muted-foreground/10 rounded-lg flex items-center justify-center">
+                    <span className="text-xs text-muted-foreground/50 italic">Vazio</span>
+                  </div>
+                )}
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
