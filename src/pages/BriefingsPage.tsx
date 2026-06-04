@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus, Calendar, User, MoreVertical, GripVertical, Edit, Trash2, Mail, MessageSquare, Paperclip, Share2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { format, isPast } from "date-fns"
+import { format, isPast, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { getBriefings, updateBriefing, deleteBriefing, Briefing } from "@/api/crud"
 import { NovoBriefingDialog } from "@/components/novo-briefing-dialog"
@@ -28,7 +28,8 @@ const KANBAN_COLUMNS = [
 const priorityColors = {
   low: 'bg-green-500',
   medium: 'bg-yellow-500',
-  high: 'bg-red-500'
+  high: 'bg-red-500',
+  urgent: 'bg-red-600'
 }
 
 export default function BriefingsPage() {
@@ -90,7 +91,7 @@ export default function BriefingsPage() {
   }
 
   const filteredBriefings = briefings.filter(briefing =>
-    briefing.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (briefing.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (briefing.client_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (briefing.client || '').toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -197,12 +198,17 @@ export default function BriefingsPage() {
 
                       <div className="flex items-center justify-between pt-1">
                         <div className="flex items-center gap-2">
-                          {briefing.deadline && (
-                            <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${isPast(new Date(briefing.deadline)) ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-400'}`}>
-                              <Calendar className="h-3 w-3" />
-                              {format(new Date(briefing.deadline), 'd MMM', { locale: ptBR })}
-                            </div>
-                          )}
+                          {(() => {
+                            if (!briefing.deadline) return null
+                            const d = new Date(briefing.deadline)
+                            if (!isValid(d)) return null
+                            return (
+                              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${isPast(d) ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-400'}`}>
+                                <Calendar className="h-3 w-3" />
+                                {format(d, 'd MMM', { locale: ptBR })}
+                              </div>
+                            )
+                          })()}
                           <div className="flex items-center gap-1.5 text-gray-500">
                              <Mail className="h-3 w-3" />
                              <MessageSquare className="h-3 w-3" />

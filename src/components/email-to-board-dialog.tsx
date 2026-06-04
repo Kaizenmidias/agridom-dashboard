@@ -28,7 +28,7 @@ export function EmailToBoardDialog({ children }: { children: React.ReactNode }) 
   
   // URL real da API do Supabase para a tabela briefings
   const webhookUrl = "https://qwbpruywwfjadkudegcj.supabase.co/rest/v1/briefings"
-  const supabaseKey = "SUA_CHAVE_ANON_AQUI" // Instrução para o usuário
+  const webhookEmail = "kaizenwebdesign+msfvlom1deooz0zsfa2c@boards.trello.com"
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)

@@ -777,9 +777,16 @@ export const crudAPI = {
       if (error) throw error
 
       // Mapear campos para compatibilidade se necessário
-      const mappedData = data?.map(b => ({
+      const mappedData = data?.map((b: any) => ({
         ...b,
-        client: b.client || b.client_name // Fallback para client_name
+        title: b.title ?? b.subject ?? '',
+        content: b.content ?? b.description ?? b.message ?? '',
+        subject: b.subject ?? undefined,
+        client_name: b.client_name ?? b.client ?? undefined,
+        client: b.client || b.client_name,
+        project_type: b.project_type ?? undefined,
+        status: b.status ?? 'new',
+        priority: b.priority ?? 'medium'
       }))
 
       return { data: mappedData || [], success: true }

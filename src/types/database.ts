@@ -163,14 +163,16 @@ export interface Briefing {
   id: string;
   title: string;
   content: string;
+  subject?: string;
   client_name?: string;
   client?: string; // Alias para client_name usado no frontend
   project_type?: string;
   budget?: number;
   deadline?: string;
   status: 'new' | 'developing' | 'changes' | 'completed' | 'standby' | 'pending' | 'in_progress' | 'cancelled';
-  priority: 'low' | 'medium' | 'high';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
   user_id: number;
+  fields?: any;
   created_at: string;
   updated_at: string;
 }
@@ -178,14 +180,16 @@ export interface Briefing {
 export interface InsertBriefing {
   title: string;
   content: string;
+  subject?: string;
   client_name?: string;
   client?: string;
   project_type?: string;
   budget?: number;
   deadline?: string;
   status?: 'new' | 'developing' | 'changes' | 'completed' | 'standby' | 'pending' | 'in_progress' | 'cancelled';
-  priority?: 'low' | 'medium' | 'high';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
   user_id: number;
+  fields?: any;
 }
 
 // Tipos de acessos de empresas
