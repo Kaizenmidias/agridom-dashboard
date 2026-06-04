@@ -11,6 +11,13 @@ import { getBriefings, updateBriefing, deleteBriefing, Briefing } from "@/api/cr
 import { NovoBriefingDialog } from "@/components/novo-briefing-dialog"
 import { EmailToBoardDialog } from "@/components/email-to-board-dialog"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -37,6 +44,8 @@ export default function BriefingsPage() {
   const [briefings, setBriefings] = useState<Briefing[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
+  const [selectedBriefing, setSelectedBriefing] = useState<Briefing | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   useEffect(() => {
     loadBriefings()
@@ -110,6 +119,49 @@ export default function BriefingsPage() {
     })
   }
 
+  const parseBriefingContent = (content?: string) => {
+    const text = String(content || '').replace(/\r\n/g, '\n').trim()
+    if (!text) return []
+
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    const normalized = lines[0]?.toLowerCase().startsWith('briefing') ? lines.slice(1) : lines
+
+    const sections: Array<{ title: string; items: Array<{ label: string; value: string }> }> = []
+    let current = { title: 'Detalhes', items: [] as Array<{ label: string; value: string }> }
+
+    const pushCurrent = () => {
+      if (current.items.length > 0) sections.push(current)
+      current = { title: 'Detalhes', items: [] }
+    }
+
+    for (const line of normalized) {
+      if (line.endsWith(':') && !line.includes('http')) {
+        pushCurrent()
+        current.title = line.slice(0, -1).trim() || 'Detalhes'
+        continue
+      }
+
+      const idx = line.indexOf(':')
+      if (idx > 0) {
+        const label = line.slice(0, idx).trim()
+        const value = line.slice(idx + 1).trim()
+        if (label && value) current.items.push({ label, value })
+        else current.items.push({ label: label || 'Campo', value: value || '-' })
+        continue
+      }
+
+      current.items.push({ label: 'Info', value: line })
+    }
+
+    pushCurrent()
+    return sections
+  }
+
+  const openDetails = (briefing: Briefing) => {
+    setSelectedBriefing(briefing)
+    setDetailsOpen(true)
+  }
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center h-[60vh] bg-[#0d1117]">
@@ -120,6 +172,51 @@ export default function BriefingsPage() {
 
   return (
     <div className="h-[calc(100vh-3rem)] flex flex-col overflow-hidden bg-[#0d1117] text-gray-200">
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto bg-[#161b22] border-gray-800 text-gray-200">
+          <DialogHeader>
+            <DialogTitle className="text-gray-100">
+              {selectedBriefing?.title || 'Briefing'}
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {(selectedBriefing?.client || selectedBriefing?.client_name) ? `Cliente: ${selectedBriefing?.client || selectedBriefing?.client_name}` : 'Cliente: não informado'}
+              {selectedBriefing?.project_type ? ` • Tipo: ${selectedBriefing.project_type}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedBriefing && (
+            <div className="space-y-4">
+              {parseBriefingContent(selectedBriefing.content).map((section) => (
+                <div key={section.title} className="rounded-lg border border-white/10 bg-[#0d1117]">
+                  <div className="px-4 py-3 border-b border-white/10">
+                    <div className="text-sm font-semibold text-gray-200">{section.title}</div>
+                  </div>
+                  <div className="p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                      {section.items.map((it, idx) => (
+                        <div key={`${section.title}-${idx}`} className="space-y-1">
+                          <div className="text-[11px] font-bold uppercase text-gray-500 tracking-wider">{it.label}</div>
+                          <div className="text-sm text-gray-200 break-words whitespace-pre-wrap">{it.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="rounded-lg border border-white/10 bg-[#0d1117]">
+                <div className="px-4 py-3 border-b border-white/10">
+                  <div className="text-sm font-semibold text-gray-200">Texto Completo</div>
+                </div>
+                <div className="p-4">
+                  <pre className="text-xs text-gray-300 whitespace-pre-wrap break-words font-mono">{selectedBriefing.content}</pre>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Sub-header */}
       <div className="px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
@@ -181,7 +278,11 @@ export default function BriefingsPage() {
               {/* Column Content */}
               <div className="flex-1 overflow-y-auto px-3 py-1 space-y-2 scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 transition-colors">
                 {getBriefingsByStatus(column.id).map((briefing) => (
-                  <Card key={briefing.id} className="bg-[#21262d] border-none shadow-sm hover:ring-1 hover:ring-blue-500/50 transition-all cursor-pointer group">
+                  <Card
+                    key={briefing.id}
+                    className="bg-[#21262d] border-none shadow-sm hover:ring-1 hover:ring-blue-500/50 transition-all cursor-pointer group"
+                    onClick={() => openDetails(briefing)}
+                  >
                     <CardContent className="p-3 space-y-3">
                       {/* Priority Tag */}
                       <div className={`w-8 h-1 rounded-full ${priorityColors[briefing.priority || 'medium']}`} />
@@ -218,13 +319,23 @@ export default function BriefingsPage() {
 
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <NovoBriefingDialog briefing={briefing} onBriefingChange={loadBriefings}>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <Edit className="h-3 w-3" />
                             </Button>
                           </NovoBriefingDialog>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <GripVertical className="h-3 w-3" />
                               </Button>
                             </DropdownMenuTrigger>
