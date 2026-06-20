@@ -954,6 +954,99 @@ export interface DashboardStats {
   }>;
 }
 
+const normalizeBillingType = (billingType?: string): 'unica' | 'semanal' | 'mensal' | 'anual' => {
+  switch ((billingType || '').toLowerCase()) {
+    case 'weekly':
+    case 'semanal':
+      return 'semanal'
+    case 'monthly':
+    case 'mensal':
+      return 'mensal'
+    case 'yearly':
+    case 'annual':
+    case 'anual':
+      return 'anual'
+    case 'one_time':
+    case 'single':
+    case 'unica':
+    default:
+      return 'unica'
+  }
+}
+
+const getExpenseAmountValue = (expense: any): number => Number(expense?.amount ?? expense?.value ?? 0) || 0
+
+const getProjectReferenceDate = (project: any): string =>
+  project?.start_date || project?.delivery_date || project?.end_date || project?.completion_date || project?.created_at || ''
+
+const isDateWithinRange = (value: string | undefined, startDate?: string, endDate?: string) => {
+  if (!value) return false
+  const dateOnly = value.slice(0, 10)
+  if (startDate && dateOnly < startDate) return false
+  if (endDate && dateOnly > endDate) return false
+  return true
+}
+
+const getMonthKeysBetweenDates = (startDate?: string, endDate?: string): Array<{ year: number; month: number }> => {
+  if (!startDate || !endDate) {
+    const now = new Date()
+    return [{ year: now.getFullYear(), month: now.getMonth() + 1 }]
+  }
+
+  const start = new Date(`${startDate}T00:00:00`)
+  const end = new Date(`${endDate}T00:00:00`)
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1)
+  const months: Array<{ year: number; month: number }> = []
+
+  while (cursor <= end) {
+    months.push({ year: cursor.getFullYear(), month: cursor.getMonth() + 1 })
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+
+  return months
+}
+
+const calculateExpenseTotalForRange = (expense: any, startDate?: string, endDate?: string) => {
+  const amount = getExpenseAmountValue(expense)
+  const billingType = normalizeBillingType(expense?.billing_type)
+  const date = expense?.date || expense?.expense_date || expense?.created_at || ''
+
+  return getMonthKeysBetweenDates(startDate, endDate).reduce((sum, { year, month }) => {
+    return sum + calculateMonthlyAmount(amount, billingType, date, year, month)
+  }, 0)
+}
+
+const buildEmptyDashboardStats = (): DashboardStats => ({
+  projects: {
+    total_projects: 0,
+    active_projects: 0,
+    completed_projects: 0,
+    paused_projects: 0,
+    total_project_value: 0,
+    total_paid_value: 0
+  },
+  expenses: {
+    total_expenses: 0,
+    total_expenses_amount: 0,
+    expense_categories: 0
+  },
+  previous_period: {
+    revenue: 0,
+    expenses: 0,
+    receivable: 0
+  },
+  current_period: {
+    revenue: 0,
+    expenses: 0,
+    profit: 0,
+    receivable: 0
+  },
+  current_receivable: 0,
+  revenue_by_month: [],
+  expenses_by_category: [],
+  recent_projects: []
+})
+
 export const dashboardAPI = {
   // Nova função que chama a API do backend Node.js com a lógica correta
   async getBackendDashboardStats(filters?: {
@@ -993,6 +1086,9 @@ export const dashboardAPI = {
         `${baseUrl}/api/dashboard-stats${queryString}`,
         `${baseUrl}/api/dashboard/stats${queryString}`,
       ];
+      // #region debug-point A:dashboard-request-start
+      fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"A",location:"src/api/supabase-client.ts:getBackendDashboardStats:start",msg:"[DEBUG] Iniciando busca de estatisticas da dashboard",data:{candidateUrls,filters:filters||null},ts:Date.now()})}).catch(()=>{});
+      // #endregion
 
       let response: Response | null = null;
       let lastStatus: number | null = null;
@@ -1000,6 +1096,9 @@ export const dashboardAPI = {
 
       for (const url of candidateUrls) {
         console.log('Frontend - Chamando API do backend:', url);
+        // #region debug-point B:dashboard-request-attempt
+        fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"B",location:"src/api/supabase-client.ts:getBackendDashboardStats:attempt",msg:"[DEBUG] Tentando endpoint da dashboard",data:{url},ts:Date.now()})}).catch(()=>{});
+        // #endregion
 
         try {
           const attempt = await fetch(url, {
@@ -1012,10 +1111,16 @@ export const dashboardAPI = {
 
           if (attempt.ok) {
             response = attempt;
+            // #region debug-point C:dashboard-request-success
+            fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"C",location:"src/api/supabase-client.ts:getBackendDashboardStats:success",msg:"[DEBUG] Endpoint da dashboard respondeu com sucesso",data:{url,status:attempt.status},ts:Date.now()})}).catch(()=>{});
+            // #endregion
             break;
           }
 
           lastStatus = attempt.status;
+          // #region debug-point D:dashboard-request-non-ok
+          fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"D",location:"src/api/supabase-client.ts:getBackendDashboardStats:non-ok",msg:"[DEBUG] Endpoint da dashboard respondeu sem sucesso",data:{url,status:attempt.status},ts:Date.now()})}).catch(()=>{});
+          // #endregion
 
           if (attempt.status !== 404) {
             response = attempt;
@@ -1023,19 +1128,17 @@ export const dashboardAPI = {
           }
         } catch (error: any) {
           lastError = error;
+          // #region debug-point E:dashboard-request-error
+          fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"E",location:"src/api/supabase-client.ts:getBackendDashboardStats:catch",msg:"[DEBUG] Falha de rede ao consultar estatisticas da dashboard",data:{url,error:error?.message||String(error)},ts:Date.now()})}).catch(()=>{});
+          // #endregion
         }
       }
 
-      if (!response) {
-        if (lastError) {
-          throw lastError;
-        }
-
-        throw new Error(`HTTP error! status: ${lastStatus ?? 404}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response || !response.ok) {
+        // #region debug-point D:dashboard-fallback-direct-supabase
+        fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"post-fix",hypothesisId:"D",location:"src/api/supabase-client.ts:getBackendDashboardStats:fallback",msg:"[DEBUG] Fallback para consulta direta no Supabase apos falha da API da dashboard",data:{lastStatus,lastError:lastError instanceof Error?lastError.message:String(lastError||''),usedBackendResponse:Boolean(response)},ts:Date.now()})}).catch(()=>{});
+        // #endregion
+        return this.getDashboardStats(filters)
       }
 
       const backendData = await response.json();
@@ -1098,7 +1201,10 @@ export const dashboardAPI = {
       return { data: mappedData };
     } catch (error: any) {
       console.error('Erro ao buscar estatísticas do backend:', error);
-      return { data: {} as DashboardStats, error: error.message || 'Erro ao buscar estatísticas' };
+      // #region debug-point E:dashboard-fallback-direct-supabase-catch
+      fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"post-fix",hypothesisId:"E",location:"src/api/supabase-client.ts:getBackendDashboardStats:catch-fallback",msg:"[DEBUG] Erro no backend da dashboard; usando consulta direta no Supabase",data:{error:error?.message||String(error)},ts:Date.now()})}).catch(()=>{});
+      // #endregion
+      return this.getDashboardStats(filters)
     }
   },
 
@@ -1109,126 +1215,45 @@ export const dashboardAPI = {
     previousEndDate?: string;
   }): Promise<{ data: DashboardStats; error?: string }> {
     try {
-      // DEBUG: Log dos filtros aplicados
-      console.log('🔍 DEBUG getDashboardStats - Filtros aplicados:', {
-        startDate: filters?.startDate,
-        endDate: filters?.endDate,
-        previousStartDate: filters?.previousStartDate,
-        previousEndDate: filters?.previousEndDate
-      })
-
-      // Buscar projetos com filtro de data (usando created_at se delivery_date não existir)
-      let projectsQuery = supabase
+      const now = new Date()
+      const { data: projects, error: projectsError } = await supabase
         .from('projects')
         .select('*')
-      
-      if (filters?.startDate && filters?.endDate) {
-        projectsQuery = projectsQuery
-          .gte('created_at', filters.startDate)
-          .lte('created_at', filters.endDate)
-      }
-
-      const { data: projects, error: projectsError } = await projectsQuery
-
-      // DEBUG: Log dos projetos retornados
-      console.log('📊 DEBUG getDashboardStats - Projetos retornados:', {
-        count: projects?.length || 0,
-        projects: projects?.map(p => ({
-          id: p.id,
-          name: p.name,
-          project_value: p.project_value,
-          paid_value: p.paid_value,
-          delivery_date: p.delivery_date,
-          created_at: p.created_at
-        })) || []
-      })
-
       if (projectsError) {
-        console.error('❌ DEBUG getDashboardStats - Erro nos projetos:', projectsError)
-        return { data: {} as DashboardStats, error: projectsError.message }
+        return { data: buildEmptyDashboardStats(), error: projectsError.message }
       }
 
-      // Buscar despesas com filtro de data
-      let expensesQuery = supabase
+      const { data: expenses, error: expensesError } = await supabase
         .from('expenses')
         .select('*')
-      
-      if (filters?.startDate && filters?.endDate) {
-        expensesQuery = expensesQuery
-          .gte('date', filters.startDate)
-          .lte('date', filters.endDate)
-      }
-
-      const { data: expenses, error: expensesError } = await expensesQuery
-
-      // DEBUG: Log das despesas retornadas
-      console.log('💰 DEBUG getDashboardStats - Despesas retornadas:', {
-        count: expenses?.length || 0,
-        expenses: expenses?.map(e => ({
-          id: e.id,
-          description: e.description,
-          value: e.value,
-          billing_type: e.billing_type,
-          date: e.date
-        })) || []
-      })
-
       if (expensesError) {
-        console.error('❌ DEBUG getDashboardStats - Erro nas despesas:', expensesError)
-        return { data: {} as DashboardStats, error: expensesError.message }
+        return { data: buildEmptyDashboardStats(), error: expensesError.message }
       }
-      
 
+      const allProjects = projects || []
+      const allExpenses = expenses || []
+      const currentProjects = allProjects.filter((project) =>
+        isDateWithinRange(getProjectReferenceDate(project), filters?.startDate, filters?.endDate)
+      )
 
-      // Calcular estatísticas dos projetos (já filtrados por período)
-      const totalProjects = projects?.length || 0
-      const activeProjects = projects?.filter(p => p.status === 'active').length || 0
-      const completedProjects = projects?.filter(p => p.status === 'completed').length || 0
-      const pausedProjects = projects?.filter(p => p.status === 'paused').length || 0
-      
-      // Faturamento: soma de project_value dos projetos no período filtrado
-      const totalProjectValue = projects?.reduce((sum, p) => sum + (Number(p.project_value) || 0), 0) || 0
-      
-      // Valor Pago: soma de paid_value dos projetos no período filtrado
-      const totalPaidValue = projects?.reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
-      
-      // A Receber: diferença entre project_value e paid_value no período filtrado
+      const totalProjects = currentProjects.length
+      const activeProjects = currentProjects.filter((project) => project.status === 'active').length
+      const completedProjects = currentProjects.filter((project) => project.status === 'completed').length
+      const pausedProjects = currentProjects.filter((project) => project.status === 'paused').length
+      const totalProjectValue = currentProjects.reduce((sum, project) => sum + (Number(project.project_value) || 0), 0)
+      const totalPaidValue = currentProjects.reduce((sum, project) => sum + (Number(project.paid_value) || 0), 0)
       const totalReceivable = totalProjectValue - totalPaidValue
 
-      // Calcular estatísticas das despesas (já filtradas por período)
-      const totalExpenses = expenses?.length || 0
-      
-      // Calcular valor total das despesas usando a coluna 'value'
-      let totalExpensesAmount = 0
-      
-      if (expenses && expenses.length > 0) {
-        for (const expense of expenses) {
-          if (expense.billing_type === 'yearly') {
-            // Para despesas anuais, usar valor total
-            totalExpensesAmount += Number(expense.amount) || 0
-          } else if (expense.billing_type === 'monthly') {
-             // Para despesas mensais, calcular valor proporcional no período
-             if (filters?.startDate && filters?.endDate) {
-               const monthlyAmount = calculateMonthlyAmount(
-                 Number(expense.amount) || 0,
-                 'mensal',
-                 expense.date,
-                 new Date(filters.startDate).getFullYear(),
-                 new Date(filters.startDate).getMonth() + 1
-               )
-               totalExpensesAmount += monthlyAmount
-             } else {
-               // Se não há filtros, usar valor mensal
-               totalExpensesAmount += Number(expense.amount) || 0
-             }
-          } else {
-            // Para despesas únicas, usar valor total (já filtradas pela query)
-            totalExpensesAmount += Number(expense.amount) || 0
-          }
-        }
-      }
-      
-      const expenseCategories = new Set(expenses?.map(e => e.category)).size || 0
+      const totalExpenses = allExpenses.length
+      const totalExpensesAmount = allExpenses.reduce(
+        (sum, expense) => sum + calculateExpenseTotalForRange(expense, filters?.startDate, filters?.endDate),
+        0
+      )
+      const expenseCategories = new Set(
+        allExpenses
+          .filter((expense) => calculateExpenseTotalForRange(expense, filters?.startDate, filters?.endDate) > 0)
+          .map((expense) => expense.category || 'Outros')
+      ).size
 
       // Calcular receita por mês (últimos 12 meses)
       const revenueByMonth = []
@@ -1236,28 +1261,48 @@ export const dashboardAPI = {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
         const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         
-        const monthlyRevenue = projects?.filter(p => {
-          const createdAt = new Date(p.created_at)
-          return createdAt.getFullYear() === date.getFullYear() && 
-                 createdAt.getMonth() === date.getMonth()
-        }).reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
+        const monthlyRevenue = allProjects
+          .filter((project) => {
+            const refDate = getProjectReferenceDate(project)
+            if (!refDate) return false
+            const projectDate = new Date(refDate)
+            return projectDate.getFullYear() === date.getFullYear() &&
+              projectDate.getMonth() === date.getMonth()
+          })
+          .reduce((sum, project) => sum + (Number(project.project_value) || 0), 0)
+
+        const monthlyExpenses = allExpenses.reduce(
+          (sum, expense) => sum + calculateMonthlyAmount(
+            getExpenseAmountValue(expense),
+            normalizeBillingType(expense.billing_type),
+            expense.date || expense.expense_date || expense.created_at,
+            date.getFullYear(),
+            date.getMonth() + 1
+          ),
+          0
+        )
         
         revenueByMonth.push({
           month: monthStr,
-          revenue: monthlyRevenue
+          revenue: monthlyRevenue,
+          expenses: monthlyExpenses
         })
       }
 
       // Despesas por categoria
-      const expensesByCategory = expenses?.reduce((acc, expense) => {
+      const expensesByCategory = allExpenses.reduce((acc, expense) => {
         const category = expense.category || 'Outros'
+        const totalForRange = calculateExpenseTotalForRange(expense, filters?.startDate, filters?.endDate)
+        if (totalForRange <= 0) {
+          return acc
+        }
         if (!acc[category]) {
           acc[category] = { total_amount: 0, count: 0 }
         }
-        acc[category].total_amount += Number(expense.value) || 0
+        acc[category].total_amount += totalForRange
         acc[category].count += 1
         return acc
-      }, {} as Record<string, { total_amount: number; count: number }>) || {}
+      }, {} as Record<string, { total_amount: number; count: number }>)
 
       const expensesByCategoryArray = Object.entries(expensesByCategory).map(([category, data]) => ({
         category,
@@ -1266,15 +1311,15 @@ export const dashboardAPI = {
       }))
 
       // Projetos recentes (últimos 5)
-      const recentProjects = projects?.sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      const recentProjects = [...currentProjects].sort((a, b) => 
+        new Date(getProjectReferenceDate(b)).getTime() - new Date(getProjectReferenceDate(a)).getTime()
       ).slice(0, 5).map(p => ({
         id: String(p.id),
         name: p.name,
         status: p.status,
         project_value: Number(p.project_value) || 0,
-        created_at: p.created_at
-      })) || []
+        created_at: getProjectReferenceDate(p)
+      }))
 
       // Calcular período anterior se os filtros estiverem disponíveis
       let previousRevenue = 0
@@ -1282,74 +1327,23 @@ export const dashboardAPI = {
       let previousReceivable = 0
       
       if (filters?.previousStartDate && filters?.previousEndDate) {
-        // Buscar projetos do período anterior
-        const { data: previousProjects } = await supabase
-          .from('projects')
-          .select('*')
-          .gte('created_at', filters.previousStartDate)
-          .lte('created_at', filters.previousEndDate)
-        
-        // Buscar despesas do período anterior (usando 'value' conforme schema)
-        const { data: previousExpensesData } = await supabase
-          .from('expenses')
-          .select('*')
-          .gte('date', filters.previousStartDate)
-          .lte('date', filters.previousEndDate)
-        
-        // Calcular valores do período anterior
-        previousRevenue = previousProjects?.reduce((sum, p) => sum + (Number(p.project_value) || 0), 0) || 0
-        const previousPaidValue = previousProjects?.reduce((sum, p) => sum + (Number(p.paid_value) || 0), 0) || 0
+        const previousProjects = allProjects.filter((project) =>
+          isDateWithinRange(getProjectReferenceDate(project), filters.previousStartDate, filters.previousEndDate)
+        )
+        previousRevenue = previousProjects.reduce((sum, project) => sum + (Number(project.project_value) || 0), 0)
+        const previousPaidValue = previousProjects.reduce((sum, project) => sum + (Number(project.paid_value) || 0), 0)
         previousReceivable = previousRevenue - previousPaidValue
-        
-        // Calcular despesas do período anterior
-        if (previousExpensesData && previousExpensesData.length > 0) {
-          for (const expense of previousExpensesData) {
-            if (expense.billing_type === 'yearly') {
-              previousExpenses += Number(expense.amount) || 0
-            } else if (expense.billing_type === 'monthly') {
-              const monthlyAmount = calculateMonthlyAmount(
-                Number(expense.amount) || 0,
-                'mensal',
-                expense.date,
-                new Date(filters.previousStartDate).getFullYear(),
-                new Date(filters.previousStartDate).getMonth() + 1
-              )
-              previousExpenses += monthlyAmount
-            } else {
-              previousExpenses += Number(expense.amount) || 0
-            }
-          }
-        }
+        previousExpenses = allExpenses.reduce(
+          (sum, expense) => sum + calculateExpenseTotalForRange(expense, filters.previousStartDate, filters.previousEndDate),
+          0
+        )
       }
-      
-      // DEBUG: Log dos cálculos intermediários
-      console.log('🧮 DEBUG getDashboardStats - Cálculos intermediários:', {
-        totalProjects,
-        totalProjectValue,
-        totalPaidValue,
-        totalReceivable,
-        totalExpenses,
-        totalExpensesAmount
-      })
-      
-      // Calcular período atual
-      const currentRevenue = totalProjectValue // Faturamento = soma de project_value
-      const currentExpenses = totalExpensesAmount
-      const currentProfit = currentRevenue - currentExpenses // Lucro = Faturamento - Despesas
-      const currentReceivable = totalReceivable // A Receber = project_value - paid_value
-      
-      // DEBUG: Log dos valores finais dos cards
-      console.log('📈 DEBUG getDashboardStats - Valores finais dos cards:', {
-        currentRevenue,
-        currentExpenses,
-        currentProfit,
-        currentReceivable,
-        previousRevenue,
-        previousExpenses,
-        previousReceivable
-      })
-      
 
+      // Calcular período atual
+      const currentRevenue = totalProjectValue
+      const currentExpenses = totalExpensesAmount
+      const currentProfit = currentRevenue - currentExpenses
+      const currentReceivable = totalReceivable
 
       const dashboardStats: DashboardStats = {
         projects: {
@@ -1385,7 +1379,7 @@ export const dashboardAPI = {
       return { data: dashboardStats }
     } catch (error) {
       console.error('Erro ao buscar estatísticas do dashboard:', error)
-      return { data: {} as DashboardStats, error: 'Erro ao buscar estatísticas do dashboard' }
+      return { data: buildEmptyDashboardStats(), error: 'Erro ao buscar estatísticas do dashboard' }
     }
   },
 
