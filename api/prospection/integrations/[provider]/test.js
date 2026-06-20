@@ -1,13 +1,30 @@
-const app = require('../../../../server/server');
+const {
+  authenticateAndResolveOwnerUserId,
+  fetchStoredIntegrationConfig,
+  sendJson,
+  testIntegration,
+} = require('../../_shared');
 
 module.exports = async function handler(req, res) {
-  const rawUrl = typeof req.url === 'string' ? req.url : '';
-  const queryIndex = rawUrl.indexOf('?');
-  const query = queryIndex >= 0 ? rawUrl.slice(queryIndex) : '';
-  const pathname = (queryIndex >= 0 ? rawUrl.slice(0, queryIndex) : rawUrl) || '';
-  const segments = pathname.split('/').filter(Boolean);
-  const provider = segments.length >= 2 ? segments[segments.length - 2] : '';
+  try {
+    if (req.method !== 'POST') {
+      return sendJson(res, 405, { error: 'Metodo nao permitido' });
+    }
 
-  req.url = `/api/prospection/integrations/${provider}/test${query}`;
-  return app(req, res);
+    const ownerUserId = await authenticateAndResolveOwnerUserId(req);
+
+    const rawUrl = typeof req.url === 'string' ? req.url : '';
+    const pathOnly = rawUrl.split('?')[0] || '';
+    const segments = pathOnly.split('/').filter(Boolean);
+    const provider = segments.length >= 2 ? segments[segments.length - 2] : '';
+
+    const config = await fetchStoredIntegrationConfig(ownerUserId);
+    const result = await testIntegration(provider, config);
+    return sendJson(res, 200, result);
+  } catch (error) {
+    return sendJson(res, error.statusCode || 500, {
+      success: false,
+      error: error.message || 'Falha ao testar integracao',
+    });
+  }
 };

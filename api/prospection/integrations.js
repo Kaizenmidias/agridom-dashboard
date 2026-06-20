@@ -1,18 +1,31 @@
+const {
+  authenticateAndResolveOwnerUserId,
+  fetchStoredIntegrationConfig,
+  readJsonBody,
+  sanitizeIntegrationConfigForClient,
+  saveIntegrationConfig,
+  sendJson,
+} = require('./_shared');
+
 module.exports = async function handler(req, res) {
   try {
-    const app = require('../../server/server');
-    const queryIndex = typeof req.url === 'string' ? req.url.indexOf('?') : -1;
-    const query = queryIndex >= 0 ? req.url.slice(queryIndex) : '';
+    const ownerUserId = await authenticateAndResolveOwnerUserId(req);
 
-    req.url = `/api/prospection/integrations${query}`;
-    return app(req, res);
+    if (req.method === 'GET') {
+      const config = await fetchStoredIntegrationConfig(ownerUserId);
+      return sendJson(res, 200, sanitizeIntegrationConfigForClient(config));
+    }
+
+    if (req.method === 'PUT') {
+      const body = await readJsonBody(req);
+      const config = await saveIntegrationConfig(ownerUserId, body || {});
+      return sendJson(res, 200, sanitizeIntegrationConfigForClient(config));
+    }
+
+    return sendJson(res, 405, { error: 'Metodo nao permitido' });
   } catch (error) {
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({
-      error: 'vercel_api_bootstrap_failed',
-      message: error instanceof Error ? error.message : String(error),
-      stack: process.env.NODE_ENV === 'production' ? undefined : (error instanceof Error ? error.stack : undefined),
-    }));
+    return sendJson(res, error.statusCode || 500, {
+      error: error.message || 'Erro ao processar integracoes',
+    });
   }
 };
