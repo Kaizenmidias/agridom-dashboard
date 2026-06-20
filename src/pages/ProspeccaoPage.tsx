@@ -1,26 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   AlertCircle,
   BarChart3,
-  Building2,
   ExternalLink,
   FolderPlus,
-  Globe,
   Loader2,
   Mail,
   MapPin,
   MessageCircle,
   Phone,
-  PlugZap,
   Radar,
   RefreshCw,
   Search,
   Send,
   Sparkles,
   Star,
-  Target,
-  TrendingUp,
   Users,
 } from 'lucide-react'
 
@@ -138,35 +132,6 @@ function getFolderName(prospect: Prospect) {
 
 function isLeadInCRM(prospect: Prospect) {
   return Boolean(prospect.analysis_report?.crmSent)
-}
-
-function MetricCard({
-  title,
-  value,
-  icon: Icon,
-  description,
-}: {
-  title: string
-  value: number | string
-  icon: React.ComponentType<{ className?: string }>
-  description: string
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="mt-2 text-2xl font-bold">{value}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-          </div>
-          <div className="rounded-xl bg-primary/10 p-3">
-            <Icon className="h-5 w-5 text-primary" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
 }
 
 function RichTextEditor({
@@ -617,19 +582,8 @@ const ProspeccaoPage = () => {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Leads Encontrados" value={metrics.leadsFound} icon={Building2} description="Base persistida e deduplicada" />
-        <MetricCard title="Leads Quentes" value={metrics.hotLeads} icon={TrendingUp} description="Score igual ou maior que 70" />
-        <MetricCard title="Sem Site" value={metrics.noWebsite} icon={Globe} description="Oportunidades imediatas" />
-        <MetricCard title="Taxa de Resposta" value={`${metrics.responseRate}%`} icon={Target} description="Leads que responderam aos contatos" />
-        <MetricCard title="WhatsApps Enviados" value={metrics.whatsappSent} icon={MessageCircle} description="Histórico de mensagens registradas" />
-        <MetricCard title="E-mails Enviados" value={metrics.emailsSent} icon={Mail} description="Disparos registrados no módulo" />
-        <MetricCard title="Reuniões Agendadas" value={metrics.meetingsScheduled} icon={Users} description="Leads em etapa de agenda" />
-        <MetricCard title="Clientes Fechados" value={metrics.clientsClosed} icon={Sparkles} description="Negócios marcados como fechados" />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
+      <div className="grid gap-4">
+        <Card>
           <CardHeader>
             <CardTitle>Buscar Leads</CardTitle>
             <CardDescription>
@@ -721,53 +675,6 @@ const ProspeccaoPage = () => {
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Integrações e API</CardTitle>
-            <CardDescription>Resumo das integrações ativas do módulo</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="rounded-lg border p-3">
-              <p className="font-medium">Apify</p>
-              <p className="text-muted-foreground">
-                {bootstrap?.integrations.apifyConfigured
-                  ? 'Configurado como fonte principal de leads.'
-                  : 'Sem token. O módulo usa outras fontes como fallback.'}
-              </p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="font-medium">Google Places</p>
-              <p className="text-muted-foreground">
-                {bootstrap?.integrations.googlePlacesConfigured
-                  ? 'Configurado como fonte secundária.'
-                  : 'Sem chave. O módulo usa fallback quando necessário.'}
-              </p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="font-medium">OpenAI</p>
-              <p className="text-muted-foreground">
-                {bootstrap?.integrations.openAIConfigured
-                  ? 'Ativa para diagnóstico e abordagem.'
-                  : 'Sem chave. O sistema usa fallback heurístico.'}
-              </p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="font-medium">SMTP</p>
-              <p className="text-muted-foreground">
-                {bootstrap?.integrations.smtpConfigured
-                  ? 'Configuração detectada para envio de e-mail.'
-                  : 'Configure credenciais reais para habilitar envio direto.'}
-              </p>
-            </div>
-            <Button asChild className="w-full">
-              <Link to="/prospeccao/integracoes">
-                <PlugZap className="mr-2 h-4 w-4" />
-                Abrir Integrações e API
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
       </div>
 
       <Tabs defaultValue="leads" className="space-y-4">
@@ -783,7 +690,7 @@ const ProspeccaoPage = () => {
           <Card>
             <CardHeader className="space-y-4">
               <div>
-                <CardTitle>Prospects em Data Table</CardTitle>
+                <CardTitle>Prospects</CardTitle>
                 <CardDescription>
                   Organize leads em pastas, envie para o CRM uma única vez e filtre rapidamente por status, pasta e busca.
                 </CardDescription>

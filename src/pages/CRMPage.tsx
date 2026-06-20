@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Building2, ExternalLink, Loader2, Mail, MapPin, MessageCircle, Move, Phone, Target, Users } from 'lucide-react'
+import { Building2, ExternalLink, Globe, Loader2, Mail, MapPin, MessageCircle, Move, Phone, Sparkles, Target, TrendingUp, Users } from 'lucide-react'
 
 import { prospectionAPI } from '@/api/prospection'
 import type { Prospect, ProspectStatus, ProspectionBootstrap } from '@/types/database'
@@ -48,6 +48,35 @@ function isLeadInCRM(prospect: Prospect) {
   return Boolean(prospect.analysis_report?.crmSent)
 }
 
+function MetricCard({
+  title,
+  value,
+  icon: Icon,
+  description,
+}: {
+  title: string
+  value: number | string
+  icon: React.ComponentType<{ className?: string }>
+  description: string
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="mt-2 text-2xl font-bold">{value}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+          </div>
+          <div className="rounded-xl bg-primary/10 p-3">
+            <Icon className="h-5 w-5 text-primary" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 const CRMPage = () => {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
@@ -89,10 +118,6 @@ const CRMPage = () => {
     [crmLeads]
   )
 
-  const conversionRate = bootstrap?.metrics.leadsFound
-    ? Math.round((bootstrap.metrics.clientsClosed / bootstrap.metrics.leadsFound) * 100)
-    : 0
-
   const handleDrop = async (status: ProspectStatus) => {
     if (!draggedId) return
 
@@ -125,7 +150,7 @@ const CRMPage = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="w-full max-w-full space-y-6 overflow-x-hidden p-4 sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">CRM</h1>
@@ -137,59 +162,15 @@ const CRMPage = () => {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-100 p-2">
-                <Users className="h-4 w-4 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Leads no CRM</p>
-                <p className="text-2xl font-bold">{crmLeads.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-violet-100 p-2">
-                <Target className="h-4 w-4 text-violet-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Interessados</p>
-                <p className="text-2xl font-bold">{crmLeads.filter((lead) => lead.status === 'Interessado').length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-amber-100 p-2">
-                <Building2 className="h-4 w-4 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Propostas</p>
-                <p className="text-2xl font-bold">{crmLeads.filter((lead) => lead.status === 'Proposta Enviada').length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-emerald-100 p-2">
-                <Users className="h-4 w-4 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Conversão</p>
-                <p className="text-2xl font-bold">{conversionRate}%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Leads Encontrados" value={bootstrap?.metrics.leadsFound || 0} icon={Building2} description="Base persistida e deduplicada" />
+        <MetricCard title="Leads Quentes" value={bootstrap?.metrics.hotLeads || 0} icon={TrendingUp} description="Score igual ou maior que 70" />
+        <MetricCard title="Sem Site" value={bootstrap?.metrics.noWebsite || 0} icon={Globe} description="Oportunidades imediatas" />
+        <MetricCard title="Taxa de Resposta" value={`${bootstrap?.metrics.responseRate || 0}%`} icon={Target} description="Leads que responderam aos contatos" />
+        <MetricCard title="WhatsApps Enviados" value={bootstrap?.metrics.whatsappSent || 0} icon={MessageCircle} description="Histórico de mensagens registradas" />
+        <MetricCard title="E-mails Enviados" value={bootstrap?.metrics.emailsSent || 0} icon={Mail} description="Disparos registrados no módulo" />
+        <MetricCard title="Reuniões Agendadas" value={bootstrap?.metrics.meetingsScheduled || 0} icon={Users} description="Leads em etapa de agenda" />
+        <MetricCard title="Clientes Fechados" value={bootstrap?.metrics.clientsClosed || 0} icon={Sparkles} description="Negócios marcados como fechados" />
       </div>
 
       {crmLeads.length === 0 ? (

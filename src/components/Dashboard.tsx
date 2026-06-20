@@ -643,6 +643,7 @@ const Dashboard = () => {
       </div>
 
       {/* Upcoming Tasks - Adapté au contexte agricole guadeloupéen */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <div className="dashboard-card card-hover">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Tâches à venir</h3>
