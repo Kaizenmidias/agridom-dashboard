@@ -896,6 +896,17 @@ async function analyzeWebsite(website, options = {}) {
     normalizedUrl = `https://${normalizedUrl}`;
   }
 
+  if (options.fastMode) {
+    return {
+      ...defaultAnalysis,
+      websiteExists: true,
+      https: normalizedUrl.startsWith('https://'),
+      websiteQuality: 'Analise rapida',
+      problemsFound: ['Analise detalhada pendente'],
+      legacyWebsite: false
+    };
+  }
+
   try {
     const pageResponse = await fetch(normalizedUrl, {
       headers: {
