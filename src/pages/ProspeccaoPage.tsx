@@ -6,18 +6,11 @@ import {
   FolderPlus,
   Info,
   Loader2,
-  Mail,
   MapPin,
-  MessageCircle,
-  Phone,
   Radar,
   RefreshCw,
   Search,
-  Send,
-  Sparkles,
   Star,
-  Trash2,
-  Users,
 } from 'lucide-react'
 
 import { prospectionAPI } from '@/api/prospection'
@@ -64,6 +57,7 @@ import { useToast } from '@/hooks/use-toast'
 
 type StateOption = { id: number; sigla: string; nome: string }
 type CityOption = { id: number; nome: string }
+type BulkAction = 'crm' | 'whatsapp' | 'email' | 'delete'
 
 const statusOptions: ProspectStatus[] = [
   'Novo',
@@ -201,6 +195,7 @@ const ProspeccaoPage = () => {
   const [leadQuery, setLeadQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | ProspectStatus>('all')
   const [folderFilter, setFolderFilter] = useState('all')
+  const [folderFilterDraft, setFolderFilterDraft] = useState('all')
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [page, setPage] = useState(1)
   const [settingsDraft, setSettingsDraft] = useState<Partial<ProspectingSettings>>({})
@@ -208,6 +203,7 @@ const ProspeccaoPage = () => {
   const [folderDestination, setFolderDestination] = useState('')
   const [extraFolders, setExtraFolders] = useState<string[]>([])
   const [detailProspect, setDetailProspect] = useState<Prospect | null>(null)
+  const [bulkAction, setBulkAction] = useState<BulkAction | undefined>(undefined)
   const pageSize = 10
 
   const loadBootstrap = async () => {
@@ -368,6 +364,10 @@ const ProspeccaoPage = () => {
   useEffect(() => {
     setPage(1)
   }, [leadQuery, statusFilter, folderFilter])
+
+  useEffect(() => {
+    setFolderFilterDraft(folderFilter)
+  }, [folderFilter])
 
   const groupedByStatus = useMemo(
     () =>
@@ -611,6 +611,29 @@ const ProspeccaoPage = () => {
     )
   }
 
+  const handleApplyBulkAction = async () => {
+    if (!bulkAction || selectedIds.length === 0) return
+
+    switch (bulkAction as BulkAction) {
+      case 'crm':
+        await handleAddSelectedToCRM()
+        break
+      case 'whatsapp':
+        await handleWhatsApp(selectedIds)
+        break
+      case 'email':
+        await handleEmail(selectedIds)
+        break
+      case 'delete':
+        await handleDeleteSelected()
+        break
+      default:
+        break
+    }
+
+    setBulkAction(undefined)
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[70vh] items-center justify-center">
@@ -752,7 +775,7 @@ const ProspeccaoPage = () => {
                   Organize leads em pastas, envie para o CRM uma única vez e filtre rapidamente por status, pasta e busca.
                 </CardDescription>
               </div>
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(180px,220px)_minmax(180px,220px)_140px]">
                 <Input
                   value={leadQuery}
                   onChange={(event) => setLeadQuery(event.target.value)}
@@ -771,7 +794,7 @@ const ProspeccaoPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={folderFilter} onValueChange={setFolderFilter}>
+                <Select value={folderFilterDraft} onValueChange={setFolderFilterDraft}>
                   <SelectTrigger>
                     <SelectValue placeholder="Pasta" />
                   </SelectTrigger>
@@ -785,21 +808,8 @@ const ProspeccaoPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const pageIds = paginatedProspects.map((prospect) => prospect.id)
-                    if (pageIds.every((id) => selectedIds.includes(id))) {
-                      setSelectedIds((current) => current.filter((id) => !pageIds.includes(id)))
-                      return
-                    }
-
-                    setSelectedIds((current) => Array.from(new Set([...current, ...pageIds])))
-                  }}
-                >
-                  {paginatedProspects.every((prospect) => selectedIds.includes(prospect.id))
-                    ? 'Limpar página'
-                    : 'Selecionar página'}
+                <Button variant="outline" onClick={() => setFolderFilter(folderFilterDraft)} disabled={folderFilterDraft === folderFilter}>
+                  Filtrar
                 </Button>
               </div>
               <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px]">
@@ -831,26 +841,50 @@ const ProspeccaoPage = () => {
                   Mover Selecionados
                 </Button>
               </div>
-              <div className="flex flex-col gap-3 rounded-lg border border-dashed p-3 lg:flex-row lg:items-center lg:justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Ações em massa para os leads selecionados no data table: {selectedIds.length} selecionado(s).
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => void handleAddSelectedToCRM()} disabled={selectedIds.length === 0}>
-                    <Users className="mr-2 h-4 w-4" />
-                    CRM em Massa
-                  </Button>
-                  <Button onClick={() => void handleWhatsApp(selectedIds)} disabled={selectedIds.length === 0}>
-                    <MessageCircle className="mr-2 h-4 w-4" />
-                    WhatsApp em Massa
-                  </Button>
-                  <Button onClick={() => void handleEmail(selectedIds)} disabled={selectedIds.length === 0}>
-                    <Send className="mr-2 h-4 w-4" />
-                    E-mail em Massa
-                  </Button>
-                  <Button variant="destructive" onClick={() => void handleDeleteSelected()} disabled={selectedIds.length === 0}>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Excluir Selecionados
+              <div className="rounded-lg border bg-muted/20 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Ações em massa</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedIds.length} lead(s) selecionado(s) no data table.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Select value={bulkAction} onValueChange={(value) => setBulkAction(value as BulkAction)}>
+                      <SelectTrigger className="w-full sm:w-[220px]">
+                        <SelectValue placeholder="Selecione a ação" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="crm">Enviar para o CRM</SelectItem>
+                        <SelectItem value="whatsapp">Registrar WhatsApp</SelectItem>
+                        <SelectItem value="email">Enviar e-mail</SelectItem>
+                        <SelectItem value="delete">Excluir selecionados</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={() => void handleApplyBulkAction()} disabled={!bulkAction || selectedIds.length === 0}>
+                      Aplicar
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <span>Use os checkboxes para selecionar os leads que devem receber a ação em massa.</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const pageIds = paginatedProspects.map((prospect) => prospect.id)
+                      if (pageIds.every((id) => selectedIds.includes(id))) {
+                        setSelectedIds((current) => current.filter((id) => !pageIds.includes(id)))
+                        return
+                      }
+
+                      setSelectedIds((current) => Array.from(new Set([...current, ...pageIds])))
+                    }}
+                    disabled={paginatedProspects.length === 0}
+                  >
+                    {paginatedProspects.every((prospect) => selectedIds.includes(prospect.id))
+                      ? 'Limpar seleção da página'
+                      : 'Selecionar página atual'}
                   </Button>
                 </div>
               </div>
