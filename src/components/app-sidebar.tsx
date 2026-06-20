@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Home, FileText, Wallet, Users, Settings, User, Briefcase, Code, Key } from "lucide-react"
+import { Home, FileText, Wallet, Users, Settings, User, Briefcase, Code, Key, Radar } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 
@@ -27,6 +27,7 @@ const allItems = [
   { title: "Acessos", url: "/acessos", icon: Key },
   { title: "Despesas", url: "/despesas", icon: Wallet },
   { title: "CRM", url: "/crm", icon: Users },
+  { title: "Prospecção", url: "/prospeccao", icon: Radar },
   { title: "Usuários", url: "/usuarios", icon: Settings },
 ]
 
@@ -44,7 +45,8 @@ export function AppSidebar() {
         item.title === 'Briefings' || 
         item.title === 'Códigos' || 
         item.title === 'Acessos' || 
-        item.title === 'CRM'
+        item.title === 'CRM' ||
+        item.title === 'Prospecção'
       )
     }
     

@@ -11,10 +11,23 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+const localOriginRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://agridom-dashboard.vercel.app', process.env.CORS_ORIGIN].filter(Boolean)
-    : ['http://localhost:8080', 'http://localhost:8081', 'http://localhost:8082', 'http://localhost:8083', 'http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:8080', 'http://127.0.0.1:8081', 'http://127.0.0.1:8082', 'http://127.0.0.1:8083', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    const productionOrigins = ['https://agridom-dashboard.vercel.app', process.env.CORS_ORIGIN].filter(Boolean);
+    const allowByDefault = !origin;
+    const isAllowedLocal = localOriginRegex.test(origin || '');
+    const isAllowedProduction = productionOrigins.includes(origin);
+
+    if (
+      allowByDefault ||
+      (process.env.NODE_ENV === 'production' ? isAllowedProduction : isAllowedLocal || isAllowedProduction)
+    ) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`Origin nao permitida pelo CORS: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -36,6 +49,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const authRoutes = require('./routes/auth');
 const crudRoutes = require('./routes/crud');
 const uploadRoutes = require('./routes/upload');
+const prospectionRoutes = require('./routes/prospection');
 
 
 // Wrapper inteligente para queries que detecta Supabase API
@@ -573,6 +587,7 @@ app.locals.supabase = getSupabaseClient();
 app.use('/api/auth', authRoutes);
 app.use('/api', crudRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/prospection', prospectionRoutes);
 
 
 // Rota de teste

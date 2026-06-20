@@ -13,6 +13,7 @@ import { CodesPage } from "./pages/CodesPage";
 import AcessosPage from "./pages/AcessosPage";
 import DespesasPage from "./pages/DespesasPage";
 import CRMPage from "./pages/CRMPage";
+import ProspeccaoPage from "./pages/ProspeccaoPage";
 import UsuariosPage from "./pages/UsuariosPage";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -43,6 +44,7 @@ const routes = [
   { path: "/acessos", element: <AcessosPage />, protected: true, restrictedForRicardo: false },
   { path: "/despesas", element: <DespesasPage />, protected: true, restrictedForRicardo: true },
   { path: "/crm", element: <CRMPage />, protected: true, restrictedForRicardo: false },
+  { path: "/prospeccao", element: <ProspeccaoPage />, protected: true, restrictedForRicardo: false },
   { path: "/usuarios", element: <UsuariosPage />, protected: true, restrictedForRicardo: true },
   { path: "/access-denied", element: <AccessDeniedPage />, protected: true, restrictedForRicardo: false },
   { path: "*", element: <NotFound />, protected: false, restrictedForRicardo: false }

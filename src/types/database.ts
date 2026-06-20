@@ -224,6 +224,118 @@ export interface InsertCompanyAccess {
   user_id: number;
 }
 
+export type ProspectStatus =
+  | 'Novo'
+  | 'Contato Enviado'
+  | 'Respondeu'
+  | 'Interessado'
+  | 'Reuniao Agendada'
+  | 'Proposta Enviada'
+  | 'Fechado'
+  | 'Perdido';
+
+export interface Prospect {
+  id: number;
+  owner_user_id?: number | null;
+  business_name: string;
+  normalized_business_name?: string | null;
+  category?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  phone?: string | null;
+  normalized_phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  normalized_website?: string | null;
+  google_maps_url?: string | null;
+  google_rating?: number | null;
+  google_reviews?: number | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  website_exists: boolean;
+  pagespeed_mobile?: number | null;
+  pagespeed_desktop?: number | null;
+  seo_score?: number | null;
+  lead_score: number;
+  website_quality?: string | null;
+  problems_found: string[];
+  approach_suggestion?: string | null;
+  diagnostic_summary?: string | null;
+  analysis_report?: {
+    responsive?: boolean;
+    https?: boolean;
+    metaTitle?: string | null;
+    metaDescription?: string | null;
+    performance?: number | null;
+    accessibility?: number | null;
+    bestPractices?: number | null;
+    folderName?: string | null;
+    crmSent?: boolean;
+    crmSentAt?: string | null;
+  } | null;
+  last_contact_date?: string | null;
+  status: ProspectStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProspectSearchInput {
+  niche: string;
+  city: string;
+  state?: string;
+  quantity: number;
+}
+
+export interface ProspectingSettings {
+  id: number;
+  owner_user_id?: number;
+  whatsapp_template: string;
+  email_subject: string;
+  email_body_html: string;
+  sender_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProspectContactHistory {
+  id: number;
+  prospect_id: number;
+  owner_user_id?: number | null;
+  channel: 'whatsapp' | 'email' | 'crm' | 'system';
+  subject?: string | null;
+  message: string;
+  recipient?: string | null;
+  delivery_status?: string | null;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ProspectMetrics {
+  leadsFound: number;
+  hotLeads: number;
+  noWebsite: number;
+  whatsappSent: number;
+  emailsSent: number;
+  responseRate: number;
+  meetingsScheduled: number;
+  clientsClosed: number;
+}
+
+export interface ProspectionBootstrap {
+  prospects: Prospect[];
+  settings: ProspectingSettings;
+  metrics: ProspectMetrics;
+  history: ProspectContactHistory[];
+  integrations: {
+    apifyConfigured: boolean;
+    googlePlacesConfigured: boolean;
+    pageSpeedConfigured: boolean;
+    openAIConfigured: boolean;
+    smtpConfigured: boolean;
+  };
+}
+
 // Tipos para estatísticas do dashboard
 export interface DashboardStats {
   total_projects: number;
@@ -299,6 +411,7 @@ export namespace Database {
   export type Briefing = Briefing;
   export type AuthUser = AuthUser;
   export type DashboardStats = DashboardStats;
+  export type Prospect = Prospect;
 }
 
 // Tipos para o Supabase (se necessário)

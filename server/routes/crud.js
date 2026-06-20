@@ -1768,7 +1768,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       return sum + (parseFloat(project.paid_value) || 0);
     }, 0);
     
-    const deliveredProjectsRevenue = (projectsDeliveredInPeriod.rows || []).reduce((sum, project) => {
+    const deliveredProjectsRevenue = (projectsCompletedInPeriod.rows || []).reduce((sum, project) => {
       return sum + (parseFloat(project.period_revenue) || 0);
     }, 0);
     
