@@ -17,6 +17,7 @@
     "JWT_SECRET": "X0SyOctdJX522yiVbTnywu+ulxOH15GyRjbwr3+5LAQcIYx1i8Vo0qA1OSrzPuWmGFC66Kk6C7luznv+dRQ5Vg==",
     "VITE_SUPABASE_URL": "https://qwbpruywwfjadkudegcj.supabase.co",
     "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3YnBydXl3d2ZqYWRrdWRlZ2NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NjMyNTAsImV4cCI6MjA3MjUzOTI1MH0.dyXrYaREdizc-UZM6NJP1Dp7RpDlzbU4pxHutJhGoy8",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3YnBydXl3d2ZqYWRrdWRlZ2NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NjMyNTAsImV4cCI6MjA3MjUzOTI1MH0.dyXrYaREdizc-UZM6NJP1Dp7RpDlzbU4pxHutJhGoy8",
     "VITE_API_URL": "https://agridom-dashboard.vercel.app"
   },
   "rewrites": [
