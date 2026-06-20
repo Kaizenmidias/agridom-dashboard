@@ -636,22 +636,6 @@ const ProspeccaoPage = () => {
             <RefreshCw className="mr-2 h-4 w-4" />
             Atualizar
           </Button>
-          <Button onClick={() => void handleAddSelectedToCRM()} disabled={selectedIds.length === 0}>
-            <Users className="mr-2 h-4 w-4" />
-            CRM em Massa
-          </Button>
-          <Button onClick={() => void handleWhatsApp(selectedIds)} disabled={selectedIds.length === 0}>
-            <MessageCircle className="mr-2 h-4 w-4" />
-            WhatsApp em Massa
-          </Button>
-          <Button onClick={() => void handleEmail(selectedIds)} disabled={selectedIds.length === 0}>
-            <Send className="mr-2 h-4 w-4" />
-            E-mail em Massa
-          </Button>
-          <Button variant="destructive" onClick={() => void handleDeleteSelected()} disabled={selectedIds.length === 0}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Excluir Selecionados
-          </Button>
         </div>
       </div>
 
@@ -846,6 +830,29 @@ const ProspeccaoPage = () => {
                 <Button onClick={() => void handleMoveSelectedToFolder()} disabled={!folderDestination || selectedIds.length === 0}>
                   Mover Selecionados
                 </Button>
+              </div>
+              <div className="flex flex-col gap-3 rounded-lg border border-dashed p-3 lg:flex-row lg:items-center lg:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Ações em massa para os leads selecionados no data table: {selectedIds.length} selecionado(s).
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => void handleAddSelectedToCRM()} disabled={selectedIds.length === 0}>
+                    <Users className="mr-2 h-4 w-4" />
+                    CRM em Massa
+                  </Button>
+                  <Button onClick={() => void handleWhatsApp(selectedIds)} disabled={selectedIds.length === 0}>
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    WhatsApp em Massa
+                  </Button>
+                  <Button onClick={() => void handleEmail(selectedIds)} disabled={selectedIds.length === 0}>
+                    <Send className="mr-2 h-4 w-4" />
+                    E-mail em Massa
+                  </Button>
+                  <Button variant="destructive" onClick={() => void handleDeleteSelected()} disabled={selectedIds.length === 0}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Excluir Selecionados
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">

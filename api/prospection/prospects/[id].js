@@ -1,6 +1,6 @@
 module.exports = async function handler(req, res) {
   try {
-    const app = require('../../../../server/server');
+    const app = require('../../../server/server');
     const rawUrl = typeof req.url === 'string' ? req.url : '';
     const pathOnly = rawUrl.split('?')[0] || '';
     const segments = pathOnly.split('/').filter(Boolean);
