@@ -44,6 +44,51 @@ const getOriginalBillingType = (expenseId, dbType) => {
   return dbType;
 };
 
+const getExpenseAmount = (expense) => {
+  return Number(expense?.amount ?? expense?.value ?? 0) || 0;
+};
+
+const resolveUserTableId = async (authUser) => {
+  if (!authUser?.id && !authUser?.email) {
+    throw new Error('Usuário autenticado inválido para mapear dashboard');
+  }
+
+  let userRecord = null;
+  let userError = null;
+
+  if (authUser?.id) {
+    const response = await supabase
+      .from('users')
+      .select('id, email, auth_user_id')
+      .eq('auth_user_id', authUser.id)
+      .maybeSingle();
+
+    userRecord = response.data;
+    userError = response.error;
+  }
+
+  if ((!userRecord || userError) && authUser?.email) {
+    const response = await supabase
+      .from('users')
+      .select('id, email, auth_user_id')
+      .eq('email', authUser.email)
+      .maybeSingle();
+
+    userRecord = response.data;
+    userError = response.error;
+  }
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!userRecord?.id) {
+    throw new Error('Usuário não encontrado na tabela users para a dashboard');
+  }
+
+  return Number(userRecord.id);
+};
+
 // Middleware de autenticação usando apenas Supabase Auth
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -1224,13 +1269,16 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
   try {
     const query = getQuery(req);
     const { startDate, endDate, previousStartDate, previousEndDate, targetYear } = req.query;
+    const dashboardUserId = await resolveUserTableId(req.user);
     
     console.log('Backend - Filtros recebidos:', {
       startDate,
       endDate,
       previousStartDate,
       previousEndDate,
-      targetYear
+      targetYear,
+      authUserId: req.userId,
+      dashboardUserId
     });
     
     // Se não há filtros de data, usar período atual (mês atual)
@@ -1256,7 +1304,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       'Tipo currentEnd': typeof currentEnd
     });
     
-    console.log('Dashboard Stats - User ID:', req.userId);
+    console.log('Dashboard Stats - User ID:', dashboardUserId);
     
     // Buscar estatísticas de projetos considerando valor pago na criação e restante na entrega
     // Calcular separadamente projetos criados e entregues no período
@@ -1270,7 +1318,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         COUNT(CASE WHEN status = 'paused' THEN 1 END) as created_paused
        FROM projects 
        WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3`,
-      [req.userId, currentStart, currentEnd]
+      [dashboardUserId, currentStart, currentEnd]
     );
     
     const projectStatsDelivered = await query(
@@ -1279,7 +1327,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         COALESCE(SUM(project_value - paid_value), 0) as delivered_paid_value
        FROM projects 
        WHERE user_id = $1 AND status = 'completed' AND completion_date IS NOT NULL AND DATE(completion_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
-      [req.userId, currentStart, currentEnd]
+      [dashboardUserId, currentStart, currentEnd]
     );
     
     // Combinar estatísticas
@@ -1305,7 +1353,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         COALESCE(SUM(paid_value), 0) as created_paid_value
        FROM projects 
        WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3`,
-      [req.userId, prevStart, prevEnd]
+      [dashboardUserId, prevStart, prevEnd]
     );
     
     const previousProjectStatsDelivered = await query(
@@ -1313,7 +1361,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         COALESCE(SUM(project_value - paid_value), 0) as delivered_paid_value
        FROM projects 
        WHERE user_id = $1 AND status = 'completed' AND completion_date IS NOT NULL AND DATE(completion_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
-      [req.userId, prevStart, prevEnd]
+      [dashboardUserId, prevStart, prevEnd]
     );
     
     const previousProjectStats = {
@@ -1326,20 +1374,11 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     // Buscar TODAS as despesas do usuário (não filtrar por data aqui)
     // O filtro por data será aplicado na função calculateMonthlyAmount
     
-    // TEMPORÁRIO: Converter UUID para ID integer para compatibilidade com schema atual
-    let userIdForExpenses = req.userId;
-    
-    // Se o userId é um UUID gerado (formato MD5), converter de volta para integer
-    if (req.userId && req.userId.length === 36 && req.userId.includes('-')) {
-      // Extrair o ID original do hash MD5 (assumindo que foi gerado a partir do ID 26)
-      // Para o usuário de desenvolvimento, usar ID 26
-      userIdForExpenses = 26;
-      console.log('🔧 DEBUG - Convertendo UUID para ID integer para expenses:', { uuid: req.userId, integerId: userIdForExpenses });
-    }
+    const userIdForExpenses = dashboardUserId;
     
     const { data: currentExpenses, error: currentExpensesError } = await supabase
       .from('expenses')
-      .select('id, amount, date, category, billing_type')
+      .select('*')
       .eq('user_id', userIdForExpenses);
     
     if (currentExpensesError) {
@@ -1371,7 +1410,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       // 🔧 TEMPORÁRIO: Recuperar tipo original do cache
       const originalBillingType = getOriginalBillingType(expense.id, expense.billing_type);
       return {
-        amount: expense.amount,
+        amount: getExpenseAmount(expense),
         date: expense.date,
         category: expense.category,
         billing_type: originalBillingType
@@ -1450,18 +1489,17 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     };
     
     // Buscar todas as despesas do usuário para cálculo do período anterior
-    const previousExpenses = await query(
-      `SELECT 
-        e.amount,
-        e.date,
-        e.billing_type
-       FROM expenses e
-       WHERE e.user_id = $1`,
-      [req.userId]
-    );
+    const { data: previousExpenses } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('user_id', userIdForExpenses);
     
     // Calcular estatísticas de despesas do período anterior
-    const previousExpensesArray = previousExpenses?.rows || [];
+    const previousExpensesArray = (previousExpenses || []).map((expense) => ({
+      amount: getExpenseAmount(expense),
+      date: expense.date,
+      billing_type: getOriginalBillingType(expense.id, expense.billing_type)
+    }));
     const prevDate = new Date(prevStart);
     const prevYearToUse = targetYear ? parseInt(targetYear) - 1 : prevDate.getFullYear();
     const previousTotalExpensesAmount = calculateTotalMonthlyExpenses(
@@ -1480,7 +1518,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     
     // Consulta projetos criados no período
     console.log('  - SQL: SELECT paid_value, created_at as revenue_date FROM projects WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3');
-    console.log('  - Parâmetros:', [req.userId, currentStart, currentEnd]);
+    console.log('  - Parâmetros:', [dashboardUserId, currentStart, currentEnd]);
     
     const projectsCreatedInPeriod = await query(
       `SELECT 
@@ -1489,7 +1527,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         paid_value as period_revenue
        FROM projects 
        WHERE user_id = $1 AND DATE(created_at) BETWEEN $2 AND $3`,
-      [req.userId, currentStart, currentEnd]
+      [dashboardUserId, currentStart, currentEnd]
     );
     
     // Projetos criados no período
@@ -1501,11 +1539,9 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         completion_date as revenue_date
        FROM projects 
        WHERE user_id = $1 AND status = 'completed' AND completion_date IS NOT NULL AND DATE(completion_date) BETWEEN $2 AND $3 AND DATE(created_at) NOT BETWEEN $2 AND $3`,
-      [req.userId, currentStart, currentEnd]
+      [dashboardUserId, currentStart, currentEnd]
     );
-    
-    // Projetos entregues no período
-    
+
     // Combinar os resultados
     const allProjectsInPeriod = {
       rows: [
@@ -1513,17 +1549,10 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         ...(projectsCompletedInPeriod.rows || [])
       ]
     };
-    
-    // Buscar todas as despesas do período para calcular por mês manualmente
-    const allExpensesInPeriod = await query(
-      `SELECT e.amount, e.date FROM expenses e
-       WHERE e.user_id = $1 AND DATE(e.date) BETWEEN $2 AND $3`,
-      [req.userId, currentStart, currentEnd]
-    );
-    
+
     // Calcular faturamento e despesas por mês manualmente
     const monthlyDataMap = new Map();
-    
+
     // Processar projetos
     const projectsInPeriod = allProjectsInPeriod.rows || [];
     console.log('Projects in period:', projectsInPeriod.length, projectsInPeriod);
@@ -1547,12 +1576,12 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     // Buscar todas as despesas do usuário para cálculo correto por mês
     const { data: allUserExpenses, error: allExpensesError } = await supabase
       .from('expenses')
-      .select('id, amount, date, category, billing_type')
+      .select('*')
       .eq('user_id', userIdForExpenses);
     
     if (!allExpensesError && allUserExpenses) {
       const mappedAllExpenses = allUserExpenses.map(expense => ({
-        amount: expense.amount,
+        amount: getExpenseAmount(expense),
         date: expense.date,
         category: expense.category,
         billing_type: getOriginalBillingType(expense.id, expense.billing_type)
@@ -1620,7 +1649,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     // Buscar despesas por categoria do período atual usando Supabase
     const { data: expensesByCategoryRaw, error: categoryError } = await supabase
       .from('expenses')
-      .select('category, amount, date, billing_type')
+      .select('*')
       .eq('user_id', userIdForExpenses)
       .gte('date', currentStart)
       .lte('date', currentEnd)
@@ -1637,9 +1666,9 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     // Mapear dados para compatibilidade
     const mappedCategoryExpenses = expensesByCategoryArray.map(expense => ({
       category: expense.category || 'Sem categoria',
-      amount: expense.amount,
+      amount: getExpenseAmount(expense),
       date: expense.date,
-      billing_type: expense.billing_type
+      billing_type: getOriginalBillingType(expense.id, expense.billing_type)
     }));
      mappedCategoryExpenses.forEach(expense => {
        let monthlyAmount;
@@ -1696,12 +1725,12 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     
     // Buscar projetos recentes do período atual
     const recentProjects = await query(
-      `SELECT id, name, status, project_value, delivery_date
+      `SELECT id, name, status, project_value, delivery_date, created_at
        FROM projects 
        WHERE user_id = $1 AND DATE(delivery_date) BETWEEN $2 AND $3
        ORDER BY delivery_date DESC
        LIMIT 5`,
-      [req.userId, currentStart, currentEnd]
+      [dashboardUserId, currentStart, currentEnd]
     );
     
     const currentProjectsRaw = projectStats.rows?.[0] || {
@@ -1744,7 +1773,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
        WHERE user_id = $1 
        AND status = 'active' 
        AND (completion_date IS NULL OR DATE(completion_date) > $3)`,
-      [req.userId, currentStart, currentEnd]
+      [dashboardUserId, currentStart, currentEnd]
     );
     
     const currentReceivable = Math.max(0, parseFloat(currentReceivableStats.rows?.[0]?.total_receivable || 0));
@@ -1758,7 +1787,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
        WHERE user_id = $1 
        AND status = 'active' 
        AND (completion_date IS NULL OR DATE(completion_date) > $3)`,
-      [req.userId, prevStart, prevEnd]
+      [dashboardUserId, prevStart, prevEnd]
     );
     
     const previousReceivable = Math.max(0, parseFloat(previousReceivableStats.rows?.[0]?.total_receivable || 0));

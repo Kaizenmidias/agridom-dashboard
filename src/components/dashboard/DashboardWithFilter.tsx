@@ -27,7 +27,6 @@ ChartJS.register(
   Legend
 );
 import { dashboardAPI, DashboardStats } from '@/api/supabase-client';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 const DashboardWithFilter: React.FC = () => {
@@ -388,20 +387,27 @@ const DashboardWithFilter: React.FC = () => {
         };
       }
     } else {
-      // Para mês específico, mostrar dados semanais baseados no total mensal
-      const labels = ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'];
+      let periodLabel = 'Período selecionado';
+
+      if (period === 'custom') {
+        periodLabel =
+          customDateRange?.from && customDateRange?.to
+            ? `${format(customDateRange.from, 'dd/MM')} - ${format(customDateRange.to, 'dd/MM')}`
+            : 'Período personalizado';
+      } else {
+        const [year, month] = period.split('-');
+        periodLabel = format(new Date(parseInt(year), parseInt(month) - 1, 1), 'MMMM/yyyy', { locale: pt });
+      }
+
+      const labels = [periodLabel];
       
       if (metric === 'todos') {
-        const faturamentoWeekly = currentMonthData.revenue / 4;
-        const despesasWeekly = currentMonthData.expenses / 4;
-        const lucroWeekly = currentMonthData.profit / 4;
-        
         return {
           labels,
           datasets: [
             {
               label: 'Faturamento',
-              data: labels.map(() => Math.round(faturamentoWeekly * (0.8 + Math.random() * 0.4))),
+              data: [currentMonthData.revenue],
               backgroundColor: 'rgba(37, 99, 235, 0.6)',
               borderColor: 'rgba(37, 99, 235, 1)',
               borderWidth: 1,
@@ -409,7 +415,7 @@ const DashboardWithFilter: React.FC = () => {
             },
             {
               label: 'Despesas',
-              data: labels.map(() => Math.round(despesasWeekly * (0.8 + Math.random() * 0.4))),
+              data: [currentMonthData.expenses],
               backgroundColor: 'rgba(239, 68, 68, 0.6)',
               borderColor: 'rgba(239, 68, 68, 1)',
               borderWidth: 1,
@@ -417,7 +423,7 @@ const DashboardWithFilter: React.FC = () => {
             },
             {
               label: 'Lucro',
-              data: labels.map(() => Math.round(lucroWeekly * (0.8 + Math.random() * 0.4))),
+              data: [currentMonthData.profit],
               backgroundColor: 'rgba(34, 197, 94, 0.6)',
               borderColor: 'rgba(34, 197, 94, 1)',
               borderWidth: 1,
@@ -438,15 +444,12 @@ const DashboardWithFilter: React.FC = () => {
             monthlyTotal = currentMonthData.profit;
             break;
         }
-        
-        const weeklyAverage = monthlyTotal / 4;
-        const data = labels.map(() => Math.round(weeklyAverage * (0.8 + Math.random() * 0.4)));
-        
+
         return {
           labels,
           datasets: [{
             label: getMetricLabel(),
-            data,
+            data: [monthlyTotal],
             backgroundColor: getMetricColor().bg,
             borderColor: getMetricColor().border,
             borderWidth: 1,
