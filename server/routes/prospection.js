@@ -1496,6 +1496,31 @@ router.patch('/prospects/:id', async (req, res) => {
   }
 });
 
+router.delete('/prospects/:id', async (req, res) => {
+  try {
+    const ownerUserId = await resolveOwnerUserId(req.authUser);
+    const prospectId = Number(req.params.id);
+
+    const { error } = await adminSupabase
+      .from('prospects')
+      .delete()
+      .eq('id', prospectId)
+      .eq('owner_user_id', ownerUserId);
+
+    if (error) throw error;
+
+    await adminSupabase
+      .from('prospect_contact_history')
+      .delete()
+      .eq('prospect_id', prospectId)
+      .eq('owner_user_id', ownerUserId);
+
+    res.json({ success: true, id: prospectId });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Erro ao excluir lead' });
+  }
+});
+
 router.post('/prospects/:id/add-to-crm', async (req, res) => {
   try {
     const ownerUserId = await resolveOwnerUserId(req.authUser);

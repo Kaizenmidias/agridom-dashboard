@@ -102,6 +102,12 @@ export const prospectionAPI = {
     })
   },
 
+  deleteProspect(id: number) {
+    return request<{ success: boolean; id: number }>(`/prospects/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
   saveSettings(payload: Partial<ProspectingSettings>) {
     return request<ProspectingSettings>('/settings', {
       method: 'PUT',

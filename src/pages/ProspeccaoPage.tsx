@@ -4,6 +4,7 @@ import {
   BarChart3,
   ExternalLink,
   FolderPlus,
+  Info,
   Loader2,
   Mail,
   MapPin,
@@ -15,6 +16,7 @@ import {
   Send,
   Sparkles,
   Star,
+  Trash2,
   Users,
 } from 'lucide-react'
 
@@ -51,6 +53,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 
 type StateOption = { id: number; sigla: string; nome: string }
@@ -198,6 +207,7 @@ const ProspeccaoPage = () => {
   const [newFolderName, setNewFolderName] = useState('')
   const [folderDestination, setFolderDestination] = useState('')
   const [extraFolders, setExtraFolders] = useState<string[]>([])
+  const [detailProspect, setDetailProspect] = useState<Prospect | null>(null)
   const pageSize = 10
 
   const loadBootstrap = async () => {
@@ -348,6 +358,11 @@ const ProspeccaoPage = () => {
     return filteredProspects.slice(start, start + pageSize)
   }, [filteredProspects, page])
 
+  const selectedProspects = useMemo(
+    () => prospects.filter((prospect) => selectedIds.includes(prospect.id)),
+    [prospects, selectedIds]
+  )
+
   const totalPages = Math.max(1, Math.ceil(filteredProspects.length / pageSize))
 
   useEffect(() => {
@@ -454,6 +469,34 @@ const ProspeccaoPage = () => {
     }
   }
 
+  const handleAddSelectedToCRM = async () => {
+    const eligibleProspects = selectedProspects.filter((prospect) => !isLeadInCRM(prospect))
+
+    if (eligibleProspects.length === 0) {
+      toast({
+        title: 'Nenhum lead elegível',
+        description: 'Selecione leads que ainda não foram enviados para o CRM.',
+      })
+      return
+    }
+
+    try {
+      await Promise.all(eligibleProspects.map((prospect) => prospectionAPI.addToCRM(prospect.id)))
+      toast({
+        title: 'Leads enviados para o CRM',
+        description: `${eligibleProspects.length} lead(s) enviado(s) em massa para o CRM.`,
+      })
+      setSelectedIds([])
+      await loadBootstrap()
+    } catch (error: any) {
+      toast({
+        title: 'Erro no envio em massa para o CRM',
+        description: error.message || 'Não foi possível enviar os leads selecionados.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const handleWhatsApp = async (prospectIds: number[]) => {
     try {
       const result = await prospectionAPI.registerWhatsApp(
@@ -541,6 +584,27 @@ const ProspeccaoPage = () => {
     }
   }
 
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return
+
+    try {
+      await Promise.all(selectedIds.map((id) => prospectionAPI.deleteProspect(id)))
+      toast({
+        title: 'Leads excluídos',
+        description: `${selectedIds.length} lead(s) excluído(s) com sucesso.`,
+      })
+      setSelectedIds([])
+      setDetailProspect(null)
+      await loadBootstrap()
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao excluir leads',
+        description: error.message || 'Não foi possível excluir os leads selecionados.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const toggleSelection = (id: number) => {
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
@@ -572,6 +636,10 @@ const ProspeccaoPage = () => {
             <RefreshCw className="mr-2 h-4 w-4" />
             Atualizar
           </Button>
+          <Button onClick={() => void handleAddSelectedToCRM()} disabled={selectedIds.length === 0}>
+            <Users className="mr-2 h-4 w-4" />
+            CRM em Massa
+          </Button>
           <Button onClick={() => void handleWhatsApp(selectedIds)} disabled={selectedIds.length === 0}>
             <MessageCircle className="mr-2 h-4 w-4" />
             WhatsApp em Massa
@@ -579,6 +647,10 @@ const ProspeccaoPage = () => {
           <Button onClick={() => void handleEmail(selectedIds)} disabled={selectedIds.length === 0}>
             <Send className="mr-2 h-4 w-4" />
             E-mail em Massa
+          </Button>
+          <Button variant="destructive" onClick={() => void handleDeleteSelected()} disabled={selectedIds.length === 0}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Excluir Selecionados
           </Button>
         </div>
       </div>
@@ -788,13 +860,18 @@ const ProspeccaoPage = () => {
                     const inCRM = isLeadInCRM(prospect)
 
                     return (
-                      <Card key={prospect.id} className="overflow-hidden">
+                      <Card
+                        key={prospect.id}
+                        className="cursor-pointer overflow-hidden transition-colors hover:bg-muted/30"
+                        onClick={() => setDetailProspect(prospect)}
+                      >
                         <CardContent className="space-y-4 p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
                                 <Checkbox
                                   checked={selectedIds.includes(prospect.id)}
+                                  onClick={(event) => event.stopPropagation()}
                                   onCheckedChange={() => toggleSelection(prospect.id)}
                                 />
                                 <p className="font-semibold">{prospect.business_name}</p>
@@ -814,36 +891,9 @@ const ProspeccaoPage = () => {
                             <Badge variant="outline">{getFolderName(prospect)}</Badge>
                           </div>
 
-                          <div className="space-y-2 text-sm text-muted-foreground">
-                            <p>Telefone: {prospect.phone || 'Sem telefone'}</p>
-                            <p>E-mail: {prospect.email || 'Sem e-mail'}</p>
-                            <p>
-                              Site:{' '}
-                              {prospect.website ? (
-                                <a
-                                  href={prospect.website}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary underline"
-                                >
-                                  Abrir site
-                                </a>
-                              ) : (
-                                'Sem site'
-                              )}
-                            </p>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            {(prospect.problems_found || []).slice(0, 3).map((problem) => (
-                              <Badge key={problem} variant="outline">
-                                {problem}
-                              </Badge>
-                            ))}
-                          </div>
-
                           <Select
                             value={prospect.status}
+                            onClick={(event) => event.stopPropagation()}
                             onValueChange={(value) => void handleStatusChange(prospect, value as ProspectStatus)}
                           >
                             <SelectTrigger className="w-full">
@@ -862,7 +912,10 @@ const ProspeccaoPage = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => prospect.website && window.open(prospect.website, '_blank')}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                prospect.website && window.open(prospect.website, '_blank')
+                              }}
                               disabled={!prospect.website}
                             >
                               Ver Site
@@ -870,7 +923,10 @@ const ProspeccaoPage = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => void handleWhatsApp([prospect.id])}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void handleWhatsApp([prospect.id])
+                              }}
                               disabled={!prospect.phone}
                             >
                               WhatsApp
@@ -878,13 +934,34 @@ const ProspeccaoPage = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => void handleEmail([prospect.id])}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void handleEmail([prospect.id])
+                              }}
                               disabled={!prospect.email}
                             >
                               E-mail
                             </Button>
-                            <Button size="sm" onClick={() => void handleAddToCRM(prospect)} disabled={inCRM}>
+                            <Button
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void handleAddToCRM(prospect)
+                              }}
+                              disabled={inCRM}
+                            >
                               CRM
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setDetailProspect(prospect)
+                              }}
+                            >
+                              <Info className="mr-2 h-4 w-4" />
+                              Detalhes
                             </Button>
                           </div>
                         </CardContent>
@@ -914,20 +991,17 @@ const ProspeccaoPage = () => {
                       </TableHead>
                       <TableHead>Empresa</TableHead>
                       <TableHead className="hidden xl:table-cell">Local</TableHead>
-                      <TableHead className="hidden xl:table-cell">Contato</TableHead>
-                      <TableHead>Site</TableHead>
                       <TableHead>Score</TableHead>
-                      <TableHead className="hidden 2xl:table-cell">Problemas</TableHead>
                       <TableHead className="hidden xl:table-cell">Pasta</TableHead>
                       <TableHead className="hidden xl:table-cell">CRM</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="min-w-[220px]">Ações</TableHead>
+                      <TableHead className="min-w-[260px]">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedProspects.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="py-12 text-center text-muted-foreground">
+                        <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                           Nenhum lead encontrado com os filtros atuais.
                         </TableCell>
                       </TableRow>
@@ -936,10 +1010,15 @@ const ProspeccaoPage = () => {
                         const temperature = getTemperature(prospect.lead_score || 0)
                         const inCRM = isLeadInCRM(prospect)
                         return (
-                          <TableRow key={prospect.id}>
+                          <TableRow
+                            key={prospect.id}
+                            className="cursor-pointer"
+                            onClick={() => setDetailProspect(prospect)}
+                          >
                             <TableCell>
                               <Checkbox
                                 checked={selectedIds.includes(prospect.id)}
+                                onClick={(event) => event.stopPropagation()}
                                 onCheckedChange={() => toggleSelection(prospect.id)}
                               />
                             </TableCell>
@@ -958,44 +1037,10 @@ const ProspeccaoPage = () => {
                               </div>
                             </TableCell>
                             <TableCell className="hidden xl:table-cell">{[prospect.city, prospect.state].filter(Boolean).join(' / ') || 'Não informado'}</TableCell>
-                            <TableCell className="hidden xl:table-cell">
-                              <div className="space-y-1 text-sm">
-                                <p>{prospect.phone || 'Sem telefone'}</p>
-                                <p className="text-muted-foreground">{prospect.email || 'Sem e-mail'}</p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {prospect.website ? (
-                                <a
-                                  href={prospect.website}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-primary underline"
-                                >
-                                  Abrir site
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              ) : (
-                                <span className="text-muted-foreground">Sem site</span>
-                              )}
-                            </TableCell>
                             <TableCell>
                               <div className="space-y-1">
                                 <p className="font-semibold text-primary">{prospect.lead_score}</p>
                                 <p className="text-xs text-muted-foreground">{prospect.website_quality || 'Sem análise'}</p>
-                              </div>
-                            </TableCell>
-                            <TableCell className="hidden 2xl:table-cell">
-                              <div className="flex max-w-[260px] flex-wrap gap-1">
-                                {(prospect.problems_found || []).length > 0 ? (
-                                  prospect.problems_found.map((problem) => (
-                                    <Badge key={problem} variant="outline">
-                                      {problem}
-                                    </Badge>
-                                  ))
-                                ) : (
-                                  <Badge variant="outline">Nenhum</Badge>
-                                )}
                               </div>
                             </TableCell>
                             <TableCell className="hidden xl:table-cell">{getFolderName(prospect)}</TableCell>
@@ -1007,6 +1052,7 @@ const ProspeccaoPage = () => {
                             <TableCell>
                               <Select
                                 value={prospect.status}
+                                onClick={(event) => event.stopPropagation()}
                                 onValueChange={(value) => void handleStatusChange(prospect, value as ProspectStatus)}
                               >
                                 <SelectTrigger className="w-[150px]">
@@ -1026,7 +1072,10 @@ const ProspeccaoPage = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => prospect.website && window.open(prospect.website, '_blank')}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    prospect.website && window.open(prospect.website, '_blank')
+                                  }}
                                   disabled={!prospect.website}
                                 >
                                   Ver Site
@@ -1034,7 +1083,10 @@ const ProspeccaoPage = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => void handleWhatsApp([prospect.id])}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void handleWhatsApp([prospect.id])
+                                  }}
                                   disabled={!prospect.phone}
                                 >
                                   WhatsApp
@@ -1042,17 +1094,34 @@ const ProspeccaoPage = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => void handleEmail([prospect.id])}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void handleEmail([prospect.id])
+                                  }}
                                   disabled={!prospect.email}
                                 >
                                   E-mail
                                 </Button>
                                 <Button
                                   size="sm"
-                                  onClick={() => void handleAddToCRM(prospect)}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void handleAddToCRM(prospect)
+                                  }}
                                   disabled={inCRM}
                                 >
                                   Enviar para o CRM
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setDetailProspect(prospect)
+                                  }}
+                                >
+                                  <Info className="mr-2 h-4 w-4" />
+                                  Detalhes
                                 </Button>
                               </div>
                             </TableCell>
@@ -1297,6 +1366,112 @@ const ProspeccaoPage = () => {
           </CardContent>
         </Card>
       ) : null}
+
+      <Dialog open={Boolean(detailProspect)} onOpenChange={(open) => !open && setDetailProspect(null)}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          {detailProspect ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{detailProspect.business_name}</DialogTitle>
+                <DialogDescription>
+                  {[detailProspect.city, detailProspect.state].filter(Boolean).join(' / ') || 'Local não informado'}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Resumo</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className={getTemperature(detailProspect.lead_score || 0).className}>
+                        {getTemperature(detailProspect.lead_score || 0).label}
+                      </Badge>
+                      <Badge className={getStatusClassName(detailProspect.status)}>{detailProspect.status}</Badge>
+                      <Badge variant="outline">{getFolderName(detailProspect)}</Badge>
+                    </div>
+                    <p><span className="font-medium">Score:</span> {detailProspect.lead_score || 0}</p>
+                    <p><span className="font-medium">Qualidade do site:</span> {detailProspect.website_quality || 'Sem análise'}</p>
+                    <p><span className="font-medium">CRM:</span> {isLeadInCRM(detailProspect) ? 'Enviado' : 'Não enviado'}</p>
+                    <p><span className="font-medium">Último contato:</span> {formatDateTime(detailProspect.last_contact_date)}</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Contato e Links</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <p><span className="font-medium">Telefone:</span> {detailProspect.phone || 'Sem telefone'}</p>
+                    <p><span className="font-medium">E-mail:</span> {detailProspect.email || 'Sem e-mail'}</p>
+                    <p><span className="font-medium">Endereço:</span> {detailProspect.address || 'Não informado'}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => detailProspect.website && window.open(detailProspect.website, '_blank')}
+                        disabled={!detailProspect.website}
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Ver Site
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => detailProspect.google_maps_url && window.open(detailProspect.google_maps_url, '_blank')}
+                        disabled={!detailProspect.google_maps_url}
+                      >
+                        <MapPin className="mr-2 h-4 w-4" />
+                        Google Maps
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Problemas Identificados</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {(detailProspect.problems_found || []).length > 0 ? (
+                      detailProspect.problems_found.map((problem) => (
+                        <Badge key={problem} variant="outline">
+                          {problem}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge variant="outline">Nenhum problema listado</Badge>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Diagnóstico</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {detailProspect.diagnostic_summary || 'Diagnóstico não disponível.'}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Abordagem Comercial</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {detailProspect.approach_suggestion || 'Abordagem não disponível.'}
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
