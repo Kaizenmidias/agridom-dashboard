@@ -611,21 +611,25 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Algo deu errado!' });
 });
 
-// Iniciar servidor
-const server = app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-console.log(`API disponível em ${process.env.NODE_ENV === 'production' ? process.env.BACKEND_URL : `http://localhost:${PORT}`}/api`);
-  console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
-});
+module.exports = app;
 
-// Configurar timeout para produção
-if (process.env.NODE_ENV === 'production') {
-  server.timeout = 30000; // 30 segundos
+if (require.main === module) {
+  // Iniciar servidor apenas no ambiente Node tradicional.
+  const server = app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`API disponível em ${process.env.NODE_ENV === 'production' ? process.env.BACKEND_URL : `http://localhost:${PORT}`}/api`);
+    console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  // Configurar timeout para produção
+  if (process.env.NODE_ENV === 'production') {
+    server.timeout = 30000; // 30 segundos
+  }
+
+  // Graceful shutdown
+  process.on('SIGINT', async () => {
+    console.log('\n🔄 Encerrando servidor...');
+    await closeConnection();
+    process.exit(0);
+  });
 }
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\n🔄 Encerrando servidor...');
-  await closeConnection();
-  process.exit(0);
-});
