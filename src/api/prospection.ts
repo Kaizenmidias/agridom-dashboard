@@ -2,6 +2,10 @@ import { supabase } from '@/lib/supabase'
 import type {
   Prospect,
   ProspectContactHistory,
+  ProspectionIntegrationProvider,
+  ProspectionIntegrationSettings,
+  ProspectionIntegrationTestResult,
+  ProspectionIntegrationUpdatePayload,
   ProspectMetrics,
   ProspectSearchInput,
   ProspectStatus,
@@ -93,6 +97,23 @@ export const prospectionAPI = {
     })
   },
 
+  getIntegrationSettings() {
+    return request<ProspectionIntegrationSettings>('/integrations')
+  },
+
+  saveIntegrationSettings(payload: ProspectionIntegrationUpdatePayload) {
+    return request<ProspectionIntegrationSettings>('/integrations', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  testIntegration(provider: ProspectionIntegrationProvider) {
+    return request<ProspectionIntegrationTestResult>(`/integrations/${provider}/test`, {
+      method: 'POST',
+    })
+  },
+
   registerWhatsApp(prospectIds: number[], template: string, defaultTemplate?: string) {
     return request<{ links: Array<{ prospect_id: number; business_name: string; url: string }> }>(
       '/whatsapp/register',
@@ -123,6 +144,10 @@ export type {
   Prospect,
   ProspectContactHistory,
   ProspectMetrics,
+  ProspectionIntegrationProvider,
+  ProspectionIntegrationSettings,
+  ProspectionIntegrationTestResult,
+  ProspectionIntegrationUpdatePayload,
   ProspectingSettings,
   ProspectionBootstrap,
 }

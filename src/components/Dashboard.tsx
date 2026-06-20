@@ -318,8 +318,8 @@ const Dashboard = () => {
   };
   
   return (
-    <div className="p-6 space-y-6 animate-enter">
-      <header className="flex justify-between items-center mb-6">
+    <div className="w-full max-w-full space-y-6 overflow-x-hidden p-4 sm:p-6 animate-enter">
+      <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold mb-1">
             <EditableField
@@ -338,7 +338,7 @@ const Dashboard = () => {
             />
           </p>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-wrap items-center gap-3">
           <button className="px-4 py-2 text-sm text-agri-primary font-medium bg-agri-primary/10 rounded-lg hover:bg-agri-primary/20 transition-colors">
             <Calendar className="h-4 w-4 inline mr-2" />
             <EditableField
@@ -550,7 +550,7 @@ const Dashboard = () => {
               Ver todos →
             </button>
           </div>
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <div className="w-full overflow-x-auto">
             <table className="w-full text-xs sm:text-sm">
               <thead className="bg-muted text-xs uppercase">
                 <tr>

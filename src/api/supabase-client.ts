@@ -217,13 +217,18 @@ export const crudAPI = {
         ? 'https://agridom-dashboard.vercel.app'
         : 'http://localhost:3001';
       
-      const response = await fetch(`${baseUrl}/api/users`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/api/users`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      } catch (error: any) {
+        throw error;
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -984,13 +989,18 @@ export const dashboardAPI = {
       const url = `${baseUrl}/api/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`;
       console.log('Frontend - Chamando API do backend:', url);
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      } catch (error: any) {
+        throw error;
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

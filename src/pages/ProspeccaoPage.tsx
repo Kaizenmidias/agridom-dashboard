@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertCircle,
   BarChart3,
@@ -11,6 +12,7 @@ import {
   MapPin,
   MessageCircle,
   Phone,
+  PlugZap,
   Radar,
   RefreshCw,
   Search,
@@ -588,7 +590,7 @@ const ProspeccaoPage = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="w-full max-w-full space-y-6 overflow-x-hidden p-4 sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -722,8 +724,8 @@ const ProspeccaoPage = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Integrações</CardTitle>
-            <CardDescription>Status das integrações externas do módulo</CardDescription>
+            <CardTitle>Integrações e API</CardTitle>
+            <CardDescription>Resumo das integrações ativas do módulo</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="rounded-lg border p-3">
@@ -758,6 +760,12 @@ const ProspeccaoPage = () => {
                   : 'Configure credenciais reais para habilitar envio direto.'}
               </p>
             </div>
+            <Button asChild className="w-full">
+              <Link to="/prospeccao/integracoes">
+                <PlugZap className="mr-2 h-4 w-4" />
+                Abrir Integrações e API
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -861,7 +869,124 @@ const ProspeccaoPage = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-lg border">
+              <div className="grid gap-4 lg:hidden">
+                {paginatedProspects.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+                    Nenhum lead encontrado com os filtros atuais.
+                  </div>
+                ) : (
+                  paginatedProspects.map((prospect) => {
+                    const temperature = getTemperature(prospect.lead_score || 0)
+                    const inCRM = isLeadInCRM(prospect)
+
+                    return (
+                      <Card key={prospect.id} className="overflow-hidden">
+                        <CardContent className="space-y-4 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  checked={selectedIds.includes(prospect.id)}
+                                  onCheckedChange={() => toggleSelection(prospect.id)}
+                                />
+                                <p className="font-semibold">{prospect.business_name}</p>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {[prospect.city, prospect.state].filter(Boolean).join(' / ') || 'Não informado'}
+                              </p>
+                            </div>
+                            <Badge className={temperature.className}>{prospect.lead_score}</Badge>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <Badge className={temperature.className}>{temperature.label}</Badge>
+                            <Badge className={inCRM ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-800'}>
+                              {inCRM ? 'No CRM' : 'Não enviado'}
+                            </Badge>
+                            <Badge variant="outline">{getFolderName(prospect)}</Badge>
+                          </div>
+
+                          <div className="space-y-2 text-sm text-muted-foreground">
+                            <p>Telefone: {prospect.phone || 'Sem telefone'}</p>
+                            <p>E-mail: {prospect.email || 'Sem e-mail'}</p>
+                            <p>
+                              Site:{' '}
+                              {prospect.website ? (
+                                <a
+                                  href={prospect.website}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary underline"
+                                >
+                                  Abrir site
+                                </a>
+                              ) : (
+                                'Sem site'
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {(prospect.problems_found || []).slice(0, 3).map((problem) => (
+                              <Badge key={problem} variant="outline">
+                                {problem}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          <Select
+                            value={prospect.status}
+                            onValueChange={(value) => void handleStatusChange(prospect, value as ProspectStatus)}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {statusOptions.map((status) => (
+                                <SelectItem key={status} value={status}>
+                                  {status}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => prospect.website && window.open(prospect.website, '_blank')}
+                              disabled={!prospect.website}
+                            >
+                              Ver Site
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleWhatsApp([prospect.id])}
+                              disabled={!prospect.phone}
+                            >
+                              WhatsApp
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleEmail([prospect.id])}
+                              disabled={!prospect.email}
+                            >
+                              E-mail
+                            </Button>
+                            <Button size="sm" onClick={() => void handleAddToCRM(prospect)} disabled={inCRM}>
+                              CRM
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })
+                )}
+              </div>
+
+              <div className="hidden rounded-lg border overflow-x-auto lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -880,15 +1005,15 @@ const ProspeccaoPage = () => {
                         />
                       </TableHead>
                       <TableHead>Empresa</TableHead>
-                      <TableHead>Local</TableHead>
-                      <TableHead>Contato</TableHead>
+                      <TableHead className="hidden xl:table-cell">Local</TableHead>
+                      <TableHead className="hidden xl:table-cell">Contato</TableHead>
                       <TableHead>Site</TableHead>
                       <TableHead>Score</TableHead>
-                      <TableHead>Problemas</TableHead>
-                      <TableHead>Pasta</TableHead>
-                      <TableHead>CRM</TableHead>
+                      <TableHead className="hidden 2xl:table-cell">Problemas</TableHead>
+                      <TableHead className="hidden xl:table-cell">Pasta</TableHead>
+                      <TableHead className="hidden xl:table-cell">CRM</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="min-w-[280px]">Ações</TableHead>
+                      <TableHead className="min-w-[220px]">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -924,8 +1049,8 @@ const ProspeccaoPage = () => {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell>{[prospect.city, prospect.state].filter(Boolean).join(' / ') || 'Não informado'}</TableCell>
-                            <TableCell>
+                            <TableCell className="hidden xl:table-cell">{[prospect.city, prospect.state].filter(Boolean).join(' / ') || 'Não informado'}</TableCell>
+                            <TableCell className="hidden xl:table-cell">
                               <div className="space-y-1 text-sm">
                                 <p>{prospect.phone || 'Sem telefone'}</p>
                                 <p className="text-muted-foreground">{prospect.email || 'Sem e-mail'}</p>
@@ -952,7 +1077,7 @@ const ProspeccaoPage = () => {
                                 <p className="text-xs text-muted-foreground">{prospect.website_quality || 'Sem análise'}</p>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden 2xl:table-cell">
                               <div className="flex max-w-[260px] flex-wrap gap-1">
                                 {(prospect.problems_found || []).length > 0 ? (
                                   prospect.problems_found.map((problem) => (
@@ -965,8 +1090,8 @@ const ProspeccaoPage = () => {
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell>{getFolderName(prospect)}</TableCell>
-                            <TableCell>
+                            <TableCell className="hidden xl:table-cell">{getFolderName(prospect)}</TableCell>
+                            <TableCell className="hidden xl:table-cell">
                               <Badge className={inCRM ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-800'}>
                                 {inCRM ? 'No CRM' : 'Não enviado'}
                               </Badge>
@@ -976,7 +1101,7 @@ const ProspeccaoPage = () => {
                                 value={prospect.status}
                                 onValueChange={(value) => void handleStatusChange(prospect, value as ProspectStatus)}
                               >
-                                <SelectTrigger className="w-[170px]">
+                                <SelectTrigger className="w-[150px]">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1031,7 +1156,7 @@ const ProspeccaoPage = () => {
                 </Table>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-muted-foreground">
                   Exibindo {paginatedProspects.length} de {filteredProspects.length} lead(s) | selecionados: {selectedIds.length}
                 </p>

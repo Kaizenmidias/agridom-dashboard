@@ -14,6 +14,7 @@ import AcessosPage from "./pages/AcessosPage";
 import DespesasPage from "./pages/DespesasPage";
 import CRMPage from "./pages/CRMPage";
 import ProspeccaoPage from "./pages/ProspeccaoPage";
+import ProspeccaoIntegracoesPage from "./pages/ProspeccaoIntegracoesPage";
 import UsuariosPage from "./pages/UsuariosPage";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -45,6 +46,7 @@ const routes = [
   { path: "/despesas", element: <DespesasPage />, protected: true, restrictedForRicardo: true },
   { path: "/crm", element: <CRMPage />, protected: true, restrictedForRicardo: false },
   { path: "/prospeccao", element: <ProspeccaoPage />, protected: true, restrictedForRicardo: false },
+  { path: "/prospeccao/integracoes", element: <ProspeccaoIntegracoesPage />, protected: true, restrictedForRicardo: false },
   { path: "/usuarios", element: <UsuariosPage />, protected: true, restrictedForRicardo: true },
   { path: "/access-denied", element: <AccessDeniedPage />, protected: true, restrictedForRicardo: false },
   { path: "*", element: <NotFound />, protected: false, restrictedForRicardo: false }
@@ -87,7 +89,7 @@ const AppLayout = () => {
   
   if (!showSidebar) {
     return (
-      <div className="min-h-screen w-full">
+      <div className="min-h-screen w-full max-w-full overflow-x-hidden">
         <Routes>
           {routes.map((route) => (
             <Route 
@@ -111,13 +113,13 @@ const AppLayout = () => {
   
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
         <AppSidebar />
-        <main className="flex-1">
-          <header className="h-12 flex items-center border-b px-4">
+        <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+          <header className="flex h-12 w-full items-center border-b px-4">
             <SidebarTrigger />
           </header>
-          <div className="flex-1">
+          <div className="flex-1 w-full max-w-full overflow-x-hidden">
             <Routes>
               {routes.map((route) => {
                 if (!route.protected) {

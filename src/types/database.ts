@@ -298,6 +298,62 @@ export interface ProspectingSettings {
   updated_at: string;
 }
 
+export type ProspectionIntegrationProvider = 'apify' | 'google' | 'openai' | 'smtp';
+
+export interface ProspectionIntegrationSettings {
+  apify: {
+    configured: boolean;
+    tokenMasked?: string | null;
+    actorId: string;
+  };
+  google: {
+    configured: boolean;
+    placesApiKeyMasked?: string | null;
+    pageSpeedApiKeyMasked?: string | null;
+  };
+  openai: {
+    configured: boolean;
+    apiKeyMasked?: string | null;
+    model: string;
+  };
+  smtp: {
+    configured: boolean;
+    host: string;
+    port: string;
+    user: string;
+    from: string;
+    passMasked?: string | null;
+  };
+}
+
+export interface ProspectionIntegrationUpdatePayload {
+  apify?: {
+    token?: string;
+    actorId?: string;
+  };
+  google?: {
+    placesApiKey?: string;
+    pageSpeedApiKey?: string;
+  };
+  openai?: {
+    apiKey?: string;
+    model?: string;
+  };
+  smtp?: {
+    host?: string;
+    port?: string;
+    user?: string;
+    pass?: string;
+    from?: string;
+  };
+}
+
+export interface ProspectionIntegrationTestResult {
+  success: boolean;
+  message: string;
+  details?: string[];
+}
+
 export interface ProspectContactHistory {
   id: number;
   prospect_id: number;

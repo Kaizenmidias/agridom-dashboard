@@ -4,6 +4,8 @@ const { createClient } = require('@supabase/supabase-js');
 
 const router = express.Router();
 const DEFAULT_APIFY_ACTOR = 'datamech/apify-google-maps-scraper';
+const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
+const INTEGRATION_SETTINGS_PREFIX = 'prospection_integrations_user_';
 
 const STATUS_OPTIONS = [
   'Novo',
@@ -72,11 +74,172 @@ function cleanNullableString(value) {
   return trimmed || null;
 }
 
+function cleanOptionalString(value) {
+  if (value === undefined || value === null) return undefined;
+  const trimmed = String(value).trim();
+  return trimmed;
+}
+
 function mergeAnalysisReport(currentValue, patch) {
   return {
     ...(currentValue && typeof currentValue === 'object' ? currentValue : {}),
     ...patch
   };
+}
+
+function buildIntegrationSettingKey(ownerUserId) {
+  return `${INTEGRATION_SETTINGS_PREFIX}${ownerUserId}`;
+}
+
+function getEnvIntegrationConfig() {
+  return {
+    apify: {
+      token: process.env.APIFY_TOKEN || '',
+      actorId: process.env.APIFY_GOOGLE_MAPS_ACTOR || DEFAULT_APIFY_ACTOR
+    },
+    google: {
+      placesApiKey: process.env.GOOGLE_PLACES_API_KEY || '',
+      pageSpeedApiKey: process.env.GOOGLE_PAGESPEED_API_KEY || ''
+    },
+    openai: {
+      apiKey: process.env.OPENAI_API_KEY || '',
+      model: process.env.OPENAI_MODEL || OPENAI_DEFAULT_MODEL
+    },
+    smtp: {
+      host: process.env.SMTP_HOST || '',
+      port: String(process.env.SMTP_PORT || '587'),
+      user: process.env.SMTP_USER || '',
+      pass: process.env.SMTP_PASS || '',
+      from: process.env.EMAIL_FROM || process.env.SMTP_USER || ''
+    }
+  };
+}
+
+function normalizeIntegrationConfig(config) {
+  const source = config && typeof config === 'object' ? config : {};
+  const envConfig = getEnvIntegrationConfig();
+
+  return {
+    apify: {
+      token: cleanNullableString(source.apify?.token) || envConfig.apify.token,
+      actorId: cleanNullableString(source.apify?.actorId) || envConfig.apify.actorId
+    },
+    google: {
+      placesApiKey: cleanNullableString(source.google?.placesApiKey) || envConfig.google.placesApiKey,
+      pageSpeedApiKey: cleanNullableString(source.google?.pageSpeedApiKey) || envConfig.google.pageSpeedApiKey
+    },
+    openai: {
+      apiKey: cleanNullableString(source.openai?.apiKey) || envConfig.openai.apiKey,
+      model: cleanNullableString(source.openai?.model) || envConfig.openai.model
+    },
+    smtp: {
+      host: cleanNullableString(source.smtp?.host) || envConfig.smtp.host,
+      port: cleanNullableString(source.smtp?.port) || envConfig.smtp.port,
+      user: cleanNullableString(source.smtp?.user) || envConfig.smtp.user,
+      pass: cleanNullableString(source.smtp?.pass) || envConfig.smtp.pass,
+      from: cleanNullableString(source.smtp?.from) || envConfig.smtp.from
+    }
+  };
+}
+
+function mergeIntegrationConfig(currentConfig, patch) {
+  const next = JSON.parse(JSON.stringify(currentConfig || getEnvIntegrationConfig()));
+
+  if (patch.apify) {
+    const token = cleanOptionalString(patch.apify.token);
+    const actorId = cleanOptionalString(patch.apify.actorId);
+    if (token) next.apify.token = token;
+    if (actorId !== undefined) next.apify.actorId = actorId || DEFAULT_APIFY_ACTOR;
+  }
+
+  if (patch.google) {
+    const placesApiKey = cleanOptionalString(patch.google.placesApiKey);
+    const pageSpeedApiKey = cleanOptionalString(patch.google.pageSpeedApiKey);
+    if (placesApiKey) next.google.placesApiKey = placesApiKey;
+    if (pageSpeedApiKey) next.google.pageSpeedApiKey = pageSpeedApiKey;
+  }
+
+  if (patch.openai) {
+    const apiKey = cleanOptionalString(patch.openai.apiKey);
+    const model = cleanOptionalString(patch.openai.model);
+    if (apiKey) next.openai.apiKey = apiKey;
+    if (model !== undefined) next.openai.model = model || OPENAI_DEFAULT_MODEL;
+  }
+
+  if (patch.smtp) {
+    const host = cleanOptionalString(patch.smtp.host);
+    const port = cleanOptionalString(patch.smtp.port);
+    const user = cleanOptionalString(patch.smtp.user);
+    const pass = cleanOptionalString(patch.smtp.pass);
+    const from = cleanOptionalString(patch.smtp.from);
+    if (host !== undefined) next.smtp.host = host;
+    if (port !== undefined) next.smtp.port = port;
+    if (user !== undefined) next.smtp.user = user;
+    if (pass) next.smtp.pass = pass;
+    if (from !== undefined) next.smtp.from = from;
+  }
+
+  return normalizeIntegrationConfig(next);
+}
+
+function maskSecret(value) {
+  if (!value) return null;
+  const stringValue = String(value);
+  if (stringValue.length <= 6) return '******';
+  return `${stringValue.slice(0, 3)}${'*'.repeat(Math.max(4, stringValue.length - 6))}${stringValue.slice(-3)}`;
+}
+
+function buildIntegrationStatus(config) {
+  return {
+    apifyConfigured: Boolean(config.apify.token),
+    googlePlacesConfigured: Boolean(config.google.placesApiKey),
+    pageSpeedConfigured: Boolean(config.google.pageSpeedApiKey),
+    openAIConfigured: Boolean(config.openai.apiKey),
+    smtpConfigured: Boolean(config.smtp.host && config.smtp.user && config.smtp.pass && config.smtp.from)
+  };
+}
+
+function sanitizeIntegrationConfigForClient(config) {
+  const statuses = buildIntegrationStatus(config);
+  return {
+    apify: {
+      configured: statuses.apifyConfigured,
+      tokenMasked: maskSecret(config.apify.token),
+      actorId: config.apify.actorId || DEFAULT_APIFY_ACTOR
+    },
+    google: {
+      configured: statuses.googlePlacesConfigured || statuses.pageSpeedConfigured,
+      placesApiKeyMasked: maskSecret(config.google.placesApiKey),
+      pageSpeedApiKeyMasked: maskSecret(config.google.pageSpeedApiKey)
+    },
+    openai: {
+      configured: statuses.openAIConfigured,
+      apiKeyMasked: maskSecret(config.openai.apiKey),
+      model: config.openai.model || OPENAI_DEFAULT_MODEL
+    },
+    smtp: {
+      configured: statuses.smtpConfigured,
+      host: config.smtp.host || '',
+      port: config.smtp.port || '587',
+      user: config.smtp.user || '',
+      from: config.smtp.from || '',
+      passMasked: maskSecret(config.smtp.pass)
+    }
+  };
+}
+
+function applyIntegrationConfigToProcess(config) {
+  process.env.APIFY_TOKEN = config.apify.token || '';
+  process.env.APIFY_GOOGLE_MAPS_ACTOR = config.apify.actorId || DEFAULT_APIFY_ACTOR;
+  process.env.GOOGLE_PLACES_API_KEY = config.google.placesApiKey || '';
+  process.env.GOOGLE_PAGESPEED_API_KEY = config.google.pageSpeedApiKey || '';
+  process.env.OPENAI_API_KEY = config.openai.apiKey || '';
+  process.env.OPENAI_MODEL = config.openai.model || OPENAI_DEFAULT_MODEL;
+  process.env.SMTP_HOST = config.smtp.host || '';
+  process.env.SMTP_PORT = String(config.smtp.port || '587');
+  process.env.SMTP_USER = config.smtp.user || '';
+  process.env.SMTP_PASS = config.smtp.pass || '';
+  process.env.EMAIL_FROM = config.smtp.from || '';
 }
 
 function escapeOverpassRegex(value) {
@@ -800,6 +963,60 @@ async function fetchSettingsForOwner(ownerUserId) {
   return inserted;
 }
 
+async function fetchStoredIntegrationConfig(ownerUserId) {
+  const { data, error } = await adminSupabase
+    .from('system_settings')
+    .select('setting_value')
+    .eq('setting_key', buildIntegrationSettingKey(ownerUserId))
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.setting_value) {
+    return getEnvIntegrationConfig();
+  }
+
+  try {
+    return normalizeIntegrationConfig(JSON.parse(data.setting_value));
+  } catch {
+    return getEnvIntegrationConfig();
+  }
+}
+
+async function hydrateIntegrationConfig(ownerUserId) {
+  const config = await fetchStoredIntegrationConfig(ownerUserId);
+  applyIntegrationConfigToProcess(config);
+  return config;
+}
+
+async function saveIntegrationConfig(ownerUserId, payload) {
+  const currentConfig = await fetchStoredIntegrationConfig(ownerUserId);
+  const nextConfig = mergeIntegrationConfig(currentConfig, payload);
+
+  const { error } = await adminSupabase
+    .from('system_settings')
+    .upsert(
+      {
+        setting_key: buildIntegrationSettingKey(ownerUserId),
+        setting_value: JSON.stringify(nextConfig),
+        description: 'Configuracoes de integracoes do modulo de prospeccao'
+      },
+      {
+        onConflict: 'setting_key'
+      }
+    );
+
+  if (error) {
+    throw error;
+  }
+
+  applyIntegrationConfigToProcess(nextConfig);
+  return nextConfig;
+}
+
 async function fetchMetricsForOwner(ownerUserId) {
   const prospects = await fetchProspectsForOwner(ownerUserId);
 
@@ -826,10 +1043,11 @@ async function fetchMetricsForOwner(ownerUserId) {
 }
 
 function createEmailTransport() {
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const config = getEnvIntegrationConfig();
+  const host = config.smtp.host;
+  const port = Number(config.smtp.port || 587);
+  const user = config.smtp.user;
+  const pass = config.smtp.pass;
 
   const invalidConfig =
     !host ||
@@ -850,11 +1068,166 @@ function createEmailTransport() {
   });
 }
 
+async function testApifyConnection() {
+  if (!process.env.APIFY_TOKEN) {
+    throw new Error('Token do Apify nao configurado');
+  }
+
+  const response = await fetch(
+    `https://api.apify.com/v2/users/me?token=${encodeURIComponent(process.env.APIFY_TOKEN)}`
+  );
+
+  if (!response.ok) {
+    throw new Error('Falha ao validar token do Apify');
+  }
+
+  const data = await response.json();
+  return {
+    success: true,
+    message: `Apify conectado com sucesso para ${data?.data?.username || 'a conta informada'}.`
+  };
+}
+
+async function testGoogleConnection() {
+  const details = [];
+
+  if (process.env.GOOGLE_PLACES_API_KEY) {
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY,
+        'X-Goog-FieldMask': 'places.displayName'
+      },
+      body: JSON.stringify({
+        textQuery: 'Dentistas Sao Paulo',
+        maxResultCount: 1
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Falha ao validar a Google Places API');
+    }
+
+    details.push('Google Places validado com sucesso');
+  }
+
+  if (process.env.GOOGLE_PAGESPEED_API_KEY) {
+    const endpoint = new URL('https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
+    endpoint.searchParams.set('url', 'https://example.com');
+    endpoint.searchParams.set('strategy', 'mobile');
+    endpoint.searchParams.set('key', process.env.GOOGLE_PAGESPEED_API_KEY);
+
+    const response = await fetch(endpoint.toString());
+    if (!response.ok) {
+      throw new Error('Falha ao validar a Google PageSpeed API');
+    }
+
+    details.push('Google PageSpeed validado com sucesso');
+  }
+
+  if (details.length === 0) {
+    throw new Error('Nenhuma chave do Google foi configurada');
+  }
+
+  return {
+    success: true,
+    message: 'Integracoes Google validadas com sucesso.',
+    details
+  };
+}
+
+async function testOpenAIConnection() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('Chave da OpenAI nao configurada');
+  }
+
+  const response = await fetch('https://api.openai.com/v1/models', {
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error('Falha ao validar a OpenAI API');
+  }
+
+  return {
+    success: true,
+    message: 'OpenAI validada com sucesso.'
+  };
+}
+
+async function testSMTPConnection() {
+  const transport = createEmailTransport();
+  await transport.verify();
+
+  return {
+    success: true,
+    message: 'SMTP validado com sucesso.'
+  };
+}
+
 router.use(authenticateRequest);
+
+router.get('/integrations', async (req, res) => {
+  try {
+    const ownerUserId = await resolveOwnerUserId(req.authUser);
+    const integrationConfig = await hydrateIntegrationConfig(ownerUserId);
+    res.json(sanitizeIntegrationConfigForClient(integrationConfig));
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Erro ao carregar integracoes' });
+  }
+});
+
+router.put('/integrations', async (req, res) => {
+  try {
+    const ownerUserId = await resolveOwnerUserId(req.authUser);
+    const integrationConfig = await saveIntegrationConfig(ownerUserId, req.body || {});
+    res.json(sanitizeIntegrationConfigForClient(integrationConfig));
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Erro ao salvar integracoes' });
+  }
+});
+
+router.post('/integrations/:provider/test', async (req, res) => {
+  try {
+    const ownerUserId = await resolveOwnerUserId(req.authUser);
+    await hydrateIntegrationConfig(ownerUserId);
+
+    const provider = String(req.params.provider || '').toLowerCase();
+    let result;
+
+    switch (provider) {
+      case 'apify':
+        result = await testApifyConnection();
+        break;
+      case 'google':
+        result = await testGoogleConnection();
+        break;
+      case 'openai':
+        result = await testOpenAIConnection();
+        break;
+      case 'smtp':
+        result = await testSMTPConnection();
+        break;
+      default:
+        return res.status(400).json({ error: 'Integracao invalida' });
+    }
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Falha ao testar integracao'
+    });
+  }
+});
 
 router.get('/bootstrap', async (req, res) => {
   try {
     const ownerUserId = await resolveOwnerUserId(req.authUser);
+    const integrationConfig = await hydrateIntegrationConfig(ownerUserId);
     const [prospects, settings, metrics, historyResponse] = await Promise.all([
       fetchProspectsForOwner(ownerUserId),
       fetchSettingsForOwner(ownerUserId),
@@ -873,13 +1246,7 @@ router.get('/bootstrap', async (req, res) => {
       settings,
       metrics,
       history: historyResponse.data || [],
-      integrations: {
-        apifyConfigured: Boolean(process.env.APIFY_TOKEN),
-        googlePlacesConfigured: Boolean(process.env.GOOGLE_PLACES_API_KEY),
-        pageSpeedConfigured: Boolean(process.env.GOOGLE_PAGESPEED_API_KEY),
-        openAIConfigured: Boolean(process.env.OPENAI_API_KEY),
-        smtpConfigured: !/your-email|ethereal|seu-email/i.test(process.env.SMTP_USER || '')
-      }
+      integrations: buildIntegrationStatus(integrationConfig)
     });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Erro ao carregar modulo de prospeccao' });
@@ -889,6 +1256,7 @@ router.get('/bootstrap', async (req, res) => {
 router.post('/search', async (req, res) => {
   try {
     const ownerUserId = await resolveOwnerUserId(req.authUser);
+    await hydrateIntegrationConfig(ownerUserId);
     const niche = cleanNullableString(req.body.niche);
     const city = cleanNullableString(req.body.city);
     const state = cleanNullableString(req.body.state);
@@ -1132,6 +1500,7 @@ router.post('/prospects/:id/add-to-crm', async (req, res) => {
 router.put('/settings', async (req, res) => {
   try {
     const ownerUserId = await resolveOwnerUserId(req.authUser);
+    await hydrateIntegrationConfig(ownerUserId);
     const currentSettings = await fetchSettingsForOwner(ownerUserId);
     const payload = {
       whatsapp_template: cleanNullableString(req.body.whatsapp_template) || currentSettings.whatsapp_template,
@@ -1213,6 +1582,7 @@ router.post('/whatsapp/register', async (req, res) => {
 router.post('/email/send', async (req, res) => {
   try {
     const ownerUserId = await resolveOwnerUserId(req.authUser);
+    await hydrateIntegrationConfig(ownerUserId);
     const prospectIds = Array.isArray(req.body.prospect_ids) ? req.body.prospect_ids : [];
     const subjectTemplate = cleanNullableString(req.body.subject);
     const bodyTemplate = cleanNullableString(req.body.body_html);

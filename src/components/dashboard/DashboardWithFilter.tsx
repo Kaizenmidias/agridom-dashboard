@@ -495,7 +495,7 @@ const DashboardWithFilter: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="w-full max-w-full space-y-6 overflow-x-hidden p-4 sm:p-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
@@ -510,9 +510,9 @@ const DashboardWithFilter: React.FC = () => {
         </div>
         
         <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4">
-          <div className="w-full md:w-auto">
+          <div className="w-full md:w-auto md:min-w-[200px]">
             <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
-              <SelectTrigger className="w-full md:w-auto min-w-[200px]">
+              <SelectTrigger className="w-full md:w-auto">
                 <SelectValue placeholder="Selecionar período" />
               </SelectTrigger>
               <SelectContent>
@@ -526,12 +526,12 @@ const DashboardWithFilter: React.FC = () => {
           </div>
           
           {selectedPeriod === 'custom' && (
-            <div className="w-full md:w-auto">
+            <div className="w-full md:w-auto md:min-w-[240px]">
               <DatePickerWithRange
                 date={customDateRange}
                 setDate={handleCustomDateRangeChange}
                 placeholderText="Selecionar período personalizado"
-                className="min-w-[280px]"
+                className="w-full"
               />
             </div>
           )}
@@ -569,11 +569,11 @@ const DashboardWithFilter: React.FC = () => {
 
       {/* Gráfico de Relatório */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Relatório de {getMetricLabel()}</CardTitle>
-          <div className="w-auto">
+          <div className="w-full sm:w-auto sm:min-w-[150px]">
             <Select value={selectedMetric} onValueChange={setSelectedMetric}>
-              <SelectTrigger className="w-auto min-w-[150px]">
+              <SelectTrigger className="w-full sm:w-auto">
                 <SelectValue placeholder="Selecionar métrica" />
               </SelectTrigger>
               <SelectContent>

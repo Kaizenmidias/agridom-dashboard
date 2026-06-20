@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Home, FileText, Wallet, Users, Settings, User, Briefcase, Code, Key, Radar } from "lucide-react"
+import { Home, FileText, Wallet, Users, Settings, User, Briefcase, Code, Key, Radar, PlugZap } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 
@@ -12,6 +12,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
@@ -27,13 +30,21 @@ const allItems = [
   { title: "Acessos", url: "/acessos", icon: Key },
   { title: "Despesas", url: "/despesas", icon: Wallet },
   { title: "CRM", url: "/crm", icon: Users },
-  { title: "Prospecção", url: "/prospeccao", icon: Radar },
+  {
+    title: "Prospecção",
+    url: "/prospeccao",
+    icon: Radar,
+    children: [
+      { title: "Integrações e API", url: "/prospeccao/integracoes", icon: PlugZap },
+    ],
+  },
   { title: "Usuários", url: "/usuarios", icon: Settings },
 ]
 
 export function AppSidebar() {
   const { state } = useSidebar()
   const { user } = useAuth()
+  const location = useLocation()
   
   // Filtrar itens baseado no usuário
   const getFilteredItems = () => {
@@ -80,12 +91,26 @@ export function AppSidebar() {
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton asChild>
-                  <NavLink to={item.url} end>
-                    <item.icon />
-                    <span>{item.title}</span>
-                  </NavLink>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} end={item.url === "/"}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </NavLink>
                   </SidebarMenuButton>
+                  {item.children?.length ? (
+                    <SidebarMenuSub>
+                      {item.children.map((child) => (
+                        <SidebarMenuSubItem key={child.url}>
+                          <SidebarMenuSubButton asChild isActive={location.pathname === child.url}>
+                            <NavLink to={child.url}>
+                              <child.icon />
+                              <span>{child.title}</span>
+                            </NavLink>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  ) : null}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
