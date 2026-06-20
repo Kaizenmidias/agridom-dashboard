@@ -749,61 +749,95 @@ function mapApifyLead(item, fallback) {
   };
 }
 
-async function searchWithApify({ niche, city, state, quantity }) {
+async function searchWithApify({ niche, city, state, quantity }, options = {}) {
   const token = process.env.APIFY_TOKEN;
   const actorId = normalizeApifyActorId(process.env.APIFY_GOOGLE_MAPS_ACTOR);
   const searchTerm = [niche, city, state, 'Brasil'].filter(Boolean).join(', ');
+  const controller = options.timeoutMs ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort(new Error('Tempo limite excedido ao consultar Apify')), options.timeoutMs)
+    : null;
 
-  const response = await fetch(
-    `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        searchTerms: [searchTerm],
-        maxItems: Math.min(Math.max(quantity * 10, 10), 50),
-        includeReviews: false
-      })
+  try {
+    const response = await fetch(
+      `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          searchTerms: [searchTerm],
+          maxItems: Math.min(Math.max(quantity * 10, 10), 50),
+          includeReviews: false
+        }),
+        signal: controller?.signal
+      }
+    );
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Falha ao consultar Apify: ${errorBody.slice(0, 240)}`);
     }
-  );
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Falha ao consultar Apify: ${errorBody.slice(0, 240)}`);
+    const data = await response.json();
+    const items = Array.isArray(data) ? data : [];
+
+    return items.map((item) =>
+      mapApifyLead(item, {
+        niche,
+        city,
+        state
+      })
+    );
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
-
-  const data = await response.json();
-  const items = Array.isArray(data) ? data : [];
-
-  return items.map((item) =>
-    mapApifyLead(item, {
-      niche,
-      city,
-      state
-    })
-  );
 }
 
 async function searchBusinessLeads(searchParams) {
+  const preferFastProviders = Boolean(process.env.VERCEL);
+
+  const providers = [];
+  if (preferFastProviders && process.env.GOOGLE_PLACES_API_KEY) {
+    providers.push({
+      name: 'google_places',
+      run: () => searchWithGooglePlaces(searchParams)
+    });
+  }
+
   if (process.env.APIFY_TOKEN) {
+    providers.push({
+      name: 'apify',
+      run: () => searchWithApify(searchParams, { timeoutMs: preferFastProviders ? 8000 : undefined })
+    });
+  }
+
+  if (!preferFastProviders && process.env.GOOGLE_PLACES_API_KEY) {
+    providers.push({
+      name: 'google_places',
+      run: () => searchWithGooglePlaces(searchParams)
+    });
+  }
+
+  providers.push({
+    name: 'osm_fallback',
+    run: () => searchWithOverpass(searchParams)
+  });
+
+  for (const provider of providers) {
     try {
-      return await searchWithApify(searchParams);
+      const leads = await provider.run();
+      return {
+        leads,
+        provider: provider.name
+      };
     } catch (error) {
-      console.warn('Falha no Apify, tentando outras fontes:', error.message);
+      console.warn(`Falha na fonte ${provider.name}, tentando a proxima:`, error.message);
     }
   }
 
-  if (process.env.GOOGLE_PLACES_API_KEY) {
-    try {
-      return await searchWithGooglePlaces(searchParams);
-    } catch (error) {
-      console.warn('Falha no Google Places, usando fallback OSM:', error.message);
-    }
-  }
-
-  return searchWithOverpass(searchParams);
+  throw new Error('Nenhuma fonte de prospeccao respondeu com sucesso');
 }
 
 async function runPageSpeed(url, strategy) {
@@ -1274,7 +1308,8 @@ router.post('/search', async (req, res) => {
       return res.status(400).json({ error: 'Nicho e cidade sao obrigatorios' });
     }
 
-    const rawLeads = await searchBusinessLeads({ niche, city, state, quantity });
+    const searchResult = await searchBusinessLeads({ niche, city, state, quantity });
+    const rawLeads = searchResult.leads;
     const existingProspects = await fetchProspectsForOwner(ownerUserId);
     const existingKeys = new Set();
     const fastMode = Boolean(process.env.VERCEL);
@@ -1386,11 +1421,7 @@ router.post('/search', async (req, res) => {
         insertedProspects.length > 0
           ? `${insertedProspects.length} lead(s) novo(s) inserido(s) com sucesso.`
           : 'Nenhum novo lead foi encontrado para os filtros informados.',
-      provider: process.env.APIFY_TOKEN
-        ? 'apify_or_fallback'
-        : process.env.GOOGLE_PLACES_API_KEY
-          ? 'google_places_or_fallback'
-          : 'osm_fallback'
+      provider: searchResult.provider
     });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Erro ao buscar leads' });
