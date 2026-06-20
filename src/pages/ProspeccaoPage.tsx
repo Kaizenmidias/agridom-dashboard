@@ -378,8 +378,9 @@ const ProspeccaoPage = () => {
       const result = await prospectionAPI.search(searchForm)
       toast({
         title: result.total > 0 ? 'Busca concluída' : 'Nenhum novo lead encontrado',
-        description:
-          result.total > 0
+        description: result.message
+          ? `${result.message} Fonte usada: ${result.provider}.`
+          : result.total > 0
             ? `${result.total} lead(s) novo(s) inserido(s) com sucesso pela fonte ${result.provider}.`
             : 'Os primeiros resultados já haviam sido prospectados. O sistema tentou avançar para os próximos disponíveis.',
       })

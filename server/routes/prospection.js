@@ -440,11 +440,15 @@ async function generateOpenAIText(prompt) {
   return data?.choices?.[0]?.message?.content?.trim() || null;
 }
 
-async function generateDiagnosticSummary(prospect, analysis) {
+async function generateDiagnosticSummary(prospect, analysis, options = {}) {
   const problemText = getProblemText(prospect.problems_found);
   const fallback = !prospect.website_exists
     ? `A empresa ${prospect.business_name} ainda nao possui site, o que indica uma oportunidade direta para ofertar uma landing page ou site institucional com foco em captacao de contatos.`
     : `A empresa ${prospect.business_name} apresenta ${problemText}. Existe uma oportunidade clara para oferecer uma nova presenca digital orientada a performance, confianca e captacao de leads.`;
+
+  if (options.fastMode) {
+    return fallback;
+  }
 
   const prompt = [
     `Empresa: ${prospect.business_name}`,
@@ -460,13 +464,17 @@ async function generateDiagnosticSummary(prospect, analysis) {
   return (await generateOpenAIText(prompt)) || fallback;
 }
 
-async function generateApproachSuggestion(prospect, analysis) {
+async function generateApproachSuggestion(prospect, analysis, options = {}) {
   const problemText = getProblemText(prospect.problems_found);
   const serviceHint = prospect.website_exists
     ? 'uma nova landing page, site institucional ou sistema web mais moderno'
     : 'um site institucional ou landing page para gerar mais contatos';
 
   const fallback = `Percebi que ${prospect.business_name} em ${prospect.city || 'sua cidade'} possui ${problemText}. Trabalhamos com ${serviceHint}, otimizados para gerar mais contatos. Posso te mostrar algumas melhorias especificas para o seu caso.`;
+
+  if (options.fastMode) {
+    return fallback;
+  }
 
   const prompt = [
     `Empresa: ${prospect.business_name}`,
@@ -827,7 +835,7 @@ async function runPageSpeed(url, strategy) {
   };
 }
 
-async function analyzeWebsite(website) {
+async function analyzeWebsite(website, options = {}) {
   const defaultAnalysis = {
     websiteExists: false,
     pagespeedMobile: null,
@@ -862,8 +870,8 @@ async function analyzeWebsite(website) {
     });
 
     const html = await pageResponse.text();
-    const mobile = await runPageSpeed(normalizedUrl, 'mobile');
-    const desktop = await runPageSpeed(normalizedUrl, 'desktop');
+    const mobile = options.fastMode ? null : await runPageSpeed(normalizedUrl, 'mobile');
+    const desktop = options.fastMode ? null : await runPageSpeed(normalizedUrl, 'desktop');
     const metaTitle = extractHtmlTitle(html);
     const metaDescription = extractMetaDescription(html);
     const responsive = hasResponsiveSignals(html);
@@ -1269,6 +1277,7 @@ router.post('/search', async (req, res) => {
     const rawLeads = await searchBusinessLeads({ niche, city, state, quantity });
     const existingProspects = await fetchProspectsForOwner(ownerUserId);
     const existingKeys = new Set();
+    const fastMode = Boolean(process.env.VERCEL);
 
     for (const prospect of existingProspects) {
       if (prospect.normalized_phone) existingKeys.add(`phone:${prospect.normalized_phone}`);
@@ -1295,7 +1304,7 @@ router.post('/search', async (req, res) => {
         continue;
       }
 
-      const analysis = await analyzeWebsite(rawLead.website);
+      const analysis = await analyzeWebsite(rawLead.website, { fastMode });
       const baseProspect = {
         owner_user_id: ownerUserId,
         business_name: rawLead.business_name,
@@ -1343,11 +1352,13 @@ router.post('/search', async (req, res) => {
 
       baseProspect.diagnostic_summary = await generateDiagnosticSummary(
         prospectForText,
-        analysis
+        analysis,
+        { fastMode }
       );
       baseProspect.approach_suggestion = await generateApproachSuggestion(
         prospectForText,
-        analysis
+        analysis,
+        { fastMode }
       );
 
       const { data, error } = await adminSupabase
@@ -1371,6 +1382,10 @@ router.post('/search', async (req, res) => {
     res.json({
       inserted: insertedProspects,
       total: insertedProspects.length,
+      message:
+        insertedProspects.length > 0
+          ? `${insertedProspects.length} lead(s) novo(s) inserido(s) com sucesso.`
+          : 'Nenhum novo lead foi encontrado para os filtros informados.',
       provider: process.env.APIFY_TOKEN
         ? 'apify_or_fallback'
         : process.env.GOOGLE_PLACES_API_KEY

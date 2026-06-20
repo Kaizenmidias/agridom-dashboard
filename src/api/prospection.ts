@@ -76,7 +76,7 @@ export const prospectionAPI = {
   },
 
   search(input: ProspectSearchInput) {
-    return request<{ inserted: Prospect[]; total: number; provider: string }>('/search', {
+    return request<{ inserted: Prospect[]; total: number; provider: string; message?: string }>('/search', {
       method: 'POST',
       body: JSON.stringify(input),
     })
