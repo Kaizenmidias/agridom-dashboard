@@ -988,20 +988,50 @@ export const dashboardAPI = {
       if (filters?.year) params.append('year', filters.year.toString());
       if (filters?.month) params.append('month', filters.month.toString());
       
-      const url = `${baseUrl}/api/dashboard/stats${params.toString() ? '?' + params.toString() : ''}`;
-      console.log('Frontend - Chamando API do backend:', url);
-      
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json'
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const candidateUrls = [
+        `${baseUrl}/api/dashboard-stats${queryString}`,
+        `${baseUrl}/api/dashboard/stats${queryString}`,
+      ];
+
+      let response: Response | null = null;
+      let lastStatus: number | null = null;
+      let lastError: unknown = null;
+
+      for (const url of candidateUrls) {
+        console.log('Frontend - Chamando API do backend:', url);
+
+        try {
+          const attempt = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (attempt.ok) {
+            response = attempt;
+            break;
           }
-        });
-      } catch (error: any) {
-        throw error;
+
+          lastStatus = attempt.status;
+
+          if (attempt.status !== 404) {
+            response = attempt;
+            break;
+          }
+        } catch (error: any) {
+          lastError = error;
+        }
+      }
+
+      if (!response) {
+        if (lastError) {
+          throw lastError;
+        }
+
+        throw new Error(`HTTP error! status: ${lastStatus ?? 404}`);
       }
 
       if (!response.ok) {
