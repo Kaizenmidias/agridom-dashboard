@@ -49,13 +49,25 @@ async function request<T>(endpoint: string, init?: RequestInit): Promise<T> {
     throw error
   }
 
-  const data = await response.json()
+  const rawText = await response.text()
+  let data: any = null
 
-  if (!response.ok) {
-    throw new Error(data?.error || 'Erro na API de prospecção')
+  try {
+    data = rawText ? JSON.parse(rawText) : null
+  } catch {
+    data = null
   }
 
-  return data as T
+  if (!response.ok) {
+    throw new Error(
+      data?.error ||
+        data?.message ||
+        rawText ||
+        `Erro na API de prospecção (status ${response.status})`
+    )
+  }
+
+  return (data ?? {}) as T
 }
 
 export const prospectionAPI = {

@@ -232,7 +232,9 @@ export const crudAPI = {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        throw new Error(
+          errorText || `HTTP error! status: ${response.status}, message: resposta vazia do servidor`
+        );
       }
 
       const data = await response.json();

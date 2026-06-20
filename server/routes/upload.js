@@ -5,16 +5,31 @@ const fs = require('fs');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 
-// Configurar o diretório de uploads
-const uploadsDir = path.join(__dirname, '../uploads/avatars');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+function getUploadsDir() {
+  if (process.env.VERCEL) {
+    return path.join('/tmp', 'uploads', 'avatars');
+  }
+
+  return path.join(__dirname, '../uploads/avatars');
+}
+
+function ensureUploadsDir() {
+  const uploadsDir = getUploadsDir();
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  return uploadsDir;
 }
 
 // Configuração do multer para upload de avatares
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, uploadsDir);
+    try {
+      cb(null, ensureUploadsDir());
+    } catch (error) {
+      cb(error);
+    }
   },
   filename: function (req, file, cb) {
     // Gerar nome único para o arquivo

@@ -380,7 +380,7 @@ const ProspeccaoPage = () => {
         title: result.total > 0 ? 'Busca concluída' : 'Nenhum novo lead encontrado',
         description:
           result.total > 0
-            ? `${result.total} lead(s) novo(s) inserido(s).`
+            ? `${result.total} lead(s) novo(s) inserido(s) com sucesso pela fonte ${result.provider}.`
             : 'Os primeiros resultados já haviam sido prospectados. O sistema tentou avançar para os próximos disponíveis.',
       })
       await loadBootstrap()
@@ -1285,7 +1285,7 @@ const ProspeccaoPage = () => {
         </TabsContent>
       </Tabs>
 
-      {!bootstrap?.integrations.apifyConfigured ? (
+      {bootstrap && !bootstrap.integrations.apifyConfigured ? (
         <Card className="border-amber-200 bg-amber-50">
           <CardContent className="flex items-start gap-3 p-4 text-amber-900">
             <AlertCircle className="mt-0.5 h-5 w-5" />
