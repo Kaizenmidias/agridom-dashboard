@@ -16,6 +16,19 @@ import CRMPage from "./pages/CRMPage";
 import ProspeccaoPage from "./pages/ProspeccaoPage";
 import ProspeccaoIntegracoesPage from "./pages/ProspeccaoIntegracoesPage";
 import UsuariosPage from "./pages/UsuariosPage";
+import LeadsPage from "./pages/commercial/LeadsPage";
+import {
+  AutomationsPage,
+  BroadcastPage,
+  HistoryPage,
+  KanbanPage,
+  MetricsPage,
+  ProductsPage,
+  SdrPage,
+} from "./pages/commercial/CommercialPlaceholders";
+import { AgentsPage, AssistantsPage, ContentsPage, PromptsPage } from "./pages/ai/AiPlaceholders";
+import { CashFlowPage, RevenuesPage } from "./pages/finance/FinancePlaceholders";
+import { IntegrationsPage, SettingsPage } from "./pages/admin/AdminPlaceholders";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -45,6 +58,29 @@ const routes = [
   { path: "/acessos", element: <AcessosPage />, protected: true, restrictedForRicardo: false },
   { path: "/despesas", element: <DespesasPage />, protected: true, restrictedForRicardo: true },
   { path: "/crm", element: <CRMPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/leads", element: <LeadsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/kanban", element: <KanbanPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/produtos", element: <ProductsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/historico", element: <HistoryPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/prospeccao", element: <Navigate to="/prospeccao" replace />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/metricas", element: <MetricsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/disparar", element: <BroadcastPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/sdr", element: <SdrPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/automacoes", element: <AutomationsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/operacional/briefings", element: <Navigate to="/briefings" replace />, protected: true, restrictedForRicardo: false },
+  { path: "/operacional/codigos", element: <Navigate to="/codigos" replace />, protected: true, restrictedForRicardo: false },
+  { path: "/operacional/acessos", element: <Navigate to="/acessos" replace />, protected: true, restrictedForRicardo: false },
+  { path: "/ia/assistentes", element: <AssistantsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/ia/conteudos", element: <ContentsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/ia/prompts", element: <PromptsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/ia/agentes", element: <AgentsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/financeiro/projetos", element: <Navigate to="/projetos" replace />, protected: true, restrictedForRicardo: true },
+  { path: "/financeiro/receitas", element: <RevenuesPage />, protected: true, restrictedForRicardo: true },
+  { path: "/financeiro/despesas", element: <Navigate to="/despesas" replace />, protected: true, restrictedForRicardo: true },
+  { path: "/financeiro/fluxo-de-caixa", element: <CashFlowPage />, protected: true, restrictedForRicardo: true },
+  { path: "/administracao/usuarios", element: <Navigate to="/usuarios" replace />, protected: true, restrictedForRicardo: true },
+  { path: "/administracao/integracoes", element: <IntegrationsPage />, protected: true, restrictedForRicardo: true },
+  { path: "/administracao/configuracoes", element: <SettingsPage />, protected: true, restrictedForRicardo: true },
   { path: "/prospeccao", element: <ProspeccaoPage />, protected: true, restrictedForRicardo: false },
   { path: "/prospeccao/integracoes", element: <ProspeccaoIntegracoesPage />, protected: true, restrictedForRicardo: false },
   { path: "/usuarios", element: <UsuariosPage />, protected: true, restrictedForRicardo: true },

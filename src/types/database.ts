@@ -2,11 +2,15 @@
 
 // Tipos de autenticação
 export interface AuthUser {
-  id: number;
+  id: number | string;
   email: string;
-  name: string;
-  role: 'admin' | 'user';
-  is_active: boolean;
+  name?: string;
+  full_name?: string;
+  role: 'admin' | 'user' | string;
+  is_active?: boolean;
+  is_admin?: boolean;
+  avatar_url?: string;
+  bio?: string;
   can_access_dashboard?: boolean;
   can_access_briefings?: boolean;
   can_access_codes?: boolean;

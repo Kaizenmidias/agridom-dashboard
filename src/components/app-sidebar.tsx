@@ -1,149 +1,39 @@
-import { useState } from "react"
-import { Home, FileText, Wallet, Users, Settings, User, Briefcase, Code, Key, Radar, PlugZap } from "lucide-react"
-import { NavLink, useLocation } from "react-router-dom"
-import { useAuth } from "@/contexts/AuthContext"
-
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  SidebarTrigger,
   useSidebar,
-} from "@/components/ui/sidebar"
-import { ThemeToggle } from "./theme-toggle"
-import { UserProfileDialog } from "./user-profile-dialog"
-import { Button } from "@/components/ui/button"
-
-const allItems = [
-  { title: "Dashboard", url: "/", icon: Home },
-  { title: "Projetos", url: "/projetos", icon: FileText },
-  { title: "Briefings", url: "/briefings", icon: Briefcase },
-  { title: "Códigos", url: "/codigos", icon: Code },
-  { title: "Acessos", url: "/acessos", icon: Key },
-  { title: "Despesas", url: "/despesas", icon: Wallet },
-  { title: "CRM", url: "/crm", icon: Users },
-  {
-    title: "Prospecção",
-    url: "/prospeccao",
-    icon: Radar,
-    children: [
-      { title: "Integrações e API", url: "/prospeccao/integracoes", icon: PlugZap },
-    ],
-  },
-  { title: "Usuários", url: "/usuarios", icon: Settings },
-]
+} from "@/components/ui/sidebar";
+import { SidebarNavigation } from "@/components/layout/sidebar/SidebarNavigation";
+import { SidebarUser } from "@/components/layout/sidebar/SidebarUser";
 
 export function AppSidebar() {
-  const { state } = useSidebar()
-  const { user } = useAuth()
-  const location = useLocation()
-  
-  // Filtrar itens baseado no usuário
-  const getFilteredItems = () => {
-    if (!user) return []
-    
-    // Para o usuário Ricardo, mostrar apenas Briefings, Códigos, Acessos e CRM
-    if (user.email === 'ricardorpc11@gmail.com') {
-      return allItems.filter(item => 
-        item.title === 'Briefings' || 
-        item.title === 'Códigos' || 
-        item.title === 'Acessos' || 
-        item.title === 'CRM' ||
-        item.title === 'Prospecção'
-      )
-    }
-    
-    // Para outros usuários, mostrar todos os itens
-    return allItems
-  }
-  
-  const items = getFilteredItems()
-  
-  const isCollapsed = state === "collapsed"
+  const { state } = useSidebar();
+  const { user } = useAuth();
+  const isCollapsed = state === "collapsed";
 
   return (
-    <Sidebar
-      collapsible="icon"
-    >
+    <Sidebar collapsible="icon">
       <SidebarContent>
-        {/* Logo/Header */}
-        <div className="p-4 border-b border-border flex items-center">
-          <div className="h-8 w-8 flex items-center justify-center">
+        <div className="flex items-center border-b border-border p-4">
+          <div className="flex h-8 w-8 items-center justify-center">
             <img src="/logo.svg" alt="Logo" className="h-8 w-8 rounded-full" />
           </div>
-          {!isCollapsed && (
-            <span className="ml-3 text-lg font-bold text-foreground">Kaizen</span>
-          )}
+          {!isCollapsed ? <span className="ml-3 text-lg font-bold text-foreground">Kaizen</span> : null}
         </div>
 
         <SidebarGroup>
           <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
-
           <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} end={item.url === "/"}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                  {item.children?.length ? (
-                    <SidebarMenuSub>
-                      {item.children.map((child) => (
-                        <SidebarMenuSubItem key={child.url}>
-                          <SidebarMenuSubButton asChild isActive={location.pathname === child.url}>
-                            <NavLink to={child.url}>
-                              <child.icon />
-                              <span>{child.title}</span>
-                            </NavLink>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  ) : null}
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            <SidebarNavigation user={user} isCollapsed={isCollapsed} />
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* User section at bottom */}
-        <div className="mt-auto p-4 border-t border-border space-y-3 overflow-hidden">
-          {/* Theme Toggle */}
-          <div className="flex justify-center">
-            <ThemeToggle />
-          </div>
-          
-          {/* User Profile */}
-          <UserProfileDialog>
-            <Button variant="ghost" className="w-full justify-start p-2 overflow-hidden">
-              <div className="flex items-center space-x-3 w-full overflow-hidden">
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-medium text-primary">
-                    {user?.full_name ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}
-                  </span>
-                </div>
-                {!isCollapsed && (
-                  <div className="flex-1 min-w-0 text-left overflow-hidden">
-                    <p className="text-sm font-medium truncate whitespace-nowrap">{user?.full_name || 'Usuário'}</p>
-                    <p className="text-xs text-muted-foreground truncate whitespace-nowrap">{user?.email || 'email@exemplo.com'}</p>
-                  </div>
-                )}
-              </div>
-            </Button>
-          </UserProfileDialog>
-        </div>
+        <SidebarUser user={user} isCollapsed={isCollapsed} />
       </SidebarContent>
     </Sidebar>
-  )
+  );
 }
