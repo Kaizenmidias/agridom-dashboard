@@ -214,7 +214,7 @@ export const crudAPI = {
       }
 
       const baseUrl = import.meta.env.PROD
-        ? (import.meta.env.VITE_API_URL || 'https://agridom-dashboard.vercel.app')
+        ? (import.meta.env.VITE_API_BASE_URL || `${window.location.origin}/api`)
         : 'http://localhost:3001';
       
       let response: Response;
@@ -1067,7 +1067,7 @@ export const dashboardAPI = {
       }
 
       const baseUrl = import.meta.env.PROD
-        ? (import.meta.env.VITE_API_URL || 'https://agridom-dashboard.vercel.app')
+        ? (import.meta.env.VITE_API_BASE_URL || `${window.location.origin}/api`)
         : 'http://localhost:3001';
       
       // Construir URL com parâmetros de filtro

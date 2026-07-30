@@ -82,8 +82,8 @@ Acesse a aplicação em: http://localhost:5173
    ```env
    VITE_SUPABASE_URL=https://seu-projeto.supabase.co
    VITE_SUPABASE_ANON_KEY=sua_chave_anonima_aqui
-   VITE_API_BASE_URL=https://seu-dominio.vercel.app/api
-   VITE_AUTH_API_BASE_URL=https://seu-dominio.vercel.app/auth
+   VITE_API_BASE_URL=https://crm.kaizenmidias.com/api
+   VITE_AUTH_API_BASE_URL=https://crm.kaizenmidias.com/auth
    ```
 3. **Deploy automático** será realizado a cada push
 

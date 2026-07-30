@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js')
 
 const allowedOrigins = new Set([
-  'https://agridom-dashboard.vercel.app',
+  'https://crm.kaizenmidias.com',
   'https://briefing.kaizenmidias.com'
 ])
 
@@ -10,7 +10,7 @@ module.exports = async function handler(req, res) {
   if (origin && allowedOrigins.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
   } else {
-    res.setHeader('Access-Control-Allow-Origin', 'https://agridom-dashboard.vercel.app')
+    res.setHeader('Access-Control-Allow-Origin', 'https://crm.kaizenmidias.com')
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')

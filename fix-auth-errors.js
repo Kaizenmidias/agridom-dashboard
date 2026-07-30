@@ -86,7 +86,7 @@ function checkCorsConfig() {
   console.log('\n4. VERIFICANDO CONFIGURAÇÕES DE CORS:');
   
   const allowedOrigins = [
-    'https://agridom-dashboard.vercel.app',
+    'https://crm.kaizenmidias.com',
     'http://localhost:8081',
     'http://localhost:8080',
     'http://localhost:3000'

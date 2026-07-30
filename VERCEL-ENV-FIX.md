@@ -15,7 +15,7 @@ O erro `Invalid API key` indica que as variáveis `VITE_SUPABASE_URL` e `VITE_SU
 ```
 VITE_SUPABASE_URL = https://qwbpruywwfjadkudegcj.supabase.co
 VITE_SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3YnBydXl3d2ZqYWRrdWRlZ2NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NjMyNTAsImV4cCI6MjA3MjUzOTI1MH0.dyXrYaREdizc-UZM6NJP1Dp7RpDlzbU4pxHutJhGoy8
-VITE_API_URL = https://agridom-dashboard.vercel.app
+VITE_API_URL = https://crm.kaizenmidias.com
 ```
 
 **IMPORTANTE:** Marque todas as variáveis para os ambientes:
@@ -43,7 +43,7 @@ git push origin main
 ### 4. Verificar se Funcionou
 
 1. **Aguarde o deploy** (2-3 minutos)
-2. **Abra a aplicação:** https://agridom-dashboard.vercel.app
+2. **Abra a aplicação:** https://crm.kaizenmidias.com
 3. **Abra DevTools** (F12) → Console
 4. **Procure pelos logs:**
    - `🚀 MAIN.TSX` - deve mostrar as variáveis
