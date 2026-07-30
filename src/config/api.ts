@@ -1,42 +1,42 @@
-// Configuração da aplicação
-// Este arquivo centraliza as configurações gerais da aplicação
+// Centralized API configuration used by browser clients.
 
-// Detecta automaticamente o ambiente baseado na URL atual
 export const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 
-// URLs base da aplicação
-export const APP_URLS = {
-  development: 'http://localhost:5173',
-  production: import.meta.env.VITE_API_URL || 'https://agridom-dashboard.vercel.app'
+const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
+
+const resolveBackendBaseUrl = () => {
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
+
+  if (configuredBaseUrl) {
+    return normalizeBaseUrl(configuredBaseUrl);
+  }
+
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3001/api';
+  }
+
+  return `${normalizeBaseUrl(window.location.origin)}/api`;
 };
 
-// Exporta a URL base da aplicação baseada no ambiente
-export const APP_BASE_URL = isProduction ? APP_URLS.production : APP_URLS.development;
+export const API_BASE_URL = resolveBackendBaseUrl();
 
-// Exporta API_BASE_URL para compatibilidade
-export const API_BASE_URL = APP_BASE_URL;
-
-// Configurações adicionais da API
 export const API_CONFIG = {
-  timeout: 30000, // 30 segundos
+  timeout: 30000,
   retries: 3,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 };
 
-// Função auxiliar para construir URLs completas
 export const buildApiUrl = (endpoint: string): string => {
-  // Remove barras duplicadas
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
   return `${API_BASE_URL}/${cleanEndpoint}`;
 };
 
-// Log da configuração atual (apenas em desenvolvimento)
 if (!isProduction) {
-  console.log('🔧 API Configuration:', {
+  console.log('API Configuration:', {
     environment: isProduction ? 'production' : 'development',
     baseUrl: API_BASE_URL,
-    hostname: window.location.hostname
+    hostname: window.location.hostname,
   });
 }

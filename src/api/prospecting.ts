@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { buildApiUrl } from "@/config/api";
 import type {
   BrazilianCity,
   CnaeCode,
@@ -13,10 +14,7 @@ import type {
   ProspectingSearchPayload,
 } from "@/types/prospecting";
 
-const isProduction = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
-const PROSPECTING_BASE_URL = isProduction
-  ? "https://agridom-dashboard.vercel.app/api/prospecting"
-  : "http://localhost:3001/api/prospecting";
+const PROSPECTING_BASE_URL = buildApiUrl("prospecting");
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const { data, error } = await supabase.auth.getSession();

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { buildApiUrl } from '@/config/api'
 import type {
   Prospect,
   ProspectContactHistory,
@@ -13,12 +14,7 @@ import type {
   ProspectionBootstrap,
 } from '@/types/database'
 
-const isProduction =
-  window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-
-const PROSPECTION_BASE_URL = isProduction
-  ? 'https://agridom-dashboard.vercel.app/api/prospection'
-  : 'http://localhost:3001/api/prospection'
+const PROSPECTION_BASE_URL = buildApiUrl('prospection')
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const { data, error } = await supabase.auth.getSession()
