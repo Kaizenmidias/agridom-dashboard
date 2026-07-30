@@ -1,8 +1,9 @@
 import { Plug, SlidersHorizontal } from "lucide-react";
 import { ModulePlaceholderPage } from "@/components/layout/ModulePlaceholderPage";
+import { IntegrationLibrary } from "@/components/integrations/IntegrationLibrary";
 
 export function IntegrationsPage() {
-  return <ModulePlaceholderPage title="Integracoes" area="Administracao" icon={Plug} description="Gerencie conexoes internas e servicos externos." moduleSummary="Integracoes concentrara configuracoes de APIs, webhooks, n8n e conectores operacionais usados pelos modulos internos." />;
+  return <IntegrationLibrary />;
 }
 
 export function SettingsPage() {

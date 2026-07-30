@@ -13,8 +13,7 @@ import { CodesPage } from "./pages/CodesPage";
 import AcessosPage from "./pages/AcessosPage";
 import DespesasPage from "./pages/DespesasPage";
 import CRMPage from "./pages/CRMPage";
-import ProspeccaoPage from "./pages/ProspeccaoPage";
-import ProspeccaoIntegracoesPage from "./pages/ProspeccaoIntegracoesPage";
+import ProspectingPage from "./pages/commercial/ProspectingPage";
 import UsuariosPage from "./pages/UsuariosPage";
 import LeadsPage from "./pages/commercial/LeadsPage";
 import {
@@ -62,7 +61,7 @@ const routes = [
   { path: "/comercial/kanban", element: <KanbanPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/produtos", element: <ProductsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/historico", element: <HistoryPage />, protected: true, restrictedForRicardo: false },
-  { path: "/comercial/prospeccao", element: <Navigate to="/prospeccao" replace />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/prospeccao", element: <ProspectingPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/metricas", element: <MetricsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/disparar", element: <BroadcastPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/sdr", element: <SdrPage />, protected: true, restrictedForRicardo: false },
@@ -81,8 +80,8 @@ const routes = [
   { path: "/administracao/usuarios", element: <Navigate to="/usuarios" replace />, protected: true, restrictedForRicardo: true },
   { path: "/administracao/integracoes", element: <IntegrationsPage />, protected: true, restrictedForRicardo: true },
   { path: "/administracao/configuracoes", element: <SettingsPage />, protected: true, restrictedForRicardo: true },
-  { path: "/prospeccao", element: <ProspeccaoPage />, protected: true, restrictedForRicardo: false },
-  { path: "/prospeccao/integracoes", element: <ProspeccaoIntegracoesPage />, protected: true, restrictedForRicardo: false },
+  { path: "/prospeccao", element: <Navigate to="/comercial/prospeccao" replace />, protected: true, restrictedForRicardo: false },
+  { path: "/prospeccao/integracoes", element: <Navigate to="/administracao/integracoes" replace />, protected: true, restrictedForRicardo: false },
   { path: "/usuarios", element: <UsuariosPage />, protected: true, restrictedForRicardo: true },
   { path: "/access-denied", element: <AccessDeniedPage />, protected: true, restrictedForRicardo: false },
   { path: "*", element: <NotFound />, protected: false, restrictedForRicardo: false }

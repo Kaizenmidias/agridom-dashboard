@@ -50,6 +50,7 @@ const authRoutes = require('./routes/auth');
 const crudRoutes = require('./routes/crud');
 const uploadRoutes = require('./routes/upload');
 const prospectionRoutes = require('./routes/prospection');
+const prospectingRoutes = require('./routes/prospecting');
 
 
 // Wrapper inteligente para queries que detecta Supabase API
@@ -588,6 +589,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', crudRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/prospection', prospectionRoutes);
+app.use('/api/prospecting', prospectingRoutes);
 
 
 // Rota de teste

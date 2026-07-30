@@ -48,7 +48,7 @@ export const navigationItems: NavigationItem[] = [
       { label: "Kanban", icon: Columns3, path: "/comercial/kanban", requiredPermissions: ["can_access_crm"] },
       { label: "Produtos", icon: Package, path: "/comercial/produtos", requiredPermissions: ["can_access_crm"] },
       { label: "Historico", icon: History, path: "/comercial/historico", requiredPermissions: ["can_access_crm"] },
-      { label: "Prospeccao", icon: Search, path: "/prospeccao", legacyPaths: ["/comercial/prospeccao"], requiredPermissions: ["can_access_crm"] },
+      { label: "Prospeccao", icon: Search, path: "/comercial/prospeccao", legacyPaths: ["/prospeccao"], requiredPermissions: ["can_access_crm"] },
       { label: "Metricas", icon: ChartNoAxesCombined, path: "/comercial/metricas", requiredPermissions: ["can_access_crm"] },
       { label: "Disparar", icon: Send, path: "/comercial/disparar", requiredPermissions: ["can_access_crm"] },
       { label: "SDR", icon: Headphones, path: "/comercial/sdr", requiredPermissions: ["can_access_crm"] },
