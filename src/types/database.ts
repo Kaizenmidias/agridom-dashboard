@@ -302,13 +302,23 @@ export interface ProspectingSettings {
   updated_at: string;
 }
 
-export type ProspectionIntegrationProvider = 'apify' | 'google' | 'openai' | 'smtp';
+export type ProspectionIntegrationProvider =
+  | 'apify'
+  | 'google'
+  | 'openai'
+  | 'smtp'
+  | 'casa_dos_dados'
+  | 'whatsapp_validator';
 
 export interface ProspectionIntegrationSettings {
   apify: {
     configured: boolean;
     tokenMasked?: string | null;
     actorId: string;
+    googleMapsActorId?: string;
+    instagramActorId?: string;
+    timeoutMinutes?: number;
+    pollIntervalSeconds?: number;
   };
   google: {
     configured: boolean;
@@ -327,6 +337,20 @@ export interface ProspectionIntegrationSettings {
     user: string;
     from: string;
     passMasked?: string | null;
+    secure?: boolean;
+  };
+  casa_dos_dados?: {
+    configured: boolean;
+    apiKeyMasked?: string | null;
+    baseUrl: string;
+    apiVersion: string;
+  };
+  whatsapp_validator?: {
+    configured: boolean;
+    apiKeyMasked?: string | null;
+    baseUrl: string;
+    instanceName: string;
+    cacheDays: number;
   };
 }
 
@@ -334,6 +358,10 @@ export interface ProspectionIntegrationUpdatePayload {
   apify?: {
     token?: string;
     actorId?: string;
+    googleMapsActorId?: string;
+    instagramActorId?: string;
+    timeoutMinutes?: number;
+    pollIntervalSeconds?: number;
   };
   google?: {
     placesApiKey?: string;
@@ -349,6 +377,18 @@ export interface ProspectionIntegrationUpdatePayload {
     user?: string;
     pass?: string;
     from?: string;
+    secure?: boolean;
+  };
+  casa_dos_dados?: {
+    apiKey?: string;
+    baseUrl?: string;
+    apiVersion?: string;
+  };
+  whatsapp_validator?: {
+    baseUrl?: string;
+    apiKey?: string;
+    instanceName?: string;
+    cacheDays?: number;
   };
 }
 
@@ -489,3 +529,4 @@ export interface SupabaseSession {
   refresh_token: string;
   user: SupabaseUser;
 }
+

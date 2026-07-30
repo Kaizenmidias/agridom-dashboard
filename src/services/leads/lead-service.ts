@@ -15,3 +15,4 @@ export async function getLeads(): Promise<Lead[]> {
 
   return ((data || []) as Prospect[]).map(prospectToLead);
 }
+

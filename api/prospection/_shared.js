@@ -2,6 +2,8 @@ const nodemailer = require('nodemailer');
 const { createClient } = require('@supabase/supabase-js');
 
 const DEFAULT_APIFY_ACTOR = 'datamech/apify-google-maps-scraper';
+const DEFAULT_CASA_BASE_URL = 'https://api.casadosdados.com.br';
+const DEFAULT_CASA_API_VERSION = 'v5';
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 const INTEGRATION_SETTINGS_PREFIX = 'prospection_integrations_user_';
 
@@ -58,6 +60,21 @@ function getEnvIntegrationConfig() {
     apify: {
       token: process.env.APIFY_TOKEN || '',
       actorId: process.env.APIFY_GOOGLE_MAPS_ACTOR || DEFAULT_APIFY_ACTOR,
+      googleMapsActorId: process.env.APIFY_GOOGLE_MAPS_ACTOR || DEFAULT_APIFY_ACTOR,
+      instagramActorId: process.env.APIFY_INSTAGRAM_ACTOR || '',
+      timeoutMinutes: Number(process.env.APIFY_TIMEOUT_MINUTES || 10),
+      pollIntervalSeconds: Number(process.env.APIFY_POLL_INTERVAL_SECONDS || 5),
+    },
+    casa_dos_dados: {
+      apiKey: process.env.CASA_DOS_DADOS_API_KEY || '',
+      baseUrl: process.env.CASA_DOS_DADOS_BASE_URL || DEFAULT_CASA_BASE_URL,
+      apiVersion: process.env.CASA_DOS_DADOS_API_VERSION || DEFAULT_CASA_API_VERSION,
+    },
+    whatsapp_validator: {
+      baseUrl: process.env.EVOLUTION_API_BASE_URL || process.env.WHATSAPP_VALIDATION_BASE_URL || '',
+      apiKey: process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_VALIDATION_API_KEY || '',
+      instanceName: process.env.EVOLUTION_API_INSTANCE || process.env.WHATSAPP_VALIDATION_PROVIDER || '',
+      cacheDays: Number(process.env.WHATSAPP_VALIDATION_CACHE_DAYS || 30),
     },
     google: {
       placesApiKey: process.env.GOOGLE_PLACES_API_KEY || '',
@@ -85,6 +102,21 @@ function normalizeIntegrationConfig(config) {
     apify: {
       token: cleanNullableString(source.apify?.token) || envConfig.apify.token,
       actorId: cleanNullableString(source.apify?.actorId) || envConfig.apify.actorId,
+      googleMapsActorId: cleanNullableString(source.apify?.googleMapsActorId) || envConfig.apify.googleMapsActorId,
+      instagramActorId: cleanNullableString(source.apify?.instagramActorId) || envConfig.apify.instagramActorId,
+      timeoutMinutes: Number(cleanNullableString(source.apify?.timeoutMinutes) || envConfig.apify.timeoutMinutes || 10),
+      pollIntervalSeconds: Number(cleanNullableString(source.apify?.pollIntervalSeconds) || envConfig.apify.pollIntervalSeconds || 5),
+    },
+    casa_dos_dados: {
+      apiKey: cleanNullableString(source.casa_dos_dados?.apiKey) || envConfig.casa_dos_dados.apiKey,
+      baseUrl: cleanNullableString(source.casa_dos_dados?.baseUrl) || envConfig.casa_dos_dados.baseUrl,
+      apiVersion: cleanNullableString(source.casa_dos_dados?.apiVersion) || envConfig.casa_dos_dados.apiVersion,
+    },
+    whatsapp_validator: {
+      baseUrl: cleanNullableString(source.whatsapp_validator?.baseUrl) || envConfig.whatsapp_validator.baseUrl,
+      apiKey: cleanNullableString(source.whatsapp_validator?.apiKey) || envConfig.whatsapp_validator.apiKey,
+      instanceName: cleanNullableString(source.whatsapp_validator?.instanceName) || envConfig.whatsapp_validator.instanceName,
+      cacheDays: Number(cleanNullableString(source.whatsapp_validator?.cacheDays) || envConfig.whatsapp_validator.cacheDays || 30),
     },
     google: {
       placesApiKey: cleanNullableString(source.google?.placesApiKey) || envConfig.google.placesApiKey,
@@ -110,8 +142,36 @@ function mergeIntegrationConfig(currentConfig, patch) {
   if (patch.apify) {
     const token = cleanOptionalString(patch.apify.token);
     const actorId = cleanOptionalString(patch.apify.actorId);
+    const googleMapsActorId = cleanOptionalString(patch.apify.googleMapsActorId);
+    const instagramActorId = cleanOptionalString(patch.apify.instagramActorId);
+    const timeoutMinutes = cleanOptionalString(patch.apify.timeoutMinutes);
+    const pollIntervalSeconds = cleanOptionalString(patch.apify.pollIntervalSeconds);
     if (token) next.apify.token = token;
     if (actorId !== undefined) next.apify.actorId = actorId || DEFAULT_APIFY_ACTOR;
+    if (googleMapsActorId !== undefined) next.apify.googleMapsActorId = googleMapsActorId || DEFAULT_APIFY_ACTOR;
+    if (instagramActorId !== undefined) next.apify.instagramActorId = instagramActorId || '';
+    if (timeoutMinutes !== undefined) next.apify.timeoutMinutes = Number(timeoutMinutes || 10);
+    if (pollIntervalSeconds !== undefined) next.apify.pollIntervalSeconds = Number(pollIntervalSeconds || 5);
+  }
+
+  if (patch.casa_dos_dados) {
+    const apiKey = cleanOptionalString(patch.casa_dos_dados.apiKey);
+    const baseUrl = cleanOptionalString(patch.casa_dos_dados.baseUrl);
+    const apiVersion = cleanOptionalString(patch.casa_dos_dados.apiVersion);
+    if (apiKey) next.casa_dos_dados.apiKey = apiKey;
+    if (baseUrl !== undefined) next.casa_dos_dados.baseUrl = baseUrl || DEFAULT_CASA_BASE_URL;
+    if (apiVersion !== undefined) next.casa_dos_dados.apiVersion = apiVersion || DEFAULT_CASA_API_VERSION;
+  }
+
+  if (patch.whatsapp_validator) {
+    const baseUrl = cleanOptionalString(patch.whatsapp_validator.baseUrl);
+    const apiKey = cleanOptionalString(patch.whatsapp_validator.apiKey);
+    const instanceName = cleanOptionalString(patch.whatsapp_validator.instanceName);
+    const cacheDays = cleanOptionalString(patch.whatsapp_validator.cacheDays);
+    if (baseUrl !== undefined) next.whatsapp_validator.baseUrl = baseUrl || '';
+    if (apiKey) next.whatsapp_validator.apiKey = apiKey;
+    if (instanceName !== undefined) next.whatsapp_validator.instanceName = instanceName || '';
+    if (cacheDays !== undefined) next.whatsapp_validator.cacheDays = Number(cacheDays || 30);
   }
 
   if (patch.google) {
@@ -147,6 +207,8 @@ function mergeIntegrationConfig(currentConfig, patch) {
 function buildIntegrationStatus(config) {
   return {
     apifyConfigured: Boolean(config.apify.token),
+    casaConfigured: Boolean(config.casa_dos_dados.apiKey),
+    whatsappValidatorConfigured: Boolean(config.whatsapp_validator.baseUrl && config.whatsapp_validator.apiKey),
     googlePlacesConfigured: Boolean(config.google.placesApiKey),
     pageSpeedConfigured: Boolean(config.google.pageSpeedApiKey),
     openAIConfigured: Boolean(config.openai.apiKey),
@@ -161,6 +223,23 @@ function sanitizeIntegrationConfigForClient(config) {
       configured: statuses.apifyConfigured,
       tokenMasked: maskSecret(config.apify.token),
       actorId: config.apify.actorId || DEFAULT_APIFY_ACTOR,
+      googleMapsActorId: config.apify.googleMapsActorId || DEFAULT_APIFY_ACTOR,
+      instagramActorId: config.apify.instagramActorId || '',
+      timeoutMinutes: config.apify.timeoutMinutes || 10,
+      pollIntervalSeconds: config.apify.pollIntervalSeconds || 5,
+    },
+    casa_dos_dados: {
+      configured: statuses.casaConfigured,
+      apiKeyMasked: maskSecret(config.casa_dos_dados.apiKey),
+      baseUrl: config.casa_dos_dados.baseUrl || DEFAULT_CASA_BASE_URL,
+      apiVersion: config.casa_dos_dados.apiVersion || DEFAULT_CASA_API_VERSION,
+    },
+    whatsapp_validator: {
+      configured: statuses.whatsappValidatorConfigured,
+      apiKeyMasked: maskSecret(config.whatsapp_validator.apiKey),
+      baseUrl: config.whatsapp_validator.baseUrl || '',
+      instanceName: config.whatsapp_validator.instanceName || '',
+      cacheDays: config.whatsapp_validator.cacheDays || 30,
     },
     google: {
       configured: statuses.googlePlacesConfigured || statuses.pageSpeedConfigured,
@@ -288,6 +367,28 @@ async function testIntegration(provider, config) {
         success: true,
         message: `Apify conectado com sucesso para ${data?.data?.username || 'a conta informada'}.`,
       };
+    }
+    case 'casa_dos_dados': {
+      if (!config.casa_dos_dados.apiKey) throw new Error('API Key da Casa dos Dados nao configurada');
+      const baseUrl = String(config.casa_dos_dados.baseUrl || DEFAULT_CASA_BASE_URL).replace(/\/$/, '');
+      const version = String(config.casa_dos_dados.apiVersion || DEFAULT_CASA_API_VERSION).replace(/^\/+/, '');
+      const response = await fetch(`${baseUrl}/${version}/health`, {
+        headers: { Authorization: `Bearer ${config.casa_dos_dados.apiKey}` },
+      });
+      if (!response.ok) throw new Error('Falha ao validar a Casa dos Dados');
+      return { success: true, message: 'Casa dos Dados validada com sucesso.' };
+    }
+    case 'whatsapp_validator': {
+      if (!config.whatsapp_validator.baseUrl) throw new Error('URL da Evolution API nao configurada');
+      if (!config.whatsapp_validator.apiKey) throw new Error('API Key da Evolution API nao configurada');
+      const response = await fetch(String(config.whatsapp_validator.baseUrl).replace(/\/$/, ''), {
+        headers: {
+          apikey: config.whatsapp_validator.apiKey,
+          Authorization: `Bearer ${config.whatsapp_validator.apiKey}`,
+        },
+      });
+      if (response.status === 401 || response.status === 403) throw new Error('Falha ao validar a Evolution API');
+      return { success: true, message: 'Evolution API validada com sucesso.' };
     }
     case 'google': {
       const details = [];

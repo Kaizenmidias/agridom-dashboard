@@ -67,3 +67,4 @@ export function prospectToLead(prospect: Prospect): Lead {
     updatedAt: prospect.updated_at,
   };
 }
+

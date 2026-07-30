@@ -8,3 +8,4 @@ export function RevenuesPage() {
 export function CashFlowPage() {
   return <ModulePlaceholderPage title="Fluxo de Caixa" area="Financeiro" icon={ChartSpline} description="Visualize entradas, saidas e saldo projetado." moduleSummary="Fluxo de Caixa consolidara receitas, despesas, recorrencias e projecoes por periodo para apoiar decisoes administrativas." />;
 }
+

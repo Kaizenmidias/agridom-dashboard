@@ -148,3 +148,4 @@ const FinancialDataFilter: React.FC<FinancialDataFilterProps> = ({
 };
 
 export default FinancialDataFilter;
+

@@ -65,3 +65,4 @@ export type LeadFilters = {
   createdAt: string;
   lastContactAt: string;
 };
+

@@ -110,3 +110,4 @@ const ReportGenerationButton: React.FC<ReportGenerationButtonProps> = ({
 };
 
 export default ReportGenerationButton;
+

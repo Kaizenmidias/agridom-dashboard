@@ -33,10 +33,3 @@ export const buildApiUrl = (endpoint: string): string => {
   return `${API_BASE_URL}/${cleanEndpoint}`;
 };
 
-if (!isProduction) {
-  console.log('API Configuration:', {
-    environment: isProduction ? 'production' : 'development',
-    baseUrl: API_BASE_URL,
-    hostname: window.location.hostname,
-  });
-}

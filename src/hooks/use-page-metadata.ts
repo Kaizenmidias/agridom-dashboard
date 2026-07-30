@@ -27,3 +27,4 @@ export const usePageMetadata = ({ defaultTitle, defaultDescription }: UsePageMet
 };
 
 export default usePageMetadata;
+

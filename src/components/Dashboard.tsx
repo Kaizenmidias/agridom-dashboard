@@ -129,7 +129,6 @@ const Dashboard = () => {
       
       // Verificar se o usuário está autenticado antes de carregar dados
       if (!isAuthenticated || !user) {
-        console.warn('Tentativa de carregar dashboard sem autenticação válida');
         if (isMounted) {
           setLoading(false);
         }
@@ -177,7 +176,6 @@ const Dashboard = () => {
         if (isMounted) {
           // Se for erro de token, não mostrar toast de erro (será tratado pela autenticação)
           if (error?.message?.includes('Token') || error?.message?.includes('token')) {
-            console.warn('Erro de token ao carregar dashboard, será tratado pela autenticação');
           } else {
             toast.error('Erro ao carregar dados do dashboard');
           }
@@ -869,3 +867,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

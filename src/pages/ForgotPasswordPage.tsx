@@ -15,14 +15,11 @@ const ForgotPasswordPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  console.log('ForgotPasswordPage renderizado', { email, loading, showSuccessMessage });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('handleSubmit chamado', { email });
     
     if (!email) {
-      console.log('Email vazio, mostrando toast');
       toast({
         title: "Email necessário",
         description: "Por favor, digite seu email para receber o link de redefinição.",
@@ -31,7 +28,6 @@ const ForgotPasswordPage = () => {
       return;
     }
 
-    console.log('Iniciando requisição...');
     setLoading(true);
     
     try {
@@ -87,7 +83,6 @@ const ForgotPasswordPage = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={(e) => {
-              console.log('Form onSubmit disparado');
               handleSubmit(e);
             }} className="space-y-4">
               <div className="space-y-2">
@@ -112,7 +107,6 @@ const ForgotPasswordPage = () => {
                 className="w-full" 
                 disabled={loading}
                 onClick={(e) => {
-                  console.log('Botão clicado!');
                   // Não prevenir o default aqui, deixar o form handle
                 }}
               >

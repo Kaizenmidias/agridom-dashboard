@@ -121,3 +121,4 @@ export function isNavigationItemActive(item: NavigationItem, pathname: string) {
   const paths = [item.path, ...(item.legacyPaths || [])].filter(Boolean);
   return paths.some((path) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)));
 }
+

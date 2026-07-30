@@ -46,3 +46,4 @@ export function SidebarUser({ user, isCollapsed }: SidebarUserProps) {
     </div>
   );
 }
+

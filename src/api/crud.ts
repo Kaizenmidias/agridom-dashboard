@@ -18,7 +18,6 @@ const checkAuth = async () => {
     }
     
     if (!session || !session.user) {
-      console.warn('Nenhuma sessão ativa encontrada')
       throw new Error('Auth session missing!')
     }
     
@@ -143,16 +142,11 @@ export const deleteBriefing = async (id: string): Promise<void> => {
 
 // === PROJETOS ===
 export const getProjects = async (): Promise<Project[]> => {
-  console.log('🔍 CRUD.TS - getProjects() chamada');
   await checkAuth()
-  console.log('✅ Auth verificada, chamando crudAPI.getProjects()');
   const result = await crudAPI.getProjects()
-  console.log('📊 Resultado crudAPI.getProjects():', result);
   if (result.error) {
-    console.error('❌ Erro em getProjects:', result.error);
     throw new Error(result.error)
   }
-  console.log('✅ getProjects concluída, retornando:', result.data?.length, 'projetos');
   return result.data
 }
 
@@ -184,16 +178,11 @@ export const deleteProject = async (id: string): Promise<void> => {
 
 // === DESPESAS ===
 export const getExpenses = async (): Promise<Expense[]> => {
-  console.log('🔍 CRUD.TS - getExpenses() chamada');
   await checkAuth()
-  console.log('✅ Auth verificada, chamando crudAPI.getExpenses()');
   const result = await crudAPI.getExpenses()
-  console.log('📊 Resultado crudAPI.getExpenses():', result);
   if (result.error) {
-    console.error('❌ Erro em getExpenses:', result.error);
     throw new Error(result.error)
   }
-  console.log('✅ getExpenses concluída, retornando:', result.data?.length, 'despesas');
   return result.data
 }
 
@@ -227,16 +216,11 @@ export const deleteExpense = async (id: string): Promise<void> => {
 
 // === CÓDIGOS ===
 export const getCodes = async (): Promise<Code[]> => {
-  console.log('🔍 CRUD.TS - getCodes() chamada');
   await checkAuth()
-  console.log('✅ Auth verificada, chamando crudAPI.getCodes()');
   const result = await crudAPI.getCodes()
-  console.log('📊 Resultado crudAPI.getCodes():', result);
   if (result.error) {
-    console.error('❌ Erro em getCodes:', result.error);
     throw new Error(result.error)
   }
-  console.log('✅ getCodes concluída, retornando:', result.data?.length, 'códigos');
   return result.data
 }
 
@@ -265,3 +249,4 @@ export const deleteCode = async (id: string): Promise<void> => {
     throw new Error(result.error)
   }
 }
+

@@ -32,3 +32,4 @@ export function AutomationsPage() {
 export function ProspectingAliasPage() {
   return <ModulePlaceholderPage title="Prospeccao" area="Comercial" icon={Braces} description="Rota agrupada para compatibilidade comercial." moduleSummary="Esta rota visual pertence ao grupo Comercial e mantem compatibilidade com o modulo de prospeccao existente." />;
 }
+

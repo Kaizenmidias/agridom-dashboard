@@ -195,3 +195,4 @@ export const ChartConfig = ({
     </div>
   );
 };
+

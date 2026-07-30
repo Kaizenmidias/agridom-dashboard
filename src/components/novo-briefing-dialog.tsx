@@ -251,3 +251,4 @@ export function NovoBriefingDialog({ children, briefing, onBriefingChange }: Nov
     </Dialog>
   )
 }
+

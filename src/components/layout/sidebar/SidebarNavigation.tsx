@@ -124,3 +124,4 @@ export function SidebarNavigation({ user, isCollapsed }: SidebarNavigationProps)
     </SidebarMenu>
   );
 }
+

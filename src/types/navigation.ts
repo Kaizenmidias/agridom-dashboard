@@ -22,3 +22,4 @@ export type NavigationItem = {
   requiredPermissions?: PermissionKey[];
   restrictedForRicardo?: boolean;
 };
+

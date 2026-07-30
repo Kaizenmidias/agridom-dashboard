@@ -100,28 +100,22 @@ const DashboardWithFilter: React.FC = () => {
   }) => {
     try {
       setLoading(true);
-      
-      // Verificar se o usuário está autenticado antes de carregar dados
+
       if (!isAuthenticated || !user) {
-        console.warn('Tentativa de carregar dashboard sem autenticação válida')
         setDashboardStats(null)
         return
       }
-      
-      console.log('Frontend - Enviando filtros para API:', filters);
+
       const result = await dashboardAPI.getBackendDashboardStats(filters);
       if (result.error) {
         throw new Error(result.error);
       }
 
       setDashboardStats(result.data);
-      console.log('Dados do dashboard carregados com sucesso');
     } catch (error: any) {
       console.error('Erro ao carregar dados do dashboard:', error);
-      
-      // Se for erro de token, não mostrar toast de erro (será tratado pela autenticação)
+
       if (error?.message?.includes('Token') || error?.message?.includes('token')) {
-        console.warn('Erro de token ao carregar dashboard, será tratado pela autenticação')
         setDashboardStats(null)
       } else {
         toast.error('Erro ao carregar dados do dashboard');
@@ -133,66 +127,49 @@ const DashboardWithFilter: React.FC = () => {
 
   const handlePeriodChange = (newPeriod: string) => {
     setSelectedPeriod(newPeriod);
-    
-    // Se for período personalizado, não processar ainda - aguardar seleção de datas
+
     if (newPeriod === 'custom') {
       return;
     }
-    
-    console.log('Frontend - Período selecionado:', newPeriod);
-    
+
     const now = new Date();
     let startDate: string, endDate: string, previousStartDate: string, previousEndDate: string;
-    
+
     if (newPeriod === 'year') {
-      // Ano atual
       const startOfCurrentYear = startOfYear(now);
       const endOfCurrentYear = endOfYear(now);
-      
+
       startDate = format(startOfCurrentYear, 'yyyy-MM-dd');
       endDate = format(endOfCurrentYear, 'yyyy-MM-dd');
-      
-      // Ano anterior
+
       const prevYear = new Date(now.getFullYear() - 1, 0, 1);
       const prevStartOfYear = startOfYear(prevYear);
       const prevEndOfYear = endOfYear(prevYear);
-      
+
       previousStartDate = format(prevStartOfYear, 'yyyy-MM-dd');
       previousEndDate = format(prevEndOfYear, 'yyyy-MM-dd');
     } else {
-      // Mês específico
       const [year, month] = newPeriod.split('-');
       const selectedDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-      
+
       const startOfSelectedMonth = startOfMonth(selectedDate);
       const endOfSelectedMonth = endOfMonth(selectedDate);
-      
+
       startDate = format(startOfSelectedMonth, 'yyyy-MM-dd');
       endDate = format(endOfSelectedMonth, 'yyyy-MM-dd');
-      
-      // Mês anterior
+
       const prevMonth = new Date(parseInt(year), parseInt(month) - 2, 1);
       const prevStartOfMonth = startOfMonth(prevMonth);
       const prevEndOfMonth = endOfMonth(prevMonth);
-      
+
       previousStartDate = format(prevStartOfMonth, 'yyyy-MM-dd');
       previousEndDate = format(prevEndOfMonth, 'yyyy-MM-dd');
     }
-    
-    // Debug: Log das datas calculadas no frontend
-    console.log('Frontend - Datas calculadas:', {
-      startDate,
-      endDate,
-      previousStartDate,
-      previousEndDate
-    });
-    
-    // Extrair ano e mês do período selecionado
+
     const targetYear = newPeriod === 'year' ? now.getFullYear() : parseInt(newPeriod.split('-')[0]);
     const targetMonth = newPeriod === 'year' ? undefined : parseInt(newPeriod.split('-')[1]);
     const period = newPeriod === 'year' ? 'annual' : 'monthly';
-    
-    // Carregar dados com filtros
+
     loadDashboardData({
       startDate,
       endDate,
@@ -205,30 +182,20 @@ const DashboardWithFilter: React.FC = () => {
     });
   };
 
-  // Função para lidar com mudança do período personalizado
   const handleCustomDateRangeChange = (dateRange: DateRange | undefined) => {
     setCustomDateRange(dateRange);
-    
+
     if (dateRange?.from && dateRange?.to) {
       const startDate = format(dateRange.from, 'yyyy-MM-dd');
       const endDate = format(dateRange.to, 'yyyy-MM-dd');
-      
-      // Calcular período anterior com a mesma duração
+
       const daysDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24));
       const previousEndDate = addDays(dateRange.from, -1);
       const previousStartDate = addDays(previousEndDate, -daysDiff);
-      
+
       const previousStartDateStr = format(previousStartDate, 'yyyy-MM-dd');
       const previousEndDateStr = format(previousEndDate, 'yyyy-MM-dd');
-      
-      console.log('Frontend - Período personalizado selecionado:', {
-        startDate,
-        endDate,
-        previousStartDate: previousStartDateStr,
-        previousEndDate: previousEndDateStr
-      });
-      
-      // Carregar dados com filtros personalizados
+
       const targetYear = dateRange.from.getFullYear();
       loadDashboardData({
         startDate,
@@ -240,35 +207,27 @@ const DashboardWithFilter: React.FC = () => {
     }
   };
 
-
-
   useEffect(() => {
-    // Carregar dados iniciais apenas quando a autenticação estiver completa
     if (!authLoading && isAuthenticated && user) {
-      console.log('Usuário autenticado, carregando dados do dashboard');
-      
-      // Calcular filtros padrão (mês atual e anterior)
       const now = new Date();
       const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-      
+
       const defaultFilters = {
         startDate: currentMonthStart.toLocaleDateString('en-CA'),
         endDate: currentMonthEnd.toLocaleDateString('en-CA'),
         previousStartDate: previousMonthStart.toLocaleDateString('en-CA'),
         previousEndDate: previousMonthEnd.toLocaleDateString('en-CA')
       };
-      
+
       loadDashboardData(defaultFilters);
     } else if (!authLoading && !isAuthenticated) {
-      console.log('Usuário não autenticado, limpando dados do dashboard');
       setDashboardStats(null);
       setLoading(false);
     }
-  }, [authLoading, isAuthenticated, user]); // Dependências para reagir a mudanças de autenticação
-
+  }, [authLoading, isAuthenticated, user]);
   const getMetricLabel = () => {
     switch (selectedMetric) {
       case 'todos':
@@ -719,3 +678,6 @@ const DashboardWithFilter: React.FC = () => {
 };
 
 export default DashboardWithFilter;
+
+
+

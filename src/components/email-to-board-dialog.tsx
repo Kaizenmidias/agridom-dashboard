@@ -169,3 +169,4 @@ export function EmailToBoardDialog({ children }: { children: React.ReactNode }) 
     </Dialog>
   )
 }
+

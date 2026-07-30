@@ -237,7 +237,6 @@ export const useCRMContext = (): CRMContextState => {
   // Synchronisation initiale au chargement (desabilitada para evitar throttling)
   useEffect(() => {
     // Sincronização automática desabilitada para resolver problema de throttling
-    console.log('Sincronização automática do CRM desabilitada para evitar throttling do navegador');
     
     // Se necessário reativar no futuro, usar delay maior
     // const initialSync = setTimeout(() => {
@@ -261,3 +260,4 @@ export const useCRMContext = (): CRMContextState => {
 };
 
 export default useCRMContext;
+

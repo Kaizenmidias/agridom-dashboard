@@ -221,3 +221,4 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
 };
 
 export default FinancialSummary;
+

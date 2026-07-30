@@ -303,23 +303,18 @@ export const crudAPI = {
 
   // Projects
   async getProjects() {
-    console.log('🔍 SUPABASE-CLIENT - getProjects() iniciada');
-    console.log('🔗 Supabase URL:', supabase.supabaseUrl);
     try {
-      console.log('📡 Fazendo chamada: supabase.from("projects").select("*")');
       const { data, error } = await supabase
         .from('projects')
         .select('*')
         .order('created_at', { ascending: false })
 
-      console.log('📊 Resposta Supabase - data:', data?.length, 'error:', error);
       
       if (error) {
         console.error('❌ Erro ao buscar projetos:', error)
         throw error
       }
 
-      console.log('✅ getProjects Supabase concluída com sucesso');
       return { data: data || [], success: true }
     } catch (error: any) {
       console.error('❌ Erro inesperado ao buscar projetos:', error)
@@ -372,7 +367,6 @@ export const crudAPI = {
     try {
       // Código antigo mantido como backup
       const userId = 25; // User_id válido (Ricardo) para evitar foreign key constraint
-      console.log('🔍 DEBUG - Usando user_id válido para projeto:', userId);
       
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
@@ -388,7 +382,6 @@ export const crudAPI = {
         user_id: userId
       }
 
-      console.log('🔍 DEBUG Supabase - Dados do projeto mapeados:', mappedData)
 
       const { data, error } = await supabase
         .from('projects')
@@ -399,10 +392,8 @@ export const crudAPI = {
         throw error
       }
       
-      console.log('🔍 DEBUG Supabase - Projeto criado com sucesso')
       return { data: { id: 'created' }, success: true }
     } catch (error: any) {
-      console.log('🔍 DEBUG Supabase - Erro capturado no projeto:', error)
       return handleSupabaseError(error)
     }
   },
@@ -591,7 +582,6 @@ export const crudAPI = {
     try {
       // Código antigo mantido como backup
       const userId = 25; // User_id válido para evitar erro de foreign key constraint
-      console.log('🔍 DEBUG - Usando user_id válido para despesa:', userId);
       
       // Mapear campos do frontend para o schema do banco
       const mappedData = {
@@ -605,7 +595,6 @@ export const crudAPI = {
         notes: expenseData.notes || ''
       }
 
-      console.log('🔍 DEBUG Supabase - Dados mapeados para inserção:', mappedData)
 
       const { data, error } = await supabase
         .from('expenses')
@@ -618,7 +607,6 @@ export const crudAPI = {
         throw error
       }
       
-      console.log('🔍 DEBUG Supabase - Despesa criada com sucesso:', data)
       return { data, success: true }
     } catch (error: any) {
       console.error('🔍 DEBUG Supabase - Erro capturado:', error)
@@ -1087,19 +1075,12 @@ export const dashboardAPI = {
       const candidateUrls = [
         `${baseUrl}/api/dashboard/stats${queryString}`,
       ];
-      // #region debug-point A:dashboard-request-start
-      fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"A",location:"src/api/supabase-client.ts:getBackendDashboardStats:start",msg:"[DEBUG] Iniciando busca de estatisticas da dashboard",data:{candidateUrls,filters:filters||null},ts:Date.now()})}).catch(()=>{});
-      // #endregion
 
       let response: Response | null = null;
       let lastStatus: number | null = null;
       let lastError: unknown = null;
 
       for (const url of candidateUrls) {
-        console.log('Frontend - Chamando API do backend:', url);
-        // #region debug-point B:dashboard-request-attempt
-        fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"B",location:"src/api/supabase-client.ts:getBackendDashboardStats:attempt",msg:"[DEBUG] Tentando endpoint da dashboard",data:{url},ts:Date.now()})}).catch(()=>{});
-        // #endregion
 
         try {
           const attempt = await fetch(url, {
@@ -1112,16 +1093,10 @@ export const dashboardAPI = {
 
           if (attempt.ok) {
             response = attempt;
-            // #region debug-point C:dashboard-request-success
-            fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"C",location:"src/api/supabase-client.ts:getBackendDashboardStats:success",msg:"[DEBUG] Endpoint da dashboard respondeu com sucesso",data:{url,status:attempt.status},ts:Date.now()})}).catch(()=>{});
-            // #endregion
             break;
           }
 
           lastStatus = attempt.status;
-          // #region debug-point D:dashboard-request-non-ok
-          fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"D",location:"src/api/supabase-client.ts:getBackendDashboardStats:non-ok",msg:"[DEBUG] Endpoint da dashboard respondeu sem sucesso",data:{url,status:attempt.status},ts:Date.now()})}).catch(()=>{});
-          // #endregion
 
           if (attempt.status !== 404) {
             response = attempt;
@@ -1129,21 +1104,14 @@ export const dashboardAPI = {
           }
         } catch (error: any) {
           lastError = error;
-          // #region debug-point E:dashboard-request-error
-          fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"pre-fix",hypothesisId:"E",location:"src/api/supabase-client.ts:getBackendDashboardStats:catch",msg:"[DEBUG] Falha de rede ao consultar estatisticas da dashboard",data:{url,error:error?.message||String(error)},ts:Date.now()})}).catch(()=>{});
-          // #endregion
         }
       }
 
       if (!response || !response.ok) {
-        // #region debug-point D:dashboard-fallback-direct-supabase
-        fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"post-fix",hypothesisId:"D",location:"src/api/supabase-client.ts:getBackendDashboardStats:fallback",msg:"[DEBUG] Fallback para consulta direta no Supabase apos falha da API da dashboard",data:{lastStatus,lastError:lastError instanceof Error?lastError.message:String(lastError||''),usedBackendResponse:Boolean(response)},ts:Date.now()})}).catch(()=>{});
-        // #endregion
         return this.getDashboardStats(filters)
       }
 
       const backendData = await response.json();
-      console.log('Frontend - Dados recebidos da API:', backendData);
       
       const projectsData = backendData?.projects || {}
       const expensesData = backendData?.expenses || {}
@@ -1198,13 +1166,9 @@ export const dashboardAPI = {
         })) : []
       };
       
-      console.log('Frontend - Dados mapeados:', mappedData);
       return { data: mappedData };
     } catch (error: any) {
       console.error('Erro ao buscar estatísticas do backend:', error);
-      // #region debug-point E:dashboard-fallback-direct-supabase-catch
-      fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"dashboard-stats-404",runId:"post-fix",hypothesisId:"E",location:"src/api/supabase-client.ts:getBackendDashboardStats:catch-fallback",msg:"[DEBUG] Erro no backend da dashboard; usando consulta direta no Supabase",data:{error:error?.message||String(error)},ts:Date.now()})}).catch(()=>{});
-      // #endregion
       return this.getDashboardStats(filters)
     }
   },
@@ -1388,3 +1352,5 @@ export const dashboardAPI = {
 }
 
 // APIs já exportadas individualmente acima
+
+

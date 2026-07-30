@@ -47,7 +47,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     if (!hasNavigatedRef.current && now - lastNavigationTime > NAVIGATION_THROTTLE_MS) {
       hasNavigatedRef.current = true;
       lastNavigationTime = now;
-      console.log('Usuário autenticado redirecionando de rota de auth para dashboard');
       return <Navigate to="/" replace />;
     }
     // Se já navegou recentemente, mostrar loading
@@ -69,7 +68,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     if (!hasNavigatedRef.current && now - lastNavigationTime > NAVIGATION_THROTTLE_MS) {
       hasNavigatedRef.current = true;
       lastNavigationTime = now;
-      console.warn('Redirecionando para login - usuário não autenticado');
       return <Navigate to="/login" replace />;
     }
     // Se já navegou recentemente, mostrar loading

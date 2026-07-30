@@ -6,9 +6,6 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
 // Debug logs para desenvolvimento
 if (import.meta.env.DEV) {
-  console.log('🔍 SUPABASE.TS - Configuração de desenvolvimento');
-  console.log('URL:', supabaseUrl);
-  console.log('Key:', supabaseKey ? `${supabaseKey.substring(0, 20)}...` : 'UNDEFINED');
 }
 
 // Verificação das variáveis de ambiente
@@ -39,9 +36,7 @@ const initializeAuth = async () => {
     }
     
     if (!session) {
-      console.warn('Nenhuma sessão ativa encontrada')
     } else {
-      console.log('Sessão ativa encontrada para:', session.user.email)
     }
   } catch (error) {
     console.error('Erro na inicialização da autenticação:', error)
@@ -50,7 +45,8 @@ const initializeAuth = async () => {
 
 // Listener para mudanças no estado de autenticação
 supabase.auth.onAuthStateChange((event, session) => {
-  console.log('Auth state changed:', event, session?.user?.email || 'No user')
+  if (import.meta.env.DEV) {
+  }
   
   if (event === 'SIGNED_OUT' || !session) {
     // Limpar dados locais quando usuário sair
@@ -67,11 +63,13 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
   
   if (event === 'SIGNED_IN' && session) {
-    console.log('Usuário autenticado com sucesso:', session.user.email)
+    if (import.meta.env.DEV) {
+    }
   }
   
   if (event === 'TOKEN_REFRESHED' && session) {
-    console.log('Token renovado automaticamente')
+    if (import.meta.env.DEV) {
+    }
   }
 })
 
@@ -91,3 +89,5 @@ export const handleSupabaseError = (error: any, ...args: any[]) => {
 export const getAuthenticatedSupabase = () => {
   return supabase
 }
+
+

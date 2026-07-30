@@ -39,7 +39,6 @@ const DespesasPage = () => {
   const fetchDespesas = async () => {
     // Verificar se o usuário está autenticado antes de carregar dados
     if (!isAuthenticated || !user) {
-      console.warn('Tentativa de carregar despesas sem autenticação válida');
       setDespesas([]);
       setLoading(false);
       return;
@@ -56,7 +55,6 @@ const DespesasPage = () => {
       setDespesas([]);
       // Se for erro de token, não mostrar toast de erro (será tratado pela autenticação)
       if (error?.message?.includes('Token') || error?.message?.includes('token')) {
-        console.warn('Erro de token ao carregar despesas, será tratado pela autenticação');
       } else {
         toast({
           title: "Erro",

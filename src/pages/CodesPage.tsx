@@ -61,7 +61,6 @@ export function CodesPage() {
   const loadCodes = async () => {
     // Verificar se o usuário está autenticado antes de carregar dados
     if (!isAuthenticated || !user) {
-      console.warn('Tentativa de carregar códigos sem autenticação válida')
       setCodes([])
       setIsLoading(false)
       return
@@ -78,7 +77,6 @@ export function CodesPage() {
       setCodes([])
       // Se for erro de token, não mostrar toast de erro (será tratado pela autenticação)
       if (error?.message?.includes('Token') || error?.message?.includes('token')) {
-        console.warn('Erro de token ao carregar códigos, será tratado pela autenticação')
       } else {
         showToast('Erro ao carregar códigos')
       }

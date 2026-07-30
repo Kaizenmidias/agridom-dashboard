@@ -116,9 +116,6 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
     setIsSubmitting(true);
     
     try {
-      console.log('🔍 DEBUG Frontend - Iniciando criação de despesa');
-      console.log('🔍 DEBUG Frontend - Token no localStorage:', localStorage.getItem('auth_token') ? 'Presente' : 'Ausente');
-      console.log('🔍 DEBUG Frontend - Dados do formulário:', data);
       
       // Converter valor de string para número
       const amount = parseFloat(data.amount.replace(/[^\d,]/g, '').replace(',', '.'));
@@ -140,7 +137,6 @@ export function NovaDespesaDialog({ children, onExpenseCreated }: NovaDespesaDia
         billing_type: data.billing_type
       };
       
-      console.log('🔍 DEBUG Frontend - Dados da despesa a serem enviados:', expenseData);
       
       await createExpense(expenseData);
       

@@ -44,7 +44,6 @@ const LoginPage = () => {
       setHasRedirected(true);
       // Pequeno delay para evitar throttling
       setTimeout(() => {
-        console.log('Usuário já autenticado, redirecionando para dashboard');
         window.location.replace('/');
       }, 100);
     }

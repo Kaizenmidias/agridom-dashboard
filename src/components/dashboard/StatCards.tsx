@@ -120,3 +120,4 @@ const StatCards: React.FC<StatCardsProps> = ({
 };
 
 export default StatCards;
+

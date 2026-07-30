@@ -132,3 +132,4 @@ const TabContainer = ({ tabs, defaultValue, onValueChange }: TabContainerProps) 
 };
 
 export default TabContainer;
+

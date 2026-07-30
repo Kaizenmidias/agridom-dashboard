@@ -20,3 +20,4 @@ export function AgentsPage() {
 export function AiOverviewPage() {
   return <ModulePlaceholderPage title="Inteligencia Artificial" area="Inteligencia Artificial" icon={Bot} description="Base para recursos internos de IA." moduleSummary="Esta area agrupara os recursos de IA usados pela Kaizen em processos comerciais, operacionais e administrativos." />;
 }
+

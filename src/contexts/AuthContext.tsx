@@ -53,9 +53,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       // Verificar se há sessão ativa do Supabase
       if (!session || !supabaseUser) {
-        console.warn('Tentativa de carregar usuários sem sessão ativa')
         setUsuarios([])
         setError(null) // Não é um erro se não há sessão
+        return
+      }
+
+      if (!import.meta.env.DEV) {
+        setUsuarios([])
+        setError(null)
         return
       }
       
@@ -63,15 +68,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Garantir que usuariosList seja sempre um array
       setUsuarios(Array.isArray(usuariosList) ? usuariosList : [])
       setError(null)
-      console.log('Usuários carregados com sucesso:', usuariosList?.length || 0)
     } catch (err: any) {
-      console.error('Erro ao carregar usuários:', err)
       // Em caso de erro, definir como array vazio
       setUsuarios([])
       
       // Se for erro de token, não mostrar erro para o usuário (será tratado pela autenticação)
       if (err?.message?.includes('Token') || err?.message?.includes('token')) {
-        console.warn('Erro de token ao carregar usuários, será tratado pela autenticação')
         setError(null)
       } else {
         setError('Erro ao carregar usuários')
@@ -89,7 +91,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const { data: { session }, error } = await supabase.auth.getSession()
         
         if (error) {
-          console.error('Erro ao obter sessão:', error.message)
           if (isMounted) {
             setSession(null)
             setSupabaseUser(null)
@@ -110,9 +111,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               try {
                 const parsedUser = JSON.parse(userData)
                 setUser(parsedUser)
-                console.log('Usuário carregado do cache:', parsedUser.email)
               } catch (parseError) {
-                console.error('Dados de usuário corrompidos:', parseError)
                 localStorage.removeItem('user_data')
               }
             }
@@ -139,8 +138,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Configurar listener para mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email || 'No user')
-        
         if (isMounted) {
           setSession(session)
           setSupabaseUser(session?.user || null)
@@ -159,7 +156,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 const parsedUser = JSON.parse(userData)
                 setUser(parsedUser)
               } catch (error) {
-                console.error('Erro ao parsear dados do usuário:', error)
                 localStorage.removeItem('user_data')
               }
             }
@@ -183,8 +179,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Polling desabilitado temporariamente para resolver problema de throttling
     // As permissões serão atualizadas apenas no próximo login
-    console.log('Polling de permissões desabilitado para evitar throttling do navegador')
-
     // Se necessário reativar no futuro, usar intervalo muito maior (30+ minutos)
     // const interval = setInterval(checkForUpdates, 1800000) // 30 minutos
     // return () => clearInterval(interval)
@@ -241,7 +235,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           localStorage.setItem('token', data.session.access_token)
         }
         
-        console.log('Login realizado com sucesso:', authUser.email)
         
         return {
           user: authUser,
@@ -308,7 +301,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Limpar sessionStorage também
       sessionStorage.clear()
       
-      console.log('Logout realizado com sucesso')
     } catch (error) {
       console.error('Erro no logout:', error)
     }
@@ -408,7 +400,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } else {
         // Token inválido - apenas logar o erro, não fazer logout automático
         // O logout deve ser feito apenas quando o usuário explicitamente sair
-        console.warn('Token inválido detectado em refreshUserData, mas mantendo sessão ativa')
       }
     } catch (error) {
       console.error('Erro ao recarregar dados do usuário:', error)
@@ -466,3 +457,5 @@ export async function isTokenValid(token: string): Promise<boolean> {
     return false
   }
 }
+
+

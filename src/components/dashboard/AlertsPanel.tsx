@@ -168,3 +168,4 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({ alerts, setAlerts, setAlertsC
 };
 
 export default AlertsPanel;
+
