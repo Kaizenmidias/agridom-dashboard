@@ -1085,7 +1085,6 @@ export const dashboardAPI = {
       
       const queryString = params.toString() ? `?${params.toString()}` : '';
       const candidateUrls = [
-        `${baseUrl}/api/dashboard-stats${queryString}`,
         `${baseUrl}/api/dashboard/stats${queryString}`,
       ];
       // #region debug-point A:dashboard-request-start
