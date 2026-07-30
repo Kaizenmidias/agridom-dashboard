@@ -3,6 +3,8 @@ import type { LucideIcon } from "lucide-react";
 import {
   Building2,
   CheckCircle2,
+  Eye,
+  EyeOff,
   Loader2,
   Mail,
   Plug,
@@ -249,6 +251,7 @@ export function IntegrationLibrary() {
   const [items, setItems] = useState<IntegrationSummary[]>([]);
   const [activeIntegration, setActiveIntegration] = useState<IntegrationSummary | null>(null);
   const [draft, setDraft] = useState<IntegrationDraft | null>(null);
+  const [visibleSecrets, setVisibleSecrets] = useState<Partial<Record<keyof IntegrationDraft, boolean>>>({});
 
   const activeConfig = useMemo(
     () => integrationCards.find((item) => item.provider === activeIntegration?.provider) || null,
@@ -281,11 +284,13 @@ export function IntegrationLibrary() {
   const openIntegration = (summary: IntegrationSummary) => {
     setActiveIntegration(summary);
     setDraft(buildDraft(summary));
+    setVisibleSecrets({});
   };
 
   const closeDialog = () => {
     setActiveIntegration(null);
     setDraft(null);
+    setVisibleSecrets({});
   };
 
   const handleSave = async (testAfterSave = false) => {
@@ -297,7 +302,17 @@ export function IntegrationLibrary() {
       const updated = await prospectingAPI.saveIntegrationMetadata(activeIntegration.provider, payload);
       setItems((current) => current.map((item) => (item.provider === updated.provider ? updated : item)));
       setActiveIntegration(updated);
-      setDraft(buildDraft(updated));
+      setDraft((current) =>
+        current
+          ? {
+              ...buildDraft(updated),
+              apifyToken: current.apifyToken,
+              casaApiKey: current.casaApiKey,
+              whatsappApiKey: current.whatsappApiKey,
+              smtpPass: current.smtpPass,
+            }
+          : current
+      );
       toast({
         title: "Integracao salva",
         description: "Os dados foram gravados no backend e aplicados ao runtime.",
@@ -357,6 +372,8 @@ export function IntegrationLibrary() {
 
   const renderField = (field: FieldConfig) => {
     if (!draft || !activeIntegration) return null;
+    const isSecret = field.type === "password";
+    const inputType = isSecret && visibleSecrets[field.key] ? "text" : field.type;
 
     if (field.type === "switch") {
       return (
@@ -378,19 +395,39 @@ export function IntegrationLibrary() {
     return (
       <div key={String(field.key)} className={field.span === "full" ? "space-y-2 md:col-span-2" : "space-y-2"}>
         <Label>{field.label}</Label>
-        <Input
-          type={field.type}
-          placeholder={field.placeholder}
-          min={field.min}
-          value={String(draft[field.key] ?? "")}
-          onChange={(event) =>
-            setDraft((current) =>
-              current
-                ? ({ ...current, [field.key]: event.target.value } as IntegrationDraft)
-                : current
-            )
-          }
-        />
+        <div className="relative">
+          <Input
+            type={inputType}
+            placeholder={field.placeholder}
+            min={field.min}
+            className={isSecret ? "pr-10" : undefined}
+            value={String(draft[field.key] ?? "")}
+            onChange={(event) =>
+              setDraft((current) =>
+                current
+                  ? ({ ...current, [field.key]: event.target.value } as IntegrationDraft)
+                  : current
+              )
+            }
+          />
+          {isSecret ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground"
+              onClick={() =>
+                setVisibleSecrets((current) => ({
+                  ...current,
+                  [field.key]: !current[field.key],
+                }))
+              }
+              aria-label={visibleSecrets[field.key] ? "Ocultar valor" : "Mostrar valor"}
+            >
+              {visibleSecrets[field.key] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          ) : null}
+        </div>
         {field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}
       </div>
     );
