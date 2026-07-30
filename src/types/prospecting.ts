@@ -21,7 +21,7 @@ export type WhatsAppValidationStatus =
 
 export type DuplicateStatus = "new" | "duplicate" | "possible_duplicate";
 
-export type IntegrationProvider = "apify" | "casa_dos_dados" | "whatsapp_validator";
+export type IntegrationProvider = "apify" | "casa_dos_dados" | "whatsapp_validator" | "smtp";
 
 export type IntegrationStatus =
   | "not_configured"
@@ -128,6 +128,8 @@ export interface IntegrationSummary {
   lastError?: string | null;
   tokenMasked?: string | null;
   apiKeyMasked?: string | null;
+  passwordMasked?: string | null;
+  secure?: boolean | null;
   creditsBalance?: number | null;
   metadata: Record<string, string | number | boolean | null>;
 }

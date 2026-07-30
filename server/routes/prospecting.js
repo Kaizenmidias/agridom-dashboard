@@ -1,5 +1,6 @@
-const express = require('express');
+﻿const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
+const nodemailer = require('nodemailer');
 
 const router = express.Router();
 
@@ -7,6 +8,25 @@ const DEFAULT_APIFY_TIMEOUT_MINUTES = 10;
 const DEFAULT_APIFY_POLL_SECONDS = 5;
 const DEFAULT_CASA_BASE_URL = 'https://api.casadosdados.com.br';
 const DEFAULT_CASA_API_VERSION = 'v5';
+const INTEGRATION_PROVIDER_ORDER = ['apify', 'casa_dos_dados', 'whatsapp_validator', 'smtp'];
+const INTEGRATION_PROVIDER_LABELS = {
+  apify: {
+    displayName: 'Apify',
+    description: 'Executa os scrapers de Google Maps e Instagram utilizados pelo mÃ³dulo de prospecÃ§Ã£o.',
+  },
+  casa_dos_dados: {
+    displayName: 'Casa dos Dados',
+    description: 'Realiza pesquisas empresariais por CNAE, estado, cidade e situaÃ§Ã£o cadastral.',
+  },
+  whatsapp_validator: {
+    displayName: 'Evolution API',
+    description: 'Valida telefones WhatsApp por meio da Evolution API configurada no backend.',
+  },
+  smtp: {
+    displayName: 'SMTP',
+    description: 'Envia emails transacionais e em massa com as credenciais do provedor configurado.',
+  },
+};
 
 function createLazySupabaseClient(keyName) {
   let client = null;
@@ -43,6 +63,21 @@ function cleanString(value) {
   return trimmed || null;
 }
 
+function cleanBoolean(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  return null;
+}
+
+function cleanNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
 }
@@ -76,6 +111,212 @@ function normalizeWebsiteDomain(value) {
     return url.hostname.replace(/^www\./, '').replace(/\/$/, '').toLowerCase();
   } catch {
     return trimmed.replace(/^https?:\/\//i, '').replace(/^www\./, '').replace(/\/$/, '').toLowerCase();
+  }
+}
+
+function normalizeIntegrationMetadata(provider, metadata) {
+  const source = metadata && typeof metadata === 'object' ? metadata : {};
+
+  if (provider === 'apify') {
+    return {
+      token: cleanString(source.token),
+      googleMapsActorId: cleanString(source.googleMapsActorId),
+      instagramActorId: cleanString(source.instagramActorId),
+      timeoutMinutes: cleanNumber(source.timeoutMinutes) ?? DEFAULT_APIFY_TIMEOUT_MINUTES,
+      pollIntervalSeconds: cleanNumber(source.pollIntervalSeconds) ?? DEFAULT_APIFY_POLL_SECONDS,
+    };
+  }
+
+  if (provider === 'casa_dos_dados') {
+    return {
+      apiKey: cleanString(source.apiKey),
+      baseUrl: cleanString(source.baseUrl) || DEFAULT_CASA_BASE_URL,
+      apiVersion: cleanString(source.apiVersion) || DEFAULT_CASA_API_VERSION,
+    };
+  }
+
+  if (provider === 'whatsapp_validator') {
+    return {
+      baseUrl: cleanString(source.baseUrl),
+      apiKey: cleanString(source.apiKey),
+      instanceName: cleanString(source.instanceName),
+      cacheDays: cleanNumber(source.cacheDays) ?? 30,
+    };
+  }
+
+  if (provider === 'smtp') {
+    return {
+      host: cleanString(source.host),
+      port: cleanNumber(source.port) ?? 587,
+      secure: cleanBoolean(source.secure) ?? false,
+      user: cleanString(source.user),
+      pass: cleanString(source.pass),
+      from: cleanString(source.from),
+    };
+  }
+
+  return source;
+}
+
+function buildIntegrationDefaults() {
+  return {
+    apify: {
+      token: process.env.APIFY_TOKEN || '',
+      googleMapsActorId: process.env.APIFY_GOOGLE_MAPS_ACTOR || '',
+      instagramActorId: process.env.APIFY_INSTAGRAM_ACTOR || '',
+      timeoutMinutes: Number(process.env.APIFY_TIMEOUT_MINUTES || DEFAULT_APIFY_TIMEOUT_MINUTES),
+      pollIntervalSeconds: Number(process.env.APIFY_POLL_INTERVAL_SECONDS || DEFAULT_APIFY_POLL_SECONDS),
+    },
+    casa_dos_dados: {
+      apiKey: process.env.CASA_DOS_DADOS_API_KEY || '',
+      baseUrl: process.env.CASA_DOS_DADOS_BASE_URL || DEFAULT_CASA_BASE_URL,
+      apiVersion: process.env.CASA_DOS_DADOS_API_VERSION || DEFAULT_CASA_API_VERSION,
+    },
+    whatsapp_validator: {
+      baseUrl: process.env.EVOLUTION_API_BASE_URL || process.env.WHATSAPP_VALIDATION_BASE_URL || '',
+      apiKey: process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_VALIDATION_API_KEY || '',
+      instanceName: process.env.EVOLUTION_API_INSTANCE || process.env.WHATSAPP_VALIDATION_PROVIDER || '',
+      cacheDays: Number(process.env.WHATSAPP_VALIDATION_CACHE_DAYS || 30),
+    },
+    smtp: {
+      host: process.env.SMTP_HOST || '',
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+      user: process.env.SMTP_USER || '',
+      pass: process.env.SMTP_PASS || '',
+      from: process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || '',
+    },
+  };
+}
+
+function buildIntegrationSummary(provider, row) {
+  const defaults = buildIntegrationDefaults();
+  const base = defaults[provider] || {};
+  const metadata = normalizeIntegrationMetadata(provider, row?.configuration_metadata || {});
+  const mergedMetadata = { ...base, ...metadata };
+  const label = INTEGRATION_PROVIDER_LABELS[provider];
+  const configured =
+    provider === 'apify'
+      ? Boolean(mergedMetadata.token)
+      : provider === 'casa_dos_dados'
+        ? Boolean(mergedMetadata.apiKey)
+        : provider === 'whatsapp_validator'
+          ? Boolean(mergedMetadata.baseUrl && mergedMetadata.apiKey)
+          : Boolean(mergedMetadata.host && mergedMetadata.user && mergedMetadata.pass && mergedMetadata.from);
+  const status = row?.status || (configured ? 'configured' : 'not_configured');
+
+  return {
+    provider,
+    displayName: label.displayName,
+    description: label.description,
+    status,
+    configured: status !== 'not_configured',
+    connected: row?.status === 'connected',
+    lastTestedAt: row?.last_tested_at || null,
+    lastError: row?.last_error || null,
+    tokenMasked: provider === 'apify' ? maskSecret(mergedMetadata.token) : null,
+    apiKeyMasked: provider === 'casa_dos_dados' || provider === 'whatsapp_validator' ? maskSecret(mergedMetadata.apiKey) : null,
+    passwordMasked: provider === 'smtp' ? maskSecret(mergedMetadata.pass) : null,
+    secure: provider === 'smtp' ? Boolean(mergedMetadata.secure) : null,
+    creditsBalance: null,
+    metadata: mergedMetadata,
+  };
+}
+
+async function loadIntegrationSummaries() {
+  const { data, error } = await adminSupabase
+    .from('integration_providers')
+    .select('*');
+
+  if (error) {
+    if (isMissingRelation(error)) {
+      return INTEGRATION_PROVIDER_ORDER.map((provider) => buildIntegrationSummary(provider, null));
+    }
+    throw error;
+  }
+
+  const rowsByProvider = new Map((data || []).map((row) => [row.provider, row]));
+  return INTEGRATION_PROVIDER_ORDER.map((provider) => buildIntegrationSummary(provider, rowsByProvider.get(provider) || null));
+}
+
+async function saveIntegrationProvider(provider, metadata) {
+  const normalizedMetadata = normalizeIntegrationMetadata(provider, metadata);
+  const summary = buildIntegrationSummary(provider, {
+    status: null,
+    configuration_metadata: normalizedMetadata,
+    last_tested_at: null,
+    last_error: null,
+  });
+
+  const { data, error } = await adminSupabase
+    .from('integration_providers')
+    .upsert(
+      {
+        provider,
+        display_name: summary.displayName,
+        status: summary.configured ? 'configured' : 'not_configured',
+        configuration_metadata: normalizedMetadata,
+        last_error: null,
+      },
+      { onConflict: 'provider' }
+    )
+    .select('*')
+    .single();
+
+  if (error) {
+    if (isMissingRelation(error)) return null;
+    throw error;
+  }
+
+  return buildIntegrationSummary(provider, data);
+}
+
+async function markIntegrationTestResult(provider, success, lastError = null) {
+  const { error } = await adminSupabase
+    .from('integration_providers')
+    .update({
+      status: success ? 'connected' : 'auth_error',
+      last_tested_at: new Date().toISOString(),
+      last_error: lastError,
+    })
+    .eq('provider', provider);
+
+  if (error && !isMissingRelation(error)) throw error;
+}
+
+function applyIntegrationToProcess(provider, metadata) {
+  if (provider === 'apify') {
+    process.env.APIFY_TOKEN = metadata.token || '';
+    process.env.APIFY_GOOGLE_MAPS_ACTOR = metadata.googleMapsActorId || '';
+    process.env.APIFY_INSTAGRAM_ACTOR = metadata.instagramActorId || '';
+    process.env.APIFY_TIMEOUT_MINUTES = String(metadata.timeoutMinutes || DEFAULT_APIFY_TIMEOUT_MINUTES);
+    process.env.APIFY_POLL_INTERVAL_SECONDS = String(metadata.pollIntervalSeconds || DEFAULT_APIFY_POLL_SECONDS);
+  }
+
+  if (provider === 'casa_dos_dados') {
+    process.env.CASA_DOS_DADOS_API_KEY = metadata.apiKey || '';
+    process.env.CASA_DOS_DADOS_BASE_URL = metadata.baseUrl || DEFAULT_CASA_BASE_URL;
+    process.env.CASA_DOS_DADOS_API_VERSION = metadata.apiVersion || DEFAULT_CASA_API_VERSION;
+  }
+
+  if (provider === 'whatsapp_validator') {
+    process.env.EVOLUTION_API_BASE_URL = metadata.baseUrl || '';
+    process.env.EVOLUTION_API_KEY = metadata.apiKey || '';
+    process.env.EVOLUTION_API_INSTANCE = metadata.instanceName || '';
+    process.env.WHATSAPP_VALIDATION_BASE_URL = metadata.baseUrl || '';
+    process.env.WHATSAPP_VALIDATION_API_KEY = metadata.apiKey || '';
+    process.env.WHATSAPP_VALIDATION_PROVIDER = metadata.instanceName || '';
+    process.env.WHATSAPP_VALIDATION_CACHE_DAYS = String(metadata.cacheDays || 30);
+  }
+
+  if (provider === 'smtp') {
+    process.env.SMTP_HOST = metadata.host || '';
+    process.env.SMTP_PORT = String(metadata.port || 587);
+    process.env.SMTP_SECURE = metadata.secure ? 'true' : 'false';
+    process.env.SMTP_USER = metadata.user || '';
+    process.env.SMTP_PASS = metadata.pass || '';
+    process.env.EMAIL_FROM = metadata.from || '';
+    process.env.SMTP_FROM = metadata.from || '';
   }
 }
 
@@ -144,24 +385,18 @@ async function resolveOwnerUserId(req) {
 }
 
 function getIntegrationConfig() {
+  const defaults = buildIntegrationDefaults();
   return {
-    apify: {
-      token: process.env.APIFY_TOKEN || '',
-      googleMapsActorId: process.env.APIFY_GOOGLE_MAPS_ACTOR || '',
-      instagramActorId: process.env.APIFY_INSTAGRAM_ACTOR || '',
-      timeoutMinutes: Number(process.env.APIFY_TIMEOUT_MINUTES || DEFAULT_APIFY_TIMEOUT_MINUTES),
-      pollIntervalSeconds: Number(process.env.APIFY_POLL_INTERVAL_SECONDS || DEFAULT_APIFY_POLL_SECONDS),
-    },
-    casaDosDados: {
-      apiKey: process.env.CASA_DOS_DADOS_API_KEY || '',
-      baseUrl: process.env.CASA_DOS_DADOS_BASE_URL || DEFAULT_CASA_BASE_URL,
-      apiVersion: process.env.CASA_DOS_DADOS_API_VERSION || DEFAULT_CASA_API_VERSION,
-    },
+    apify: defaults.apify,
+    casaDosDados: defaults.casa_dos_dados,
     whatsapp: {
-      provider: process.env.WHATSAPP_VALIDATION_PROVIDER || '',
-      apiKey: process.env.WHATSAPP_VALIDATION_API_KEY || '',
-      cacheDays: Number(process.env.WHATSAPP_VALIDATION_CACHE_DAYS || 30),
+      provider: defaults.whatsapp_validator.instanceName,
+      apiKey: defaults.whatsapp_validator.apiKey,
+      baseUrl: defaults.whatsapp_validator.baseUrl,
+      instanceName: defaults.whatsapp_validator.instanceName,
+      cacheDays: defaults.whatsapp_validator.cacheDays,
     },
+    smtp: defaults.smtp,
   };
 }
 
@@ -170,54 +405,6 @@ function maskSecret(value) {
   const stringValue = String(value);
   if (stringValue.length <= 4) return '****';
   return `${'•'.repeat(12)}${stringValue.slice(-4)}`;
-}
-
-function integrationSummaries() {
-  const config = getIntegrationConfig();
-  return [
-    {
-      provider: 'apify',
-      displayName: 'Apify',
-      description: 'Executa os scrapers de Google Maps e Instagram utilizados pelo modulo de prospeccao.',
-      status: config.apify.token ? 'configured' : 'not_configured',
-      configured: Boolean(config.apify.token),
-      connected: false,
-      tokenMasked: maskSecret(config.apify.token),
-      metadata: {
-        googleMapsActorId: config.apify.googleMapsActorId,
-        instagramActorId: config.apify.instagramActorId,
-        timeoutMinutes: config.apify.timeoutMinutes,
-        pollIntervalSeconds: config.apify.pollIntervalSeconds,
-      },
-    },
-    {
-      provider: 'casa_dos_dados',
-      displayName: 'Casa dos Dados',
-      description: 'Realiza pesquisas empresariais por CNAE, estado, cidade e situacao cadastral.',
-      status: config.casaDosDados.apiKey ? 'configured' : 'not_configured',
-      configured: Boolean(config.casaDosDados.apiKey),
-      connected: false,
-      apiKeyMasked: maskSecret(config.casaDosDados.apiKey),
-      creditsBalance: null,
-      metadata: {
-        apiVersion: config.casaDosDados.apiVersion,
-        baseUrl: config.casaDosDados.baseUrl,
-      },
-    },
-    {
-      provider: 'whatsapp_validator',
-      displayName: 'Validacao de WhatsApp',
-      description: 'Abstracao para confirmar se um telefone pertence a uma conta WhatsApp real.',
-      status: config.whatsapp.provider && config.whatsapp.apiKey ? 'configured' : 'not_configured',
-      configured: Boolean(config.whatsapp.provider && config.whatsapp.apiKey),
-      connected: false,
-      apiKeyMasked: maskSecret(config.whatsapp.apiKey),
-      metadata: {
-        provider: config.whatsapp.provider,
-        cacheDays: config.whatsapp.cacheDays,
-      },
-    },
-  ];
 }
 
 async function logJobEvent(jobId, eventType, message, metadata = {}) {
@@ -319,6 +506,64 @@ async function testCasaDosDados() {
   });
   if (!response.ok) throw new Error('Nao foi possivel validar a Casa dos Dados com uma chamada de baixo consumo.');
   return { success: true, message: 'Casa dos Dados validada com sucesso.' };
+}
+
+async function testEvolutionApi() {
+  const { whatsapp } = getIntegrationConfig();
+  if (!whatsapp.baseUrl) throw new Error('A Evolution API nao esta configurada.');
+  if (!whatsapp.apiKey) throw new Error('A chave da Evolution API nao esta configurada.');
+
+  const normalizedBaseUrl = whatsapp.baseUrl.replace(/\/$/, '');
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), 8000);
+
+  try {
+    const response = await fetch(normalizedBaseUrl, {
+      method: 'GET',
+      headers: {
+        apikey: whatsapp.apiKey,
+        Authorization: `Bearer ${whatsapp.apiKey}`,
+      },
+      signal: abortController.signal,
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('A Evolution API recusou a autenticacao informada.');
+    }
+
+    return {
+      success: true,
+      message: `Evolution API acessivel em ${normalizedBaseUrl}.`,
+      details: whatsapp.instanceName ? [`Instancia: ${whatsapp.instanceName}`] : [],
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function testSmtp() {
+  const { smtp } = getIntegrationConfig();
+  if (!smtp.host) throw new Error('O host SMTP nao esta configurado.');
+  if (!smtp.user) throw new Error('O usuario SMTP nao esta configurado.');
+  if (!smtp.pass) throw new Error('A senha SMTP nao esta configurada.');
+  if (!smtp.from) throw new Error('O remetente SMTP nao esta configurado.');
+
+  const transport = nodemailer.createTransport({
+    host: smtp.host,
+    port: Number(smtp.port || 587),
+    secure: Boolean(smtp.secure),
+    auth: {
+      user: smtp.user,
+      pass: smtp.pass,
+    },
+  });
+
+  await transport.verify();
+  return {
+    success: true,
+    message: 'SMTP validado com sucesso.',
+    details: [`Remetente: ${smtp.from}`],
+  };
 }
 
 async function runApifyActor(actorId, input) {
@@ -493,7 +738,8 @@ async function processJob(job, ownerUserId) {
 router.get('/integrations', async (req, res) => {
   try {
     await resolveOwnerUserId(req);
-    res.json({ integrations: integrationSummaries() });
+    const integrations = await loadIntegrationSummaries();
+    res.json({ integrations });
   } catch (error) {
     res.status(error.statusCode || 500).json({ error: error.message || 'Erro ao carregar integracoes' });
   }
@@ -503,15 +749,19 @@ router.put('/integrations/:provider', async (req, res) => {
   try {
     await resolveOwnerUserId(req);
     const provider = req.params.provider;
-    const secretFields = ['token', 'apiKey', 'password', 'pass'];
-    if (secretFields.some((field) => Object.prototype.hasOwnProperty.call(req.body?.metadata || {}, field))) {
-      return res.status(400).json({
-        error: 'Segredos devem ser configurados no ambiente seguro do backend, nao pelo navegador.',
-      });
+    if (!INTEGRATION_PROVIDER_ORDER.includes(provider)) {
+      return res.status(404).json({ error: 'Integracao nao encontrada' });
     }
-    const integration = integrationSummaries().find((item) => item.provider === provider);
-    if (!integration) return res.status(404).json({ error: 'Integracao nao encontrada' });
-    res.json(integration);
+    const normalizedMetadata = normalizeIntegrationMetadata(provider, req.body?.metadata || req.body || {});
+    const savedIntegration = await saveIntegrationProvider(provider, normalizedMetadata);
+    applyIntegrationToProcess(provider, normalizedMetadata);
+    const response = savedIntegration || buildIntegrationSummary(provider, {
+      status: null,
+      configuration_metadata: normalizedMetadata,
+      last_tested_at: null,
+      last_error: null,
+    });
+    res.json(response);
   } catch (error) {
     res.status(error.statusCode || 500).json({ error: error.message || 'Erro ao salvar integracao' });
   }
@@ -521,15 +771,31 @@ router.post('/integrations/:provider/test', async (req, res) => {
   try {
     await resolveOwnerUserId(req);
     const provider = req.params.provider;
-    if (provider === 'apify') return res.json(await testApify());
-    if (provider === 'casa_dos_dados') return res.json(await testCasaDosDados());
+    if (provider === 'apify') {
+      const result = await testApify();
+      await markIntegrationTestResult(provider, true, null);
+      return res.json(result);
+    }
+    if (provider === 'casa_dos_dados') {
+      const result = await testCasaDosDados();
+      await markIntegrationTestResult(provider, true, null);
+      return res.json(result);
+    }
     if (provider === 'whatsapp_validator') {
-      const config = getIntegrationConfig().whatsapp;
-      if (!config.provider || !config.apiKey) throw new Error('Nenhum provedor real de WhatsApp esta configurado.');
-      return res.json({ success: true, message: 'Provedor de WhatsApp configurado. A validacao real sera executada pelo backend.' });
+      const result = await testEvolutionApi();
+      await markIntegrationTestResult(provider, true, null);
+      return res.json(result);
+    }
+    if (provider === 'smtp') {
+      const result = await testSmtp();
+      await markIntegrationTestResult(provider, true, null);
+      return res.json(result);
     }
     return res.status(400).json({ error: 'Integracao invalida' });
   } catch (error) {
+    if (['apify', 'casa_dos_dados', 'whatsapp_validator', 'smtp'].includes(req.params.provider)) {
+      await markIntegrationTestResult(req.params.provider, false, error.message || 'Falha ao testar integracao').catch(() => {});
+    }
     res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Falha ao testar integracao' });
   }
 });
@@ -778,3 +1044,4 @@ router.get('/history', async (req, res) => {
 });
 
 module.exports = router;
+
