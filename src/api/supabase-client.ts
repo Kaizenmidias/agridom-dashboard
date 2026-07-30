@@ -2,6 +2,8 @@ import { supabase, handleSupabaseError } from '../lib/supabase'
 import { AuthUser, LoginCredentials, RegisterCredentials } from '../types/database'
 import { calculateMonthlyAmount } from '../utils/billing-calculations'
 
+const normalizeBackendOrigin = (value: string) => value.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+
 // Auth functions using Supabase client
 export const authAPI = {
   async login(credentials: LoginCredentials) {
@@ -214,7 +216,7 @@ export const crudAPI = {
       }
 
       const baseUrl = import.meta.env.PROD
-        ? (import.meta.env.VITE_API_BASE_URL || `${window.location.origin}/api`)
+        ? normalizeBackendOrigin(import.meta.env.VITE_API_BASE_URL || window.location.origin)
         : 'http://localhost:3001';
       
       let response: Response;
@@ -1067,7 +1069,7 @@ export const dashboardAPI = {
       }
 
       const baseUrl = import.meta.env.PROD
-        ? (import.meta.env.VITE_API_BASE_URL || `${window.location.origin}/api`)
+        ? normalizeBackendOrigin(import.meta.env.VITE_API_BASE_URL || window.location.origin)
         : 'http://localhost:3001';
       
       // Construir URL com parâmetros de filtro
