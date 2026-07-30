@@ -243,6 +243,7 @@ function buildPayload(provider: IntegrationProvider, draft: IntegrationDraft) {
 export function IntegrationLibrary() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<IntegrationProvider | null>(null);
   const [items, setItems] = useState<IntegrationSummary[]>([]);
@@ -257,12 +258,15 @@ export function IntegrationLibrary() {
   const loadIntegrations = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const data = await prospectingAPI.getIntegrations();
       setItems(data.integrations);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Nao foi possivel carregar a biblioteca.";
+      setLoadError(message);
       toast({
         title: "Erro ao carregar integracoes",
-        description: error instanceof Error ? error.message : "Nao foi possivel carregar a biblioteca.",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -346,6 +350,11 @@ export function IntegrationLibrary() {
     }
   };
 
+  const itemsByProvider = useMemo(
+    () => new Map(items.map((item) => [item.provider, item] as const)),
+    [items]
+  );
+
   const renderField = (field: FieldConfig) => {
     if (!draft || !activeIntegration) return null;
 
@@ -411,6 +420,15 @@ export function IntegrationLibrary() {
         </AlertDescription>
       </Alert>
 
+      {loadError ? (
+        <Alert variant="destructive">
+          <AlertTitle>Falha ao carregar dados salvos</AlertTitle>
+          <AlertDescription>
+            {loadError}. Os modais continuam disponiveis com a estrutura padrao para que a integracao possa ser ajustada manualmente.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {loading ? (
         <div className="flex min-h-[260px] items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -418,8 +436,15 @@ export function IntegrationLibrary() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
           {integrationCards.map((card) => {
-            const item = items.find((entry) => entry.provider === card.provider);
-            if (!item) return null;
+            const item = itemsByProvider.get(card.provider) ?? {
+              provider: card.provider,
+              displayName: card.title,
+              description: card.description,
+              status: "not_configured",
+              configured: false,
+              connected: false,
+              metadata: {},
+            } as IntegrationSummary;
             const Icon = card.icon;
 
             return (
