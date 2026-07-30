@@ -47,12 +47,12 @@ export const navigationItems: NavigationItem[] = [
       { label: "Leads", icon: Users, path: "/comercial/leads", requiredPermissions: ["can_access_crm"] },
       { label: "Kanban", icon: Columns3, path: "/comercial/kanban", requiredPermissions: ["can_access_crm"] },
       { label: "Produtos", icon: Package, path: "/comercial/produtos", requiredPermissions: ["can_access_crm"] },
-      { label: "Historico", icon: History, path: "/comercial/historico", requiredPermissions: ["can_access_crm"] },
-      { label: "Prospeccao", icon: Search, path: "/comercial/prospeccao", legacyPaths: ["/prospeccao"], requiredPermissions: ["can_access_crm"] },
-      { label: "Metricas", icon: ChartNoAxesCombined, path: "/comercial/metricas", requiredPermissions: ["can_access_crm"] },
+      { label: "Histórico", icon: History, path: "/comercial/historico", requiredPermissions: ["can_access_crm"] },
+      { label: "Prospecção", icon: Search, path: "/comercial/prospeccao", legacyPaths: ["/prospeccao"], requiredPermissions: ["can_access_crm"] },
+      { label: "Métricas", icon: ChartNoAxesCombined, path: "/comercial/metricas", requiredPermissions: ["can_access_crm"] },
       { label: "Disparar", icon: Send, path: "/comercial/disparar", requiredPermissions: ["can_access_crm"] },
       { label: "SDR", icon: Headphones, path: "/comercial/sdr", requiredPermissions: ["can_access_crm"] },
-      { label: "Automacoes", icon: Workflow, path: "/comercial/automacoes", requiredPermissions: ["can_access_crm"] },
+      { label: "Automações", icon: Workflow, path: "/comercial/automacoes", requiredPermissions: ["can_access_crm"] },
     ],
   },
   {
@@ -60,16 +60,16 @@ export const navigationItems: NavigationItem[] = [
     icon: BriefcaseBusiness,
     children: [
       { label: "Briefings", icon: ClipboardList, path: "/briefings", legacyPaths: ["/operacional/briefings"], requiredPermissions: ["can_access_briefings"] },
-      { label: "Codigos", icon: Code2, path: "/codigos", legacyPaths: ["/operacional/codigos"], requiredPermissions: ["can_access_codes"] },
+      { label: "Códigos", icon: Code2, path: "/codigos", legacyPaths: ["/operacional/codigos"], requiredPermissions: ["can_access_codes"] },
       { label: "Acessos", icon: KeyRound, path: "/acessos", legacyPaths: ["/operacional/acessos"] },
     ],
   },
   {
-    label: "Inteligencia Artificial",
+    label: "Inteligência Artificial",
     icon: Bot,
     children: [
       { label: "Assistentes", icon: MessageSquareText, path: "/ia/assistentes" },
-      { label: "Conteudos", icon: FileText, path: "/ia/conteudos" },
+      { label: "Conteúdos", icon: FileText, path: "/ia/conteudos" },
       { label: "Prompts", icon: Braces, path: "/ia/prompts" },
       { label: "Agentes", icon: BrainCircuit, path: "/ia/agentes" },
     ],
@@ -85,13 +85,13 @@ export const navigationItems: NavigationItem[] = [
     ],
   },
   {
-    label: "Administracao",
+    label: "Administração",
     icon: Settings,
     children: [
-      { label: "Usuarios", icon: UserCog, path: "/usuarios", legacyPaths: ["/administracao/usuarios"], requiredPermissions: ["can_access_users"], restrictedForRicardo: true },
-      { label: "Integracoes", icon: Plug, path: "/administracao/integracoes", restrictedForRicardo: true },
-      { label: "Configuracoes", icon: SlidersHorizontal, path: "/administracao/configuracoes", restrictedForRicardo: true },
-    ],
+      { label: "Usuários", icon: UserCog, path: "/usuarios", legacyPaths: ["/administracao/usuarios"], requiredPermissions: ["can_access_users"], restrictedForRicardo: true },
+      { label: "Integrações", icon: Plug, path: "/administracao/integracoes", restrictedForRicardo: true },
+      { label: "Configurações", icon: SlidersHorizontal, path: "/administracao/configuracoes", restrictedForRicardo: true },
+  ],
   },
 ];
 

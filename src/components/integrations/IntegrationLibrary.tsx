@@ -402,8 +402,8 @@ export function IntegrationLibrary() {
         <AppBreadcrumbs />
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Integracoes</h1>
-            <p className="text-muted-foreground">Central de configuracao das credenciais utilizadas pelos modulos comerciais.</p>
+            <h1 className="text-3xl font-bold">Integrações</h1>
+            <p className="text-muted-foreground">Central de configuração das credenciais utilizadas pelos módulos comerciais.</p>
           </div>
           <Button variant="outline" onClick={() => void loadIntegrations()} disabled={loading}>
             <RefreshCw className="mr-2 h-4 w-4" />
@@ -414,9 +414,9 @@ export function IntegrationLibrary() {
 
       <Alert>
         <Settings2 className="h-4 w-4" />
-        <AlertTitle>Configuracao persistida no backend</AlertTitle>
-        <AlertDescription>
-          Os dados informados nos modais sao gravados no Supabase e tambem aplicados ao runtime do servidor para manter os testes e os modulos ativos.
+          <AlertTitle>Configuração persistida no backend</AlertTitle>
+          <AlertDescription>
+          Os dados informados nos modais são gravados no Supabase e também aplicados ao runtime do servidor para manter os testes e os módulos ativos.
         </AlertDescription>
       </Alert>
 
@@ -424,7 +424,7 @@ export function IntegrationLibrary() {
         <Alert variant="destructive">
           <AlertTitle>Falha ao carregar dados salvos</AlertTitle>
           <AlertDescription>
-            {loadError}. Os modais continuam disponiveis com a estrutura padrao para que a integracao possa ser ajustada manualmente.
+            {loadError}. Os modais continuam disponíveis com a estrutura padrão para que a integração possa ser ajustada manualmente.
           </AlertDescription>
         </Alert>
       ) : null}
