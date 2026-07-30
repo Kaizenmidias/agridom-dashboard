@@ -60,8 +60,9 @@ supabase.auth.onAuthStateChange((event, session) => {
     localStorage.removeItem('last_token_verification')
     
     // Redirecionar para login se não estiver na página de login
-    if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
-      window.location.href = '/login'
+    const currentHash = window.location.hash || ''
+    if (currentHash !== '#/login' && currentHash !== '#/' && currentHash !== '') {
+      window.location.hash = '#/login'
     }
   }
   

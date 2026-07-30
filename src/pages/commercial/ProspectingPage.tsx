@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Building2,
@@ -180,7 +180,7 @@ function GoogleMapsSearchForm({
             <Checkbox checked={onlyValidatedWhatsApp} disabled={disabledWhatsApp} onCheckedChange={(value) => setOnlyValidatedWhatsApp(Boolean(value))} />
             <Label>So com WhatsApp validado</Label>
           </div>
-          {disabledWhatsApp ? <p className="text-xs text-muted-foreground">Configure um servico de validacao de WhatsApp em Administracao / Integracoes.</p> : null}
+          {disabledWhatsApp ? <p className="text-xs text-muted-foreground">Configure um serviço de validação de WhatsApp em Administração / Integrações.</p> : null}
         </div>
       </div>
       <Button disabled={running || !searchTerms.trim()} onClick={() => onSubmit({ source: "google_maps", searchTerms, quantity: Number(quantity), minimumRating: minimumRating === "any" ? null : Number(minimumRating), onlyValidatedWhatsApp })}>
@@ -702,7 +702,7 @@ export default function ProspectingPage() {
             </p>
           </div>
           <Button variant="outline" asChild>
-            <a href="/administracao/integracoes"><ExternalLink className="mr-2 h-4 w-4" />Integracoes</a>
+            <Link to="/administracao/integracoes"><ExternalLink className="mr-2 h-4 w-4" />Integrações</Link>
           </Button>
         </div>
       </div>

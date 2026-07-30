@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -33,6 +34,7 @@ import { useAuth } from '@/contexts/AuthContext';
 // Dados fictícios removidos - agora usando apenas dados reais da API
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const { isAuthenticated, user, loading: authLoading } = useAuth();
   
   // State for editable content
@@ -545,7 +547,7 @@ const Dashboard = () => {
             <h3 className="font-semibold text-base sm:text-lg">Projetos Recentes</h3>
             <button 
               className="text-xs sm:text-sm text-agri-primary hover:text-agri-primary-dark font-medium"
-              onClick={() => window.location.href = '/projetos'}
+              onClick={() => navigate('/projetos')}
             >
               Ver todos →
             </button>

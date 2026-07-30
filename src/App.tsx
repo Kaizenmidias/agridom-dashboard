@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useMemo, useRef } from "react";
 import Index from "./pages/Index";
 import ProjetosPage from "./pages/ProjetosPage";
@@ -197,13 +197,13 @@ const App = () => {
       <AuthProvider>
         <AppSettingsProvider>
           <CRMProvider>
-            <BrowserRouter>
+            <HashRouter>
               <TooltipProvider>
                 <AppLayout />
                 <Toaster />
                 <DebugEnv />
               </TooltipProvider>
-            </BrowserRouter>
+            </HashRouter>
           </CRMProvider>
         </AppSettingsProvider>
       </AuthProvider>
