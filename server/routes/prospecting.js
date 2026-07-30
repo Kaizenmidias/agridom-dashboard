@@ -8,6 +8,7 @@ const DEFAULT_APIFY_TIMEOUT_MINUTES = 10;
 const DEFAULT_APIFY_POLL_SECONDS = 5;
 const DEFAULT_CASA_BASE_URL = 'https://api.casadosdados.com.br';
 const DEFAULT_CASA_API_VERSION = 'v5';
+const INTEGRATION_SETTINGS_PREFIX = 'prospecting_integrations_user_';
 const INTEGRATION_PROVIDER_ORDER = ['apify', 'casa_dos_dados', 'whatsapp_validator', 'smtp'];
 const INTEGRATION_PROVIDER_LABELS = {
   apify: {
@@ -223,54 +224,6 @@ function buildIntegrationSummary(provider, row) {
   };
 }
 
-async function loadIntegrationSummaries() {
-  const { data, error } = await adminSupabase
-    .from('integration_providers')
-    .select('*');
-
-  if (error) {
-    if (isMissingRelation(error)) {
-      return INTEGRATION_PROVIDER_ORDER.map((provider) => buildIntegrationSummary(provider, null));
-    }
-    throw error;
-  }
-
-  const rowsByProvider = new Map((data || []).map((row) => [row.provider, row]));
-  return INTEGRATION_PROVIDER_ORDER.map((provider) => buildIntegrationSummary(provider, rowsByProvider.get(provider) || null));
-}
-
-async function saveIntegrationProvider(provider, metadata) {
-  const normalizedMetadata = normalizeIntegrationMetadata(provider, metadata);
-  const summary = buildIntegrationSummary(provider, {
-    status: null,
-    configuration_metadata: normalizedMetadata,
-    last_tested_at: null,
-    last_error: null,
-  });
-
-  const { data, error } = await adminSupabase
-    .from('integration_providers')
-    .upsert(
-      {
-        provider,
-        display_name: summary.displayName,
-        status: summary.configured ? 'configured' : 'not_configured',
-        configuration_metadata: normalizedMetadata,
-        last_error: null,
-      },
-      { onConflict: 'provider' }
-    )
-    .select('*')
-    .single();
-
-  if (error) {
-    if (isMissingRelation(error)) return null;
-    throw error;
-  }
-
-  return buildIntegrationSummary(provider, data);
-}
-
 async function markIntegrationTestResult(provider, success, lastError = null) {
   const { error } = await adminSupabase
     .from('integration_providers')
@@ -318,6 +271,14 @@ function applyIntegrationToProcess(provider, metadata) {
     process.env.EMAIL_FROM = metadata.from || '';
     process.env.SMTP_FROM = metadata.from || '';
   }
+}
+
+function applyIntegrationConfigToProcess(config) {
+  const normalized = normalizeIntegrationConfig(config);
+  applyIntegrationToProcess('apify', normalized.apify);
+  applyIntegrationToProcess('casa_dos_dados', normalized.casa_dos_dados);
+  applyIntegrationToProcess('whatsapp_validator', normalized.whatsapp_validator);
+  applyIntegrationToProcess('smtp', normalized.smtp);
 }
 
 function normalizeInstagramUsername(value) {
@@ -382,6 +343,132 @@ async function resolveOwnerUserId(req) {
   }
 
   return userRow;
+}
+
+function buildIntegrationSettingKey(ownerUserId) {
+  return `${INTEGRATION_SETTINGS_PREFIX}${ownerUserId}`;
+}
+
+function normalizeIntegrationConfig(config) {
+  const source = config && typeof config === 'object' ? config : {};
+  const defaults = buildIntegrationDefaults();
+
+  return {
+    apify: {
+      token: cleanString(source.apify?.token) || defaults.apify.token,
+      googleMapsActorId: cleanString(source.apify?.googleMapsActorId) || defaults.apify.googleMapsActorId,
+      instagramActorId: cleanString(source.apify?.instagramActorId) || defaults.apify.instagramActorId,
+      timeoutMinutes: cleanNumber(source.apify?.timeoutMinutes) ?? defaults.apify.timeoutMinutes,
+      pollIntervalSeconds: cleanNumber(source.apify?.pollIntervalSeconds) ?? defaults.apify.pollIntervalSeconds,
+    },
+    casa_dos_dados: {
+      apiKey: cleanString(source.casa_dos_dados?.apiKey) || defaults.casa_dos_dados.apiKey,
+      baseUrl: cleanString(source.casa_dos_dados?.baseUrl) || defaults.casa_dos_dados.baseUrl,
+      apiVersion: cleanString(source.casa_dos_dados?.apiVersion) || defaults.casa_dos_dados.apiVersion,
+    },
+    whatsapp_validator: {
+      baseUrl: cleanString(source.whatsapp_validator?.baseUrl) || defaults.whatsapp_validator.baseUrl,
+      apiKey: cleanString(source.whatsapp_validator?.apiKey) || defaults.whatsapp_validator.apiKey,
+      instanceName: cleanString(source.whatsapp_validator?.instanceName) || defaults.whatsapp_validator.instanceName,
+      cacheDays: cleanNumber(source.whatsapp_validator?.cacheDays) ?? defaults.whatsapp_validator.cacheDays,
+    },
+    smtp: {
+      host: cleanString(source.smtp?.host) || defaults.smtp.host,
+      port: cleanNumber(source.smtp?.port) ?? defaults.smtp.port,
+      secure: cleanBoolean(source.smtp?.secure) ?? defaults.smtp.secure,
+      user: cleanString(source.smtp?.user) || defaults.smtp.user,
+      pass: cleanString(source.smtp?.pass) || defaults.smtp.pass,
+      from: cleanString(source.smtp?.from) || defaults.smtp.from,
+    },
+  };
+}
+
+function mergeIntegrationConfig(currentConfig, provider, patch) {
+  const current = normalizeIntegrationConfig(currentConfig);
+  const normalizedPatch = normalizeIntegrationMetadata(provider, patch);
+  const next = JSON.parse(JSON.stringify(current));
+  const currentProvider = next[provider] || {};
+
+  for (const [key, value] of Object.entries(normalizedPatch)) {
+    if (value !== null && value !== undefined && value !== '') {
+      currentProvider[key] = value;
+    }
+  }
+
+  next[provider] = currentProvider;
+  return normalizeIntegrationConfig(next);
+}
+
+async function fetchStoredIntegrationConfig(ownerUserId) {
+  const { data, error } = await adminSupabase
+    .from('system_settings')
+    .select('setting_value')
+    .eq('setting_key', buildIntegrationSettingKey(ownerUserId))
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!data?.setting_value) {
+    return normalizeIntegrationConfig(buildIntegrationDefaults());
+  }
+
+  try {
+    return normalizeIntegrationConfig(JSON.parse(data.setting_value));
+  } catch {
+    return normalizeIntegrationConfig(buildIntegrationDefaults());
+  }
+}
+
+async function hydrateIntegrationConfig(ownerUserId) {
+  const config = await fetchStoredIntegrationConfig(ownerUserId);
+  applyIntegrationConfigToProcess(config);
+  return config;
+}
+
+async function loadIntegrationSummaries(ownerUserId) {
+  const config = await hydrateIntegrationConfig(ownerUserId);
+  const { data: providerRows, error } = await adminSupabase
+    .from('integration_providers')
+    .select('provider,status,last_tested_at,last_error')
+    .in('provider', INTEGRATION_PROVIDER_ORDER);
+
+  const providerMap = new Map();
+  if (!error && Array.isArray(providerRows)) {
+    for (const row of providerRows) {
+      providerMap.set(row.provider, row);
+    }
+  } else if (!isMissingRelation(error)) {
+    throw error;
+  }
+
+  return INTEGRATION_PROVIDER_ORDER.map((provider) =>
+    buildIntegrationSummary(provider, {
+      ...providerMap.get(provider),
+      configuration_metadata: config[provider],
+    })
+  );
+}
+
+async function saveIntegrationConfig(ownerUserId, provider, patch) {
+  const currentConfig = await fetchStoredIntegrationConfig(ownerUserId);
+  const nextConfig = mergeIntegrationConfig(currentConfig, provider, patch);
+
+  const { error } = await adminSupabase
+    .from('system_settings')
+    .upsert(
+      {
+        setting_key: buildIntegrationSettingKey(ownerUserId),
+        setting_value: JSON.stringify(nextConfig),
+        description: 'Configuracoes de integracoes do modulo de prospeccao',
+      },
+      { onConflict: 'setting_key' }
+    );
+
+  if (error) throw error;
+
+  applyIntegrationConfigToProcess(nextConfig);
+  return nextConfig;
 }
 
 function getIntegrationConfig() {
@@ -659,6 +746,7 @@ function detectDuplicate(result, existingProspects) {
 
 async function processJob(job, ownerUserId) {
   const params = job.search_parameters || {};
+  await hydrateIntegrationConfig(ownerUserId);
   await adminSupabase.from('prospecting_jobs').update({ status: 'running', started_at: new Date().toISOString() }).eq('id', job.id);
   await logJobEvent(job.id, 'preparing', 'Preparando consulta');
 
@@ -737,8 +825,8 @@ async function processJob(job, ownerUserId) {
 
 router.get('/integrations', async (req, res) => {
   try {
-    await resolveOwnerUserId(req);
-    const integrations = await loadIntegrationSummaries();
+    const user = await resolveOwnerUserId(req);
+    const integrations = await loadIntegrationSummaries(user.id);
     res.json({ integrations });
   } catch (error) {
     res.status(error.statusCode || 500).json({ error: error.message || 'Erro ao carregar integracoes' });
@@ -747,17 +835,15 @@ router.get('/integrations', async (req, res) => {
 
 router.put('/integrations/:provider', async (req, res) => {
   try {
-    await resolveOwnerUserId(req);
+    const user = await resolveOwnerUserId(req);
     const provider = req.params.provider;
     if (!INTEGRATION_PROVIDER_ORDER.includes(provider)) {
       return res.status(404).json({ error: 'Integracao nao encontrada' });
     }
     const normalizedMetadata = normalizeIntegrationMetadata(provider, req.body?.metadata || req.body || {});
-    const savedIntegration = await saveIntegrationProvider(provider, normalizedMetadata);
-    applyIntegrationToProcess(provider, normalizedMetadata);
-    const response = savedIntegration || buildIntegrationSummary(provider, {
-      status: null,
-      configuration_metadata: normalizedMetadata,
+    const nextConfig = await saveIntegrationConfig(user.id, provider, normalizedMetadata);
+    const response = buildIntegrationSummary(provider, {
+      configuration_metadata: nextConfig[provider],
       last_tested_at: null,
       last_error: null,
     });
@@ -769,7 +855,8 @@ router.put('/integrations/:provider', async (req, res) => {
 
 router.post('/integrations/:provider/test', async (req, res) => {
   try {
-    await resolveOwnerUserId(req);
+    const user = await resolveOwnerUserId(req);
+    await hydrateIntegrationConfig(user.id);
     const provider = req.params.provider;
     if (provider === 'apify') {
       const result = await testApify();
