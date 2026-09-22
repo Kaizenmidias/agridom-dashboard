@@ -1,4 +1,7 @@
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -10,6 +13,7 @@ import {
 import { navigationItems, isNavigationItemActive } from "@/config/navigation";
 import type { NavigationItem } from "@/types/navigation";
 import type { AuthUser } from "@/types/database";
+import { cn } from "@/lib/utils";
 
 type SidebarNavigationProps = {
   user: AuthUser | null;
@@ -43,33 +47,63 @@ function filterNavigation(items: NavigationItem[], user: AuthUser | null): Navig
 
 export function SidebarNavigation({ user, isCollapsed }: SidebarNavigationProps) {
   const location = useLocation();
-  const items = filterNavigation(navigationItems, user);
+  const items = useMemo(() => filterNavigation(navigationItems, user), [user]);
+  const activeGroup = useMemo(() => {
+    return items.find((item) => item.children?.some((child) => isNavigationItemActive(child, location.pathname)))?.label || null;
+  }, [items, location.pathname]);
+  const [openGroup, setOpenGroup] = useState<string | null>(activeGroup);
+
+  useEffect(() => {
+    if (activeGroup) {
+      setOpenGroup(activeGroup);
+    }
+  }, [activeGroup]);
+
+  const toggleGroup = (label: string) => {
+    setOpenGroup((current) => (current === label ? null : label));
+  };
 
   return (
-    <SidebarMenu className="gap-3">
+    <SidebarMenu className="gap-1">
       {items.map((item) => {
         if (item.children?.length) {
+          const isOpen = openGroup === item.label && !isCollapsed;
+          const isActiveGroup = item.children.some((child) => isNavigationItemActive(child, location.pathname));
+
           return (
             <SidebarMenuItem key={item.label}>
-              {!isCollapsed ? (
-                <p className="mb-1 px-2 text-[11px] font-semibold text-sidebar-foreground/55">{item.label}</p>
-              ) : null}
-              <SidebarMenuSub className="mx-0 border-l-0 px-0 py-0">
-                {item.children.map((child) => (
-                  <SidebarMenuSubItem key={child.path || child.label}>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={isNavigationItemActive(child, location.pathname)}
-                      className="h-8 rounded-md px-2 text-[12px] font-medium"
-                    >
-                      <NavLink to={child.path || "#"}>
-                        <child.icon />
-                        <span>{child.label}</span>
-                      </NavLink>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                ))}
-              </SidebarMenuSub>
+              <Collapsible open={isOpen} onOpenChange={() => toggleGroup(item.label)}>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton
+                    tooltip={item.label}
+                    isActive={isActiveGroup}
+                    className="h-9 rounded-md text-[12px] font-semibold"
+                    aria-expanded={isOpen}
+                  >
+                    <item.icon />
+                    <span>{item.label}</span>
+                    <ChevronDown className={cn("ml-auto h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")} />
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+                  <SidebarMenuSub className="mx-0 mt-1 border-l-0 px-0 pb-1 pl-4">
+                    {item.children.map((child) => (
+                      <SidebarMenuSubItem key={child.path || child.label}>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={isNavigationItemActive(child, location.pathname)}
+                          className="h-8 rounded-md px-2 text-[12px] font-medium"
+                        >
+                          <NavLink to={child.path || "#"}>
+                            <child.icon />
+                            <span>{child.label}</span>
+                          </NavLink>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              </Collapsible>
             </SidebarMenuItem>
           );
         }
