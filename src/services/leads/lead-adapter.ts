@@ -14,6 +14,17 @@ type ProspectAnalysisReport = {
   bairro?: string | null;
   crmSent?: boolean;
   crmSentAt?: string | null;
+  labels?: string[];
+  address?: string | null;
+  linkedin?: string | null;
+  sector?: string | null;
+  revenue?: string | null;
+  employees?: string | null;
+  budget?: string | null;
+  notes?: string | null;
+  nextMeetingAt?: string | null;
+  meetingOwner?: string | null;
+  documents?: Lead["metadata"]["documents"];
 };
 
 const statusMap: Record<ProspectStatus, LeadStatus> = {
@@ -73,6 +84,17 @@ export function prospectToLead(prospect: Prospect): Lead {
       origin: report.source || report.origem || "manual",
       crmSent: Boolean(report.crmSent),
       crmSentAt: report.crmSentAt || null,
+      labels: report.labels || [],
+      address: report.address || prospect.address || null,
+      linkedin: report.linkedin || null,
+      sector: report.sector || null,
+      revenue: report.revenue || null,
+      employees: report.employees || null,
+      budget: report.budget || null,
+      notes: report.notes || null,
+      nextMeetingAt: report.nextMeetingAt || null,
+      meetingOwner: report.meetingOwner || null,
+      documents: report.documents || [],
     },
   };
 }

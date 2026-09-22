@@ -16,6 +16,7 @@ import CRMPage from "./pages/CRMPage";
 import ProspectingPage from "./pages/commercial/ProspectingPage";
 import UsuariosPage from "./pages/UsuariosPage";
 import LeadsPage from "./pages/commercial/LeadsPage";
+import LeadDetailPage from "./pages/commercial/LeadDetailPage";
 import {
   AgendaPage,
   AutomationsPage,
@@ -56,6 +57,7 @@ const routes = [
   { path: "/crm", element: <CRMPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/chats", element: <ChatsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/leads", element: <LeadsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/leads/:leadSlug", element: <LeadDetailPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/pipeline", element: <PipelinePage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/prospeccao", element: <ProspectingPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/metricas", element: <MetricsPage />, protected: true, restrictedForRicardo: false },

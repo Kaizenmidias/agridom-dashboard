@@ -63,6 +63,8 @@ async function sendLead(endpoint: string, method: "POST" | "PATCH", lead: Partia
       state: lead.state,
       assigned_to: lead.assignedTo,
       source: lead.source || "manual",
+      last_contact_date: lead.lastContactAt,
+      metadata: lead.metadata,
     }),
   });
 
@@ -76,6 +78,10 @@ export function createLead(lead: Partial<Lead>) {
 }
 
 export function updateLead(id: string, lead: Partial<Lead>) {
+  return sendLead(`/prospects/${id}`, "PATCH", lead);
+}
+
+export function updateLeadDetails(id: string, lead: Partial<Lead>) {
   return sendLead(`/prospects/${id}`, "PATCH", lead);
 }
 

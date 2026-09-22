@@ -48,6 +48,22 @@ export interface Lead {
     origin?: string | null;
     crmSent?: boolean;
     crmSentAt?: string | null;
+    labels?: string[];
+    address?: string | null;
+    linkedin?: string | null;
+    sector?: string | null;
+    revenue?: string | null;
+    employees?: string | null;
+    budget?: string | null;
+    notes?: string | null;
+    nextMeetingAt?: string | null;
+    meetingOwner?: string | null;
+    documents?: Array<{
+      id: string;
+      name: string;
+      url?: string | null;
+      createdAt: string;
+    }>;
   };
 }
 

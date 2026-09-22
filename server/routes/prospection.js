@@ -48,6 +48,7 @@ const normalizeBusinessName = (value) =>
 
 const buildAnalysisReport = (body = {}, previous = {}) => ({
   ...(previous || {}),
+  ...(body.metadata || {}),
   source: normalizeNullable(body.source) || previous?.source || 'manual',
   contactName: normalizeNullable(body.contact_name) || null,
   assignedTo: normalizeNullable(body.assigned_to) || null,
@@ -122,15 +123,16 @@ router.post('/prospects', async (req, res) => {
 
     const insert = await query(
       `INSERT INTO prospects (
-        owner_user_id, business_name, normalized_business_name, category, city, state,
+        owner_user_id, business_name, normalized_business_name, category, address, city, state,
         phone, normalized_phone, email, website, normalized_website, website_exists,
         lead_score, status, analysis_report
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.userId,
         businessName,
         normalizeBusinessName(businessName),
         normalizeNullable(req.body.category),
+        normalizeNullable(req.body.metadata?.address),
         normalizeNullable(req.body.city),
         normalizeNullable(req.body.state),
         phone,
@@ -190,6 +192,7 @@ router.patch('/prospects/:id', async (req, res) => {
        SET business_name = COALESCE(?, business_name),
            normalized_business_name = COALESCE(?, normalized_business_name),
            category = COALESCE(?, category),
+           address = COALESCE(?, address),
            city = COALESCE(?, city),
            state = COALESCE(?, state),
            phone = COALESCE(?, phone),
@@ -210,6 +213,7 @@ router.patch('/prospects/:id', async (req, res) => {
         businessName,
         businessName ? normalizeBusinessName(businessName) : null,
         normalizeNullable(req.body.category),
+        normalizeNullable(req.body.metadata?.address),
         normalizeNullable(req.body.city),
         normalizeNullable(req.body.state),
         phone,

@@ -12,7 +12,6 @@ import {
   FolderPlus,
   Mail,
   MoreHorizontal,
-  PanelTop,
   Phone,
   Plus,
   Search,
@@ -289,7 +288,6 @@ export default function LeadsPage() {
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
   const [leadForm, setLeadForm] = useState(emptyLeadForm);
   const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
-  const [selectedLeadDetails, setSelectedLeadDetails] = useState<Lead | null>(null);
   const [savingLead, setSavingLead] = useState(false);
   const [cityOptions, setCityOptions] = useState<string[]>([]);
   const [citiesLoading, setCitiesLoading] = useState(false);
@@ -396,6 +394,11 @@ export default function LeadsPage() {
     setPage(1);
   };
 
+  const getLeadPath = (lead: Lead) => {
+    const leadName = getLeadPersonName(lead);
+    return `/comercial/leads/${slugify(`${lead.companyName || leadName}-${lead.id}`)}`;
+  };
+
   const handleCreateFolder = () => {
     const name = newFolderName.trim();
     if (!name) return;
@@ -435,7 +438,6 @@ export default function LeadsPage() {
   const openEditLeadDialog = (lead: Lead) => {
     setEditingLeadId(lead.id);
     setLeadForm(leadToForm(lead));
-    setSelectedLeadDetails(null);
     setLeadDialogOpen(true);
   };
 
@@ -767,7 +769,7 @@ export default function LeadsPage() {
                                   <AvatarFallback>{leadName.slice(0, 1).toUpperCase()}</AvatarFallback>
                                 </Avatar>
                                 <div className="min-w-0">
-                                  <button type="button" className="truncate text-left font-medium hover:text-primary hover:underline" onClick={() => setSelectedLeadDetails(lead)}>
+                                  <button type="button" className="truncate text-left font-medium hover:text-primary hover:underline" onClick={() => navigate(getLeadPath(lead))}>
                                     {leadName}
                                   </button>
                                   <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
@@ -807,7 +809,7 @@ export default function LeadsPage() {
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => setSelectedLeadDetails(lead)}>Ver lead</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => navigate(getLeadPath(lead))}>Ver lead</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => openEditLeadDialog(lead)}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
                                   {whatsappUrl ? <DropdownMenuItem asChild><a href={whatsappUrl} target="_blank" rel="noreferrer">Abrir WhatsApp</a></DropdownMenuItem> : null}
                                   {email ? <DropdownMenuItem asChild><a href={`mailto:${email}`}>Enviar e-mail</a></DropdownMenuItem> : null}
@@ -862,89 +864,6 @@ export default function LeadsPage() {
           </div>
         </section>
       </div>
-
-      <Dialog open={Boolean(selectedLeadDetails)} onOpenChange={(open) => !open && setSelectedLeadDetails(null)}>
-        <DialogContent className="sm:max-w-4xl">
-          {selectedLeadDetails ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>{getLeadPersonName(selectedLeadDetails)}</DialogTitle>
-                <DialogDescription>{selectedLeadDetails.companyName}</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-                <div className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground">Origem</p>
-                      <p className="mt-1 font-medium">{sourceLabels[selectedLeadDetails.source]}</p>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground">Entrada</p>
-                      <p className="mt-1 font-medium">{new Date(selectedLeadDetails.createdAt).toLocaleString("pt-BR")}</p>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground">Último contato</p>
-                      <p className="mt-1 font-medium">{selectedLeadDetails.lastContactAt ? new Date(selectedLeadDetails.lastContactAt).toLocaleString("pt-BR") : "Ainda não contatado"}</p>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground">Responsável</p>
-                      <p className="mt-1 font-medium">{selectedLeadDetails.assignedTo || "Sem responsável"}</p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border">
-                    <div className="border-b px-4 py-3">
-                      <h3 className="font-semibold">Histórico de atividade</h3>
-                    </div>
-                    <div className="space-y-3 p-4">
-                      {(selectedLeadDetails.activities || []).length > 0 ? (
-                        selectedLeadDetails.activities!.map((activity) => (
-                          <div key={activity.id} className="rounded-md bg-muted/30 p-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <Badge variant="outline">{activity.channel}</Badge>
-                              <span className="text-xs text-muted-foreground">{new Date(activity.createdAt).toLocaleString("pt-BR")}</span>
-                            </div>
-                            {activity.subject ? <p className="mt-2 text-sm font-medium">{activity.subject}</p> : null}
-                            <p className="mt-2 text-sm text-muted-foreground">{activity.message}</p>
-                            {activity.recipient ? <p className="mt-1 text-xs text-muted-foreground">Destino: {activity.recipient}</p> : null}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Nenhuma atividade registrada ainda.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3 rounded-md border p-4">
-                  <h3 className="font-semibold">Informações do lead</h3>
-                  <div className="space-y-3 text-sm">
-                    <p><span className="text-muted-foreground">Organização:</span> {selectedLeadDetails.companyName}</p>
-                    <p><span className="text-muted-foreground">Segmento:</span> {selectedLeadDetails.category || "Não informado"}</p>
-                    <p><span className="text-muted-foreground">E-mail:</span> {selectedLeadDetails.email || "Não informado"}</p>
-                    <p><span className="text-muted-foreground">Telefone:</span> {formatPhone(selectedLeadDetails.phone)}</p>
-                    <p><span className="text-muted-foreground">Cidade:</span> {[selectedLeadDetails.city, selectedLeadDetails.state].filter(Boolean).join(" / ") || "Não informada"}</p>
-                    <p><span className="text-muted-foreground">Site:</span> {selectedLeadDetails.website || "Não informado"}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    <Badge className={getStatusClass(selectedLeadDetails.status)}>{statusLabels[selectedLeadDetails.status]}</Badge>
-                    <Badge variant="outline">Score {selectedLeadDetails.score || 0}</Badge>
-                    <Badge variant="outline">{selectedLeadDetails.folderName || "Sem pasta"}</Badge>
-                  </div>
-                  <div className="flex flex-col gap-2 pt-3">
-                    <Button variant="outline" onClick={() => openEditLeadDialog(selectedLeadDetails)}>
-                      <Edit className="mr-2 h-4 w-4" />Editar lead
-                    </Button>
-                    <Button onClick={() => void addLeadToKanban(selectedLeadDetails)}>
-                      <PanelTop className="mr-2 h-4 w-4" />Adicionar ao Kanban
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
