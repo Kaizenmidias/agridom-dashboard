@@ -35,7 +35,6 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -189,8 +188,21 @@ function LeadTableSkeleton() {
   );
 }
 
+const emptyLeadForm = {
+  companyName: "",
+  contactName: "",
+  email: "",
+  phone: "",
+  website: "",
+  city: "",
+  state: "",
+  category: "",
+  assignedTo: "",
+};
+
 export default function LeadsPage() {
   const { leads, loading, error, reload } = useLeads();
+  const [sessionLeads, setSessionLeads] = useState<Lead[]>([]);
   const [filters, setFilters] = useState<LeadFilters>(initialFilters);
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -202,16 +214,19 @@ export default function LeadsPage() {
   const [newFolderDescription, setNewFolderDescription] = useState("");
   const [newFolderIcon, setNewFolderIcon] = useState("folder");
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [leadDialogOpen, setLeadDialogOpen] = useState(false);
+  const [leadForm, setLeadForm] = useState(emptyLeadForm);
 
-  const folders = useMemo(() => buildFolders(leads, customFolders), [leads, customFolders]);
+  const allLeads = useMemo(() => [...sessionLeads, ...leads], [leads, sessionLeads]);
+  const folders = useMemo(() => buildFolders(allLeads, customFolders), [allLeads, customFolders]);
   const selectedFolder = folders.find((folder) => folder.id === filters.folderId) || folders[0];
-  const cities = useMemo(() => Array.from(new Set(leads.map((lead) => lead.city).filter(Boolean))).sort() as string[], [leads]);
-  const owners = useMemo(() => Array.from(new Set(leads.map((lead) => lead.assignedTo).filter(Boolean))).sort() as string[], [leads]);
+  const cities = useMemo(() => Array.from(new Set(allLeads.map((lead) => lead.city).filter(Boolean))).sort() as string[], [allLeads]);
+  const owners = useMemo(() => Array.from(new Set(allLeads.map((lead) => lead.assignedTo).filter(Boolean))).sort() as string[], [allLeads]);
 
   const filteredLeads = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return leads.filter((lead) => {
+    return allLeads.filter((lead) => {
       const textMatches = !normalizedQuery || [
         lead.companyName,
         lead.phone,
@@ -245,7 +260,7 @@ export default function LeadsPage() {
         (filters.assignedTo === "all" || lead.assignedTo === filters.assignedTo)
       );
     });
-  }, [filters, leads, query]);
+  }, [allLeads, filters, query]);
 
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / itemsPerPage));
   const paginatedLeads = filteredLeads.slice((page - 1) * itemsPerPage, page * itemsPerPage);
@@ -294,9 +309,46 @@ export default function LeadsPage() {
     setFolderDialogOpen(false);
   };
 
+  const handleLeadFormChange = (key: keyof typeof emptyLeadForm, value: string) => {
+    setLeadForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleCreateLead = () => {
+    const companyName = leadForm.companyName.trim();
+    if (!companyName) return;
+
+    const now = new Date().toISOString();
+    const newLead: Lead = {
+      id: `local-${Date.now()}`,
+      companyName,
+      contactName: leadForm.contactName.trim() || null,
+      email: leadForm.email.trim() || null,
+      phone: leadForm.phone.trim() || null,
+      website: leadForm.website.trim() || null,
+      city: leadForm.city.trim() || null,
+      state: leadForm.state.trim() || null,
+      category: leadForm.category.trim() || null,
+      assignedTo: leadForm.assignedTo.trim() || null,
+      source: "manual",
+      status: "novo",
+      score: 0,
+      folderId: "todos-os-leads",
+      folderName: "Todos os Leads",
+      lastContactAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setSessionLeads((current) => [newLead, ...current]);
+    setFilters((current) => ({ ...current, folderId: "todos-os-leads" }));
+    setPage(1);
+    setLeadForm(emptyLeadForm);
+    setLeadDialogOpen(false);
+  };
+
   return (
-    <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-background p-4 md:p-6">
-      <div className="space-y-3 border-b border-border/70 pb-4">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-background">
+      <div className="space-y-3 border-b border-border/70 px-4 py-4 md:px-6">
         <AppBreadcrumbs />
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -309,7 +361,7 @@ export default function LeadsPage() {
               <Input className="h-10 pl-9" placeholder="Buscar leads, empresas, e-mails..." value={query} onChange={(event) => setQuery(event.target.value)} />
             </div>
             <Button variant="outline">Importar</Button>
-            <Button><Plus className="mr-2 h-4 w-4" />Novo Lead</Button>
+            <Button onClick={() => setLeadDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Novo Lead</Button>
           </div>
         </div>
       </div>
@@ -324,11 +376,11 @@ export default function LeadsPage() {
         </Alert>
       ) : null}
 
-      <div className="grid min-h-[680px] gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="rounded-lg border border-border/80 bg-card">
+      <div className="grid min-h-[calc(100vh-9rem)] lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="border-r border-border/80 bg-card/60">
           <div className="border-b border-border/70 px-4 py-3">
             <h2 className="text-sm font-semibold">Contatos</h2>
-            <p className="text-xs text-muted-foreground">{leads.length} registros no CRM</p>
+            <p className="text-xs text-muted-foreground">{allLeads.length} registros no CRM</p>
           </div>
           <div className="space-y-1 p-3">
             {folders.map((folder) => {
@@ -394,9 +446,9 @@ export default function LeadsPage() {
           </div>
         </aside>
 
-        <Card className="min-w-0 rounded-lg border border-border/80 shadow-none">
-          <CardHeader className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/10 p-4 text-primary-foreground sm:flex-row sm:items-center sm:justify-between">
+        <section className="min-w-0">
+          <div className="space-y-4 border-b border-border/70 p-4 md:p-5">
+            <div className="flex flex-col gap-3 rounded-md border border-primary/30 bg-primary/10 p-4 text-primary-foreground sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-foreground">Encontre os contatos certos mais rápido</p>
                 <p className="text-xs text-muted-foreground">Use status, origem, cidade e score para priorizar os leads com maior chance de avanço.</p>
@@ -407,7 +459,7 @@ export default function LeadsPage() {
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle>{selectedFolder?.name || "Todos os Leads"}</CardTitle>
+                <h2 className="text-lg font-semibold">{selectedFolder?.name || "Todos os Leads"}</h2>
                 <p className="text-sm text-muted-foreground">{filteredLeads.length} lead(s) encontrados</p>
               </div>
               {activeFilters > 0 ? <Badge variant="secondary">{activeFilters} filtro(s) ativo(s)</Badge> : null}
@@ -471,9 +523,9 @@ export default function LeadsPage() {
                 <Filter className="mr-2 h-4 w-4" />Filtros avançados
               </Button>
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent>
+          <div className="p-4 md:p-5">
             {selectedIds.length > 0 ? (
               <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-3">
                 <span className="text-sm font-medium">{selectedIds.length} selecionado(s)</span>
@@ -485,7 +537,7 @@ export default function LeadsPage() {
 
             {loading ? (
               <LeadTableSkeleton />
-            ) : leads.length === 0 ? (
+            ) : allLeads.length === 0 ? (
               <div className="rounded-md border border-dashed p-8 text-center">
                 <h3 className="font-semibold">Nenhum lead encontrado na base atual</h3>
                 <p className="mt-1 text-sm text-muted-foreground">Quando a tabela de prospecção receber contatos do n8n ou das buscas, eles aparecerão aqui.</p>
@@ -622,9 +674,109 @@ export default function LeadsPage() {
                 />
               </>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
+
+      <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Novo lead</DialogTitle>
+            <DialogDescription>Cadastre as informações principais do contato comercial.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="lead-company">Organização *</Label>
+              <Input
+                id="lead-company"
+                value={leadForm.companyName}
+                onChange={(event) => handleLeadFormChange("companyName", event.target.value)}
+                placeholder="Nome da empresa"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-contact">Nome do contato</Label>
+              <Input
+                id="lead-contact"
+                value={leadForm.contactName}
+                onChange={(event) => handleLeadFormChange("contactName", event.target.value)}
+                placeholder="Pessoa responsável"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-category">Segmento</Label>
+              <Input
+                id="lead-category"
+                value={leadForm.category}
+                onChange={(event) => handleLeadFormChange("category", event.target.value)}
+                placeholder="Ex.: Clínica, Restaurante"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-email">E-mail</Label>
+              <Input
+                id="lead-email"
+                value={leadForm.email}
+                onChange={(event) => handleLeadFormChange("email", event.target.value)}
+                placeholder="contato@empresa.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-phone">Telefone</Label>
+              <Input
+                id="lead-phone"
+                value={leadForm.phone}
+                onChange={(event) => handleLeadFormChange("phone", event.target.value)}
+                placeholder="(00) 00000-0000"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-website">Site</Label>
+              <Input
+                id="lead-website"
+                value={leadForm.website}
+                onChange={(event) => handleLeadFormChange("website", event.target.value)}
+                placeholder="empresa.com.br"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[1fr_88px]">
+              <div className="space-y-2">
+                <Label htmlFor="lead-city">Cidade</Label>
+                <Input
+                  id="lead-city"
+                  value={leadForm.city}
+                  onChange={(event) => handleLeadFormChange("city", event.target.value)}
+                  placeholder="Cidade"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lead-state">UF</Label>
+                <Input
+                  id="lead-state"
+                  value={leadForm.state}
+                  onChange={(event) => handleLeadFormChange("state", event.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="SP"
+                />
+              </div>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="lead-owner">Responsável</Label>
+              <Input
+                id="lead-owner"
+                value={leadForm.assignedTo}
+                onChange={(event) => handleLeadFormChange("assignedTo", event.target.value)}
+                placeholder="Nome do responsável comercial"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLeadDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCreateLead} disabled={!leadForm.companyName.trim()}>
+              <Plus className="mr-2 h-4 w-4" />Adicionar lead
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={Boolean(leadToDelete)} onOpenChange={(open) => !open && setLeadToDelete(null)}>
         <AlertDialogContent>

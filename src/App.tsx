@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Bell, Search, Settings } from "lucide-react";
 import Index from "./pages/Index";
 import ProjetosPage from "./pages/ProjetosPage";
@@ -231,13 +231,13 @@ const App = () => {
       <AuthProvider>
         <AppSettingsProvider>
           <CRMProvider>
-            <HashRouter>
+            <BrowserRouter>
               <TooltipProvider>
                 <AppLayout />
                 <Toaster />
                 <DebugEnv />
               </TooltipProvider>
-            </HashRouter>
+            </BrowserRouter>
           </CRMProvider>
         </AppSettingsProvider>
       </AuthProvider>
@@ -246,4 +246,3 @@ const App = () => {
 };
 
 export default App;
-
