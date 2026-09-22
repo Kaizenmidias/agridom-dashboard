@@ -19,7 +19,7 @@ function getInitials(name?: string) {
 }
 
 export function SidebarUser({ user, isCollapsed }: SidebarUserProps) {
-  const displayName = user?.full_name || user?.name || "Usuario";
+  const displayName = userá.full_name || userá.name || "Usuário";
 
   return (
     <div className="mt-auto space-y-2 overflow-hidden border-t border-sidebar-border/70 p-3">
@@ -32,7 +32,7 @@ export function SidebarUser({ user, isCollapsed }: SidebarUserProps) {
             {!isCollapsed ? (
               <div className="min-w-0 flex-1 overflow-hidden text-left">
                 <p className="truncate whitespace-nowrap text-xs font-semibold text-sidebar-foreground">{displayName}</p>
-                <p className="truncate whitespace-nowrap text-[10px] text-sidebar-foreground/55">{user?.role || "Administrador"}</p>
+                <p className="truncate whitespace-nowrap text-[10px] text-sidebar-foreground/55">{userá.role || "Administrador"}</p>
               </div>
             ) : null}
           </div>

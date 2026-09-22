@@ -64,7 +64,7 @@ const statusOptions: ProspectStatus[] = [
   'Contato Enviado',
   'Respondeu',
   'Interessado',
-  'Reuniao Agendada',
+  'Reunião Agendada',
   'Proposta Enviada',
   'Fechado',
   'Perdido',
@@ -94,7 +94,7 @@ function getStatusClassName(status: ProspectStatus) {
       return 'bg-cyan-100 text-cyan-800'
     case 'Interessado':
       return 'bg-violet-100 text-violet-800'
-    case 'Reuniao Agendada':
+    case 'Reunião Agendada':
       return 'bg-indigo-100 text-indigo-800'
     case 'Proposta Enviada':
       return 'bg-amber-100 text-amber-800'
@@ -762,7 +762,7 @@ const ProspeccaoPage = () => {
           <TabsTrigger value="leads">Leads</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
           <TabsTrigger value="mensagens">Mensagens</TabsTrigger>
-          <TabsTrigger value="historico">Histórico</TabsTrigger>
+          <TabsTrigger value="histórico">Histórico</TabsTrigger>
           <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
         </TabsList>
 
@@ -1305,7 +1305,7 @@ const ProspeccaoPage = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="historico">
+        <TabsContent value="histórico">
           <Card>
             <CardHeader>
               <CardTitle>Histórico de Contatos</CardTitle>

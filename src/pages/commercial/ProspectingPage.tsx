@@ -91,7 +91,7 @@ function getDuplicateBadge(status: ProspectingResult["duplicateStatus"]) {
 
 function getDuplicateLabel(status: ProspectingResult["duplicateStatus"]) {
   if (status === "duplicate") return "Ja existe";
-  if (status === "possible_duplicate") return "Possivel duplicado";
+  if (status === "possible_duplicate") return "Possível duplicado";
   return "Novo lead";
 }
 
@@ -123,9 +123,9 @@ function IntegrationConsumption({ integrations }: { integrations: IntegrationSum
           <CardContent className="flex items-center justify-between p-4">
             <div>
               <p className="text-sm font-medium">{item!.displayName}</p>
-              <p className="text-xs text-muted-foreground">{item!.configured ? "Configurada no backend" : "Nao configurada"}</p>
+              <p className="text-xs text-muted-foreground">{item!.configured ? "Configurada no backend" : "Não configurada"}</p>
             </div>
-            <Badge variant={item!.configured ? "default" : "secondary"}>{item!.creditsBalance != null ? `${item!.creditsBalance} creditos` : item!.status}</Badge>
+            <Badge variant={item!.configured ? "default" : "secondary"}>{item!.creditsBalance != null ? `${item!.creditsBalance} créditos` : item!.status}</Badge>
           </CardContent>
         </Card>
       ))}
@@ -166,7 +166,7 @@ function GoogleMapsSearchForm({
           <Select value={minimumRating} onValueChange={setMinimumRating}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Qualquer avaliacao</SelectItem>
+              <SelectItem value="any">Qualquer avaliação</SelectItem>
               <SelectItem value="3">3 estrelas ou mais</SelectItem>
               <SelectItem value="3.5">3,5 estrelas ou mais</SelectItem>
               <SelectItem value="4">4 estrelas ou mais</SelectItem>
@@ -238,7 +238,7 @@ function CnpjSearchForm({
     <div className="space-y-4">
       <div className="space-y-2">
         <Label>Nicho / Atividade</Label>
-        <Input placeholder="Pesquise por codigo CNAE ou descricao" value={cnaeQuery} onChange={(event) => setCnaeQuery(event.target.value)} />
+        <Input placeholder="Pesquise por código CNAE ou descrição" value={cnaeQuery} onChange={(event) => setCnaeQuery(event.target.value)} />
         {cnaes.length > 0 ? (
           <div className="rounded-md border">
             {cnaes.map((item) => (
@@ -279,7 +279,7 @@ function CnpjSearchForm({
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{[10, 20, 30, 50, 100].map((item) => <SelectItem key={item} value={String(item)}>{item} empresas</SelectItem>)}</SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">Consumo estimado informado pela integracao quando disponivel.</p>
+          <p className="text-xs text-muted-foreground">Consumo estimado informado pela integração quando disponível.</p>
         </div>
         <div className="space-y-2 rounded-md border p-3">
           <div className="flex items-center gap-2">
@@ -308,7 +308,7 @@ function InstagramSearchForm({ onSubmit, running }: { onSubmit: (payload: Prospe
       <div className="space-y-2">
         <Label>Termos de busca</Label>
         <Input placeholder="Ex.: Contabilidade" value={searchTerms} onChange={(event) => setSearchTerms(event.target.value)} />
-        <p className="text-sm text-muted-foreground">A busca retornara perfis publicos relacionados ao termo informado. A disponibilidade dos dados depende das informacoes publicas de cada perfil.</p>
+        <p className="text-sm text-muted-foreground">A busca retornará perfis públicos relacionados ao termo informado. A disponibilidade dos dados depende das informações públicas de cada perfil.</p>
       </div>
       <div className="max-w-xs space-y-2">
         <Label>Quantidade</Label>
@@ -332,7 +332,7 @@ function ProspectingJobProgress({ job, events, onCancel }: { job: ProspectingJob
     <Card className="rounded-lg border shadow-none">
       <CardHeader>
         <CardTitle>Progresso da consulta</CardTitle>
-        <CardDescription>Nao exibimos porcentagem artificial; o acompanhamento usa etapas e eventos reais do backend.</CardDescription>
+        <CardDescription>Não exibimos porcentagem artificial; o acompanhamento usa etapas e eventos reais do backend.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {job ? (
@@ -437,11 +437,11 @@ function ProspectingResultsTable({
                   <TableHead>E-mail</TableHead>
                   <TableHead>Website</TableHead>
                   <TableHead>Cidade</TableHead>
-                  <TableHead>Avaliacao</TableHead>
+                  <TableHead>Avaliação</TableHead>
                   <TableHead>CNPJ / Instagram</TableHead>
                   <TableHead>Duplicidade</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Acoes</TableHead>
+                  <TableHead>Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -460,9 +460,9 @@ function ProspectingResultsTable({
                       <TableCell><Badge className={getWhatsAppBadge(item.whatsappStatus, item.phone)}>{item.phone ? getWhatsAppStatusLabel(item.whatsappStatus) : "Sem telefone"}</Badge></TableCell>
                       <TableCell>{item.email ? <a className="text-primary hover:underline" href={`mailto:${item.email}`}>{item.email}</a> : "Sem e-mail"}</TableCell>
                       <TableCell>{item.website ? <a className="text-primary hover:underline" href={item.website.startsWith("http") ? item.website : `https://${item.website}`} target="_blank" rel="noreferrer">Abrir</a> : "Sem site"}</TableCell>
-                      <TableCell>{[item.city, item.state].filter(Boolean).join(" / ") || "Nao informado"}</TableCell>
-                      <TableCell>{item.rating ? `${item.rating} (${item.reviewCount || 0})` : "Nao informada"}</TableCell>
-                      <TableCell>{item.cnpj ? formatCnpj(item.cnpj) : item.instagramUsername ? `@${item.instagramUsername}` : "Nao informado"}</TableCell>
+                      <TableCell>{[item.city, item.state].filter(Boolean).join(" / ") || "Não informado"}</TableCell>
+                      <TableCell>{item.rating ? `${item.rating} (${item.reviewCount || 0})` : "Não informada"}</TableCell>
+                      <TableCell>{item.cnpj ? formatCnpj(item.cnpj) : item.instagramUsername ? `@${item.instagramUsername}` : "Não informado"}</TableCell>
                       <TableCell><Badge className={getDuplicateBadge(item.duplicateStatus)}>{getDuplicateLabel(item.duplicateStatus)}</Badge></TableCell>
                       <TableCell>{item.validationStatus}</TableCell>
                       <TableCell>
@@ -511,7 +511,7 @@ function ProspectingImportDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Adicionar aos Leads</DialogTitle>
-          <DialogDescription>{selectedCount} resultado(s) selecionado(s). Duplicados definitivos serao ignorados pelo backend.</DialogDescription>
+          <DialogDescription>{selectedCount} resultado(s) selecionado(s). Duplicados definitivos seráo ignorados pelo backend.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2"><Label>Pasta de destino</Label><Input value={folderName} onChange={(event) => setFolderName(event.target.value)} /></div>
@@ -526,7 +526,7 @@ function ProspectingImportDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2"><Label>Responsavel</Label><Input value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)} /></div>
+          <div className="space-y-2"><Label>Responsável</Label><Input value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)} /></div>
           <div className="space-y-2"><Label>Origem</Label><Input value={`Prospeccao - ${sourceConfig[source].label}`} disabled /></div>
           <div className="space-y-2"><Label>Tags</Label><Input placeholder="Separadas por virgula" value={tags} onChange={(event) => setTags(event.target.value)} /></div>
         </div>
@@ -592,8 +592,8 @@ export default function ProspectingPage() {
       setHistory(historyData.items);
     } catch (error) {
       toast({
-        title: "Erro ao carregar prospeccao",
-        description: error instanceof Error ? error.message : "Nao foi possivel carregar os dados iniciais.",
+        title: "Erro ao carregar prospecção",
+        description: error instanceof Error ? error.message : "Não foi possível carregar os dados iniciais.",
         variant: "destructive",
       });
     }
@@ -632,8 +632,8 @@ export default function ProspectingPage() {
       toast({ title: "Busca finalizada", description: `${completedJob.foundCount} resultado(s) encontrados.` });
     } catch (error) {
       toast({
-        title: "Nao foi possivel executar a busca",
-        description: error instanceof Error ? error.message : "Verifique as integracoes e a migration de prospeccao.",
+        title: "Não foi possível executar a busca",
+        description: error instanceof Error ? error.message : "Verifique as integrações e a migration de prospecção.",
         variant: "destructive",
       });
     } finally {
@@ -661,14 +661,14 @@ export default function ProspectingPage() {
         origin: `Prospeccao - ${sourceConfig[source].label}`,
         tags: options.tags,
       });
-      toast({ title: "Importacao concluida", description: result.message });
+      toast({ title: "Importação concluída", description: result.message });
       setImportOpen(false);
       setSelectedIds([]);
       if (job) await refreshJob(job.id);
     } catch (error) {
       toast({
         title: "Erro ao importar leads",
-        description: error instanceof Error ? error.message : "Nao foi possivel importar os selecionados.",
+        description: error instanceof Error ? error.message : "Não foi possível importar os selecionados.",
         variant: "destructive",
       });
     }
@@ -681,7 +681,7 @@ export default function ProspectingPage() {
       setJob(cancelled);
       await refreshJob(job.id);
     } catch (error) {
-      toast({ title: "Erro ao cancelar", description: error instanceof Error ? error.message : "Nao foi possivel cancelar.", variant: "destructive" });
+      toast({ title: "Erro ao cancelar", description: error instanceof Error ? error.message : "Não foi possível cancelar.", variant: "destructive" });
     }
   };
 
@@ -711,7 +711,7 @@ export default function ProspectingPage() {
 
       <Card className="rounded-lg border shadow-none">
         <CardHeader>
-          <CardTitle>Fonte de prospeccao</CardTitle>
+          <CardTitle>Fonte de prospecção</CardTitle>
           <CardDescription>Escolha a origem e preencha os filtros da consulta.</CardDescription>
         </CardHeader>
         <CardContent>

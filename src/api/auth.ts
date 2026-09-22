@@ -1,7 +1,7 @@
 ﻿import { authAPI } from './api-client'
 import { AuthUser, LoginCredentials, RegisterCredentials, AuthResponse } from '../types/database'
 
-// Fun??o para fazer login
+// Função para fazer login
 export const loginUser = async (credentials: LoginCredentials): Promise<AuthResponse> => {
   try {
     const result = await authAPI.login(credentials)
@@ -22,12 +22,12 @@ export const loginUser = async (credentials: LoginCredentials): Promise<AuthResp
   }
 }
 
-// Fun??o para alterar senha
+// Função para alterar senha
 export const changePassword = async (currentPassword: string, newPassword: string): Promise<{ success: boolean }> => {
   try {
     const token = localStorage.getItem('token')
     if (!token) {
-      throw new Error('Token n?o encontrado')
+      throw new Error('Token não encontrado')
     }
 
     const result = await authAPI.changePassword(0, currentPassword, newPassword)
@@ -62,11 +62,11 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Au
     }
     return result;
   } else {
-    throw new Error(result.error || 'Erro ao registrar usu?rio');
+    throw new Error(result.error || 'Erro ao registrar usuário');
   }
 }
 
-// Fun??o para verificar token
+// Função para verificar token
 export const verifyToken = async (token?: string): Promise<{ user: AuthUser; valid: boolean }> => {
   try {
     const result = await authAPI.verify(token)
@@ -77,7 +77,7 @@ export const verifyToken = async (token?: string): Promise<{ user: AuthUser; val
 
     return result
   } catch (error) {
-    console.error('Erro na verifica??o do token:', error)
+    console.error('Erro na verificação do token:', error)
     throw error
   }
 }

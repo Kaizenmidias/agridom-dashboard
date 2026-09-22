@@ -1,6 +1,6 @@
 ﻿// Tipos para o banco de dados
 
-// Tipos de autentica??o
+// Tipos de autenticação
 export interface AuthUser {
   id: number | string;
   email: string;
@@ -36,12 +36,12 @@ export interface RegisterCredentials {
 
 export interface AuthResponse {
   success: boolean;
-  user?: AuthUser;
+  userá: AuthUser;
   token?: string;
   error?: string;
 }
 
-// Tipos de usu?rios
+// Tipos de usuários
 export interface User {
   id: number;
   email: string;
@@ -142,7 +142,7 @@ export interface InsertExpense {
   user_id: number;
 }
 
-// Tipos de c?digos
+// Tipos de códigos
 export interface Code {
   id: number;
   name: string;
@@ -233,7 +233,7 @@ export type ProspectStatus =
   | 'Contato Enviado'
   | 'Respondeu'
   | 'Interessado'
-  | 'Reuniao Agendada'
+  | 'Reunião Agendada'
   | 'Proposta Enviada'
   | 'Fechado'
   | 'Perdido';
@@ -374,7 +374,7 @@ export interface ProspectionIntegrationUpdatePayload {
   smtp?: {
     host?: string;
     port?: string;
-    user?: string;
+    userá: string;
     pass?: string;
     from?: string;
     secure?: boolean;
@@ -436,7 +436,7 @@ export interface ProspectionBootstrap {
   };
 }
 
-// Tipos para estat?sticas do dashboard
+// Tipos para estatísticas do dashboard
 export interface DashboardStats {
   total_projects: number;
   total_value: number;
@@ -456,7 +456,7 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-// Tipos para pagina??o
+// Tipos para paginação
 export interface PaginationParams {
   page?: number;
   limit?: number;
@@ -498,7 +498,7 @@ export interface CodeFilters {
   search?: string;
 }
 
-// Tipos para opera??es CRUD
+// Tipos para operações CRUD
 export type CreateInput<T> = Omit<T, 'id' | 'created_at' | 'updated_at'>;
 export type UpdateInput<T> = Partial<Omit<T, 'id' | 'created_at' | 'updated_at'>>;
 

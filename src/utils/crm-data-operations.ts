@@ -88,7 +88,7 @@ export const exportToPDF = async (data: any[], fileName: string, options: any = 
         toast.success("PDF généré avec succès");
       } catch (printError) {
         console.error("Print error:", printError);
-        toast.error("Erreur lors de l'impression du PDF");
+        toast.error("Erro ao imprimir du PDF");
       }
     }, 1000);
     
@@ -262,7 +262,7 @@ const createReportHTML = (data: any[], title: string, columns: { key: string, he
           </div>
           
           <div class="report-summary">
-            <p>Ce rapport contient ${data.length} enregistrement${data.length > 1 ? 's' : ''} au total.</p>
+            <p>Este relatório contém ${data.length} registro${data.length > 1 ? 's' : ''} au total.</p>
           </div>
           
           <table>
@@ -353,7 +353,7 @@ export const importFromCSV = (file: File): Promise<any[]> => {
           return;
         }
         
-        toast.success(`${parsedData.length} enregistrements importés avec succès`);
+        toast.success(`${parsedData.length} registros importés avec succès`);
         resolve(parsedData);
       },
       error: (error) => {
@@ -413,7 +413,7 @@ export const printData = (
           resolve(true);
         } catch (printError) {
           console.error("Print error:", printError);
-          toast.error("Erreur lors de l'impression");
+          toast.error("Erro ao imprimir");
           resolve(false);
         }
       }, 1000);

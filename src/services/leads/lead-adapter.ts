@@ -18,7 +18,7 @@ const statusMap: Record<ProspectStatus, LeadStatus> = {
   "Contato Enviado": "em_contato",
   Respondeu: "em_contato",
   Interessado: "qualificado",
-  "Reuniao Agendada": "reuniao",
+  "Reunião Agendada": "reuniao",
   "Proposta Enviada": "proposta",
   Fechado: "convertido",
   Perdido: "perdido",

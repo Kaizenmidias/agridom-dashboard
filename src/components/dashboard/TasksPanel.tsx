@@ -50,13 +50,13 @@ const TasksPanel: React.FC<TasksPanelProps> = ({ tasks, setTasks }) => {
   
   const handleDeleteTask = (taskId: number) => {
     setTasks(tasks.filter(task => task.id !== taskId));
-    toast.success('Tarefa exclu?da');
+    toast.success('Tarefa excluída');
   };
   
   // Add new task
   const handleAddTask = () => {
     if (!newTask.title.trim() || !newTask.due.trim()) {
-      toast.error('Preencha todos os campos obrigat?rios');
+      toast.error('Preencha todos os campos obrigatórios');
       return;
     }
     
@@ -80,7 +80,7 @@ const TasksPanel: React.FC<TasksPanelProps> = ({ tasks, setTasks }) => {
   return (
     <div className="dashboard-card card-hover animate-enter">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold">Pr?ximas tarefas</h3>
+        <h3 className="font-semibold">Próximas tarefas</h3>
         <div className="flex items-center space-x-2">
           <Button 
             size="sm" 
@@ -172,13 +172,13 @@ const TasksPanel: React.FC<TasksPanelProps> = ({ tasks, setTasks }) => {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="taskTitle" className="text-right">
-                T?tulo
+                Título
               </Label>
               <Input
                 id="taskTitle"
                 value={newTask.title}
                 onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-                placeholder="T?tulo da tarefa"
+                placeholder="Título da tarefa"
                 className="col-span-3"
               />
             </div>
@@ -190,7 +190,7 @@ const TasksPanel: React.FC<TasksPanelProps> = ({ tasks, setTasks }) => {
                 id="dueDate"
                 value={newTask.due}
                 onChange={(e) => setNewTask({...newTask, due: e.target.value})}
-                placeholder="ex: Hoje, Amanh?, 15/06"
+                placeholder="ex: Hoje, Amanhã, 15/06"
                 className="col-span-3"
               />
             </div>
@@ -205,7 +205,7 @@ const TasksPanel: React.FC<TasksPanelProps> = ({ tasks, setTasks }) => {
                 className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="low">Baixa</option>
-                <option value="medium">M?dia</option>
+                <option value="medium">Média</option>
                 <option value="high">Alta</option>
               </select>
             </div>

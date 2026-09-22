@@ -5,7 +5,7 @@ import type { Lead } from "@/types/lead";
 
 export async function getLeads(): Promise<Lead[]> {
   const token = localStorage.getItem("token");
-  if (!token) throw new Error("Usuario nao autenticado");
+  if (!token) throw new Error("Usuário nao autenticado");
 
   const response = await fetch(buildApiUrl("prospection/bootstrap"), {
     headers: {
@@ -15,7 +15,7 @@ export async function getLeads(): Promise<Lead[]> {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload?.error || "Nao foi possivel carregar os leads.");
+    throw new Error(payload?.error || "Não foi possível carregar os leads.");
   }
 
   return ((payload?.prospects || []) as Prospect[]).map(prospectToLead);

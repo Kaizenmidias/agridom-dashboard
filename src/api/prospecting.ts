@@ -16,7 +16,7 @@ const PROSPECTING_BASE_URL = buildApiUrl("prospecting");
 
 function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem("token");
-  if (!token) throw new Error("Usuario nao autenticado");
+  if (!token) throw new Error("Usuário nao autenticado");
 
   return {
     "Content-Type": "application/json",
@@ -35,7 +35,7 @@ async function request<T>(endpoint: string, init?: RequestInit): Promise<T> {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload?.error || payload?.message || `Erro na API de prospeccao (${response.status})`);
+    throw new Error(payload?.error || payload?.message || `Erro na API de prospecção (${response.status})`);
   }
 
   return payload as T;

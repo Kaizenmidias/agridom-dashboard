@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast'
 
 const crmColumns: ProspectStatus[] = [
   'Interessado',
-  'Reuniao Agendada',
+  'Reunião Agendada',
   'Proposta Enviada',
   'Fechado',
   'Perdido',
@@ -27,7 +27,7 @@ function getStatusColor(status: ProspectStatus) {
   switch (status) {
     case 'Interessado':
       return 'bg-violet-100 text-violet-800'
-    case 'Reuniao Agendada':
+    case 'Reunião Agendada':
       return 'bg-indigo-100 text-indigo-800'
     case 'Proposta Enviada':
       return 'bg-amber-100 text-amber-800'

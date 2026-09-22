@@ -14,7 +14,7 @@ export function useLeads() {
       const data = await getLeads();
       setLeads(data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel carregar os leads.";
+      const message = err instanceof Error ? err.message : "Não foi possível carregar os leads.";
       setError(message);
       setLeads([]);
     } finally {

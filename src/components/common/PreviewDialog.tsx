@@ -36,7 +36,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
         <DialogHeader>
           <DialogTitle>{title || `Prévia - ${moduleName}`}</DialogTitle>
           <DialogDescription>
-            Prévia antes da impress?o
+            Prévia antes da impressão
           </DialogDescription>
         </DialogHeader>
         <div className="flex-grow overflow-auto border rounded-md mt-4 bg-white">

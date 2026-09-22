@@ -87,7 +87,7 @@ export const EditableTable = ({
       case 'Élevée':
       case 'Urgente':
         return 'bg-red-100 text-red-800';
-      case 'M?dia':
+      case 'Média':
         return 'bg-orange-100 text-orange-800';
       case 'Basse':
       case 'Baixa':

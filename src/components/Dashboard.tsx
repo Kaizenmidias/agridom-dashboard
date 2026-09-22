@@ -31,7 +31,7 @@ import PageHeader from './layout/PageHeader';
 import { dashboardAPI, DashboardStats } from '../api/api-client';
 import { useAuth } from '@/contexts/AuthContext';
 
-// Dados fict?cios removidos - agora usando apenas dados reais da API
+// Dados fictícios removidos - agora usando apenas dados reais da API
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -39,7 +39,7 @@ const Dashboard = () => {
   
   // State for editable content
   const [title, setTitle] = useState('Dashboard de Projetos');
-  const [description, setDescription] = useState('Vis?o geral dos seus projetos e despesas');
+  const [description, setDescription] = useState('Visão geral dos seus projetos e despesas');
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -127,7 +127,7 @@ const Dashboard = () => {
       if (hasLoaded || !isMounted) return;
       hasLoaded = true;
       
-      // Verificar se o usu?rio est? autenticado antes de carregar dados
+      // Verificar se o usuário está autenticado antes de carregar dados
       if (!isAuthenticated || !user) {
         if (isMounted) {
           setLoading(false);
@@ -140,7 +140,7 @@ const Dashboard = () => {
           setLoading(true);
         }
         
-        // Usar a nova fun??o que chama o backend Node.js com a l?gica correta
+        // Usar a nova função que chama o backend Node.js com a lógica correta
         const result = await dashboardAPI.getBackendDashboardStats();
         if (result.error) {
           throw new Error(result.error);
@@ -174,7 +174,7 @@ const Dashboard = () => {
       } catch (error) {
         console.error('Erro ao carregar dados do dashboard:', error);
         if (isMounted) {
-          // Se for erro de token, n?o mostrar toast de erro (ser? tratado pela autentica??o)
+          // Se for erro de token, não mostrar toast de erro (será tratado pela autenticação)
           if (error?.message?.includes('Token') || error?.message?.includes('token')) {
           } else {
             toast.error('Erro ao carregar dados do dashboard');
@@ -187,7 +187,7 @@ const Dashboard = () => {
       }
     };
     
-    // Usar timeout para evitar execu??o imediata e throttling
+    // Usar timeout para evitar execução imediata e throttling
      const timeoutId = setTimeout(loadDashboardData, 200);
      
      return () => {
@@ -199,17 +199,17 @@ const Dashboard = () => {
   // Handle changes
   const handleTitleChange = (value: string | number) => {
     setTitle(String(value));
-    toast.success('T?tulo atualizado');
+    toast.success('Título atualizado');
   };
   
   const handleDescriptionChange = (value: string | number) => {
     setDescription(String(value));
-    toast.success('Descri??o atualizada');
+    toast.success('Descrição atualizada');
   };
   
   const handleMonthChange = (value: string | number) => {
     setCurrentMonth(String(value));
-    toast.success('M?s atualizado');
+    toast.success('Mês atualizado');
   };
   
   // Stat card updates
@@ -222,7 +222,7 @@ const Dashboard = () => {
   
   const handleAreaChange = (value: string | number) => {
     setCultivatedArea(Number(value));
-    toast.success('Superf?cie cultivada atualizada');
+    toast.success('Superfície cultivada atualizada');
   };
   
   const handleParcelsCountChange = (value: string | number) => {
@@ -232,7 +232,7 @@ const Dashboard = () => {
   
   const handleYieldChange = (value: string | number) => {
     setAverageYield(Number(value));
-    toast.success('Rendimento m?dio atualizado');
+    toast.success('Rendimento médio atualizado');
   };
   
   const handleYieldGrowthChange = (value: string | number) => {
@@ -261,7 +261,7 @@ const Dashboard = () => {
   
   const handleDeleteTask = (taskId: number) => {
     setUpcomingTasks(upcomingTasks.filter(task => task.id !== taskId));
-    toast.success('Tarefa exclu?da');
+    toast.success('Tarefa excluída');
   };
   
   // Alert management
@@ -275,19 +275,19 @@ const Dashboard = () => {
   const handleDeleteAlert = (id: number) => {
     setAlerts(alerts.filter(alert => alert.id !== id));
     setAlertsCount(prev => prev - 1);
-    toast.success('Alerta exclu?do');
+    toast.success('Alerta excluído');
   };
   
   // Weather alert management
   const handleDeleteWeatherAlert = (id: number) => {
     setWeatherAlerts(weatherAlerts.filter(alert => alert.id !== id));
-    toast.success('Alerta meteorol?gico exclu?do');
+    toast.success('Alerta meteorológico excluído');
   };
   
   const handleAddWeatherAlert = () => {
     // Validation
     if (!newAlert.region || !newAlert.startDate || !newAlert.endDate || !newAlert.description) {
-      toast.error('Preencha todos os campos obrigat?rios');
+      toast.error('Preencha todos os campos obrigatórios');
       return;
     }
     
@@ -308,12 +308,12 @@ const Dashboard = () => {
       description: ''
     });
     
-    toast.success('Novo alerta meteorol?gico adicionado');
+    toast.success('Novo alerta meteorológico adicionado');
   };
   
   // Add transaction handler (placeholder for future implementation)
   const handleAddTransaction = () => {
-    toast.info('Redirecionando para a p?gina financeira');
+    toast.info('Redirecionando para a página financeira');
     // In a real app, this would navigate to the finance page
   };
   
@@ -439,9 +439,9 @@ const Dashboard = () => {
         {/* Revenue Chart - Dados reais de faturamento */}
         <div className="dashboard-card col-span-full xl:col-span-2 card-hover">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-2">
-            <h3 className="font-semibold text-base sm:text-lg">Evolu??o do Faturamento</h3>
+            <h3 className="font-semibold text-base sm:text-lg">Evolução do Faturamento</h3>
             <div className="flex items-center space-x-2">
-              <span className="text-xs sm:text-sm text-gray-600">Per?odo:</span>
+              <span className="text-xs sm:text-sm text-gray-600">Período:</span>
               <EditableField
                 value={currentMonth}
                 type="text"
@@ -547,7 +547,7 @@ const Dashboard = () => {
               className="text-xs sm:text-sm text-agri-primary hover:text-agri-primary-dark font-medium"
               onClick={() => navigate('/projetos')}
             >
-              Ver todos ?
+              Ver todos
             </button>
           </div>
           <div className="w-full overflow-x-auto">
@@ -646,7 +646,7 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <div className="dashboard-card card-hover">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold">Pr?ximas tarefas</h3>
+            <h3 className="font-semibold">Próximas tarefas</h3>
             <button className="text-xs text-agri-primary hover:underline">Ver tudo</button>
           </div>
           
@@ -725,7 +725,7 @@ const Dashboard = () => {
         <div className="dashboard-card card-hover">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Alertes</h3>
-            <button className="text-xs text-agri-primary hover:underline">G?rer les alertes</button>
+            <button className="text-xs text-agri-primary hover:underline">Gerenciar alertas</button>
           </div>
           
           <div className="space-y-3">
@@ -775,7 +775,7 @@ const Dashboard = () => {
       <Dialog open={showAddAlertDialog} onOpenChange={setShowAddAlertDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Adicionar alerta meteorol?gico</DialogTitle>
+            <DialogTitle>Adicionar alerta meteorológico</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
@@ -796,7 +796,7 @@ const Dashboard = () => {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="region" className="text-right">
-                Regi?o
+                Região
               </Label>
               <Input
                 id="region"
@@ -807,7 +807,7 @@ const Dashboard = () => {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="startDate" className="text-right">
-                Data de in?cio
+                Data de início
               </Label>
               <Input
                 id="startDate"
@@ -841,7 +841,7 @@ const Dashboard = () => {
               >
                 <option value="baixa">Baixa</option>
                 <option value="moderada">Moderada</option>
-                <option value="cr?tica">Cr?tica</option>
+                <option value="crítica">Crítica</option>
               </select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">

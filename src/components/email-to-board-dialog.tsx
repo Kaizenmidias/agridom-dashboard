@@ -74,7 +74,7 @@ export function EmailToBoardDialog({ children }: { children: React.ReactNode }) 
                 </Button>
               </div>
               <p className="text-[11px] text-gray-500 italic">
-                Qualquer pessoa com esse e-mail pode adicionar cart?es como voc?.
+                Qualquer pessoa com esse e-mail pode adicionar cart?es como você.
               </p>
             </div>
 
@@ -93,7 +93,7 @@ export function EmailToBoardDialog({ children }: { children: React.ReactNode }) 
                 <Badge className="bg-purple-600/20 text-purple-400 border-purple-600/30 text-[9px] uppercase font-bold px-1 py-0">Premium</Badge>
               </div>
               <p className="text-[11px] text-gray-400 leading-relaxed">
-                A Atlassian Intelligence est? desativada para E-mail para quadro. <span className="text-blue-400 cursor-pointer">Saiba mais sobre a fun??o.</span>
+                A Atlassian Intelligence est? desativada para E-mail para quadro. <span className="text-blue-400 cursor-pointer">Saiba mais sobre a função.</span>
               </p>
             </div>
 
@@ -112,7 +112,7 @@ export function EmailToBoardDialog({ children }: { children: React.ReactNode }) 
                     <SelectContent className="bg-[#2d333b] border-gray-700 text-gray-200">
                       <SelectItem value="new">Novos projetos</SelectItem>
                       <SelectItem value="developing">Desenvolvendo</SelectItem>
-                      <SelectItem value="changes">Altera??es</SelectItem>
+                      <SelectItem value="changes">Alterações</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -135,7 +135,7 @@ export function EmailToBoardDialog({ children }: { children: React.ReactNode }) 
               <div className="bg-blue-600/10 border border-blue-600/20 rounded-lg p-3 space-y-2">
                 <div className="flex items-center gap-2 text-blue-400 text-xs font-bold">
                   <Sparkles className="h-3.5 w-3.5" />
-                  Dica de Integra??o
+                  Dica de Integração
                 </div>
                 <p className="text-[10px] text-blue-300/80 leading-relaxed">
                   Para integrar com o seu site, configure o seu formul?rio para enviar um POST JSON para a URL abaixo. <br/>

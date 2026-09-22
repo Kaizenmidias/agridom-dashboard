@@ -66,7 +66,7 @@ const PreviewPrintButton: React.FC<PreviewPrintButtonProps> = ({
                   size="sm"
                   className={`transition-all ${className}`}
                   disabled={isActionInProgress}
-                  aria-label="Options d'prévia et d'impress?o"
+                  aria-label="Options d'prévia et d'impressão"
                 >
                   {isActionInProgress ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -78,7 +78,7 @@ const PreviewPrintButton: React.FC<PreviewPrintButtonProps> = ({
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Prévia e impress?o</p>
+              <p>Prévia e impressão</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

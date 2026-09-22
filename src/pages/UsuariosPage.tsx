@@ -14,7 +14,7 @@ import { User, InsertUser, AuthUser } from '@/types/database';
 import { toast } from '@/hooks/use-toast';
 
 const UsuariosPage = () => {
-  const { user, usuarios, loading, error, isAdmin, refreshUserData } = useAuth();
+  const { user, usuários, loading, error, isAdmin, refreshUserData } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -162,12 +162,12 @@ const UsuariosPage = () => {
     );
   }
 
-  const permissoes = [
-    { id: 1, nome: "Gerenciar Projetos", descricao: "Criar, editar e excluir projetos" },
-    { id: 2, nome: "Gerenciar Clientes", descricao: "Acesso total ao CRM" },
-    { id: 3, nome: "Visualizar Financeiro", descricao: "Ver relatórios financeiros" },
-    { id: 4, nome: "Gerenciar Usuários", descricao: "Adicionar e editar usuários" },
-    { id: 5, nome: "Configurações", descricao: "Alterar configurações do sistema" }
+  const permissões = [
+    { id: 1, nome: "Gerenciar Projetos", descrição: "Criar, editar e excluir projetos" },
+    { id: 2, nome: "Gerenciar Clientes", descrição: "Acesso total ao CRM" },
+    { id: 3, nome: "Visualizar Financeiro", descrição: "Ver relatórios financeiros" },
+    { id: 4, nome: "Gerenciar Usuários", descrição: "Adicionar e editar usuários" },
+    { id: 5, nome: "Configurações", descrição: "Alterar configurações do sistema" }
   ];
 
   const getRoleDisplayName = (role: string) => {
@@ -201,23 +201,23 @@ const UsuariosPage = () => {
     }
   };
 
-  const usuariosAtivos = usuarios?.filter(u => u.is_active).length || 0;
-  const totalUsuarios = usuarios?.length || 0;
-  const administradores = usuarios?.filter(u => u.role === 'admin').length || 0;
+  const usuáriosAtivos = usuários?.filter(u => u.is_active).length || 0;
+  const totalUsuarios = usuários?.length || 0;
+  const administradores = usuários?.filter(u => u.role === 'admin').length || 0;
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Usuarios</h1>
-          <p className="text-muted-foreground">Gerencie usuarios e permissoes do sistema</p>
+          <h1 className="text-3xl font-bold text-foreground">Usuários</h1>
+          <p className="text-muted-foreground">Gerencie usuários e permissões do sistema</p>
         </div>
         {isAdmin && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
-                Novo Usuario
+                Novo Usuário
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
@@ -314,7 +314,7 @@ const UsuariosPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Usuários Ativos</p>
-                <p className="text-xl font-bold">{usuariosAtivos}</p>
+                <p className="text-xl font-bold">{usuáriosAtivos}</p>
               </div>
             </div>
           </CardContent>
@@ -327,7 +327,7 @@ const UsuariosPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Usuários Inativos</p>
-                <p className="text-xl font-bold">{totalUsuarios - usuariosAtivos}</p>
+                <p className="text-xl font-bold">{totalUsuarios - usuáriosAtivos}</p>
               </div>
             </div>
           </CardContent>
@@ -353,7 +353,7 @@ const UsuariosPage = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {usuarios?.map((usuario) => {
+            {usuários?.map((usuario) => {
               return (
                 <div key={usuario.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50">
                   <div className="flex items-center space-x-4">

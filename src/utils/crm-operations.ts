@@ -255,7 +255,7 @@ export const enhancedImport = async (
     }
     
     onComplete(validData);
-    toast.success(`${validData.length} enregistrement(s) importé(s) avec succès`);
+    toast.success(`${validData.length} registro(s) importé(s) avec succès`);
     return true;
   } catch (error) {
     console.error("Import error:", error);

@@ -6,7 +6,7 @@ import { verifyToken } from './auth'
 // Re-exportar tipos para uso em outros componentes
 export type { User, Project, Expense, Code, CompanyAccess, Briefing };
 
-// Funcao auxiliar para verificar autenticacao usando JWT local
+// Função auxiliar para verificar autenticação usando JWT local
 const checkAuth = async () => {
   const token = localStorage.getItem('token')
   if (!token) {
@@ -20,7 +20,7 @@ const checkAuth = async () => {
 
   return result.user
 }
-// === USU?RIOS ===
+// === USUÁRIOS ===
 export const getUsers = async (): Promise<User[]> => {
   await checkAuth()
   const result = await crudAPI.getUsers()
@@ -206,7 +206,7 @@ export const deleteExpense = async (id: string): Promise<void> => {
 
 
 
-// === C?digos ===
+// === Códigos ===
 export const getCodes = async (): Promise<Code[]> => {
   await checkAuth()
   const result = await crudAPI.getCodes()

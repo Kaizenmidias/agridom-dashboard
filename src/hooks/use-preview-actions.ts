@@ -39,13 +39,13 @@ export const usePreviewActions = ({
         columns: columns,
         title: title || `Prévia - ${moduleName}`
       });
-      toast.success("Document envoyé à l'impress?o", {
+      toast.success("Document envoyé à l'impressão", {
         description: "Votre documento a été envoyé à l'imprimante."
       });
     } catch (error) {
-      console.error("Erreur lors de l'impress?o:", error);
-      toast.error("Erreur d'impress?o", {
-        description: "Une erreur s'est produite lors de l'impress?o do documento."
+      console.error("Erreur lors de l'impressão:", error);
+      toast.error("Erreur d'impressão", {
+        description: "Une erreur s'est produite lors de l'impressão do documento."
       });
     } finally {
       setIsActionInProgress(false);

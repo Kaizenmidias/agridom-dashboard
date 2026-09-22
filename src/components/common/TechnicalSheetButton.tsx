@@ -49,7 +49,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
   // Format data for the technical sheet
   const formatTechSheetData = () => {
     if (!data || Object.keys(data).length === 0) {
-      console.error("Données insuffisantes pour générer la ficha t?cnica");
+      console.error("Données insuffisantes pour générer la ficha técnica");
       return null;
     }
     
@@ -285,7 +285,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
                   ) : children || (
                     <>
                       <Download className="mr-2 h-4 w-4" />
-                      Télécharger ficha t?cnica
+                      Télécharger ficha técnica
                     </>
                   )}
                 </Button>
@@ -307,7 +307,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
             </DropdownMenu>
           </TooltipTrigger>
           <TooltipContent className="bg-white border shadow-lg">
-            <p>Générer une ficha t?cnica détaillée</p>
+            <p>Générer une ficha técnica détaillée</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -317,7 +317,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
           <DialogHeader>
             <DialogTitle>Ficha Técnica - {data?.name || data?.nom || 'Cultura'}</DialogTitle>
             <DialogDescription>
-              Prévia da ficha t?cnica
+              Prévia da ficha técnica
             </DialogDescription>
           </DialogHeader>
           <div className="flex-grow overflow-auto border rounded-md mt-4 bg-white">

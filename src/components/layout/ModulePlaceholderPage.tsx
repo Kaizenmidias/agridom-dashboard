@@ -7,7 +7,7 @@ type ModulePlaceholderPageProps = {
   title: string;
   description: string;
   moduleSummary: string;
-  area: string;
+  área: string;
   icon: LucideIcon;
 };
 
@@ -15,7 +15,7 @@ export function ModulePlaceholderPage({
   title,
   description,
   moduleSummary,
-  area,
+  área,
   icon: Icon,
 }: ModulePlaceholderPageProps) {
   return (
@@ -41,7 +41,7 @@ export function ModulePlaceholderPage({
         <CardContent className="space-y-4">
           <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{moduleSummary}</p>
           <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
-            A estrutura inicial ja esta preparada para receber dados, filtros, permissoes e integracoes quando a area for ativada.
+            A estrutura inicial já está preparada para receber dados, filtros, permissões e integrações quando a área for ativada.
           </div>
         </CardContent>
       </Card>

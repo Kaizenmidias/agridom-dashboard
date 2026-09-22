@@ -5,7 +5,7 @@ import { getUsers } from '../api/crud'
 
 interface AuthContextType {
   user: AuthUser | null
-  usuarios: AuthUser[]
+  usuários: AuthUser[]
   loading: boolean
   error: string | null
   isAdmin: boolean
@@ -29,14 +29,14 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [usuarios, setUsuarios] = useState<AuthUser[]>([])
+  const [usuários, setUsuários] = useState<AuthUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [session, setSession] = useState<{ access_token: string } | null>(null)
   const [authProviderUser, setauthProviderUser] = useState<AuthUser | null>(null)
 
-  const isAdmin = user?.is_admin === true ||
-    (user?.role && (
+  const isAdmin = userá.is_admin === true ||
+    (userá.role && (
       user.role.toLowerCase() === 'administrador' ||
       user.role.toLowerCase() === 'admin' ||
       user.role.toLowerCase() === 'administrator'
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const clearAuthState = () => {
     setUser(null)
-    setUsuarios([])
+    setUsuários([])
     setSession(null)
     setauthProviderUser(null)
     setError(null)
@@ -64,26 +64,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
     sessionStorage.clear()
   }
 
-  const loadUsuarios = async () => {
+  const loadUsuários = async () => {
     try {
       if (!localStorage.getItem('token')) {
-        setUsuarios([])
+        setUsuários([])
         setError(null)
         return
       }
 
       if (!import.meta.env.DEV) {
-        setUsuarios([])
+        setUsuários([])
         setError(null)
         return
       }
 
-      const usuariosList = await getUsers()
-      setUsuarios(Array.isArray(usuariosList) ? usuariosList : [])
+      const usuáriosList = await getUsers()
+      setUsuários(Array.isArray(usuáriosList) ? usuáriosList : [])
       setError(null)
     } catch (err: any) {
-      setUsuarios([])
-      setError(err?.message?.toLowerCase?.().includes('token') ? null : 'Erro ao carregar usuarios')
+      setUsuários([])
+      setError(err?.message?.toLowerCase?.().includes('token') ? null : 'Erro ao carregar usuários')
     }
   }
 
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           clearAuthState()
         }
       } catch (err) {
-        console.error('Erro ao inicializar autenticacao:', err)
+        console.error('Erro ao inicializar autenticação:', err)
         if (isMounted) clearAuthState()
       } finally {
         if (isMounted) setLoading(false)
@@ -137,11 +137,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     if (user) {
-      loadUsuarios()
+      loadUsuários()
     } else {
-      setUsuarios([])
+      setUsuários([])
     }
-  }, [user?.id])
+  }, [userá.id])
 
   const login = async (credentials: LoginCredentials): Promise<AuthResponse | null> => {
     try {
@@ -154,7 +154,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return response
       }
 
-      throw new Error('Falha na autenticacao')
+      throw new Error('Falha na autenticação')
     } catch (err: any) {
       console.error('Erro no login:', err)
       setError(err.message || 'Erro no login')
@@ -188,7 +188,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const updateProfile = async (data: Partial<AuthUser>): Promise<AuthUser | null> => {
     try {
-      if (!user) throw new Error('Usuario nao autenticado')
+      if (!user) throw new Error('Usuário nao autenticado')
       setLoading(true)
 
       const updatedUser = await updateUserProfile(data)
@@ -209,7 +209,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const handleUploadAvatar = async (file: File): Promise<AuthUser | null> => {
     try {
-      if (!user) throw new Error('Usuario nao autenticado')
+      if (!user) throw new Error('Usuário nao autenticado')
       setLoading(true)
 
       const updatedUser = await uploadAvatar(file)
@@ -230,7 +230,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const handleChangePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
     try {
-      if (!user) throw new Error('Usuario nao autenticado')
+      if (!user) throw new Error('Usuário nao autenticado')
       setLoading(true)
       await changePassword(currentPassword, newPassword)
     } catch (err) {
@@ -253,13 +253,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         localStorage.setItem('user_data', JSON.stringify(result.user))
       }
     } catch (err) {
-      console.error('Erro ao recarregar dados do usuario:', err)
+      console.error('Erro ao recarregar dados do usuário:', err)
     }
   }
 
   const value: AuthContextType = {
     user,
-    usuarios,
+    usuários,
     loading,
     error,
     isAdmin,

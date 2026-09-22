@@ -59,7 +59,7 @@ export const authAPI = {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       })
     } catch (error: any) {
-      return { user: null, valid: false, error: error.message || 'Usuario nao autenticado' }
+      return { user: null, valid: false, error: error.message || 'Usuário nao autenticado' }
     }
   },
 

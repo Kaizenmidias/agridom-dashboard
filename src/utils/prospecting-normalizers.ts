@@ -96,9 +96,9 @@ export function getWhatsAppStatusLabel(status: WhatsAppValidationStatus) {
   const labels: Record<WhatsAppValidationStatus, string> = {
     valid: "Validado",
     invalid: "Invalido",
-    unknown: "Nao validado",
-    not_checked: "Nao consultado",
-    provider_error: "Erro na validacao",
+    unknown: "Não validado",
+    not_checked: "Não consultado",
+    provider_error: "Erro na validação",
   };
 
   return labels[status];

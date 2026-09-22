@@ -92,14 +92,14 @@ const fieldSets: Record<IntegrationProvider, FieldConfig[]> = {
   whatsapp_validator: [
     { key: "whatsappBaseUrl", label: "URL base", type: "text", placeholder: "https://evolution.sua-instancia.com", span: "full" },
     { key: "whatsappApiKey", label: "API Key", type: "password", placeholder: "Chave da Evolution API", span: "full" },
-    { key: "whatsappInstanceName", label: "Instancia", type: "text", placeholder: "kaizen-validation", span: "half" },
+    { key: "whatsappInstanceName", label: "Instância", type: "text", placeholder: "kaizen-validation", span: "half" },
     { key: "whatsappCacheDays", label: "Cache em dias", type: "number", placeholder: "30", span: "half", min: 1 },
   ],
   smtp: [
     { key: "smtpHost", label: "Servidor SMTP", type: "text", placeholder: "smtp.seudominio.com", span: "full" },
     { key: "smtpPort", label: "Porta", type: "number", placeholder: "587", span: "half", min: 1 },
     { key: "smtpSecure", label: "SSL/TLS", type: "switch", span: "half" },
-    { key: "smtpUser", label: "Usuario", type: "text", placeholder: "noreply@seudominio.com", span: "full" },
+    { key: "smtpUser", label: "Usuário", type: "text", placeholder: "noreply@seudominio.com", span: "full" },
     { key: "smtpPass", label: "Senha", type: "password", placeholder: "Senha SMTP", span: "full" },
     { key: "smtpFrom", label: "Remetente", type: "text", placeholder: "Kaizen <noreply@seudominio.com>", span: "full" },
   ],
@@ -109,13 +109,13 @@ const integrationCards: IntegrationCardConfig[] = [
   {
     provider: "apify",
     title: "Apify",
-    description: "Scrapers utilizados na prospeccao comercial.",
+    description: "Scrapers utilizados na prospecção comercial.",
     icon: Plug,
     fields: fieldSets.apify,
     summaryLines: (summary) => [
       summary.tokenMasked ? `Token: ${summary.tokenMasked}` : "Token nao configurado",
-      `Google Maps: ${String(summary.metadata.googleMapsActorId || "Nao configurado")}`,
-      `Instagram: ${String(summary.metadata.instagramActorId || "Nao configurado")}`,
+      `Google Maps: ${String(summary.metadata.googleMapsActorId || "Não configurado")}`,
+      `Instagram: ${String(summary.metadata.instagramActorId || "Não configurado")}`,
     ],
   },
   {
@@ -126,7 +126,7 @@ const integrationCards: IntegrationCardConfig[] = [
     fields: fieldSets.casa_dos_dados,
     summaryLines: (summary) => [
       summary.apiKeyMasked ? `API Key: ${summary.apiKeyMasked}` : "API Key nao configurada",
-      `Base URL: ${String(summary.metadata.baseUrl || "Nao configurada")}`,
+      `Base URL: ${String(summary.metadata.baseUrl || "Não configurada")}`,
       `Versao: ${String(summary.metadata.apiVersion || "v5")}`,
     ],
   },
@@ -138,8 +138,8 @@ const integrationCards: IntegrationCardConfig[] = [
     fields: fieldSets.whatsapp_validator,
     summaryLines: (summary) => [
       summary.apiKeyMasked ? `API Key: ${summary.apiKeyMasked}` : "API Key nao configurada",
-      `URL base: ${String(summary.metadata.baseUrl || "Nao configurada")}`,
-      `Instancia: ${String(summary.metadata.instanceName || "Nao configurada")}`,
+      `URL base: ${String(summary.metadata.baseUrl || "Não configurada")}`,
+      `Instância: ${String(summary.metadata.instanceName || "Não configurada")}`,
     ],
   },
   {
@@ -149,19 +149,19 @@ const integrationCards: IntegrationCardConfig[] = [
     icon: Mail,
     fields: fieldSets.smtp,
     summaryLines: (summary) => [
-      `Host: ${String(summary.metadata.host || "Nao configurado")}`,
+      `Host: ${String(summary.metadata.host || "Não configurado")}`,
       `Porta: ${String(summary.metadata.port || 587)}`,
-      `Remetente: ${String(summary.metadata.from || "Nao configurado")}`,
+      `Remetente: ${String(summary.metadata.from || "Não configurado")}`,
     ],
   },
 ];
 
 function getStatusLabel(status: IntegrationSummary["status"]) {
   const labels = {
-    not_configured: "Nao configurada",
+    not_configured: "Não configurada",
     configured: "Configurada",
     connected: "Conectada",
-    auth_error: "Erro de autenticacao",
+    auth_error: "Erro de autenticação",
     provider_error: "Erro do provedor",
   };
   return labels[status];
@@ -265,10 +265,10 @@ export function IntegrationLibrary() {
       const data = await prospectingAPI.getIntegrations();
       setItems(data.integrations);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Nao foi possivel carregar a biblioteca.";
+      const message = error instanceof Error ? error.message : "Não foi possível carregar a biblioteca.";
       setLoadError(message);
       toast({
-        title: "Erro ao carregar integracoes",
+        title: "Erro ao carregar integrações",
         description: message,
         variant: "destructive",
       });
@@ -314,7 +314,7 @@ export function IntegrationLibrary() {
           : current
       );
       toast({
-        title: "Integracao salva",
+        title: "Integração salva",
         description: "Os dados foram gravados no backend e aplicados ao runtime.",
       });
 
@@ -327,7 +327,7 @@ export function IntegrationLibrary() {
         } catch (error) {
           toast({
             title: "Falha no teste",
-            description: error instanceof Error ? error.message : "Nao foi possivel testar a integracao.",
+            description: error instanceof Error ? error.message : "Não foi possível testar a integração.",
             variant: "destructive",
           });
         } finally {
@@ -338,8 +338,8 @@ export function IntegrationLibrary() {
       return updated;
     } catch (error) {
       toast({
-        title: "Erro ao salvar integracao",
-        description: error instanceof Error ? error.message : "Nao foi possivel salvar as configuracoes.",
+        title: "Erro ao salvar integração",
+        description: error instanceof Error ? error.message : "Não foi possível salvar as configurações.",
         variant: "destructive",
       });
       return null;
@@ -357,7 +357,7 @@ export function IntegrationLibrary() {
     } catch (error) {
       toast({
         title: "Falha no teste",
-        description: error instanceof Error ? error.message : "Nao foi possivel testar a integracao.",
+        description: error instanceof Error ? error.message : "Não foi possível testar a integração.",
         variant: "destructive",
       });
     } finally {
@@ -439,8 +439,8 @@ export function IntegrationLibrary() {
         <AppBreadcrumbs />
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Integra??es</h1>
-            <p className="text-muted-foreground">Central de configura??o das credenciais utilizadas pelos m?dulos comerciais.</p>
+            <h1 className="text-3xl font-bold">Integrações</h1>
+            <p className="text-muted-foreground">Central de configuração das credenciais utilizadas pelos m?dulos comerciais.</p>
           </div>
           <Button variant="outline" onClick={() => void loadIntegrations()} disabled={loading}>
             <RefreshCw className="mr-2 h-4 w-4" />
@@ -451,9 +451,9 @@ export function IntegrationLibrary() {
 
       <Alert>
         <Settings2 className="h-4 w-4" />
-          <AlertTitle>Configura??o persistida no backend</AlertTitle>
+          <AlertTitle>Configuração persistida no backend</AlertTitle>
           <AlertDescription>
-          Os dados informados nos modais s?o gravados no banco MySQL e tamb?m aplicados ao runtime do servidor para manter os testes e os m?dulos ativos.
+          Os dados informados nos modais s?o gravados no banco MySQL e também aplicados ao runtime do servidor para manter os testes e os m?dulos ativos.
         </AlertDescription>
       </Alert>
 
@@ -461,7 +461,7 @@ export function IntegrationLibrary() {
         <Alert variant="destructive">
           <AlertTitle>Falha ao carregar dados salvos</AlertTitle>
           <AlertDescription>
-            {loadError}. Os modais continuam dispon?veis com a estrutura padr?o para que a integra??o possa ser ajustada manualmente.
+            {loadError}. Os modais continuam dispon?veis com a estrutura padr?o para que a integração possa ser ajustada manualmente.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -503,7 +503,7 @@ export function IntegrationLibrary() {
                     {card.summaryLines(item).map((line) => (
                       <p key={line}>{line}</p>
                     ))}
-                    <p>Ultimo teste: {item.lastTestedAt ? new Date(item.lastTestedAt).toLocaleString("pt-BR") : "Nunca"}</p>
+                    <p>Último teste: {item.lastTestedAt ? new Date(item.lastTestedAt).toLocaleString("pt-BR") : "Nunca"}</p>
                     {item.lastError ? <p className="text-destructive">{item.lastError}</p> : null}
                   </div>
 

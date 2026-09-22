@@ -69,7 +69,7 @@ export const useCRMContext = (): CRMContextState => {
         { periode: "2023-T1", cultureId: 2, rendement: 15.3, revenus: 7800, couts: 2100 }
       ],
       columns: [
-        { key: "periodo", header: "Período" },
+        { key: "período", header: "Período" },
         { key: "culturaId", header: "ID da Cultura" },
         { key: "rendement", header: "Rendement (t/ha)" },
         { key: "revenus", header: "Revenus (€)" },

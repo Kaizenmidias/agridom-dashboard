@@ -2,22 +2,22 @@ import { Bot, Braces, BrainCircuit, FileText, MessageSquareText } from "lucide-r
 import { ModulePlaceholderPage } from "@/components/layout/ModulePlaceholderPage";
 
 export function AssistantsPage() {
-  return <ModulePlaceholderPage title="Assistentes" area="Inteligencia Artificial" icon={MessageSquareText} description="Organize assistentes internos por finalidade." moduleSummary="Assistentes reunira configuracoes, objetivos e canais de uso dos assistentes internos da Kaizen para apoio operacional e comercial." />;
+  return <ModulePlaceholderPage title="Assistentes" area="Inteligência Artificial" icon={MessageSquareText} description="Organize assistentes internos por finalidade." moduleSummary="Assistentes reunirá configurações, objetivos e canais de uso dos assistentes internos da Kaizen para apoio operacional e comercial." />;
 }
 
 export function ContentsPage() {
-  return <ModulePlaceholderPage title="Conteudos" area="Inteligencia Artificial" icon={FileText} description="Estruture geracao e revisao de conteudos." moduleSummary="Conteudos sera usado para planejar, acompanhar e registrar materiais criados com apoio de IA, mantendo contexto por cliente, projeto ou campanha interna." />;
+  return <ModulePlaceholderPage title="Conteúdos" area="Inteligência Artificial" icon={FileText} description="Estruture geração e revisão de conteúdos." moduleSummary="Conteúdos será usado para planejar, acompanhar e registrar materiais criados com apoio de IA, mantendo contexto por cliente, projeto ou campanha interna." />;
 }
 
 export function PromptsPage() {
-  return <ModulePlaceholderPage title="Prompts" area="Inteligencia Artificial" icon={Braces} description="Centralize prompts aprovados e reutilizaveis." moduleSummary="Prompts organizara instrucoes, variaveis, modelos e versoes usadas pelos times para manter consistencia nos processos com IA." />;
+  return <ModulePlaceholderPage title="Prompts" area="Inteligência Artificial" icon={Braces} description="Centralize prompts aprovados e reutilizáveis." moduleSummary="Prompts organizará instruções, variáveis, modelos e versões usadas pelos times para manter consistência nos processos com IA." />;
 }
 
 export function AgentsPage() {
-  return <ModulePlaceholderPage title="Agentes" area="Inteligencia Artificial" icon={BrainCircuit} description="Prepare agentes especializados para fluxos internos." moduleSummary="Agentes sera a area de definicao e acompanhamento de agentes com responsabilidades especificas, integracoes e historico de execucao." />;
+  return <ModulePlaceholderPage title="Agentes" area="Inteligência Artificial" icon={BrainCircuit} description="Prepare agentes especializados para fluxos internos." moduleSummary="Agentes será a área de definição e acompanhamento de agentes com responsabilidades específicas, integrações e histórico de execução." />;
 }
 
 export function AiOverviewPage() {
-  return <ModulePlaceholderPage title="Inteligencia Artificial" area="Inteligencia Artificial" icon={Bot} description="Base para recursos internos de IA." moduleSummary="Esta area agrupara os recursos de IA usados pela Kaizen em processos comerciais, operacionais e administrativos." />;
+  return <ModulePlaceholderPage title="Inteligência Artificial" area="Inteligência Artificial" icon={Bot} description="Base para recursos internos de IA." moduleSummary="Esta área agrupará os recursos de IA usados pela Kaizen em processos comerciais, operacionais e administrativos." />;
 }
 

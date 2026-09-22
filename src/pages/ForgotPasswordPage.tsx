@@ -21,8 +21,8 @@ const ForgotPasswordPage = () => {
     
     if (!email) {
       toast({
-        title: "Email necess?rio",
-        description: "Por favor, digite seu email para receber o link de redefini??o.",
+        title: "Email necessário",
+        description: "Por favor, digite seu email para receber o link de redefinição.",
         variant: "destructive",
       });
       return;
@@ -41,13 +41,13 @@ const ForgotPasswordPage = () => {
           description: result.message || "Verifique sua caixa de entrada para redefinir sua senha.",
         });
       } else {
-        throw new Error(result.error || 'Erro ao enviar email de recupera??o');
+        throw new Error(result.error || 'Erro ao enviar email de recuperação');
       }
     } catch (error: any) {
       console.error('Erro no forgot password:', error);
       toast({
         title: "Erro",
-        description: error.message || 'Erro ao enviar email de recupera??o',
+        description: error.message || 'Erro ao enviar email de recuperação',
         variant: "destructive",
       });
     } finally {
@@ -67,7 +67,7 @@ const ForgotPasswordPage = () => {
             Redefinir senha
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            Digite seu email para receber um link de redefini??o de senha
+            Digite seu email para receber um link de redefinição de senha
           </p>
         </div>
         
@@ -75,10 +75,10 @@ const ForgotPasswordPage = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5" />
-              Recupera??o de senha
+              Recuperação de senha
             </CardTitle>
             <CardDescription>
-              Enviaremos um link de redefini??o para seu email
+              Enviaremos um link de redefinição para seu email
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -107,17 +107,17 @@ const ForgotPasswordPage = () => {
                 className="w-full" 
                 disabled={loading}
                 onClick={(e) => {
-                  // N?o prevenir o default aqui, deixar o form handle
+                  // Não prevenir o default aqui, deixar o form handle
                 }}
               >
-                {loading ? "Enviando..." : "Enviar e-mail de redefini??o"}
+                {loading ? "Enviando..." : "Enviar e-mail de redefinição"}
               </Button>
             </form>
             
             {showSuccessMessage && (
               <div className="mt-6 p-4 rounded-lg" style={{ backgroundColor: '#D4EDDA', color: '#27673C' }}>
                 <p className="text-sm font-medium">
-                  Se houver uma conta para esse e-mail, um link de redefini??o de senha foi enviado. Se voc? n?o recebeu o e-mail, verifique se digitou seu e-mail corretamente.
+                  Se houver uma conta para esse e-mail, um link de redefinição de senha foi enviado. Se você não recebeu o e-mail, verifique se digitou seu e-mail corretamente.
                 </p>
               </div>
             )}

@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState } from "react";
 import {
   Archive,
+  Building2,
   CheckCircle2,
   Circle,
   Edit,
@@ -10,10 +11,12 @@ import {
   FolderPlus,
   Mail,
   MoreHorizontal,
+  Phone,
   Plus,
   Search,
   Send,
   Trash2,
+  UserRound,
   UserPlus,
   X,
 } from "lucide-react";
@@ -65,12 +68,12 @@ import { cn } from "@/lib/utils";
 
 const statusLabels: Record<LeadStatus, string> = {
   novo: "Novo",
-  nao_contatado: "Nao contatado",
+  nao_contatado: "Não contatado",
   em_contato: "Em contato",
   qualificado: "Qualificado",
-  reuniao: "Reuniao",
+  reuniao: "Reunião",
   proposta: "Proposta",
-  negociacao: "Negociacao",
+  negociacao: "Negociação",
   convertido: "Convertido",
   perdido: "Perdido",
   arquivado: "Arquivado",
@@ -78,9 +81,9 @@ const statusLabels: Record<LeadStatus, string> = {
 
 const sourceLabels: Record<LeadSource, string> = {
   google_maps: "Google Maps",
-  formulario: "Formulario",
-  importacao: "Importacao",
-  indicacao: "Indicacao",
+  formulario: "Formulário",
+  importacao: "Importação",
+  indicacao: "Indicação",
   instagram: "Instagram",
   manual: "Manual",
   n8n: "n8n",
@@ -129,6 +132,14 @@ function formatDate(value?: string | null) {
   if (date.toDateString() === yesterday.toDateString()) return "Ontem";
 
   return date.toLocaleDateString("pt-BR");
+}
+
+function getLeadPersonName(lead: Lead) {
+  return lead.contactName || lead.companyName || "Lead sem nome";
+}
+
+function getLeadOrganization(lead: Lead) {
+  return lead.companyName || "Não informada";
 }
 
 function folderMatchesLead(folderId: string, lead: Lead) {
@@ -284,15 +295,19 @@ export default function LeadsPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="space-y-3">
+    <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-background p-4 md:p-6">
+      <div className="space-y-3 border-b border-border/70 pb-4">
         <AppBreadcrumbs />
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Leads</h1>
-            <p className="text-muted-foreground">Organize, filtre e acompanhe os contatos comerciais.</p>
+            <h1 className="text-2xl font-semibold text-foreground">Leads</h1>
+            <p className="text-sm text-muted-foreground">Organize pessoas, empresas e contatos comerciais.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative min-w-[280px]">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input className="h-10 pl-9" placeholder="Buscar leads, empresas, e-mails..." value={query} onChange={(event) => setQuery(event.target.value)} />
+            </div>
             <Button variant="outline">Importar</Button>
             <Button><Plus className="mr-2 h-4 w-4" />Novo Lead</Button>
           </div>
@@ -309,12 +324,13 @@ export default function LeadsPage() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <Card className="rounded-lg border shadow-none">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Pastas</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
+      <div className="grid min-h-[680px] gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="rounded-lg border border-border/80 bg-card">
+          <div className="border-b border-border/70 px-4 py-3">
+            <h2 className="text-sm font-semibold">Contatos</h2>
+            <p className="text-xs text-muted-foreground">{leads.length} registros no CRM</p>
+          </div>
+          <div className="space-y-1 p-3">
             {folders.map((folder) => {
               const Icon = getFolderIcon(folder);
               const active = filters.folderId === folder.id;
@@ -324,8 +340,8 @@ export default function LeadsPage() {
                   type="button"
                   onClick={() => updateFilter("folderId", folder.id)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted",
-                    active && "bg-primary/10 text-primary"
+                    "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-muted",
+                    active && "bg-primary/10 font-medium text-primary"
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
@@ -344,7 +360,7 @@ export default function LeadsPage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Nova pasta de leads</DialogTitle>
-                  <DialogDescription>Crie a estrutura visual da pasta. A persistencia sera conectada ao backend MySQL quando esta rotina estiver preparada.</DialogDescription>
+                  <DialogDescription>Crie a estrutura visual da pasta. A persistência será conectada ao backend MySQL quando esta rotina estiver preparada.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -352,16 +368,16 @@ export default function LeadsPage() {
                     <Input id="folder-name" value={newFolderName} onChange={(event) => setNewFolderName(event.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="folder-description">Descricao opcional</Label>
+                    <Label htmlFor="folder-description">Descrição opcional</Label>
                     <Input id="folder-description" value={newFolderDescription} onChange={(event) => setNewFolderDescription(event.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Icone</Label>
+                    <Label>Ícone</Label>
                     <Select value={newFolderIcon} onValueChange={setNewFolderIcon}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="folder">Pasta</SelectItem>
-                        <SelectItem value="circle">Circulo</SelectItem>
+                        <SelectItem value="circle">Círculo</SelectItem>
                         <SelectItem value="send">Follow-up</SelectItem>
                         <SelectItem value="check">Validado</SelectItem>
                         <SelectItem value="archive">Arquivo</SelectItem>
@@ -375,11 +391,20 @@ export default function LeadsPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </CardContent>
-        </Card>
+          </div>
+        </aside>
 
-        <Card className="min-w-0 rounded-lg border shadow-none">
+        <Card className="min-w-0 rounded-lg border border-border/80 shadow-none">
           <CardHeader className="space-y-4">
+            <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/10 p-4 text-primary-foreground sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Encontre os contatos certos mais rápido</p>
+                <p className="text-xs text-muted-foreground">Use status, origem, cidade e score para priorizar os leads com maior chance de avanço.</p>
+              </div>
+              <Button variant="secondary" size="sm" className="w-fit">
+                <Filter className="mr-2 h-4 w-4" />Aplicar filtro
+              </Button>
+            </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>{selectedFolder?.name || "Todos os Leads"}</CardTitle>
@@ -388,11 +413,7 @@ export default function LeadsPage() {
               {activeFilters > 0 ? <Badge variant="secondary">{activeFilters} filtro(s) ativo(s)</Badge> : null}
             </div>
 
-            <div className="grid gap-2 md:grid-cols-[minmax(180px,1fr)_repeat(4,minmax(130px,160px))_auto]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input className="pl-9" placeholder="Buscar empresa, telefone, e-mail, cidade..." value={query} onChange={(event) => setQuery(event.target.value)} />
-              </div>
+            <div className="grid gap-2 md:grid-cols-[repeat(4,minmax(130px,1fr))_auto]">
               <Select value={filters.status} onValueChange={(value) => updateFilter("status", value)}>
                 <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
@@ -440,14 +461,14 @@ export default function LeadsPage() {
                 </SelectContent>
               </Select>
               <Select value={filters.assignedTo} onValueChange={(value) => updateFilter("assignedTo", value)}>
-                <SelectTrigger><SelectValue placeholder="Responsavel" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Responsável" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos responsaveis</SelectItem>
+                  <SelectItem value="all">Todos responsáveis</SelectItem>
                   {owners.map((owner) => <SelectItem key={owner} value={owner}>{owner}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Button variant="outline" className="justify-start">
-                <Filter className="mr-2 h-4 w-4" />Filtros avancados
+                <Filter className="mr-2 h-4 w-4" />Filtros avançados
               </Button>
             </div>
           </CardHeader>
@@ -456,7 +477,7 @@ export default function LeadsPage() {
             {selectedIds.length > 0 ? (
               <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-3">
                 <span className="text-sm font-medium">{selectedIds.length} selecionado(s)</span>
-                {["Mover para pasta", "Alterar status", "Atribuir responsavel", "Adicionar ao Kanban", "Exportar", "Arquivar", "Excluir"].map((action) => (
+                {["Mover para pasta", "Alterar status", "Atribuir responsável", "Adicionar ao Kanban", "Exportar", "Arquivar", "Excluir"].map((action) => (
                   <Button key={action} variant={action === "Excluir" ? "destructive" : "outline"} size="sm">{action}</Button>
                 ))}
               </div>
@@ -467,7 +488,7 @@ export default function LeadsPage() {
             ) : leads.length === 0 ? (
               <div className="rounded-md border border-dashed p-8 text-center">
                 <h3 className="font-semibold">Nenhum lead encontrado na base atual</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Quando a tabela de prospeccao receber contatos do n8n ou das buscas, eles aparecerao aqui.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Quando a tabela de prospecção receber contatos do n8n ou das buscas, eles aparecerão aqui.</p>
               </div>
             ) : filteredLeads.length === 0 ? (
               <div className="rounded-md border border-dashed p-8 text-center">
@@ -482,19 +503,16 @@ export default function LeadsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10"><Checkbox checked={allPageSelected} onCheckedChange={togglePageSelection} /></TableHead>
-                        <TableHead>Empresa</TableHead>
-                        <TableHead>Contato</TableHead>
-                        <TableHead>Telefone</TableHead>
-                        <TableHead>WhatsApp</TableHead>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Organização</TableHead>
                         <TableHead>E-mail</TableHead>
-                        <TableHead>Website</TableHead>
+                        <TableHead>Telefone</TableHead>
                         <TableHead>Cidade</TableHead>
                         <TableHead>Origem</TableHead>
-                        <TableHead>Lead Score</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Responsavel</TableHead>
-                        <TableHead>Ultimo contato</TableHead>
-                        <TableHead className="w-10">Acoes</TableHead>
+                        <TableHead>Responsável</TableHead>
+                        <TableHead>Último contato</TableHead>
+                        <TableHead className="w-10">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -502,29 +520,51 @@ export default function LeadsPage() {
                         const whatsappUrl = buildWhatsAppUrl(lead.phone);
                         const websiteUrl = normalizeWebsiteUrl(lead.website);
                         const email = normalizeEmail(lead.email);
+                        const leadName = getLeadPersonName(lead);
+                        const organization = getLeadOrganization(lead);
 
                         return (
-                          <TableRow key={lead.id}>
+                          <TableRow key={lead.id} className="h-16">
                             <TableCell><Checkbox checked={selectedIds.includes(lead.id)} onCheckedChange={() => toggleLead(lead.id)} /></TableCell>
-                            <TableCell className="min-w-[220px]">
+                            <TableCell className="min-w-[240px]">
                               <div className="flex items-center gap-3">
-                                <Avatar className="h-8 w-8"><AvatarFallback>{lead.companyName.slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
+                                <Avatar className="h-9 w-9 border border-border/70 bg-muted">
+                                  <AvatarFallback>{leadName.slice(0, 1).toUpperCase()}</AvatarFallback>
+                                </Avatar>
                                 <div className="min-w-0">
-                                  <p className="truncate font-medium">{lead.companyName}</p>
-                                  <p className="truncate text-xs text-muted-foreground">{lead.category || "Sem categoria"}</p>
+                                  <p className="truncate font-medium">{leadName}</p>
+                                  <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                                    <UserRound className="h-3 w-3" />{lead.category || "Sem categoria"}
+                                  </p>
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell>{lead.contactName || "Nao informado"}</TableCell>
-                            <TableCell>{formatPhone(lead.phone)}</TableCell>
-                            <TableCell>{whatsappUrl ? <Button variant="ghost" size="icon" asChild><a href={whatsappUrl} target="_blank" rel="noreferrer"><Send className="h-4 w-4" /></a></Button> : "Sem WhatsApp"}</TableCell>
-                            <TableCell>{email ? <a className="text-primary hover:underline" href={`mailto:${email}`}>{email}</a> : "Sem e-mail"}</TableCell>
-                            <TableCell>{websiteUrl ? <a className="inline-flex items-center gap-1 text-primary hover:underline" href={websiteUrl} target="_blank" rel="noreferrer">{getWebsiteDomain(websiteUrl)}<ExternalLink className="h-3 w-3" /></a> : "Sem site"}</TableCell>
-                            <TableCell>{[lead.city, lead.state].filter(Boolean).join(" / ") || "Nao informada"}</TableCell>
+                            <TableCell className="min-w-[210px]">
+                              <div className="min-w-0">
+                                <p className="flex items-center gap-1 truncate font-medium"><Building2 className="h-3.5 w-3.5 text-muted-foreground" />{organization}</p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {websiteUrl ? <a className="inline-flex items-center gap-1 hover:text-primary" href={websiteUrl} target="_blank" rel="noreferrer">{getWebsiteDomain(websiteUrl)}<ExternalLink className="h-3 w-3" /></a> : "Sem site"}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="min-w-[220px]">
+                              {email ? <a className="inline-flex items-center gap-1 text-primary hover:underline" href={`mailto:${email}`}><Mail className="h-3.5 w-3.5" />{email}</a> : "Sem e-mail"}
+                            </TableCell>
+                            <TableCell className="min-w-[170px]">
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1"><Phone className="h-3.5 w-3.5 text-muted-foreground" />{formatPhone(lead.phone)}</span>
+                                {whatsappUrl ? <Button variant="ghost" size="icon" className="h-7 w-7" asChild><a href={whatsappUrl} target="_blank" rel="noreferrer"><Send className="h-4 w-4" /></a></Button> : null}
+                              </div>
+                            </TableCell>
+                            <TableCell>{[lead.city, lead.state].filter(Boolean).join(" / ") || "Não informada"}</TableCell>
                             <TableCell>{sourceLabels[lead.source]}</TableCell>
-                            <TableCell><Badge variant="outline" className={getScoreClass(lead.score)}>{lead.score || 0}</Badge></TableCell>
-                            <TableCell><Badge className={getStatusClass(lead.status)}>{statusLabels[lead.status]}</Badge></TableCell>
-                            <TableCell>{lead.assignedTo || "Sem responsavel"}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Badge className={getStatusClass(lead.status)}>{statusLabels[lead.status]}</Badge>
+                                <Badge variant="outline" className={getScoreClass(lead.score)}>{lead.score || 0}</Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>{lead.assignedTo || "Sem responsável"}</TableCell>
                             <TableCell>{formatDate(lead.lastContactAt)}</TableCell>
                             <TableCell>
                               <DropdownMenu>
@@ -558,7 +598,7 @@ export default function LeadsPage() {
                         <Checkbox checked={selectedIds.includes(lead.id)} onCheckedChange={() => toggleLead(lead.id)} />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium">{lead.companyName}</p>
-                          <p className="text-sm text-muted-foreground">{[lead.city, lead.state].filter(Boolean).join(" / ") || "Nao informada"}</p>
+                          <p className="text-sm text-muted-foreground">{[lead.city, lead.state].filter(Boolean).join(" / ") || "Não informada"}</p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <Badge variant="outline" className={getScoreClass(lead.score)}>{lead.score || 0}</Badge>
                             <Badge className={getStatusClass(lead.status)}>{statusLabels[lead.status]}</Badge>
@@ -591,7 +631,7 @@ export default function LeadsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir lead</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acao exigira integracao de exclusao com o backend antes de remover dados reais. O lead selecionado foi marcado apenas para confirmacao visual nesta etapa.
+              Esta ação exigirá integração de exclusão com o backend antes de remover dados reais. O lead selecionado foi marcado apenas para confirmação visual nesta etapa.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -603,4 +643,3 @@ export default function LeadsPage() {
     </div>
   );
 }
-
