@@ -7,7 +7,7 @@ type ModulePlaceholderPageProps = {
   title: string;
   description: string;
   moduleSummary: string;
-  área: string;
+  area: string;
   icon: LucideIcon;
 };
 
@@ -15,7 +15,7 @@ export function ModulePlaceholderPage({
   title,
   description,
   moduleSummary,
-  área,
+  area,
   icon: Icon,
 }: ModulePlaceholderPageProps) {
   return (
@@ -48,4 +48,3 @@ export function ModulePlaceholderPage({
     </div>
   );
 }
-
