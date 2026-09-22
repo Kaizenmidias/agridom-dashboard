@@ -42,6 +42,23 @@ export interface Lead {
   lastContactAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  activities?: LeadActivity[];
+  metadata?: {
+    contactName?: string | null;
+    origin?: string | null;
+    crmSent?: boolean;
+    crmSentAt?: string | null;
+  };
+}
+
+export interface LeadActivity {
+  id: string;
+  channel: "whatsapp" | "email" | "crm" | "system" | string;
+  subject?: string | null;
+  message: string;
+  recipient?: string | null;
+  deliveryStatus?: string | null;
+  createdAt: string;
 }
 
 export interface LeadFolder {
@@ -65,4 +82,3 @@ export type LeadFilters = {
   createdAt: string;
   lastContactAt: string;
 };
-

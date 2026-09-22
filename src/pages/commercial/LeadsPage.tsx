@@ -12,6 +12,7 @@ import {
   FolderPlus,
   Mail,
   MoreHorizontal,
+  PanelTop,
   Phone,
   Plus,
   Search,
@@ -59,6 +60,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { useLeads } from "@/hooks/leads/useLeads";
+import { addLeadToPipeline as persistLeadToPipeline, createLead, updateLead } from "@/services/leads/lead-service";
 import type { Lead, LeadFilters, LeadFolder, LeadSource, LeadStatus } from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
 import { buildWhatsAppUrl } from "@/utils/whatsapp";
@@ -287,6 +289,8 @@ export default function LeadsPage() {
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
   const [leadForm, setLeadForm] = useState(emptyLeadForm);
   const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
+  const [selectedLeadDetails, setSelectedLeadDetails] = useState<Lead | null>(null);
+  const [savingLead, setSavingLead] = useState(false);
   const [cityOptions, setCityOptions] = useState<string[]>([]);
   const [citiesLoading, setCitiesLoading] = useState(false);
 
@@ -431,6 +435,7 @@ export default function LeadsPage() {
   const openEditLeadDialog = (lead: Lead) => {
     setEditingLeadId(lead.id);
     setLeadForm(leadToForm(lead));
+    setSelectedLeadDetails(null);
     setLeadDialogOpen(true);
   };
 
@@ -438,7 +443,7 @@ export default function LeadsPage() {
     setSessionLeads((current) => [lead, ...current.filter((item) => item.id !== lead.id)]);
   };
 
-  const handleSaveLead = () => {
+  const handleSaveLead = async () => {
     const companyName = leadForm.companyName.trim();
     if (!companyName) return;
 
@@ -465,43 +470,60 @@ export default function LeadsPage() {
       updatedAt: now,
     };
 
-    upsertLocalLead(savedLead);
-    setFilters((current) => ({ ...current, folderId: "todos-os-leads" }));
-    setPage(1);
-    setLeadForm(emptyLeadForm);
-    setEditingLeadId(null);
-    setLeadDialogOpen(false);
+    try {
+      setSavingLead(true);
+      if (editingLeadId) {
+        const persisted = await updateLead(editingLeadId, savedLead);
+        upsertLocalLead(persisted);
+      } else {
+        const persisted = await createLead(savedLead);
+        upsertLocalLead(persisted);
+      }
+      await reload();
+      setFilters((current) => ({ ...current, folderId: "todos-os-leads" }));
+      setPage(1);
+      setLeadForm(emptyLeadForm);
+      setEditingLeadId(null);
+      setLeadDialogOpen(false);
+    } finally {
+      setSavingLead(false);
+    }
   };
 
-  const addLeadToKanban = (lead: Lead) => {
+  const addLeadToKanban = async (lead: Lead) => {
     const now = new Date().toISOString();
-    const pipelineLead: Lead = {
-      ...lead,
-      status: lead.status === "novo" || lead.status === "nao_contatado" ? "qualificado" : lead.status,
+    const pipelineLead = await persistLeadToPipeline(lead.id);
+    const normalizedPipelineLead: Lead = {
+      ...pipelineLead,
+      status: pipelineLead.status === "novo" || pipelineLead.status === "nao_contatado" ? "qualificado" : pipelineLead.status,
       folderId: "pipeline",
       folderName: "Pipeline",
-      updatedAt: now,
+      updatedAt: pipelineLead.updatedAt || now,
     };
-    upsertLocalLead(pipelineLead);
-    writePipelineLead(pipelineLead);
+    upsertLocalLead(normalizedPipelineLead);
+    writePipelineLead(normalizedPipelineLead);
+    await reload();
     navigate("/comercial/pipeline");
   };
 
-  const addSelectedToKanban = () => {
-    selectedIds
+  const addSelectedToKanban = async () => {
+    const leadsToSend = selectedIds
       .map((id) => allLeads.find((lead) => lead.id === id))
-      .filter((lead): lead is Lead => Boolean(lead))
-      .forEach((lead) => {
+      .filter((lead): lead is Lead => Boolean(lead));
+
+    for (const lead of leadsToSend) {
+      const persisted = await persistLeadToPipeline(lead.id);
         const pipelineLead = {
-          ...lead,
-          status: lead.status === "novo" || lead.status === "nao_contatado" ? "qualificado" as LeadStatus : lead.status,
+          ...persisted,
+          status: persisted.status === "novo" || persisted.status === "nao_contatado" ? "qualificado" as LeadStatus : persisted.status,
           folderId: "pipeline",
           folderName: "Pipeline",
           updatedAt: new Date().toISOString(),
         };
         upsertLocalLead(pipelineLead);
         writePipelineLead(pipelineLead);
-      });
+    }
+    await reload();
     setSelectedIds([]);
     navigate("/comercial/pipeline");
   };
@@ -745,7 +767,9 @@ export default function LeadsPage() {
                                   <AvatarFallback>{leadName.slice(0, 1).toUpperCase()}</AvatarFallback>
                                 </Avatar>
                                 <div className="min-w-0">
-                                  <p className="truncate font-medium">{leadName}</p>
+                                  <button type="button" className="truncate text-left font-medium hover:text-primary hover:underline" onClick={() => setSelectedLeadDetails(lead)}>
+                                    {leadName}
+                                  </button>
                                   <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
                                     <UserRound className="h-3 w-3" />{lead.category || "Sem categoria"}
                                   </p>
@@ -783,7 +807,7 @@ export default function LeadsPage() {
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuItem>Ver lead</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setSelectedLeadDetails(lead)}>Ver lead</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => openEditLeadDialog(lead)}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
                                   {whatsappUrl ? <DropdownMenuItem asChild><a href={whatsappUrl} target="_blank" rel="noreferrer">Abrir WhatsApp</a></DropdownMenuItem> : null}
                                   {email ? <DropdownMenuItem asChild><a href={`mailto:${email}`}>Enviar e-mail</a></DropdownMenuItem> : null}
@@ -838,6 +862,89 @@ export default function LeadsPage() {
           </div>
         </section>
       </div>
+
+      <Dialog open={Boolean(selectedLeadDetails)} onOpenChange={(open) => !open && setSelectedLeadDetails(null)}>
+        <DialogContent className="sm:max-w-4xl">
+          {selectedLeadDetails ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{getLeadPersonName(selectedLeadDetails)}</DialogTitle>
+                <DialogDescription>{selectedLeadDetails.companyName}</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">Origem</p>
+                      <p className="mt-1 font-medium">{sourceLabels[selectedLeadDetails.source]}</p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">Entrada</p>
+                      <p className="mt-1 font-medium">{new Date(selectedLeadDetails.createdAt).toLocaleString("pt-BR")}</p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">Último contato</p>
+                      <p className="mt-1 font-medium">{selectedLeadDetails.lastContactAt ? new Date(selectedLeadDetails.lastContactAt).toLocaleString("pt-BR") : "Ainda não contatado"}</p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">Responsável</p>
+                      <p className="mt-1 font-medium">{selectedLeadDetails.assignedTo || "Sem responsável"}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border">
+                    <div className="border-b px-4 py-3">
+                      <h3 className="font-semibold">Histórico de atividade</h3>
+                    </div>
+                    <div className="space-y-3 p-4">
+                      {(selectedLeadDetails.activities || []).length > 0 ? (
+                        selectedLeadDetails.activities!.map((activity) => (
+                          <div key={activity.id} className="rounded-md bg-muted/30 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <Badge variant="outline">{activity.channel}</Badge>
+                              <span className="text-xs text-muted-foreground">{new Date(activity.createdAt).toLocaleString("pt-BR")}</span>
+                            </div>
+                            {activity.subject ? <p className="mt-2 text-sm font-medium">{activity.subject}</p> : null}
+                            <p className="mt-2 text-sm text-muted-foreground">{activity.message}</p>
+                            {activity.recipient ? <p className="mt-1 text-xs text-muted-foreground">Destino: {activity.recipient}</p> : null}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Nenhuma atividade registrada ainda.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-md border p-4">
+                  <h3 className="font-semibold">Informações do lead</h3>
+                  <div className="space-y-3 text-sm">
+                    <p><span className="text-muted-foreground">Organização:</span> {selectedLeadDetails.companyName}</p>
+                    <p><span className="text-muted-foreground">Segmento:</span> {selectedLeadDetails.category || "Não informado"}</p>
+                    <p><span className="text-muted-foreground">E-mail:</span> {selectedLeadDetails.email || "Não informado"}</p>
+                    <p><span className="text-muted-foreground">Telefone:</span> {formatPhone(selectedLeadDetails.phone)}</p>
+                    <p><span className="text-muted-foreground">Cidade:</span> {[selectedLeadDetails.city, selectedLeadDetails.state].filter(Boolean).join(" / ") || "Não informada"}</p>
+                    <p><span className="text-muted-foreground">Site:</span> {selectedLeadDetails.website || "Não informado"}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Badge className={getStatusClass(selectedLeadDetails.status)}>{statusLabels[selectedLeadDetails.status]}</Badge>
+                    <Badge variant="outline">Score {selectedLeadDetails.score || 0}</Badge>
+                    <Badge variant="outline">{selectedLeadDetails.folderName || "Sem pasta"}</Badge>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-3">
+                    <Button variant="outline" onClick={() => openEditLeadDialog(selectedLeadDetails)}>
+                      <Edit className="mr-2 h-4 w-4" />Editar lead
+                    </Button>
+                    <Button onClick={() => void addLeadToKanban(selectedLeadDetails)}>
+                      <PanelTop className="mr-2 h-4 w-4" />Adicionar ao Kanban
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
@@ -940,8 +1047,8 @@ export default function LeadsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLeadDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveLead} disabled={!leadForm.companyName.trim()}>
-              <Plus className="mr-2 h-4 w-4" />{editingLeadId ? "Salvar lead" : "Adicionar lead"}
+            <Button onClick={handleSaveLead} disabled={!leadForm.companyName.trim() || savingLead}>
+              <Plus className="mr-2 h-4 w-4" />{savingLead ? "Salvando..." : editingLeadId ? "Salvar lead" : "Adicionar lead"}
             </Button>
           </DialogFooter>
         </DialogContent>

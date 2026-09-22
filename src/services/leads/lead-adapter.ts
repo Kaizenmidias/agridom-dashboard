@@ -9,8 +9,11 @@ type ProspectAnalysisReport = {
   origem?: string | null;
   responsible?: string | null;
   assignedTo?: string | null;
+  contactName?: string | null;
   email_secundario?: string | null;
   bairro?: string | null;
+  crmSent?: boolean;
+  crmSentAt?: string | null;
 };
 
 const statusMap: Record<ProspectStatus, LeadStatus> = {
@@ -45,7 +48,7 @@ export function prospectToLead(prospect: Prospect): Lead {
   return {
     id: String(prospect.id),
     companyName: prospect.business_name,
-    contactName: null,
+    contactName: report.contactName || null,
     category: prospect.category,
     phone: prospect.phone,
     whatsapp: buildWhatsAppUrl(prospect.phone),
@@ -65,6 +68,11 @@ export function prospectToLead(prospect: Prospect): Lead {
     lastContactAt: prospect.last_contact_date,
     createdAt: prospect.created_at,
     updatedAt: prospect.updated_at,
+    metadata: {
+      contactName: report.contactName || null,
+      origin: report.source || report.origem || "manual",
+      crmSent: Boolean(report.crmSent),
+      crmSentAt: report.crmSentAt || null,
+    },
   };
 }
-

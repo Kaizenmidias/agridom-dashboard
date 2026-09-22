@@ -29,6 +29,39 @@ const defaultSettings = {
   sender_name: 'Kaizen',
 };
 
+const normalizeText = (value) => String(value || '').trim();
+const normalizeNullable = (value) => {
+  const text = normalizeText(value);
+  return text || null;
+};
+const onlyDigits = (value) => String(value || '').replace(/\D/g, '');
+const normalizeWebsite = (value) => {
+  const text = normalizeText(value);
+  if (!text) return null;
+  return text.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+};
+const normalizeBusinessName = (value) =>
+  normalizeText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const buildAnalysisReport = (body = {}, previous = {}) => ({
+  ...(previous || {}),
+  source: normalizeNullable(body.source) || previous?.source || 'manual',
+  contactName: normalizeNullable(body.contact_name) || null,
+  assignedTo: normalizeNullable(body.assigned_to) || null,
+  folderName: previous?.folderName || 'Todos os Leads',
+});
+
+async function insertHistory(query, { prospectId, ownerUserId, channel = 'system', subject = null, message, recipient = null, metadata = {} }) {
+  await query(
+    `INSERT INTO prospect_contact_history (prospect_id, owner_user_id, channel, subject, message, recipient, delivery_status, metadata)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [prospectId, ownerUserId, channel, subject, message, recipient, 'registrado', JSON.stringify(metadata)]
+  );
+}
+
 router.get('/bootstrap', async (req, res) => {
   try {
     const query = getQuery(req);
@@ -77,37 +110,134 @@ router.post('/search', async (req, res) => {
   });
 });
 
+router.post('/prospects', async (req, res) => {
+  try {
+    const businessName = normalizeText(req.body.business_name);
+    if (!businessName) return res.status(400).json({ error: 'Nome da organizacao e obrigatorio' });
+
+    const query = getQuery(req);
+    const phone = normalizeNullable(req.body.phone);
+    const website = normalizeNullable(req.body.website);
+    const analysisReport = buildAnalysisReport(req.body);
+
+    const insert = await query(
+      `INSERT INTO prospects (
+        owner_user_id, business_name, normalized_business_name, category, city, state,
+        phone, normalized_phone, email, website, normalized_website, website_exists,
+        lead_score, status, analysis_report
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.userId,
+        businessName,
+        normalizeBusinessName(businessName),
+        normalizeNullable(req.body.category),
+        normalizeNullable(req.body.city),
+        normalizeNullable(req.body.state),
+        phone,
+        onlyDigits(phone),
+        normalizeNullable(req.body.email),
+        website,
+        normalizeWebsite(website),
+        website ? 1 : 0,
+        0,
+        'Novo',
+        JSON.stringify(analysisReport),
+      ]
+    );
+
+    await insertHistory(query, {
+      prospectId: insert.insertId,
+      ownerUserId: req.userId,
+      message: 'Lead cadastrado manualmente no CRM.',
+      recipient: normalizeNullable(req.body.email) || phone,
+      metadata: { action: 'created', source: analysisReport.source },
+    });
+
+    const result = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [insert.insertId, req.userId]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao criar prospect:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 router.patch('/prospects/:id', async (req, res) => {
   try {
     const { status, last_contact_date, approach_suggestion, diagnostic_summary, problems_found, folder_name } = req.body;
     const query = getQuery(req);
+    const existing = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.id, req.userId]);
+    if (!existing.rows?.length) return res.status(404).json({ error: 'Prospect nao encontrado' });
+
+    let previousReport = {};
+    try {
+      previousReport = typeof existing.rows[0].analysis_report === 'string'
+        ? JSON.parse(existing.rows[0].analysis_report || '{}')
+        : (existing.rows[0].analysis_report || {});
+    } catch {
+      previousReport = {};
+    }
+
+    const nextReport = buildAnalysisReport(req.body, {
+      ...previousReport,
+      folderName: folder_name ?? previousReport.folderName,
+    });
+    const businessName = normalizeNullable(req.body.business_name);
+    const phone = normalizeNullable(req.body.phone);
+    const website = normalizeNullable(req.body.website);
+
     await query(
       `UPDATE prospects
-       SET status = COALESCE(?, status),
+       SET business_name = COALESCE(?, business_name),
+           normalized_business_name = COALESCE(?, normalized_business_name),
+           category = COALESCE(?, category),
+           city = COALESCE(?, city),
+           state = COALESCE(?, state),
+           phone = COALESCE(?, phone),
+           normalized_phone = COALESCE(?, normalized_phone),
+           email = COALESCE(?, email),
+           website = COALESCE(?, website),
+           normalized_website = COALESCE(?, normalized_website),
+           website_exists = COALESCE(?, website_exists),
+           status = COALESCE(?, status),
            last_contact_date = COALESCE(?, last_contact_date),
            approach_suggestion = COALESCE(?, approach_suggestion),
            diagnostic_summary = COALESCE(?, diagnostic_summary),
            problems_found = COALESCE(?, problems_found),
-           analysis_report = CASE
-             WHEN ? IS NULL THEN analysis_report
-             ELSE JSON_SET(COALESCE(analysis_report, JSON_OBJECT()), '$.folderName', ?)
-           END,
+           analysis_report = ?,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND owner_user_id = ?`,
       [
+        businessName,
+        businessName ? normalizeBusinessName(businessName) : null,
+        normalizeNullable(req.body.category),
+        normalizeNullable(req.body.city),
+        normalizeNullable(req.body.state),
+        phone,
+        phone ? onlyDigits(phone) : null,
+        normalizeNullable(req.body.email),
+        website,
+        website ? normalizeWebsite(website) : null,
+        website ? 1 : null,
         status ?? null,
         last_contact_date ?? null,
         approach_suggestion ?? null,
         diagnostic_summary ?? null,
         problems_found ? JSON.stringify(problems_found) : null,
-        folder_name ?? null,
-        folder_name ?? null,
+        JSON.stringify(nextReport),
         req.params.id,
         req.userId,
       ]
     );
+
+    await insertHistory(query, {
+      prospectId: req.params.id,
+      ownerUserId: req.userId,
+      message: 'Informacoes do lead atualizadas.',
+      recipient: normalizeNullable(req.body.email) || phone,
+      metadata: { action: 'updated' },
+    });
+
     const result = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.id, req.userId]);
-    if (!result.rows?.length) return res.status(404).json({ error: 'Prospect nao encontrado' });
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Erro ao atualizar prospect:', error);
@@ -135,6 +265,13 @@ router.post('/prospects/:id/add-to-crm', async (req, res) => {
        WHERE id = ? AND owner_user_id = ?`,
       [new Date().toISOString(), req.params.id, req.userId]
     );
+    await insertHistory(query, {
+      prospectId: req.params.id,
+      ownerUserId: req.userId,
+      channel: 'crm',
+      message: 'Lead adicionado ao Kanban comercial.',
+      metadata: { action: 'added_to_kanban' },
+    });
     const result = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.id, req.userId]);
     if (!result.rows?.length) return res.status(404).json({ error: 'Prospect nao encontrado' });
     res.json(result.rows[0]);
