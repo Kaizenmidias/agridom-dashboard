@@ -23,7 +23,7 @@ const ResetPasswordPage = () => {
 
   useEffect(() => {
     if (!token) {
-      setError('Token de recuperaÃ§Ã£o nÃ£o encontrado. Solicite um novo link de recuperaÃ§Ã£o.');
+      setError('Token de recupera??o n?o encontrado. Solicite um novo link de recupera??o.');
     }
   }, [token]);
 
@@ -38,7 +38,7 @@ const ResetPasswordPage = () => {
     e.preventDefault();
     
     if (!token) {
-      setError('Token de recuperaÃ§Ã£o nÃ£o encontrado.');
+      setError('Token de recupera??o n?o encontrado.');
       return;
     }
 
@@ -49,7 +49,7 @@ const ResetPasswordPage = () => {
     }
 
     if (newPassword !== confirmPassword) {
-      setError('As senhas nÃ£o coincidem');
+      setError('As senhas n?o coincidem');
       return;
     }
 
@@ -63,7 +63,7 @@ const ResetPasswordPage = () => {
         setSuccess(true);
         toast.success(result.message || 'Senha redefinida com sucesso!');
         
-        // Redirecionar para login apÃ³s 2 segundos
+        // Redirecionar para login ap?s 2 segundos
         setTimeout(() => {
           navigate('/login');
         }, 2000);
@@ -89,7 +89,7 @@ const ResetPasswordPage = () => {
             </div>
             <CardTitle className="text-2xl font-bold text-green-700">Senha Redefinida!</CardTitle>
             <CardDescription>
-              Sua senha foi redefinida com sucesso. VocÃª serÃ¡ redirecionado para a pÃ¡gina de login.
+              Sua senha foi redefinida com sucesso. Voc? ser? redirecionado para a p?gina de login.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">

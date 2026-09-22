@@ -49,7 +49,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
   // Format data for the technical sheet
   const formatTechSheetData = () => {
     if (!data || Object.keys(data).length === 0) {
-      console.error("Données insuffisantes pour générer la fiche technique");
+      console.error("Données insuffisantes pour générer la ficha t?cnica");
       return null;
     }
     
@@ -182,7 +182,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
     if (printWindow) {
       const isDarkMode = settings.darkMode;
       
-      printWindow.document.write(`
+      printWindow.documento.write(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -258,7 +258,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
           </body>
         </html>
       `);
-      printWindow.document.close();
+      printWindow.documento.close();
       
       setTimeout(() => {
         printWindow.focus();
@@ -285,7 +285,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
                   ) : children || (
                     <>
                       <Download className="mr-2 h-4 w-4" />
-                      Télécharger fiche technique
+                      Télécharger ficha t?cnica
                     </>
                   )}
                 </Button>
@@ -293,7 +293,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
               <DropdownMenuContent className="bg-white border shadow-lg">
                 <DropdownMenuItem onClick={handleShowPreview} className="cursor-pointer">
                   <Eye className="mr-2 h-4 w-4" />
-                  <span>Aperçu</span>
+                  <span>Prévia</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
                   <Printer className="mr-2 h-4 w-4" />
@@ -307,7 +307,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
             </DropdownMenu>
           </TooltipTrigger>
           <TooltipContent className="bg-white border shadow-lg">
-            <p>Générer une fiche technique détaillée</p>
+            <p>Générer une ficha t?cnica détaillée</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -317,7 +317,7 @@ const TechnicalSheetButton: React.FC<TechnicalSheetButtonProps> = ({
           <DialogHeader>
             <DialogTitle>Ficha Técnica - {data?.name || data?.nom || 'Cultura'}</DialogTitle>
             <DialogDescription>
-              Aperçu de la fiche technique
+              Prévia da ficha t?cnica
             </DialogDescription>
           </DialogHeader>
           <div className="flex-grow overflow-auto border rounded-md mt-4 bg-white">

@@ -127,7 +127,7 @@ export const EditableField = ({
           <button 
             onClick={handleCancel} 
             className="p-1 text-agri-danger hover:bg-agri-danger/10 rounded-full"
-            aria-label="Annuler"
+            aria-label="Cancelar"
           >
             <X className="h-4 w-4" />
           </button>

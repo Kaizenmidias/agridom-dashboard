@@ -439,8 +439,8 @@ export function IntegrationLibrary() {
         <AppBreadcrumbs />
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">IntegraÃ§Ãµes</h1>
-            <p className="text-muted-foreground">Central de configuraÃ§Ã£o das credenciais utilizadas pelos mÃ³dulos comerciais.</p>
+            <h1 className="text-3xl font-bold">Integra??es</h1>
+            <p className="text-muted-foreground">Central de configura??o das credenciais utilizadas pelos m?dulos comerciais.</p>
           </div>
           <Button variant="outline" onClick={() => void loadIntegrations()} disabled={loading}>
             <RefreshCw className="mr-2 h-4 w-4" />
@@ -451,9 +451,9 @@ export function IntegrationLibrary() {
 
       <Alert>
         <Settings2 className="h-4 w-4" />
-          <AlertTitle>ConfiguraÃ§Ã£o persistida no backend</AlertTitle>
+          <AlertTitle>Configura??o persistida no backend</AlertTitle>
           <AlertDescription>
-          Os dados informados nos modais sÃ£o gravados no banco MySQL e tambÃ©m aplicados ao runtime do servidor para manter os testes e os mÃ³dulos ativos.
+          Os dados informados nos modais s?o gravados no banco MySQL e tamb?m aplicados ao runtime do servidor para manter os testes e os m?dulos ativos.
         </AlertDescription>
       </Alert>
 
@@ -461,7 +461,7 @@ export function IntegrationLibrary() {
         <Alert variant="destructive">
           <AlertTitle>Falha ao carregar dados salvos</AlertTitle>
           <AlertDescription>
-            {loadError}. Os modais continuam disponÃ­veis com a estrutura padrÃ£o para que a integraÃ§Ã£o possa ser ajustada manualmente.
+            {loadError}. Os modais continuam dispon?veis com a estrutura padr?o para que a integra??o possa ser ajustada manualmente.
           </AlertDescription>
         </Alert>
       ) : null}

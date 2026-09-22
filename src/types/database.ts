@@ -1,6 +1,6 @@
 ﻿// Tipos para o banco de dados
 
-// Tipos de autenticaÃ§Ã£o
+// Tipos de autentica??o
 export interface AuthUser {
   id: number | string;
   email: string;
@@ -41,7 +41,7 @@ export interface AuthResponse {
   error?: string;
 }
 
-// Tipos de usuÃ¡rios
+// Tipos de usu?rios
 export interface User {
   id: number;
   email: string;
@@ -142,7 +142,7 @@ export interface InsertExpense {
   user_id: number;
 }
 
-// Tipos de cÃ³digos
+// Tipos de c?digos
 export interface Code {
   id: number;
   name: string;
@@ -436,7 +436,7 @@ export interface ProspectionBootstrap {
   };
 }
 
-// Tipos para estatÃ­sticas do dashboard
+// Tipos para estat?sticas do dashboard
 export interface DashboardStats {
   total_projects: number;
   total_value: number;
@@ -456,7 +456,7 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-// Tipos para paginaÃ§Ã£o
+// Tipos para pagina??o
 export interface PaginationParams {
   page?: number;
   limit?: number;
@@ -498,7 +498,7 @@ export interface CodeFilters {
   search?: string;
 }
 
-// Tipos para operaÃ§Ãµes CRUD
+// Tipos para opera??es CRUD
 export type CreateInput<T> = Omit<T, 'id' | 'created_at' | 'updated_at'>;
 export type UpdateInput<T> = Partial<Omit<T, 'id' | 'created_at' | 'updated_at'>>;
 

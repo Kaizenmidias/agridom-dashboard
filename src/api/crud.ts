@@ -20,7 +20,7 @@ const checkAuth = async () => {
 
   return result.user
 }
-// === USUÃRIOS ===
+// === USU?RIOS ===
 export const getUsers = async (): Promise<User[]> => {
   await checkAuth()
   const result = await crudAPI.getUsers()
@@ -206,7 +206,7 @@ export const deleteExpense = async (id: string): Promise<void> => {
 
 
 
-// === CÃ“DIGOS ===
+// === C?digos ===
 export const getCodes = async (): Promise<Code[]> => {
   await checkAuth()
   const result = await crudAPI.getCodes()

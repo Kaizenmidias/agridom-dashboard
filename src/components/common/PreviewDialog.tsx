@@ -34,9 +34,9 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[80vh]">
         <DialogHeader>
-          <DialogTitle>{title || `Aperçu - ${moduleName}`}</DialogTitle>
+          <DialogTitle>{title || `Prévia - ${moduleName}`}</DialogTitle>
           <DialogDescription>
-            Aperçu avant impression
+            Prévia antes da impress?o
           </DialogDescription>
         </DialogHeader>
         <div className="flex-grow overflow-auto border rounded-md mt-4 bg-white">
@@ -47,7 +47,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
                 <head>
                   <meta charset="UTF-8">
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <title>${title || `Aperçu - ${moduleName}`}</title>
+                  <title>${title || `Prévia - ${moduleName}`}</title>
                   <style>
                     :root {
                       --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -156,7 +156,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
             `}
             className="w-full h-full border-none"
             title="Preview"
-            aria-label={`Aperçu du document: ${title || moduleName}`}
+            aria-label={`Prévia do documento: ${title || moduleName}`}
           />
         </div>
         <div className="flex justify-end gap-2 mt-4">

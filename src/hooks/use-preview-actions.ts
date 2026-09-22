@@ -37,15 +37,15 @@ export const usePreviewActions = ({
     try {
       await printModuleData(moduleName, {
         columns: columns,
-        title: title || `Aperçu - ${moduleName}`
+        title: title || `Prévia - ${moduleName}`
       });
-      toast.success("Document envoyé à l'impression", {
-        description: "Votre document a été envoyé à l'imprimante."
+      toast.success("Document envoyé à l'impress?o", {
+        description: "Votre documento a été envoyé à l'imprimante."
       });
     } catch (error) {
-      console.error("Erreur lors de l'impression:", error);
-      toast.error("Erreur d'impression", {
-        description: "Une erreur s'est produite lors de l'impression du document."
+      console.error("Erreur lors de l'impress?o:", error);
+      toast.error("Erreur d'impress?o", {
+        description: "Une erreur s'est produite lors de l'impress?o do documento."
       });
     } finally {
       setIsActionInProgress(false);
@@ -78,7 +78,7 @@ export const usePreviewActions = ({
     try {
       await exportModuleData(moduleName, 'pdf', data);
       toast.success("PDF généré avec succès", {
-        description: "Le document a été téléchargé."
+        description: "Le documento a été téléchargé."
       });
     } catch (error) {
       console.error("Erreur lors de la génération du PDF:", error);

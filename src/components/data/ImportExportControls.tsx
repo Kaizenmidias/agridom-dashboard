@@ -123,7 +123,7 @@ const ImportExportControls: React.FC<ImportExportControlsProps> = ({
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleImportConfirm}>Importer</Button>
           </DialogFooter>
         </DialogContent>
@@ -164,7 +164,7 @@ const ImportExportControls: React.FC<ImportExportControlsProps> = ({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setExportDialogOpen(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setExportDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleExportConfirm}>Exporter</Button>
           </DialogFooter>
         </DialogContent>

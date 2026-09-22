@@ -66,19 +66,19 @@ const PreviewPrintButton: React.FC<PreviewPrintButtonProps> = ({
                   size="sm"
                   className={`transition-all ${className}`}
                   disabled={isActionInProgress}
-                  aria-label="Options d'aperçu et d'impression"
+                  aria-label="Options d'prévia et d'impress?o"
                 >
                   {isActionInProgress ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
                     <Eye className="h-4 w-4" aria-hidden="true" />
                   )}
-                  <span className="ml-2 hidden sm:inline">Aperçu</span>
+                  <span className="ml-2 hidden sm:inline">Prévia</span>
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Aperçu et impression</p>
+              <p>Prévia e impress?o</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -90,7 +90,7 @@ const PreviewPrintButton: React.FC<PreviewPrintButtonProps> = ({
               onKeyDown={(e) => handleKeyDown(e, handleShowPreview)}
             >
               <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
-              <span>Aperçu à l'écran</span>
+              <span>Prévia à l'tela</span>
             </DropdownMenuItem>
           )}
           <DropdownMenuItem 

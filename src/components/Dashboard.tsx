@@ -31,7 +31,7 @@ import PageHeader from './layout/PageHeader';
 import { dashboardAPI, DashboardStats } from '../api/api-client';
 import { useAuth } from '@/contexts/AuthContext';
 
-// Dados fictÃ­cios removidos - agora usando apenas dados reais da API
+// Dados fict?cios removidos - agora usando apenas dados reais da API
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -39,7 +39,7 @@ const Dashboard = () => {
   
   // State for editable content
   const [title, setTitle] = useState('Dashboard de Projetos');
-  const [description, setDescription] = useState('VisÃ£o geral dos seus projetos e despesas');
+  const [description, setDescription] = useState('Vis?o geral dos seus projetos e despesas');
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -104,7 +104,7 @@ const Dashboard = () => {
     region: '',
     startDate: '',
     endDate: '',
-    severity: 'modÃ©rÃ©e',
+    severity: 'moderada',
     description: ''
   });
   
@@ -123,11 +123,11 @@ const Dashboard = () => {
     let hasLoaded = false;
     
     const loadDashboardData = async () => {
-      // Evitar mÃºltiplas execuÃ§Ãµes simultÃ¢neas
+      // Evitar múltiplas execuções simultâneas
       if (hasLoaded || !isMounted) return;
       hasLoaded = true;
       
-      // Verificar se o usuÃ¡rio estÃ¡ autenticado antes de carregar dados
+      // Verificar se o usu?rio est? autenticado antes de carregar dados
       if (!isAuthenticated || !user) {
         if (isMounted) {
           setLoading(false);
@@ -140,7 +140,7 @@ const Dashboard = () => {
           setLoading(true);
         }
         
-        // Usar a nova funÃ§Ã£o que chama o backend Node.js com a lÃ³gica correta
+        // Usar a nova fun??o que chama o backend Node.js com a l?gica correta
         const result = await dashboardAPI.getBackendDashboardStats();
         if (result.error) {
           throw new Error(result.error);
@@ -174,7 +174,7 @@ const Dashboard = () => {
       } catch (error) {
         console.error('Erro ao carregar dados do dashboard:', error);
         if (isMounted) {
-          // Se for erro de token, nÃ£o mostrar toast de erro (serÃ¡ tratado pela autenticaÃ§Ã£o)
+          // Se for erro de token, n?o mostrar toast de erro (ser? tratado pela autentica??o)
           if (error?.message?.includes('Token') || error?.message?.includes('token')) {
           } else {
             toast.error('Erro ao carregar dados do dashboard');
@@ -187,7 +187,7 @@ const Dashboard = () => {
       }
     };
     
-    // Usar timeout para evitar execuÃ§Ã£o imediata e throttling
+    // Usar timeout para evitar execu??o imediata e throttling
      const timeoutId = setTimeout(loadDashboardData, 200);
      
      return () => {
@@ -199,17 +199,17 @@ const Dashboard = () => {
   // Handle changes
   const handleTitleChange = (value: string | number) => {
     setTitle(String(value));
-    toast.success('Titre mis Ã  jour');
+    toast.success('T?tulo atualizado');
   };
   
   const handleDescriptionChange = (value: string | number) => {
     setDescription(String(value));
-    toast.success('Description mise Ã  jour');
+    toast.success('Descri??o atualizada');
   };
   
   const handleMonthChange = (value: string | number) => {
     setCurrentMonth(String(value));
-    toast.success('Mois mis Ã  jour');
+    toast.success('M?s atualizado');
   };
   
   // Stat card updates
@@ -222,22 +222,22 @@ const Dashboard = () => {
   
   const handleAreaChange = (value: string | number) => {
     setCultivatedArea(Number(value));
-    toast.success('SuperfÃ­cie cultivada atualizada');
+    toast.success('Superf?cie cultivada atualizada');
   };
   
   const handleParcelsCountChange = (value: string | number) => {
     setParcelsCount(Number(value));
-    toast.success('Nombre de parcelles mis Ã  jour');
+    toast.success('Número de parcelas atualizado');
   };
   
   const handleYieldChange = (value: string | number) => {
     setAverageYield(Number(value));
-    toast.success('Rendement moyen mis Ã  jour');
+    toast.success('Rendimento m?dio atualizado');
   };
   
   const handleYieldGrowthChange = (value: string | number) => {
     setYieldGrowth(Number(value));
-    toast.success('Croissance du rendement mise Ã  jour');
+    toast.success('Crescimento do rendimento atualizado');
   };
   
   // Task management
@@ -256,12 +256,12 @@ const Dashboard = () => {
       task.id === taskId ? { ...task, title: editedTaskTitle } : task
     ));
     setEditingTask(null);
-    toast.success('TÃ¢che mise Ã  jour');
+    toast.success('Tarefa atualizada');
   };
   
   const handleDeleteTask = (taskId: number) => {
     setUpcomingTasks(upcomingTasks.filter(task => task.id !== taskId));
-    toast.success('TÃ¢che supprimÃ©e');
+    toast.success('Tarefa exclu?da');
   };
   
   // Alert management
@@ -269,25 +269,25 @@ const Dashboard = () => {
     setAlerts(alerts.map(alert => 
       alert.id === id ? { ...alert, message } : alert
     ));
-    toast.success('Alerte mise Ã  jour');
+    toast.success('Alerta atualizado');
   };
   
   const handleDeleteAlert = (id: number) => {
     setAlerts(alerts.filter(alert => alert.id !== id));
     setAlertsCount(prev => prev - 1);
-    toast.success('Alerte supprimÃ©e');
+    toast.success('Alerta exclu?do');
   };
   
   // Weather alert management
   const handleDeleteWeatherAlert = (id: number) => {
     setWeatherAlerts(weatherAlerts.filter(alert => alert.id !== id));
-    toast.success('Alerte mÃ©tÃ©orologique supprimÃ©e');
+    toast.success('Alerta meteorol?gico exclu?do');
   };
   
   const handleAddWeatherAlert = () => {
     // Validation
     if (!newAlert.region || !newAlert.startDate || !newAlert.endDate || !newAlert.description) {
-      toast.error('Veuillez remplir tous les champs obligatoires');
+      toast.error('Preencha todos os campos obrigat?rios');
       return;
     }
     
@@ -304,16 +304,16 @@ const Dashboard = () => {
       region: '',
       startDate: '',
       endDate: '',
-      severity: 'modÃ©rÃ©e',
+      severity: 'moderada',
       description: ''
     });
     
-    toast.success('Nouvelle alerte mÃ©tÃ©orologique ajoutÃ©e');
+    toast.success('Novo alerta meteorol?gico adicionado');
   };
   
   // Add transaction handler (placeholder for future implementation)
   const handleAddTransaction = () => {
-    toast.info('Redirection vers la page de finances');
+    toast.info('Redirecionando para a p?gina financeira');
     // In a real app, this would navigate to the finance page
   };
   
@@ -352,7 +352,7 @@ const Dashboard = () => {
             onClick={handleAddTransaction}
           >
             <Wallet className="h-4 w-4 inline mr-2" />
-            Ajouter une transaction
+            Adicionar une transaction
           </button>
         </div>
       </header>
@@ -384,7 +384,7 @@ const Dashboard = () => {
         </div>
         
         <div className="stat-card card-hover">
-          <p className="stat-label text-xs sm:text-sm">Projetos ConcluÃ­dos</p>
+          <p className="stat-label text-xs sm:text-sm">Projetos Concluídos</p>
           <div className="flex items-baseline justify-between mt-1 sm:mt-2">
             <p className="stat-value text-lg sm:text-xl lg:text-2xl">
               {loading ? 'Carregando...' : completedProjects}
@@ -439,9 +439,9 @@ const Dashboard = () => {
         {/* Revenue Chart - Dados reais de faturamento */}
         <div className="dashboard-card col-span-full xl:col-span-2 card-hover">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-2">
-            <h3 className="font-semibold text-base sm:text-lg">EvoluÃ§Ã£o do Faturamento</h3>
+            <h3 className="font-semibold text-base sm:text-lg">Evolu??o do Faturamento</h3>
             <div className="flex items-center space-x-2">
-              <span className="text-xs sm:text-sm text-gray-600">PerÃ­odo:</span>
+              <span className="text-xs sm:text-sm text-gray-600">Per?odo:</span>
               <EditableField
                 value={currentMonth}
                 type="text"
@@ -547,7 +547,7 @@ const Dashboard = () => {
               className="text-xs sm:text-sm text-agri-primary hover:text-agri-primary-dark font-medium"
               onClick={() => navigate('/projetos')}
             >
-              Ver todos â†’
+              Ver todos ?
             </button>
           </div>
           <div className="w-full overflow-x-auto">
@@ -585,7 +585,7 @@ const Dashboard = () => {
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {project.status === 'active' ? 'Ativo' :
-                         project.status === 'completed' ? 'ConcluÃ­do' :
+                         project.status === 'completed' ? 'Concluído' :
                          project.status === 'paused' ? 'Pausado' :
                          'Pendente'}
                       </span>
@@ -642,12 +642,12 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Upcoming Tasks - AdaptÃ© au contexte agricole guadeloupÃ©en */}
+      {/* Upcoming Tasks - Adaptado ao contexto operacional */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <div className="dashboard-card card-hover">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold">TÃ¢ches Ã  venir</h3>
-            <button className="text-xs text-agri-primary hover:underline">Voir tout</button>
+            <h3 className="font-semibold">Pr?ximas tarefas</h3>
+            <button className="text-xs text-agri-primary hover:underline">Ver tudo</button>
           </div>
           
           <div className="space-y-3">
@@ -691,7 +691,7 @@ const Dashboard = () => {
                   ) : (
                     <>
                       <p className="text-sm font-medium">{task.title}</p>
-                      <p className="text-xs text-muted-foreground">Ã‰chÃ©ance: {task.due}</p>
+                      <p className="text-xs text-muted-foreground">Vencimento: {task.due}</p>
                     </>
                   )}
                 </div>
@@ -716,16 +716,16 @@ const Dashboard = () => {
               </div>
             ))}
             {upcomingTasks.length === 0 && (
-              <p className="text-center text-muted-foreground py-4">Aucune tÃ¢che Ã  venir</p>
+              <p className="text-center text-muted-foreground py-4">Nenhuma tarefa futura</p>
             )}
           </div>
         </div>
         
-        {/* Alertas - Adaptado Ã  agricultura na Guadalupe */}
+        {/* Alertas - Adaptado ? agricultura na Guadalupe */}
         <div className="dashboard-card card-hover">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Alertes</h3>
-            <button className="text-xs text-agri-primary hover:underline">GÃ©rer les alertes</button>
+            <button className="text-xs text-agri-primary hover:underline">G?rer les alertes</button>
           </div>
           
           <div className="space-y-3">
@@ -765,7 +765,7 @@ const Dashboard = () => {
               </div>
             ))}
             {alerts.length === 0 && (
-              <p className="text-center text-muted-foreground py-4">Aucune alerte active</p>
+              <p className="text-center text-muted-foreground py-4">Nenhum alerta ativo</p>
             )}
           </div>
         </div>
@@ -775,7 +775,7 @@ const Dashboard = () => {
       <Dialog open={showAddAlertDialog} onOpenChange={setShowAddAlertDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Ajouter une alerte mÃ©tÃ©orologique</DialogTitle>
+            <DialogTitle>Adicionar alerta meteorol?gico</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
@@ -790,13 +790,13 @@ const Dashboard = () => {
               >
                 <option value="Cyclone">Cyclone</option>
                 <option value="Pluie">Pluie</option>
-                <option value="SÃ©cheresse">SÃ©cheresse</option>
+                <option value="Seca">Seca</option>
                 <option value="Vent">Vent</option>
               </select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="region" className="text-right">
-                RegiÃ£o
+                Regi?o
               </Label>
               <Input
                 id="region"
@@ -807,7 +807,7 @@ const Dashboard = () => {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="startDate" className="text-right">
-                Data de inÃ­cio
+                Data de in?cio
               </Label>
               <Input
                 id="startDate"
@@ -831,7 +831,7 @@ const Dashboard = () => {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="severity" className="text-right">
-                SÃ©vÃ©ritÃ©
+                Severidade
               </Label>
               <select
                 id="severity"
@@ -839,9 +839,9 @@ const Dashboard = () => {
                 onChange={(e) => setNewAlert({...newAlert, severity: e.target.value})}
                 className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="faible">Faible</option>
-                <option value="modÃ©rÃ©e">ModÃ©rÃ©e</option>
-                <option value="critique">Critique</option>
+                <option value="baixa">Baixa</option>
+                <option value="moderada">Moderada</option>
+                <option value="cr?tica">Cr?tica</option>
               </select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -857,8 +857,8 @@ const Dashboard = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddAlertDialog(false)}>Annuler</Button>
-            <Button onClick={handleAddWeatherAlert}>Ajouter</Button>
+            <Button variant="outline" onClick={() => setShowAddAlertDialog(false)}>Cancelar</Button>
+            <Button onClick={handleAddWeatherAlert}>Adicionar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -867,4 +867,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-

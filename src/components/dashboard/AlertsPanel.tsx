@@ -30,7 +30,7 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({ alerts, setAlerts, setAlertsC
     setAlerts(alerts.map(alert => 
       alert.id === id ? { ...alert, message } : alert
     ));
-    toast.success('Alerte mise à jour');
+    toast.success('Alerta atualizado');
   };
   
   // Delete alert
@@ -58,7 +58,7 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({ alerts, setAlerts, setAlertsC
     setAlertsCount(prev => prev + 1);
     setNewAlertMessage('');
     setShowAddAlertDialog(false);
-    toast.success('Nouvelle alerte ajoutée');
+    toast.success('Novo alerta adicionado');
   };
   
   return (
@@ -73,7 +73,7 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({ alerts, setAlerts, setAlertsC
             className="text-xs text-agri-primary hover:bg-agri-primary/10"
           >
             <Plus className="h-3.5 w-3.5 mr-1" />
-            Ajouter
+            Adicionar
           </Button>
         </div>
       </div>
@@ -115,14 +115,14 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({ alerts, setAlerts, setAlertsC
           </div>
         ))}
         {alerts.length === 0 && (
-          <p className="text-center text-muted-foreground py-4">Aucune alerte active</p>
+          <p className="text-center text-muted-foreground py-4">Nenhum alerta ativo</p>
         )}
       </div>
       
       <Dialog open={showAddAlertDialog} onOpenChange={setShowAddAlertDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Ajouter une alerte</DialogTitle>
+            <DialogTitle>Adicionar une alerte</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
@@ -155,10 +155,10 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({ alerts, setAlerts, setAlertsC
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddAlertDialog(false)}>
-              Annuler
+              Cancelar
             </Button>
             <Button onClick={handleAddAlert}>
-              Ajouter
+              Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>

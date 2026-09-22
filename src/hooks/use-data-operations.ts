@@ -34,7 +34,7 @@ export function useDataOperations<T extends Record<string, any>>({
     
     setData(prev => [...prev, newItem]);
     setFilteredData(prev => [...prev, newItem]);
-    toast.success("Élément ajouté avec succès");
+    toast.success("Item adicionado com sucesso");
     
     return newItem;
   }, [idField]);
@@ -52,19 +52,19 @@ export function useDataOperations<T extends Record<string, any>>({
       )
     );
     
-    toast.success("Élément mis à jour avec succès");
+    toast.success("Item atualizado com sucesso");
   }, [idField]);
 
   const deleteItem = useCallback((id: number | string) => {
     setData(prev => prev.filter(item => item[idField] !== id));
     setFilteredData(prev => prev.filter(item => item[idField] !== id));
-    toast.success("Élément supprimé avec succès");
+    toast.success("Item excluído com sucesso");
   }, [idField]);
 
   const bulkDelete = useCallback((ids: (number | string)[]) => {
     setData(prev => prev.filter(item => !ids.includes(item[idField])));
     setFilteredData(prev => prev.filter(item => !ids.includes(item[idField])));
-    toast.success(`${ids.length} élément(s) supprimé(s) avec succès`);
+    toast.success(`${ids.length} item(ns) excluído(s) com sucesso`);
   }, [idField]);
 
   // Search and filter operations
@@ -163,7 +163,7 @@ export function useDataOperations<T extends Record<string, any>>({
       )
     );
     
-    toast.success(`${ids.length} élément(s) mis à jour avec succès`);
+    toast.success(`${ids.length} item(ns) atualizado(s) com sucesso`);
   }, [idField]);
 
   // Reset filters
@@ -200,4 +200,3 @@ export function useDataOperations<T extends Record<string, any>>({
 }
 
 export default useDataOperations;
-

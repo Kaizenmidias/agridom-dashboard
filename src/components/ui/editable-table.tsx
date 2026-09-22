@@ -83,14 +83,14 @@ export const EditableTable = ({
 
   const getPriorityStyle = (priority: string) => {
     switch (priority) {
-      case 'Haute':
+      case 'Alta':
       case 'Élevée':
       case 'Urgente':
         return 'bg-red-100 text-red-800';
-      case 'Moyenne':
+      case 'M?dia':
         return 'bg-orange-100 text-orange-800';
       case 'Basse':
-      case 'Faible':
+      case 'Baixa':
         return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';

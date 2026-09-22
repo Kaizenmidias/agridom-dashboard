@@ -61,7 +61,7 @@ export const generatePreviewHTML = (
 
   return `
     <div class="p-6 dark:bg-gray-800 dark:text-gray-100">
-      <h2 class="text-xl font-bold mb-4">${title || `Aperçu - ${moduleName}`}</h2>
+      <h2 class="text-xl font-bold mb-4">${title || `Prévia - ${moduleName}`}</h2>
       <div class="overflow-x-auto">
         <table class="min-w-full border-collapse">
           <thead>

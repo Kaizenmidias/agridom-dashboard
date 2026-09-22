@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { UserProfileDialog } from "@/components/user-profile-dialog";
 import type { AuthUser } from "@/types/database";
 
@@ -39,9 +38,6 @@ export function SidebarUser({ user, isCollapsed }: SidebarUserProps) {
           </div>
         </Button>
       </UserProfileDialog>
-      <div className="flex justify-center">
-        <ThemeToggle className="h-8 w-8 text-sidebar-foreground/70 hover:bg-white/5 hover:text-sidebar-foreground" />
-      </div>
     </div>
   );
 }
