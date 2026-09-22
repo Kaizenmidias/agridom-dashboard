@@ -3,20 +3,20 @@ import {
   Braces,
   BrainCircuit,
   BriefcaseBusiness,
+  CalendarDays,
   ChartNoAxesCombined,
   ChartSpline,
   CircleDollarSign,
   ClipboardList,
   Code2,
-  Columns3,
+  FileSignature,
   FileText,
   FolderKanban,
-  Headphones,
-  History,
   KeyRound,
   LayoutDashboard,
+  MessagesSquare,
   MessageSquareText,
-  Package,
+  PanelTop,
   Plug,
   ReceiptText,
   Search,
@@ -44,15 +44,14 @@ export const navigationItems: NavigationItem[] = [
     label: "Comercial",
     icon: TrendingUp,
     children: [
+      { label: "Chats", icon: MessagesSquare, path: "/comercial/chats", requiredPermissions: ["can_access_crm"] },
       { label: "Leads", icon: Users, path: "/comercial/leads", requiredPermissions: ["can_access_crm"] },
-      { label: "Kanban", icon: Columns3, path: "/comercial/kanban", requiredPermissions: ["can_access_crm"] },
-      { label: "Produtos", icon: Package, path: "/comercial/produtos", requiredPermissions: ["can_access_crm"] },
-      { label: "Histórico", icon: History, path: "/comercial/historico", requiredPermissions: ["can_access_crm"] },
+      { label: "Pipeline", icon: PanelTop, path: "/comercial/pipeline", legacyPaths: ["/comercial/kanban"], requiredPermissions: ["can_access_crm"] },
       { label: "Prospecção", icon: Search, path: "/comercial/prospeccao", legacyPaths: ["/prospeccao"], requiredPermissions: ["can_access_crm"] },
       { label: "Métricas", icon: ChartNoAxesCombined, path: "/comercial/metricas", requiredPermissions: ["can_access_crm"] },
       { label: "Disparar", icon: Send, path: "/comercial/disparar", requiredPermissions: ["can_access_crm"] },
-      { label: "SDR", icon: Headphones, path: "/comercial/sdr", requiredPermissions: ["can_access_crm"] },
       { label: "Automações", icon: Workflow, path: "/comercial/automacoes", requiredPermissions: ["can_access_crm"] },
+      { label: "Agenda", icon: CalendarDays, path: "/comercial/agenda", requiredPermissions: ["can_access_crm"] },
     ],
   },
   {
@@ -85,13 +84,20 @@ export const navigationItems: NavigationItem[] = [
     ],
   },
   {
+    label: "Jurídico",
+    icon: FileSignature,
+    children: [
+      { label: "Contratos", icon: FileText, path: "/juridico/contratos", restrictedForRicardo: true },
+    ],
+  },
+  {
     label: "Administração",
     icon: Settings,
     children: [
       { label: "Usuários", icon: UserCog, path: "/usuarios", legacyPaths: ["/administracao/usuarios"], requiredPermissions: ["can_access_users"], restrictedForRicardo: true },
       { label: "Integrações", icon: Plug, path: "/administracao/integracoes", restrictedForRicardo: true },
       { label: "Configurações", icon: SlidersHorizontal, path: "/administracao/configuracoes", restrictedForRicardo: true },
-  ],
+    ],
   },
 ];
 
@@ -121,4 +127,3 @@ export function isNavigationItemActive(item: NavigationItem, pathname: string) {
   const paths = [item.path, ...(item.legacyPaths || [])].filter(Boolean);
   return paths.some((path) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)));
 }
-
