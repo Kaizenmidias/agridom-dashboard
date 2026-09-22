@@ -12,7 +12,7 @@ const RicardoAccessControl = ({ children, restrictedPaths }: RicardoAccessContro
   const currentPath = window.location.pathname;
 
   // Verifica se é o usuário Ricardo e se está tentando acessar uma rota restrita
-  const isRicardo = userá.email === "ricardorpc11@gmail.com";
+  const isRicardo = user?.email === "ricardorpc11@gmail.com";
   const isRestrictedPath = restrictedPaths.includes(currentPath);
 
   if (isRicardo && isRestrictedPath) {

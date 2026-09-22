@@ -36,12 +36,12 @@ export interface RegisterCredentials {
 
 export interface AuthResponse {
   success: boolean;
-  userá: AuthUser;
+  user: AuthUser;
   token?: string;
   error?: string;
 }
 
-// Tipos de usuários
+// Tipos de usuarios
 export interface User {
   id: number;
   email: string;
@@ -374,7 +374,7 @@ export interface ProspectionIntegrationUpdatePayload {
   smtp?: {
     host?: string;
     port?: string;
-    userá: string;
+    user: string;
     pass?: string;
     from?: string;
     secure?: boolean;

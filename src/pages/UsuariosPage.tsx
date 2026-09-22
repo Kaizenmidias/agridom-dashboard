@@ -14,7 +14,7 @@ import { User, InsertUser, AuthUser } from '@/types/database';
 import { toast } from '@/hooks/use-toast';
 
 const UsuariosPage = () => {
-  const { user, usuários, loading, error, isAdmin, refreshUserData } = useAuth();
+  const { user, usuarios, loading, error, isAdmin, refreshUserData } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -162,12 +162,12 @@ const UsuariosPage = () => {
     );
   }
 
-  const permissões = [
-    { id: 1, nome: "Gerenciar Projetos", descrição: "Criar, editar e excluir projetos" },
-    { id: 2, nome: "Gerenciar Clientes", descrição: "Acesso total ao CRM" },
-    { id: 3, nome: "Visualizar Financeiro", descrição: "Ver relatórios financeiros" },
-    { id: 4, nome: "Gerenciar Usuários", descrição: "Adicionar e editar usuários" },
-    { id: 5, nome: "Configurações", descrição: "Alterar configurações do sistema" }
+  const permissoes = [
+    { id: 1, nome: "Gerenciar Projetos", descricao: "Criar, editar e excluir projetos" },
+    { id: 2, nome: "Gerenciar Clientes", descricao: "Acesso total ao CRM" },
+    { id: 3, nome: "Visualizar Financeiro", descricao: "Ver relatórios financeiros" },
+    { id: 4, nome: "Gerenciar Usuários", descricao: "Adicionar e editar usuários" },
+    { id: 5, nome: "Configurações", descricao: "Alterar configurações do sistema" }
   ];
 
   const getRoleDisplayName = (role: string) => {
@@ -201,9 +201,9 @@ const UsuariosPage = () => {
     }
   };
 
-  const usuáriosAtivos = usuários?.filter(u => u.is_active).length || 0;
-  const totalUsuarios = usuários?.length || 0;
-  const administradores = usuários?.filter(u => u.role === 'admin').length || 0;
+  const usuariosAtivos = usuarios?.filter(u => u.is_active).length || 0;
+  const totalUsuarios = usuarios?.length || 0;
+  const administradores = usuarios?.filter(u => u.role === 'admin').length || 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -314,7 +314,7 @@ const UsuariosPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Usuários Ativos</p>
-                <p className="text-xl font-bold">{usuáriosAtivos}</p>
+                <p className="text-xl font-bold">{usuariosAtivos}</p>
               </div>
             </div>
           </CardContent>
@@ -327,7 +327,7 @@ const UsuariosPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Usuários Inativos</p>
-                <p className="text-xl font-bold">{totalUsuarios - usuáriosAtivos}</p>
+                <p className="text-xl font-bold">{totalUsuarios - usuariosAtivos}</p>
               </div>
             </div>
           </CardContent>
@@ -353,7 +353,7 @@ const UsuariosPage = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {usuários?.map((usuario) => {
+            {usuarios?.map((usuario) => {
               return (
                 <div key={usuario.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50">
                   <div className="flex items-center space-x-4">

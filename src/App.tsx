@@ -50,7 +50,7 @@ const routes = [
   { path: "/dashboard", element: <Index />, protected: true, restrictedForRicardo: true },
   { path: "/projetos", element: <ProjetosPage />, protected: true, restrictedForRicardo: true },
   { path: "/briefings", element: <BriefingsPage />, protected: true, restrictedForRicardo: false },
-  { path: "/códigos", element: <CodesPage />, protected: true, restrictedForRicardo: false },
+  { path: "/codigos", element: <CodesPage />, protected: true, restrictedForRicardo: false },
   { path: "/acessos", element: <AcessosPage />, protected: true, restrictedForRicardo: false },
   { path: "/despesas", element: <DespesasPage />, protected: true, restrictedForRicardo: true },
   { path: "/crm", element: <CRMPage />, protected: true, restrictedForRicardo: false },
@@ -67,10 +67,10 @@ const routes = [
   { path: "/comercial/histórico", element: <Navigate to="/comercial/chats" replace />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/sdr", element: <Navigate to="/comercial/leads" replace />, protected: true, restrictedForRicardo: false },
   { path: "/operacional/briefings", element: <Navigate to="/briefings" replace />, protected: true, restrictedForRicardo: false },
-  { path: "/operacional/códigos", element: <Navigate to="/códigos" replace />, protected: true, restrictedForRicardo: false },
+  { path: "/operacional/codigos", element: <Navigate to="/codigos" replace />, protected: true, restrictedForRicardo: false },
   { path: "/operacional/acessos", element: <Navigate to="/acessos" replace />, protected: true, restrictedForRicardo: false },
   { path: "/ia/assistentes", element: <AssistantsPage />, protected: true, restrictedForRicardo: false },
-  { path: "/ia/conteúdos", element: <ContentsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/ia/conteudos", element: <ContentsPage />, protected: true, restrictedForRicardo: false },
   { path: "/ia/prompts", element: <PromptsPage />, protected: true, restrictedForRicardo: false },
   { path: "/ia/agentes", element: <AgentsPage />, protected: true, restrictedForRicardo: false },
   { path: "/financeiro/projetos", element: <Navigate to="/projetos" replace />, protected: true, restrictedForRicardo: true },
@@ -179,11 +179,11 @@ const AppLayout = () => {
               </button>
               <div className="hidden items-center gap-2 rounded-md px-2 py-1 md:flex">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {(userá.full_name || userá.name || "U").slice(0, 1).toUpperCase()}
+                  {(user?.full_name || user?.name || "U").slice(0, 1).toUpperCase()}
                 </div>
                 <div className="leading-tight">
-                  <p className="text-xs font-semibold text-foreground">{userá.full_name || userá.name || "Usuário"}</p>
-                  <p className="text-[10px] text-muted-foreground">{userá.role || "Administrador"}</p>
+                  <p className="text-xs font-semibold text-foreground">{user?.full_name || user?.name || "Usuário"}</p>
+                  <p className="text-[10px] text-muted-foreground">{user?.role || "Administrador"}</p>
                 </div>
               </div>
             </div>

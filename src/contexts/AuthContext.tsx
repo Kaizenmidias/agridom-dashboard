@@ -5,7 +5,7 @@ import { getUsers } from '../api/crud'
 
 interface AuthContextType {
   user: AuthUser | null
-  usuários: AuthUser[]
+  usuarios: AuthUser[]
   loading: boolean
   error: string | null
   isAdmin: boolean
@@ -29,14 +29,14 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [usuários, setUsuários] = useState<AuthUser[]>([])
+  const [usuarios, setUsuarios] = useState<AuthUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [session, setSession] = useState<{ access_token: string } | null>(null)
   const [authProviderUser, setauthProviderUser] = useState<AuthUser | null>(null)
 
-  const isAdmin = userá.is_admin === true ||
-    (userá.role && (
+  const isAdmin = user?.is_admin === true ||
+    (user?.role && (
       user.role.toLowerCase() === 'administrador' ||
       user.role.toLowerCase() === 'admin' ||
       user.role.toLowerCase() === 'administrator'
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const clearAuthState = () => {
     setUser(null)
-    setUsuários([])
+    setUsuarios([])
     setSession(null)
     setauthProviderUser(null)
     setError(null)
@@ -64,25 +64,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     sessionStorage.clear()
   }
 
-  const loadUsuários = async () => {
+  const loadUsuarios = async () => {
     try {
       if (!localStorage.getItem('token')) {
-        setUsuários([])
+        setUsuarios([])
         setError(null)
         return
       }
 
       if (!import.meta.env.DEV) {
-        setUsuários([])
+        setUsuarios([])
         setError(null)
         return
       }
 
-      const usuáriosList = await getUsers()
-      setUsuários(Array.isArray(usuáriosList) ? usuáriosList : [])
+      const usuariosList = await getUsers()
+      setUsuarios(Array.isArray(usuariosList) ? usuariosList : [])
       setError(null)
     } catch (err: any) {
-      setUsuários([])
+      setUsuarios([])
       setError(err?.message?.toLowerCase?.().includes('token') ? null : 'Erro ao carregar usuários')
     }
   }
@@ -137,11 +137,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     if (user) {
-      loadUsuários()
+      loadUsuarios()
     } else {
-      setUsuários([])
+      setUsuarios([])
     }
-  }, [userá.id])
+  }, [user?.id])
 
   const login = async (credentials: LoginCredentials): Promise<AuthResponse | null> => {
     try {
@@ -259,7 +259,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const value: AuthContextType = {
     user,
-    usuários,
+    usuarios,
     loading,
     error,
     isAdmin,

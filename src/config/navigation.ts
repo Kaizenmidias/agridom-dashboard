@@ -59,7 +59,7 @@ export const navigationItems: NavigationItem[] = [
     icon: BriefcaseBusiness,
     children: [
       { label: "Briefings", icon: ClipboardList, path: "/briefings", legacyPaths: ["/operacional/briefings"], requiredPermissions: ["can_access_briefings"] },
-      { label: "Códigos", icon: Code2, path: "/códigos", legacyPaths: ["/operacional/códigos"], requiredPermissions: ["can_access_codes"] },
+      { label: "Códigos", icon: Code2, path: "/codigos", legacyPaths: ["/operacional/codigos"], requiredPermissions: ["can_access_codes"] },
       { label: "Acessos", icon: KeyRound, path: "/acessos", legacyPaths: ["/operacional/acessos"] },
     ],
   },
@@ -68,7 +68,7 @@ export const navigationItems: NavigationItem[] = [
     icon: Bot,
     children: [
       { label: "Assistentes", icon: MessageSquareText, path: "/ia/assistentes" },
-      { label: "Conteúdos", icon: FileText, path: "/ia/conteúdos" },
+      { label: "Conteúdos", icon: FileText, path: "/ia/conteudos" },
       { label: "Prompts", icon: Braces, path: "/ia/prompts" },
       { label: "Agentes", icon: BrainCircuit, path: "/ia/agentes" },
     ],

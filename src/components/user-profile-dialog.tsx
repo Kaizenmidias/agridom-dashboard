@@ -27,11 +27,11 @@ export function UserProfileDialog({ children }: UserProfileDialogProps) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [userData, setUserData] = useState({
-    nome: userá.full_name || "",
-    email: userá.email || "",
-    cargo: userá.role || "",
-    bio: userá.bio || "",
-    avatar: userá.avatar_url || ""
+    nome: user.full_name || "",
+    email: user.email || "",
+    cargo: user.role || "",
+    bio: user.bio || "",
+    avatar: user.avatar_url || ""
   })
   const [passwords, setPasswords] = useState({
     current: "",
