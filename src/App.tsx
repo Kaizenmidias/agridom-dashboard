@@ -4,8 +4,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useMemo, useRef } from "react";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Bell, Search, Settings } from "lucide-react";
 import Index from "./pages/Index";
 import ProjetosPage from "./pages/ProjetosPage";
 import BriefingsPage from "./pages/BriefingsPage";
@@ -37,12 +37,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RicardoAccessControl from "./components/RicardoAccessControl";
 import DebugEnv from "./components/DebugEnv";
 // Removed PermissionProtectedRoute - no longer needed
-import { useEffect } from "react";
 import { CRMProvider } from "./contexts/CRMContext";
 import { AppSettingsProvider } from "./contexts/AppSettingsContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-
-import { trackPageView } from "./utils/analytics";
 
 // Define routes configuration with Ricardo access control
 const routes = [
@@ -113,7 +110,13 @@ const queryClient = new QueryClient({
 
 // Layout component that conditionally shows sidebar
 const AppLayout = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
+  const topbarDate = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
   
   // Don't show sidebar when not authenticated
   const showSidebar = isAuthenticated;
@@ -155,10 +158,37 @@ const AppLayout = () => {
       <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
         <AppSidebar />
         <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-          <header className="flex h-12 w-full items-center border-b px-4">
-            <SidebarTrigger />
+          <header className="sticky top-0 z-20 flex h-14 w-full items-center gap-3 border-b border-border/80 bg-background/90 px-4 backdrop-blur-xl">
+            <SidebarTrigger className="text-muted-foreground hover:bg-white/5 hover:text-foreground" />
+            <div className="relative hidden w-full max-w-md md:block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="search"
+                placeholder="Pesquisar em todo o sistema..."
+                className="h-8 w-full rounded-md border border-input bg-card/70 pl-9 pr-3 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60 focus:ring-1 focus:ring-primary/50"
+              />
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="hidden text-[11px] font-medium capitalize text-muted-foreground lg:inline">{topbarDate}</span>
+              <button className="relative flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-white/5 hover:text-foreground" type="button">
+                <Bell className="h-4 w-4" />
+                <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-destructive" />
+              </button>
+              <button className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-white/5 hover:text-foreground" type="button">
+                <Settings className="h-4 w-4" />
+              </button>
+              <div className="hidden items-center gap-2 rounded-md px-2 py-1 md:flex">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {(user?.full_name || user?.name || "U").slice(0, 1).toUpperCase()}
+                </div>
+                <div className="leading-tight">
+                  <p className="text-xs font-semibold text-foreground">{user?.full_name || user?.name || "Usuario"}</p>
+                  <p className="text-[10px] text-muted-foreground">{user?.role || "Administrador"}</p>
+                </div>
+              </div>
+            </div>
           </header>
-          <div className="flex-1 w-full max-w-full overflow-x-hidden">
+          <div className="flex-1 w-full max-w-full overflow-x-hidden bg-background">
             <Routes>
               {routes.map((route) => {
                 if (!route.protected) {

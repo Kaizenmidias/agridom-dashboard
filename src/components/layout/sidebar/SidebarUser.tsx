@@ -23,27 +23,25 @@ export function SidebarUser({ user, isCollapsed }: SidebarUserProps) {
   const displayName = user?.full_name || user?.name || "Usuario";
 
   return (
-    <div className="mt-auto space-y-3 overflow-hidden border-t border-border p-4">
-      <div className="flex justify-center">
-        <ThemeToggle />
-      </div>
-
+    <div className="mt-auto space-y-2 overflow-hidden border-t border-sidebar-border/70 p-3">
       <UserProfileDialog>
-        <Button variant="ghost" className="w-full justify-start overflow-hidden p-2">
+        <Button variant="ghost" className="h-auto w-full justify-start overflow-hidden rounded-md p-2 hover:bg-white/5">
           <div className="flex w-full items-center gap-3 overflow-hidden">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-              <span className="text-sm font-medium text-primary">{getInitials(displayName)}</span>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_0_18px_rgba(183,255,60,0.18)]">
+              <span className="text-sm font-bold">{getInitials(displayName)}</span>
             </div>
             {!isCollapsed ? (
               <div className="min-w-0 flex-1 overflow-hidden text-left">
-                <p className="truncate whitespace-nowrap text-sm font-medium">{displayName}</p>
-                <p className="truncate whitespace-nowrap text-xs text-muted-foreground">{user?.email || "email@exemplo.com"}</p>
+                <p className="truncate whitespace-nowrap text-xs font-semibold text-sidebar-foreground">{displayName}</p>
+                <p className="truncate whitespace-nowrap text-[10px] text-sidebar-foreground/55">{user?.role || "Administrador"}</p>
               </div>
             ) : null}
           </div>
         </Button>
       </UserProfileDialog>
+      <div className="flex justify-center">
+        <ThemeToggle className="h-8 w-8 text-sidebar-foreground/70 hover:bg-white/5 hover:text-sidebar-foreground" />
+      </div>
     </div>
   );
 }
-

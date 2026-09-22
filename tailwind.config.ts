@@ -140,14 +140,14 @@ export default {
 				'pulse-slow': 'pulse-slow 3s ease-in-out infinite'
 			},
 			fontFamily: {
-				sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'sans-serif'],
-				heading: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'sans-serif']
+				sans: ['Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+				heading: ['Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif']
 			},
 			boxShadow: {
-				'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
-				'glass-hover': '0 8px 32px rgba(0, 0, 0, 0.15)',
-				'card': '0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1)',
-				'card-hover': '0 4px 6px rgba(0, 0, 0, 0.05), 0 10px 15px rgba(0, 0, 0, 0.1)'
+				'glass': '0 18px 60px rgba(0, 0, 0, 0.35)',
+				'glass-hover': '0 22px 70px rgba(0, 0, 0, 0.45)',
+				'card': '0 18px 40px rgba(0, 0, 0, 0.22)',
+				'card-hover': '0 20px 52px rgba(0, 0, 0, 0.34)'
 			}
 		}
 	},

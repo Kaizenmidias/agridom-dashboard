@@ -16,13 +16,11 @@ interface ThemeToggleProps {
 }
 
 export function ThemeToggle({ className }: ThemeToggleProps) {
-  const [theme, setTheme] = React.useState<Theme>("system")
+  const [theme, setTheme] = React.useState<Theme>("dark")
 
   React.useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as Theme
-    if (savedTheme) {
-      setTheme(savedTheme)
-    }
+    const savedTheme = (localStorage.getItem("theme") as Theme) || "dark"
+    setTheme(savedTheme)
   }, [])
 
   const applyTheme = (newTheme: Theme) => {
