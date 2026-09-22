@@ -1,4 +1,5 @@
-﻿import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Archive,
   Building2,
@@ -17,7 +18,6 @@ import {
   Send,
   Trash2,
   UserRound,
-  UserPlus,
   X,
 } from "lucide-react";
 import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
@@ -64,6 +64,38 @@ import { formatPhone } from "@/utils/phone";
 import { buildWhatsAppUrl } from "@/utils/whatsapp";
 import { getWebsiteDomain, normalizeEmail, normalizeWebsiteUrl, slugify } from "@/utils/lead-formatters";
 import { cn } from "@/lib/utils";
+
+const BRAZILIAN_STATES = [
+  { uf: "AC", name: "Acre" },
+  { uf: "AL", name: "Alagoas" },
+  { uf: "AP", name: "Amapá" },
+  { uf: "AM", name: "Amazonas" },
+  { uf: "BA", name: "Bahia" },
+  { uf: "CE", name: "Ceará" },
+  { uf: "DF", name: "Distrito Federal" },
+  { uf: "ES", name: "Espírito Santo" },
+  { uf: "GO", name: "Goiás" },
+  { uf: "MA", name: "Maranhão" },
+  { uf: "MT", name: "Mato Grosso" },
+  { uf: "MS", name: "Mato Grosso do Sul" },
+  { uf: "MG", name: "Minas Gerais" },
+  { uf: "PA", name: "Pará" },
+  { uf: "PB", name: "Paraíba" },
+  { uf: "PR", name: "Paraná" },
+  { uf: "PE", name: "Pernambuco" },
+  { uf: "PI", name: "Piauí" },
+  { uf: "RJ", name: "Rio de Janeiro" },
+  { uf: "RN", name: "Rio Grande do Norte" },
+  { uf: "RS", name: "Rio Grande do Sul" },
+  { uf: "RO", name: "Rondônia" },
+  { uf: "RR", name: "Roraima" },
+  { uf: "SC", name: "Santa Catarina" },
+  { uf: "SP", name: "São Paulo" },
+  { uf: "SE", name: "Sergipe" },
+  { uf: "TO", name: "Tocantins" },
+];
+
+const PIPELINE_STORAGE_KEY = "kaizen.pipeline.leads";
 
 const statusLabels: Record<LeadStatus, string> = {
   novo: "Novo",
@@ -141,6 +173,43 @@ function getLeadOrganization(lead: Lead) {
   return lead.companyName || "Não informada";
 }
 
+function formatBrazilianPhoneInput(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function leadToForm(lead: Lead) {
+  return {
+    companyName: lead.companyName || "",
+    contactName: lead.contactName || "",
+    email: lead.email || "",
+    phone: formatBrazilianPhoneInput(lead.phone || ""),
+    website: lead.website || "",
+    city: lead.city || "",
+    state: lead.state || "",
+    category: lead.category || "",
+    assignedTo: lead.assignedTo || "",
+  };
+}
+
+function readPipelineLeads() {
+  try {
+    const stored = localStorage.getItem(PIPELINE_STORAGE_KEY);
+    return stored ? (JSON.parse(stored) as Lead[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePipelineLead(lead: Lead) {
+  const current = readPipelineLeads();
+  const next = [lead, ...current.filter((item) => item.id !== lead.id)];
+  localStorage.setItem(PIPELINE_STORAGE_KEY, JSON.stringify(next));
+}
+
 function folderMatchesLead(folderId: string, lead: Lead) {
   if (folderId === "todos-os-leads") return true;
   if (folderId === "novos") return lead.status === "novo";
@@ -201,6 +270,7 @@ const emptyLeadForm = {
 };
 
 export default function LeadsPage() {
+  const navigate = useNavigate();
   const { leads, loading, error, reload } = useLeads();
   const [sessionLeads, setSessionLeads] = useState<Lead[]>([]);
   const [filters, setFilters] = useState<LeadFilters>(initialFilters);
@@ -216,12 +286,47 @@ export default function LeadsPage() {
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
   const [leadForm, setLeadForm] = useState(emptyLeadForm);
+  const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
+  const [cityOptions, setCityOptions] = useState<string[]>([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
 
-  const allLeads = useMemo(() => [...sessionLeads, ...leads], [leads, sessionLeads]);
+  const allLeads = useMemo(() => {
+    const localIds = new Set(sessionLeads.map((lead) => lead.id));
+    return [...sessionLeads, ...leads.filter((lead) => !localIds.has(lead.id))];
+  }, [leads, sessionLeads]);
   const folders = useMemo(() => buildFolders(allLeads, customFolders), [allLeads, customFolders]);
   const selectedFolder = folders.find((folder) => folder.id === filters.folderId) || folders[0];
   const cities = useMemo(() => Array.from(new Set(allLeads.map((lead) => lead.city).filter(Boolean))).sort() as string[], [allLeads]);
   const owners = useMemo(() => Array.from(new Set(allLeads.map((lead) => lead.assignedTo).filter(Boolean))).sort() as string[], [allLeads]);
+
+  useEffect(() => {
+    if (!leadForm.state) {
+      setCityOptions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadCities() {
+      try {
+        setCitiesLoading(true);
+        const response = await fetch(
+          `https://servicodados.ibge.gov.br/api/v1/localidades/estados/${leadForm.state}/municipios?orderBy=nome`,
+          { signal: controller.signal }
+        );
+        const data = await response.json();
+        setCityOptions(Array.isArray(data) ? data.map((city) => city.nome).filter(Boolean) : []);
+      } catch (error) {
+        if (!controller.signal.aborted) setCityOptions([]);
+      } finally {
+        if (!controller.signal.aborted) setCitiesLoading(false);
+      }
+    }
+
+    void loadCities();
+
+    return () => controller.abort();
+  }, [leadForm.state]);
 
   const filteredLeads = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -310,16 +415,37 @@ export default function LeadsPage() {
   };
 
   const handleLeadFormChange = (key: keyof typeof emptyLeadForm, value: string) => {
-    setLeadForm((current) => ({ ...current, [key]: value }));
+    setLeadForm((current) => {
+      if (key === "phone") return { ...current, phone: formatBrazilianPhoneInput(value) };
+      if (key === "state") return { ...current, state: value, city: "" };
+      return { ...current, [key]: value };
+    });
   };
 
-  const handleCreateLead = () => {
+  const openCreateLeadDialog = () => {
+    setEditingLeadId(null);
+    setLeadForm(emptyLeadForm);
+    setLeadDialogOpen(true);
+  };
+
+  const openEditLeadDialog = (lead: Lead) => {
+    setEditingLeadId(lead.id);
+    setLeadForm(leadToForm(lead));
+    setLeadDialogOpen(true);
+  };
+
+  const upsertLocalLead = (lead: Lead) => {
+    setSessionLeads((current) => [lead, ...current.filter((item) => item.id !== lead.id)]);
+  };
+
+  const handleSaveLead = () => {
     const companyName = leadForm.companyName.trim();
     if (!companyName) return;
 
     const now = new Date().toISOString();
-    const newLead: Lead = {
-      id: `local-${Date.now()}`,
+    const currentLead = editingLeadId ? allLeads.find((lead) => lead.id === editingLeadId) : null;
+    const savedLead: Lead = {
+      id: currentLead?.id || `local-${Date.now()}`,
       companyName,
       contactName: leadForm.contactName.trim() || null,
       email: leadForm.email.trim() || null,
@@ -330,20 +456,54 @@ export default function LeadsPage() {
       category: leadForm.category.trim() || null,
       assignedTo: leadForm.assignedTo.trim() || null,
       source: "manual",
-      status: "novo",
-      score: 0,
-      folderId: "todos-os-leads",
-      folderName: "Todos os Leads",
-      lastContactAt: null,
-      createdAt: now,
+      status: currentLead?.status || "novo",
+      score: currentLead?.score || 0,
+      folderId: currentLead?.folderId || "todos-os-leads",
+      folderName: currentLead?.folderName || "Todos os Leads",
+      lastContactAt: currentLead?.lastContactAt || null,
+      createdAt: currentLead?.createdAt || now,
       updatedAt: now,
     };
 
-    setSessionLeads((current) => [newLead, ...current]);
+    upsertLocalLead(savedLead);
     setFilters((current) => ({ ...current, folderId: "todos-os-leads" }));
     setPage(1);
     setLeadForm(emptyLeadForm);
+    setEditingLeadId(null);
     setLeadDialogOpen(false);
+  };
+
+  const addLeadToKanban = (lead: Lead) => {
+    const now = new Date().toISOString();
+    const pipelineLead: Lead = {
+      ...lead,
+      status: lead.status === "novo" || lead.status === "nao_contatado" ? "qualificado" : lead.status,
+      folderId: "pipeline",
+      folderName: "Pipeline",
+      updatedAt: now,
+    };
+    upsertLocalLead(pipelineLead);
+    writePipelineLead(pipelineLead);
+    navigate("/comercial/pipeline");
+  };
+
+  const addSelectedToKanban = () => {
+    selectedIds
+      .map((id) => allLeads.find((lead) => lead.id === id))
+      .filter((lead): lead is Lead => Boolean(lead))
+      .forEach((lead) => {
+        const pipelineLead = {
+          ...lead,
+          status: lead.status === "novo" || lead.status === "nao_contatado" ? "qualificado" as LeadStatus : lead.status,
+          folderId: "pipeline",
+          folderName: "Pipeline",
+          updatedAt: new Date().toISOString(),
+        };
+        upsertLocalLead(pipelineLead);
+        writePipelineLead(pipelineLead);
+      });
+    setSelectedIds([]);
+    navigate("/comercial/pipeline");
   };
 
   return (
@@ -361,7 +521,7 @@ export default function LeadsPage() {
               <Input className="h-10 pl-9" placeholder="Buscar leads, empresas, e-mails..." value={query} onChange={(event) => setQuery(event.target.value)} />
             </div>
             <Button variant="outline">Importar</Button>
-            <Button onClick={() => setLeadDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Novo Lead</Button>
+            <Button onClick={openCreateLeadDialog}><Plus className="mr-2 h-4 w-4" />Novo Lead</Button>
           </div>
         </div>
       </div>
@@ -529,9 +689,10 @@ export default function LeadsPage() {
             {selectedIds.length > 0 ? (
               <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-3">
                 <span className="text-sm font-medium">{selectedIds.length} selecionado(s)</span>
-                {["Mover para pasta", "Alterar status", "Atribuir responsável", "Adicionar ao Kanban", "Exportar", "Arquivar", "Excluir"].map((action) => (
+                {["Mover para pasta", "Alterar status", "Atribuir responsável", "Exportar", "Arquivar", "Excluir"].map((action) => (
                   <Button key={action} variant={action === "Excluir" ? "destructive" : "outline"} size="sm">{action}</Button>
                 ))}
+                <Button variant="outline" size="sm" onClick={addSelectedToKanban}>Adicionar ao Kanban</Button>
               </div>
             ) : null}
 
@@ -623,12 +784,12 @@ export default function LeadsPage() {
                                 <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem>Ver lead</DropdownMenuItem>
-                                  <DropdownMenuItem><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openEditLeadDialog(lead)}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
                                   {whatsappUrl ? <DropdownMenuItem asChild><a href={whatsappUrl} target="_blank" rel="noreferrer">Abrir WhatsApp</a></DropdownMenuItem> : null}
                                   {email ? <DropdownMenuItem asChild><a href={`mailto:${email}`}>Enviar e-mail</a></DropdownMenuItem> : null}
                                   <DropdownMenuItem>Mover para pasta</DropdownMenuItem>
                                   <DropdownMenuItem>Alterar status</DropdownMenuItem>
-                                  <DropdownMenuItem>Adicionar ao Kanban</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => addLeadToKanban(lead)}>Adicionar ao Kanban</DropdownMenuItem>
                                   <DropdownMenuItem>Criar tarefa</DropdownMenuItem>
                                   <DropdownMenuItem>Arquivar</DropdownMenuItem>
                                   <DropdownMenuSeparator />
@@ -681,8 +842,8 @@ export default function LeadsPage() {
       <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Novo lead</DialogTitle>
-            <DialogDescription>Cadastre as informações principais do contato comercial.</DialogDescription>
+            <DialogTitle>{editingLeadId ? "Editar lead" : "Novo lead"}</DialogTitle>
+            <DialogDescription>{editingLeadId ? "Atualize as informações principais do contato comercial." : "Cadastre as informações principais do contato comercial."}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
@@ -742,21 +903,29 @@ export default function LeadsPage() {
             <div className="grid gap-3 sm:grid-cols-[1fr_88px]">
               <div className="space-y-2">
                 <Label htmlFor="lead-city">Cidade</Label>
-                <Input
-                  id="lead-city"
-                  value={leadForm.city}
-                  onChange={(event) => handleLeadFormChange("city", event.target.value)}
-                  placeholder="Cidade"
-                />
+                <Select value={leadForm.city || undefined} onValueChange={(value) => handleLeadFormChange("city", value)} disabled={!leadForm.state || citiesLoading}>
+                  <SelectTrigger id="lead-city">
+                    <SelectValue placeholder={leadForm.state ? (citiesLoading ? "Carregando..." : "Selecione") : "Escolha a UF"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cityOptions.map((city) => (
+                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lead-state">UF</Label>
-                <Input
-                  id="lead-state"
-                  value={leadForm.state}
-                  onChange={(event) => handleLeadFormChange("state", event.target.value.toUpperCase().slice(0, 2))}
-                  placeholder="SP"
-                />
+                <Select value={leadForm.state || undefined} onValueChange={(value) => handleLeadFormChange("state", value)}>
+                  <SelectTrigger id="lead-state">
+                    <SelectValue placeholder="UF" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BRAZILIAN_STATES.map((state) => (
+                      <SelectItem key={state.uf} value={state.uf}>{state.uf}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-2 sm:col-span-2">
@@ -771,8 +940,8 @@ export default function LeadsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLeadDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreateLead} disabled={!leadForm.companyName.trim()}>
-              <Plus className="mr-2 h-4 w-4" />Adicionar lead
+            <Button onClick={handleSaveLead} disabled={!leadForm.companyName.trim()}>
+              <Plus className="mr-2 h-4 w-4" />{editingLeadId ? "Salvar lead" : "Adicionar lead"}
             </Button>
           </DialogFooter>
         </DialogContent>
