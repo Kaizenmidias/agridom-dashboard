@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
   Archive,
   CheckCircle2,
@@ -344,7 +344,7 @@ export default function LeadsPage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Nova pasta de leads</DialogTitle>
-                  <DialogDescription>Crie a estrutura visual da pasta. A persistencia sera conectada ao Supabase quando o backend estiver preparado.</DialogDescription>
+                  <DialogDescription>Crie a estrutura visual da pasta. A persistencia sera conectada ao backend MySQL quando esta rotina estiver preparada.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">

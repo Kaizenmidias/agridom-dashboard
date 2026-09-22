@@ -1,8 +1,8 @@
-import { supabase } from '@/lib/supabase'
 import { buildApiUrl } from '@/config/api'
 import type {
   Prospect,
   ProspectContactHistory,
+  ProspectionBootstrap,
   ProspectionIntegrationProvider,
   ProspectionIntegrationSettings,
   ProspectionIntegrationTestResult,
@@ -11,56 +11,34 @@ import type {
   ProspectSearchInput,
   ProspectStatus,
   ProspectingSettings,
-  ProspectionBootstrap,
 } from '@/types/database'
 
 const PROSPECTION_BASE_URL = buildApiUrl('prospection')
 
-async function getAuthHeaders(): Promise<HeadersInit> {
-  const { data, error } = await supabase.auth.getSession()
-
-  if (error || !data.session?.access_token) {
-    throw new Error('Usuário não autenticado')
-  }
+function getAuthHeaders(): HeadersInit {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Usuario nao autenticado')
 
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${data.session.access_token}`,
+    Authorization: `Bearer ${token}`,
   }
 }
 
 async function request<T>(endpoint: string, init?: RequestInit): Promise<T> {
-  const headers = await getAuthHeaders()
-  const url = `${PROSPECTION_BASE_URL}${endpoint}`
-  let response: Response
-  try {
-    response = await fetch(url, {
-      ...init,
-      headers: {
-        ...headers,
-        ...(init?.headers || {}),
-      },
-    })
-  } catch (error: any) {
-    throw error
-  }
+  const response = await fetch(`${PROSPECTION_BASE_URL}${endpoint}`, {
+    ...init,
+    headers: {
+      ...getAuthHeaders(),
+      ...(init?.headers || {}),
+    },
+  })
 
   const rawText = await response.text()
-  let data: any = null
-
-  try {
-    data = rawText ? JSON.parse(rawText) : null
-  } catch {
-    data = null
-  }
+  const data = rawText ? JSON.parse(rawText) : null
 
   if (!response.ok) {
-    throw new Error(
-      data?.error ||
-        data?.message ||
-        rawText ||
-        `Erro na API de prospecção (status ${response.status})`
-    )
+    throw new Error(data?.error || data?.message || rawText || `Erro na API de prospeccao (${response.status})`)
   }
 
   return (data ?? {}) as T
@@ -93,15 +71,11 @@ export const prospectionAPI = {
   },
 
   addToCRM(id: number) {
-    return request<Prospect>(`/prospects/${id}/add-to-crm`, {
-      method: 'POST',
-    })
+    return request<Prospect>(`/prospects/${id}/add-to-crm`, { method: 'POST' })
   },
 
   deleteProspect(id: number) {
-    return request<{ success: boolean; id: number }>(`/prospects/${id}`, {
-      method: 'DELETE',
-    })
+    return request<{ success: boolean; id: number }>(`/prospects/${id}`, { method: 'DELETE' })
   },
 
   saveSettings(payload: Partial<ProspectingSettings>) {
@@ -123,33 +97,20 @@ export const prospectionAPI = {
   },
 
   testIntegration(provider: ProspectionIntegrationProvider) {
-    return request<ProspectionIntegrationTestResult>(`/integrations/${provider}/test`, {
-      method: 'POST',
-    })
+    return request<ProspectionIntegrationTestResult>(`/integrations/${provider}/test`, { method: 'POST' })
   },
 
   registerWhatsApp(prospectIds: number[], template: string, defaultTemplate?: string) {
-    return request<{ links: Array<{ prospect_id: number; business_name: string; url: string }> }>(
-      '/whatsapp/register',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          prospect_ids: prospectIds,
-          template,
-          default_template: defaultTemplate,
-        }),
-      }
-    )
+    return request<{ links: Array<{ prospect_id: number; business_name: string; url: string }> }>('/whatsapp/register', {
+      method: 'POST',
+      body: JSON.stringify({ prospect_ids: prospectIds, template, default_template: defaultTemplate }),
+    })
   },
 
   sendEmail(prospectIds: number[], subject: string, bodyHtml: string) {
     return request<{ sent: Array<{ id: number; email: string; subject: string }> }>('/email/send', {
       method: 'POST',
-      body: JSON.stringify({
-        prospect_ids: prospectIds,
-        subject,
-        body_html: bodyHtml,
-      }),
+      body: JSON.stringify({ prospect_ids: prospectIds, subject, body_html: bodyHtml }),
     })
   },
 }
@@ -158,11 +119,10 @@ export type {
   Prospect,
   ProspectContactHistory,
   ProspectMetrics,
+  ProspectionBootstrap,
   ProspectionIntegrationProvider,
   ProspectionIntegrationSettings,
   ProspectionIntegrationTestResult,
   ProspectionIntegrationUpdatePayload,
   ProspectingSettings,
-  ProspectionBootstrap,
 }
-

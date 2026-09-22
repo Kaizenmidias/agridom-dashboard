@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, Lock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { authAPI } from '@/api/supabase-client';
+import { authAPI } from '@/api/api-client';
 
 const ResetPasswordPage = () => {
   const [searchParams] = useSearchParams();
@@ -23,7 +23,7 @@ const ResetPasswordPage = () => {
 
   useEffect(() => {
     if (!token) {
-      setError('Token de recuperação não encontrado. Solicite um novo link de recuperação.');
+      setError('Token de recuperaÃ§Ã£o nÃ£o encontrado. Solicite um novo link de recuperaÃ§Ã£o.');
     }
   }, [token]);
 
@@ -38,7 +38,7 @@ const ResetPasswordPage = () => {
     e.preventDefault();
     
     if (!token) {
-      setError('Token de recuperação não encontrado.');
+      setError('Token de recuperaÃ§Ã£o nÃ£o encontrado.');
       return;
     }
 
@@ -49,7 +49,7 @@ const ResetPasswordPage = () => {
     }
 
     if (newPassword !== confirmPassword) {
-      setError('As senhas não coincidem');
+      setError('As senhas nÃ£o coincidem');
       return;
     }
 
@@ -63,7 +63,7 @@ const ResetPasswordPage = () => {
         setSuccess(true);
         toast.success(result.message || 'Senha redefinida com sucesso!');
         
-        // Redirecionar para login após 2 segundos
+        // Redirecionar para login apÃ³s 2 segundos
         setTimeout(() => {
           navigate('/login');
         }, 2000);
@@ -89,7 +89,7 @@ const ResetPasswordPage = () => {
             </div>
             <CardTitle className="text-2xl font-bold text-green-700">Senha Redefinida!</CardTitle>
             <CardDescription>
-              Sua senha foi redefinida com sucesso. Você será redirecionado para a página de login.
+              Sua senha foi redefinida com sucesso. VocÃª serÃ¡ redirecionado para a pÃ¡gina de login.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">

@@ -1,6 +1,6 @@
-// Tipos para o banco de dados
+﻿// Tipos para o banco de dados
 
-// Tipos de autenticação
+// Tipos de autenticaÃ§Ã£o
 export interface AuthUser {
   id: number | string;
   email: string;
@@ -41,7 +41,7 @@ export interface AuthResponse {
   error?: string;
 }
 
-// Tipos de usuários
+// Tipos de usuÃ¡rios
 export interface User {
   id: number;
   email: string;
@@ -142,7 +142,7 @@ export interface InsertExpense {
   user_id: number;
 }
 
-// Tipos de códigos
+// Tipos de cÃ³digos
 export interface Code {
   id: number;
   name: string;
@@ -436,7 +436,7 @@ export interface ProspectionBootstrap {
   };
 }
 
-// Tipos para estatísticas do dashboard
+// Tipos para estatÃ­sticas do dashboard
 export interface DashboardStats {
   total_projects: number;
   total_value: number;
@@ -456,7 +456,7 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-// Tipos para paginação
+// Tipos para paginaÃ§Ã£o
 export interface PaginationParams {
   page?: number;
   limit?: number;
@@ -498,7 +498,7 @@ export interface CodeFilters {
   search?: string;
 }
 
-// Tipos para operações CRUD
+// Tipos para operaÃ§Ãµes CRUD
 export type CreateInput<T> = Omit<T, 'id' | 'created_at' | 'updated_at'>;
 export type UpdateInput<T> = Partial<Omit<T, 'id' | 'created_at' | 'updated_at'>>;
 
@@ -512,21 +512,5 @@ export namespace Database {
   export type AuthUser = AuthUser;
   export type DashboardStats = DashboardStats;
   export type Prospect = Prospect;
-}
-
-// Tipos para o Supabase (se necessário)
-export interface SupabaseUser {
-  id: string;
-  email?: string;
-  user_metadata?: {
-    name?: string;
-    role?: string;
-  };
-}
-
-export interface SupabaseSession {
-  access_token: string;
-  refresh_token: string;
-  user: SupabaseUser;
 }
 

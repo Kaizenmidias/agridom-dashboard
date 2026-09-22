@@ -1,9 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+﻿import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { loginUser, registerUser, verifyToken, updateUserProfile, uploadAvatar, changePassword } from '../api/auth'
 import { AuthUser, LoginCredentials, RegisterCredentials, AuthResponse } from '../types/database'
 import { getUsers } from '../api/crud'
-import { supabase } from '../lib/supabase'
-import type { Session, User } from '@supabase/supabase-js'
 
 interface AuthContextType {
   user: AuthUser | null
@@ -11,8 +9,8 @@ interface AuthContextType {
   loading: boolean
   error: string | null
   isAdmin: boolean
-  session: Session | null
-  supabaseUser: User | null
+  session: { access_token: string } | null
+  authProviderUser: AuthUser | null
   login: (credentials: LoginCredentials) => Promise<AuthResponse | null>
   register: (credentials: RegisterCredentials) => Promise<AuthResponse | null>
   logout: () => void
@@ -34,27 +32,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [usuarios, setUsuarios] = useState<AuthUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
-  const [supabaseUser, setSupabaseUser] = useState<User | null>(null)
-  
-  // Calcular se o usuário é admin baseado no campo is_admin ou cargo
-  const isAdmin = user?.is_admin === true || 
+  const [session, setSession] = useState<{ access_token: string } | null>(null)
+  const [authProviderUser, setauthProviderUser] = useState<AuthUser | null>(null)
+
+  const isAdmin = user?.is_admin === true ||
     (user?.role && (
       user.role.toLowerCase() === 'administrador' ||
       user.role.toLowerCase() === 'admin' ||
       user.role.toLowerCase() === 'administrator'
     )) || false
 
-  // Calcular se está autenticado baseado na sessão do Supabase
-  const isAuthenticated = !!session && !!supabaseUser
+  const isAuthenticated = !!user && !!localStorage.getItem('token')
 
-  // Função para carregar lista de usuários
+  const applyAuthenticatedUser = (authUser: AuthUser, token: string) => {
+    setUser(authUser)
+    setauthProviderUser(authUser)
+    setSession({ access_token: token })
+    localStorage.setItem('user_data', JSON.stringify(authUser))
+    localStorage.setItem('token', token)
+  }
+
+  const clearAuthState = () => {
+    setUser(null)
+    setUsuarios([])
+    setSession(null)
+    setauthProviderUser(null)
+    setError(null)
+    localStorage.removeItem('user_data')
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    sessionStorage.clear()
+  }
+
   const loadUsuarios = async () => {
     try {
-      // Verificar se há sessão ativa do Supabase
-      if (!session || !supabaseUser) {
+      if (!localStorage.getItem('token')) {
         setUsuarios([])
-        setError(null) // Não é um erro se não há sessão
+        setError(null)
         return
       }
 
@@ -63,347 +77,183 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setError(null)
         return
       }
-      
+
       const usuariosList = await getUsers()
-      // Garantir que usuariosList seja sempre um array
       setUsuarios(Array.isArray(usuariosList) ? usuariosList : [])
       setError(null)
     } catch (err: any) {
-      // Em caso de erro, definir como array vazio
       setUsuarios([])
-      
-      // Se for erro de token, não mostrar erro para o usuário (será tratado pela autenticação)
-      if (err?.message?.includes('Token') || err?.message?.includes('token')) {
-        setError(null)
-      } else {
-        setError('Erro ao carregar usuários')
-      }
+      setError(err?.message?.toLowerCase?.().includes('token') ? null : 'Erro ao carregar usuarios')
     }
   }
 
-  // Inicializar autenticação com Supabase
   useEffect(() => {
-    let isMounted = true;
-    
+    let isMounted = true
+
     const initAuth = async () => {
       try {
-        // Obter sessão atual do Supabase
-        const { data: { session }, error } = await supabase.auth.getSession()
-        
-        if (error) {
+        const token = localStorage.getItem('token')
+        const cachedUser = localStorage.getItem('user_data')
+
+        if (!token) {
           if (isMounted) {
-            setSession(null)
-            setSupabaseUser(null)
-            setUser(null)
+            clearAuthState()
             setLoading(false)
           }
           return
         }
-        
-        if (isMounted) {
-          setSession(session)
-          setSupabaseUser(session?.user || null)
-          
-          // Se há sessão, tentar carregar dados do usuário do localStorage
-          if (session?.user) {
-            const userData = localStorage.getItem('user_data')
-            if (userData) {
-              try {
-                const parsedUser = JSON.parse(userData)
-                setUser(parsedUser)
-              } catch (parseError) {
-                localStorage.removeItem('user_data')
-              }
-            }
-          } else {
-            // Sem sessão, limpar dados
-            setUser(null)
+
+        let nextUser: AuthUser | null = null
+        if (cachedUser) {
+          try {
+            nextUser = JSON.parse(cachedUser)
+          } catch {
             localStorage.removeItem('user_data')
-            localStorage.removeItem('token')
           }
-          
-          setLoading(false)
         }
-      } catch (error) {
-        console.error('Erro ao inicializar autenticação:', error)
-        if (isMounted) {
-          setSession(null)
-          setSupabaseUser(null)
-          setUser(null)
-          setLoading(false)
+
+        const verified = await verifyToken(token)
+        nextUser = verified?.user || nextUser
+
+        if (isMounted && nextUser) {
+          applyAuthenticatedUser(nextUser, token)
+        } else if (isMounted) {
+          clearAuthState()
         }
+      } catch (err) {
+        console.error('Erro ao inicializar autenticacao:', err)
+        if (isMounted) clearAuthState()
+      } finally {
+        if (isMounted) setLoading(false)
       }
     }
 
-    // Configurar listener para mudanças de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (isMounted) {
-          setSession(session)
-          setSupabaseUser(session?.user || null)
-          
-          if (event === 'SIGNED_OUT' || !session) {
-            setUser(null)
-            localStorage.removeItem('user_data')
-            localStorage.removeItem('token')
-          }
-          
-          if (event === 'SIGNED_IN' && session) {
-            // Tentar carregar dados do usuário do localStorage
-            const userData = localStorage.getItem('user_data')
-            if (userData) {
-              try {
-                const parsedUser = JSON.parse(userData)
-                setUser(parsedUser)
-              } catch (error) {
-                localStorage.removeItem('user_data')
-              }
-            }
-          }
-        }
-      }
-    )
-
-    // Inicializar
     initAuth()
-    
+
     return () => {
       isMounted = false
-      subscription.unsubscribe()
     }
   }, [])
 
-  // Polling para verificar atualizações de permissões (desabilitado para evitar throttling)
   useEffect(() => {
-    if (!user) return
-
-    // Polling desabilitado temporariamente para resolver problema de throttling
-    // As permissões serão atualizadas apenas no próximo login
-    // Se necessário reativar no futuro, usar intervalo muito maior (30+ minutos)
-    // const interval = setInterval(checkForUpdates, 1800000) // 30 minutos
-    // return () => clearInterval(interval)
-  }, [user])
-
-  // Carregamento automático de usuários quando há sessão ativa
-  useEffect(() => {
-    if (session && supabaseUser) {
-      loadUsuarios();
+    if (user) {
+      loadUsuarios()
     } else {
-      setUsuarios([]);
+      setUsuarios([])
     }
-  }, [session, supabaseUser])
+  }, [user?.id])
 
-  // Função para fazer login
   const login = async (credentials: LoginCredentials): Promise<AuthResponse | null> => {
     try {
       setLoading(true)
       setError(null)
-      
-      // Fazer login usando o Supabase diretamente
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: credentials.email,
-        password: credentials.password
-      })
-      
-      if (error) {
-        throw new Error(error.message)
+
+      const response = await loginUser(credentials)
+      if (response?.user && response?.token) {
+        applyAuthenticatedUser(response.user, response.token)
+        return response
       }
-      
-      if (data.session && data.user) {
-        // Atualizar estados
-        setSession(data.session)
-        setSupabaseUser(data.user)
-        
-        // Criar objeto de usuário compatível com o sistema
-        const authUser: AuthUser = {
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: data.user.user_metadata?.full_name || data.user.email!,
-          role: data.user.user_metadata?.role || 'user',
-          is_admin: data.user.user_metadata?.is_admin || false,
-          avatar_url: data.user.user_metadata?.avatar_url,
-          bio: data.user.user_metadata?.bio,
-          created_at: data.user.created_at,
-          updated_at: data.user.updated_at || data.user.created_at
-        }
-        
-        setUser(authUser)
-        
-        // Salvar dados no localStorage
-        localStorage.setItem('user_data', JSON.stringify(authUser))
-        if (data.session.access_token) {
-          localStorage.setItem('token', data.session.access_token)
-        }
-        
-        
-        return {
-          user: authUser,
-          token: data.session.access_token,
-          success: true
-        }
-      }
-      
-      throw new Error('Falha na autenticação')
-    } catch (error: any) {
-      console.error('Erro no login:', error)
-      setError(error.message || 'Erro no login')
-      throw error
+
+      throw new Error('Falha na autenticacao')
+    } catch (err: any) {
+      console.error('Erro no login:', err)
+      setError(err.message || 'Erro no login')
+      throw err
     } finally {
       setLoading(false)
     }
   }
 
-  // Função para registrar novo usuário
   const register = async (credentials: RegisterCredentials): Promise<AuthResponse | null> => {
     try {
       setLoading(true)
-      
-      // Registrar usuário usando a API real
       const response = await registerUser(credentials)
-      
-      if (response.user) {
-        // Salvar dados do usuário no localStorage
-        localStorage.setItem('user_data', JSON.stringify(response.user))
-        localStorage.setItem('token', response.token)
-        
-        setUser(response.user)
+
+      if (response.user && response.token) {
+        applyAuthenticatedUser(response.user, response.token)
       }
-      
+
       return response
-    } catch (error) {
-      console.error('Erro no registro:', error)
-      throw error
+    } catch (err) {
+      console.error('Erro no registro:', err)
+      throw err
     } finally {
       setLoading(false)
     }
   }
 
-  // Função para fazer logout
-  const logout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        console.error('Erro ao fazer logout:', error.message)
-      }
-      
-      // Limpar estados locais
-      setUser(null)
-      setUsuarios([])
-      setSession(null)
-      setSupabaseUser(null)
-      setError(null)
-      
-      // Limpar localStorage
-      localStorage.removeItem('user_data')
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      
-      // Limpar sessionStorage também
-      sessionStorage.clear()
-      
-    } catch (error) {
-      console.error('Erro no logout:', error)
-    }
+  const logout = () => {
+    clearAuthState()
   }
 
-  // Função para atualizar perfil do usuário
   const updateProfile = async (data: Partial<AuthUser>): Promise<AuthUser | null> => {
     try {
-      if (!user) {
-        throw new Error('Usuário não autenticado')
-      }
-      
+      if (!user) throw new Error('Usuario nao autenticado')
       setLoading(true)
-      
-      // Atualizar perfil usando a API real
+
       const updatedUser = await updateUserProfile(data)
-      
       if (updatedUser) {
-        // Salvar no localStorage
-        localStorage.setItem('user_data', JSON.stringify(updatedUser))
-        
         setUser(updatedUser)
+        setauthProviderUser(updatedUser)
+        localStorage.setItem('user_data', JSON.stringify(updatedUser))
       }
-      
+
       return updatedUser
-    } catch (error) {
-      console.error('Erro ao atualizar perfil:', error)
-      throw error
+    } catch (err) {
+      console.error('Erro ao atualizar perfil:', err)
+      throw err
     } finally {
       setLoading(false)
     }
   }
 
-  // Função para fazer upload de avatar
   const handleUploadAvatar = async (file: File): Promise<AuthUser | null> => {
     try {
-      if (!user) {
-        throw new Error('Usuário não autenticado')
-      }
-      
+      if (!user) throw new Error('Usuario nao autenticado')
       setLoading(true)
-      
-      // Fazer upload do avatar
+
       const updatedUser = await uploadAvatar(file)
-      
       if (updatedUser) {
-        // Salvar no localStorage
-        localStorage.setItem('user_data', JSON.stringify(updatedUser))
-        
         setUser(updatedUser)
+        setauthProviderUser(updatedUser)
+        localStorage.setItem('user_data', JSON.stringify(updatedUser))
       }
-      
+
       return updatedUser
-    } catch (error) {
-      console.error('Erro ao fazer upload do avatar:', error)
-      throw error
+    } catch (err) {
+      console.error('Erro ao fazer upload do avatar:', err)
+      throw err
     } finally {
       setLoading(false)
     }
   }
 
-  // Função para alterar senha
   const handleChangePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
     try {
-      if (!user) {
-        throw new Error('Usuário não autenticado')
-      }
-      
+      if (!user) throw new Error('Usuario nao autenticado')
       setLoading(true)
-      
-      // Alterar senha usando a API real
       await changePassword(currentPassword, newPassword)
-    } catch (error) {
-      console.error('Erro ao alterar senha:', error)
-      throw error
+    } catch (err) {
+      console.error('Erro ao alterar senha:', err)
+      throw err
     } finally {
       setLoading(false)
     }
   }
 
-  // Função para recarregar dados do usuário atual
   const refreshUserData = async (): Promise<void> => {
     try {
       const token = localStorage.getItem('token')
-      
-      if (!token || !user) {
-        return
-      }
-      
-      // Verificar token e obter dados atualizados do usuário
+      if (!token || !user) return
+
       const result = await verifyToken(token)
-      
-      if (result && result.user && result.valid) {
-        // Atualizar dados no localStorage e no estado
-        localStorage.setItem('user_data', JSON.stringify(result.user))
+      if (result?.user && result.valid) {
         setUser(result.user)
-      } else {
-        // Token inválido - apenas logar o erro, não fazer logout automático
-        // O logout deve ser feito apenas quando o usuário explicitamente sair
+        setauthProviderUser(result.user)
+        localStorage.setItem('user_data', JSON.stringify(result.user))
       }
-    } catch (error) {
-      console.error('Erro ao recarregar dados do usuário:', error)
-      // Se houver erro, manter o usuário atual
+    } catch (err) {
+      console.error('Erro ao recarregar dados do usuario:', err)
     }
   }
 
@@ -414,7 +264,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     error,
     isAdmin,
     session,
-    supabaseUser,
+    authProviderUser,
     login,
     register,
     logout,
@@ -425,11 +275,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isAuthenticated
   }
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
@@ -440,15 +286,10 @@ export function useAuth() {
   return context
 }
 
-// Hook removido para evitar loops de redirecionamento
-// Use ProtectedRoute ou verificações condicionais no componente
-
-// Função utilitária para obter o token atual
 export function getAuthToken(): string | null {
   return localStorage.getItem('token')
 }
 
-// Função utilitária para verificar se o token é válido
 export async function isTokenValid(token: string): Promise<boolean> {
   try {
     const result = await verifyToken(token)
@@ -457,5 +298,3 @@ export async function isTokenValid(token: string): Promise<boolean> {
     return false
   }
 }
-
-

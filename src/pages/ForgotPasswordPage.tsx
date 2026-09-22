@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Mail, ArrowLeft, KeyRound } from 'lucide-react';
-import { authAPI } from '@/api/supabase-client';
+import { authAPI } from '@/api/api-client';
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
@@ -21,8 +21,8 @@ const ForgotPasswordPage = () => {
     
     if (!email) {
       toast({
-        title: "Email necessário",
-        description: "Por favor, digite seu email para receber o link de redefinição.",
+        title: "Email necessÃ¡rio",
+        description: "Por favor, digite seu email para receber o link de redefiniÃ§Ã£o.",
         variant: "destructive",
       });
       return;
@@ -41,13 +41,13 @@ const ForgotPasswordPage = () => {
           description: result.message || "Verifique sua caixa de entrada para redefinir sua senha.",
         });
       } else {
-        throw new Error(result.error || 'Erro ao enviar email de recuperação');
+        throw new Error(result.error || 'Erro ao enviar email de recuperaÃ§Ã£o');
       }
     } catch (error: any) {
       console.error('Erro no forgot password:', error);
       toast({
         title: "Erro",
-        description: error.message || 'Erro ao enviar email de recuperação',
+        description: error.message || 'Erro ao enviar email de recuperaÃ§Ã£o',
         variant: "destructive",
       });
     } finally {
@@ -67,7 +67,7 @@ const ForgotPasswordPage = () => {
             Redefinir senha
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            Digite seu email para receber um link de redefinição de senha
+            Digite seu email para receber um link de redefiniÃ§Ã£o de senha
           </p>
         </div>
         
@@ -75,10 +75,10 @@ const ForgotPasswordPage = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5" />
-              Recuperação de senha
+              RecuperaÃ§Ã£o de senha
             </CardTitle>
             <CardDescription>
-              Enviaremos um link de redefinição para seu email
+              Enviaremos um link de redefiniÃ§Ã£o para seu email
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -107,17 +107,17 @@ const ForgotPasswordPage = () => {
                 className="w-full" 
                 disabled={loading}
                 onClick={(e) => {
-                  // Não prevenir o default aqui, deixar o form handle
+                  // NÃ£o prevenir o default aqui, deixar o form handle
                 }}
               >
-                {loading ? "Enviando..." : "Enviar e-mail de redefinição"}
+                {loading ? "Enviando..." : "Enviar e-mail de redefiniÃ§Ã£o"}
               </Button>
             </form>
             
             {showSuccessMessage && (
               <div className="mt-6 p-4 rounded-lg" style={{ backgroundColor: '#D4EDDA', color: '#27673C' }}>
                 <p className="text-sm font-medium">
-                  Se houver uma conta para esse e-mail, um link de redefinição de senha foi enviado. Se você não recebeu o e-mail, verifique se digitou seu e-mail corretamente.
+                  Se houver uma conta para esse e-mail, um link de redefiniÃ§Ã£o de senha foi enviado. Se vocÃª nÃ£o recebeu o e-mail, verifique se digitou seu e-mail corretamente.
                 </p>
               </div>
             )}

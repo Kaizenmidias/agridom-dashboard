@@ -1,14 +1,13 @@
-{
-  "name": "agri-dom-backend",
+﻿{
+  "name": "kaizen-crm-backend",
   "version": "1.0.0",
-  "description": "Backend API para o sistema de gestão agrícola",
+  "description": "Backend API para o CRM da Kaizen Midias",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.0",
     "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -16,21 +15,20 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "mysql2": "^3.24.4",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.6",
-    "pg": "^8.11.3",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   },
   "keywords": [
-    "agriculture",
+    "crm",
     "management",
     "api",
-    "postgresql",
-    "supabase"
+    "mysql"
   ],
-  "author": "AgriDom",
+  "author": "Kaizen Midias",
   "license": "MIT"
 }

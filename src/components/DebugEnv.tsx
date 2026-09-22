@@ -1,19 +1,14 @@
-import React from 'react';
+﻿import React from 'react';
 
-// Componente para debug das variáveis de ambiente
-// Remover após confirmar que está funcionando em produção
 export const DebugEnv: React.FC = () => {
   const envVars = {
-    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
-    VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Definida (oculta)' : 'Não definida',
-    NODE_ENV: import.meta.env.NODE_ENV,
+    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
     MODE: import.meta.env.MODE,
     DEV: import.meta.env.DEV,
     PROD: import.meta.env.PROD
   };
 
-  // Desabilitado temporariamente para teste de inputs
-  const shouldShow = false; // import.meta.env.DEV || !import.meta.env.VITE_SUPABASE_URL;
+  const shouldShow = false;
 
   if (!shouldShow) return null;
 
@@ -30,15 +25,15 @@ export const DebugEnv: React.FC = () => {
       maxWidth: '300px',
       borderLeft: '3px solid #ff0000'
     }}>
-      <h4>🔍 Debug - Variáveis de Ambiente</h4>
+      <h4>Debug - Variaveis de Ambiente</h4>
       {Object.entries(envVars).map(([key, value]) => (
         <div key={key}>
-          <strong>{key}:</strong> {value || 'undefined'}
+          <strong>{key}:</strong> {String(value || 'undefined')}
         </div>
       ))}
-      {!import.meta.env.VITE_SUPABASE_URL && (
+      {!import.meta.env.VITE_API_BASE_URL && (
         <div style={{ color: '#ff6b6b', marginTop: '10px' }}>
-          ⚠️ ERRO: Variáveis VITE_ não configuradas na Vercel!
+          ERRO: VITE_API_BASE_URL nao configurada.
         </div>
       )}
     </div>

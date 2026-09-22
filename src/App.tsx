@@ -1,4 +1,4 @@
-
+﻿
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -105,7 +105,7 @@ const queryClient = new QueryClient({
 });
 
 // Using BrowserRouter for clean URLs without hash fragments
-// Vercel configuration handles SPA routing with rewrites
+// Nginx configuration handles SPA routing with rewrites
 
 // Layout component that conditionally shows sidebar
 const AppLayout = () => {

@@ -1,34 +1,26 @@
-import { crudAPI } from './supabase-client'
+﻿import { crudAPI } from './api-client'
 import { User, Project, Expense, Code, InsertUser, InsertProject, InsertExpense, InsertCode, CompanyAccess, InsertCompanyAccess, Briefing, InsertBriefing } from '../types/database'
-// API_BASE_URL removido - usando apenas Supabase agora
+// API_BASE_URL removido - usando API propria agora
 import { verifyToken } from './auth'
 
 // Re-exportar tipos para uso em outros componentes
 export type { User, Project, Expense, Code, CompanyAccess, Briefing };
 
-// Função auxiliar para verificar autenticação usando Supabase
+// Funcao auxiliar para verificar autenticacao usando JWT local
 const checkAuth = async () => {
-  try {
-    const { supabase } = await import('../lib/supabase')
-    const { data: { session }, error } = await supabase.auth.getSession()
-    
-    if (error) {
-      console.error('Erro ao obter sessão:', error.message)
-      throw new Error('Erro de autenticação: ' + error.message)
-    }
-    
-    if (!session || !session.user) {
-      throw new Error('Auth session missing!')
-    }
-    
-    return session.user
-  } catch (error: any) {
-    console.error('Erro na verificação de autenticação:', error.message)
+  const token = localStorage.getItem('token')
+  if (!token) {
     throw new Error('Auth session missing!')
   }
-}
 
-// === USUÁRIOS ===
+  const result = await verifyToken(token)
+  if (!result?.valid) {
+    throw new Error('Auth session invalid!')
+  }
+
+  return result.user
+}
+// === USUÃRIOS ===
 export const getUsers = async (): Promise<User[]> => {
   await checkAuth()
   const result = await crudAPI.getUsers()
@@ -214,7 +206,7 @@ export const deleteExpense = async (id: string): Promise<void> => {
 
 
 
-// === CÓDIGOS ===
+// === CÃ“DIGOS ===
 export const getCodes = async (): Promise<Code[]> => {
   await checkAuth()
   const result = await crudAPI.getCodes()

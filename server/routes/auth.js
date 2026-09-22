@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -6,39 +6,31 @@ const { sendPasswordResetEmail } = require('../config/email');
 
 const router = express.Router();
 
-// Middleware para acessar a função query
+// Middleware para acessar a funÃ§Ã£o query
 const getQuery = (req) => req.app.locals.query;
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const supabase = req.app.locals.supabase;
+    const query = getQuery(req);
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+      return res.status(400).json({ error: 'Email e senha sao obrigatorios' });
     }
 
-    // Buscar usuário no Supabase
-    console.log('🔍 Buscando usuário no Supabase:', email);
-    const { data: users, error: searchError } = await supabase
-      .from('users')
-      .select('id, email, password, name, role, is_active')
-      .eq('email', email)
-      .eq('is_active', true)
-      .limit(1);
-
-    if (searchError) {
-      console.error('❌ Erro ao buscar usuário:', searchError);
-      return res.status(500).json({ error: 'Erro interno do servidor' });
-    }
-
-    const result = { rows: users || [] };
+    const result = await query(
+      `SELECT id, email, password, name, role, avatar_url, is_active,
+              can_access_dashboard, can_access_projects, can_access_briefings,
+              can_access_codes, can_access_expenses, can_access_crm, can_access_users
+       FROM users
+       WHERE email = ? AND is_active = 1
+       LIMIT 1`,
+      [email]
+    );
 
     if (!result.rows || result.rows.length === 0) {
-      // Fallback para credenciais de desenvolvimento
-      if (email === 'agenciakaizendesign@gmail.com' && password === '123456') {
-        console.log('🔐 Usando credenciais de fallback para desenvolvimento');
+      if (process.env.NODE_ENV !== 'production' && email === 'agenciakaizendesign@gmail.com' && password === '123456') {
         const fallbackUser = {
           id: 26,
           email: 'agenciakaizendesign@gmail.com',
@@ -47,20 +39,12 @@ router.post('/login', async (req, res) => {
           avatar_url: null,
           is_active: true
         };
-        
-        // Gerar token JWT para usuário fallback
-        const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
-        
+        const jwtSecret = process.env.JWT_SECRET || 'default-secret-key';
         const token = jwt.sign(
-          { 
-            userId: fallbackUser.id, 
-            email: fallbackUser.email,
-            role: fallbackUser.role
-          },
+          { userId: fallbackUser.id, email: fallbackUser.email, role: fallbackUser.role },
           jwtSecret,
           { expiresIn: '24h' }
         );
-        
         return res.json({
           success: true,
           token,
@@ -68,71 +52,73 @@ router.post('/login', async (req, res) => {
             id: fallbackUser.id,
             email: fallbackUser.email,
             name: fallbackUser.name,
+            full_name: fallbackUser.name,
             role: fallbackUser.role,
             avatar_url: fallbackUser.avatar_url,
-            is_admin: fallbackUser.role === 'admin'
+            is_admin: true,
+            can_access_dashboard: true,
+            can_access_projects: true,
+            can_access_briefings: true,
+            can_access_codes: true,
+            can_access_expenses: true,
+            can_access_crm: true,
+            can_access_users: true
           }
         });
       }
-      
-      // Usuário não encontrado
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+
+      return res.status(401).json({ error: 'Credenciais invalidas' });
     }
 
     const user = result.rows[0];
-    // Usuário encontrado
-
-    // Verificar senha
-    console.log('🔐 Verificando senha...');
     const isValidPassword = await bcrypt.compare(password, user.password);
-    console.log('🔐 Senha válida:', isValidPassword);
-    
+
     if (!isValidPassword) {
-      // Senha inválida
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+      return res.status(401).json({ error: 'Credenciais invalidas' });
     }
 
-    // Gerar token JWT
-    const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
-    // JWT Secret verificado
-    
+    const jwtSecret = process.env.JWT_SECRET || 'default-secret-key';
     const token = jwt.sign(
-      { 
-        userId: user.id, 
-        email: user.email,
-        role: user.role
-      },
+      { userId: user.id, email: user.email, role: user.role },
       jwtSecret,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
-    // Determinar se é admin baseado no role
-      const isAdmin = user.role && (
-        user.role.toLowerCase() === 'admin' ||
-        user.role.toLowerCase() === 'administrator'
-      );
+    const isAdmin = user.role && (
+      user.role.toLowerCase() === 'admin' ||
+      user.role.toLowerCase() === 'administrator' ||
+      user.role.toLowerCase() === 'administrador'
+    );
 
-    // Retornar dados do usuário (sem a senha)
     const authUser = {
       id: user.id,
       email: user.email,
       name: user.name,
+      full_name: user.name,
       role: user.role,
-      is_active: user.is_active,
-      is_admin: isAdmin
+      avatar_url: user.avatar_url,
+      is_active: !!user.is_active,
+      is_admin: !!isAdmin,
+      can_access_dashboard: !!isAdmin || !!user.can_access_dashboard,
+      can_access_projects: !!isAdmin || !!user.can_access_projects,
+      can_access_briefings: !!isAdmin || !!user.can_access_briefings,
+      can_access_codes: !!isAdmin || !!user.can_access_codes,
+      can_access_expenses: !!isAdmin || !!user.can_access_expenses,
+      can_access_crm: !!isAdmin || !!user.can_access_crm,
+      can_access_users: !!isAdmin || !!user.can_access_users
     };
 
-    res.json({ 
+    res.json({
       message: 'Login realizado com sucesso',
-      user: authUser, 
-      token 
+      success: true,
+      user: authUser,
+      token
     });
   } catch (error) {
     console.error('Erro no login:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
-
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
@@ -140,32 +126,32 @@ router.post('/register', async (req, res) => {
     const query = getQuery(req);
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+      return res.status(400).json({ error: 'Email e senha sÃ£o obrigatÃ³rios' });
     }
 
-    // Verificar se o email já existe
+    // Verificar se o email jÃ¡ existe
     const existingUserResult = await query(
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT id FROM users WHERE email = ?',
       [email]
     );
 
     if (existingUserResult.rows && existingUserResult.rows.length > 0) {
-      return res.status(409).json({ error: 'Este email já está em uso' });
+      return res.status(409).json({ error: 'Este email jÃ¡ estÃ¡ em uso' });
     }
 
     // Hash da senha
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Inserir novo usuário
+    // Inserir novo usuÃ¡rio
     await query(
       `INSERT INTO users (email, password, name, role, created_at, updated_at)
-       VALUES ($1, $2, $3, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+       VALUES (?, ?, ?, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [email, passwordHash, full_name || null]
     );
 
-    // Buscar o usuário inserido
+    // Buscar o usuÃ¡rio inserido
     const result = await query(
-      'SELECT id, email, name as full_name, role, created_at FROM users WHERE email = $1',
+      'SELECT id, email, name as full_name, role, avatar_url, is_active, created_at FROM users WHERE email = ?',
       [email]
     );
 
@@ -174,11 +160,11 @@ router.post('/register', async (req, res) => {
     // Gerar token JWT
     const token = jwt.sign(
       { userId: userData.id, email: userData.email },
-      process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET,
+      process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
-    // Criar objeto do usuário autenticado
+    // Criar objeto do usuÃ¡rio autenticado
     const authUser = {
       id: userData.id,
       email: userData.email,
@@ -198,52 +184,52 @@ router.post('/register', async (req, res) => {
 router.get('/verify', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    console.log('🔍 Authorization header:', authHeader);
+    console.log('ðŸ” Authorization header:', authHeader);
     
     const token = authHeader?.replace('Bearer ', '');
-    console.log('🔍 Token extraído:', token ? `${token.substring(0, 20)}...` : 'null');
+    console.log('ðŸ” Token extraÃ­do:', token ? `${token.substring(0, 20)}...` : 'null');
     
     const query = getQuery(req);
 
     if (!token) {
-      console.log('❌ Token não fornecido');
-      return res.status(401).json({ error: 'Token não fornecido' });
+      console.log('âŒ Token nÃ£o fornecido');
+      return res.status(401).json({ error: 'Token nÃ£o fornecido' });
     }
 
-    // Verificar formato básico do token JWT
+    // Verificar formato bÃ¡sico do token JWT
     const tokenParts = token.split('.');
     if (tokenParts.length !== 3) {
-      console.log('❌ Token malformado - partes:', tokenParts.length);
+      console.log('âŒ Token malformado - partes:', tokenParts.length);
       return res.status(401).json({ error: 'Token malformado' });
     }
 
-    const jwtSecret = process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET || 'default-secret-key';
-    console.log('🔑 Verificando token com secret...');
+    const jwtSecret = process.env.JWT_SECRET || 'default-secret-key';
+    console.log('ðŸ”‘ Verificando token com secret...');
     const decoded = jwt.verify(token, jwtSecret);
-    console.log('✅ Token decodificado:', { userId: decoded.userId, email: decoded.email });
+    console.log('âœ… Token decodificado:', { userId: decoded.userId, email: decoded.email });
     
-    // Buscar usuário atual com todas as permissões do banco
+    // Buscar usuÃ¡rio atual com todas as permissÃµes do banco
     const userResult = await query(
       `SELECT id, email, name as full_name, role, is_active, 
               can_access_dashboard, can_access_projects, can_access_briefings, 
               can_access_codes, can_access_expenses, can_access_crm, can_access_users 
-       FROM users WHERE id = $1`,
+       FROM users WHERE id = ?`,
       [decoded.userId]
     );
 
     if (!userResult.rows || userResult.rows.length === 0) {
-      return res.status(401).json({ error: 'Usuário não encontrado' });
+      return res.status(401).json({ error: 'UsuÃ¡rio nÃ£o encontrado' });
     }
 
     const user = userResult.rows[0];
     
-    // Verificar se é administrador
+    // Verificar se Ã© administrador
       const isAdmin = user.role && (
         user.role.toLowerCase() === 'admin' ||
         user.role.toLowerCase() === 'administrator'
       );
     
-    // Usar permissões diretas do banco de dados
+    // Usar permissÃµes diretas do banco de dados
     res.json({
       valid: true,
       user: {
@@ -263,8 +249,8 @@ router.get('/verify', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erro na verificação do token:', error);
-    res.status(401).json({ error: 'Token inválido' });
+    console.error('Erro na verificaÃ§Ã£o do token:', error);
+    res.status(401).json({ error: 'Token invÃ¡lido' });
   }
 });
 
@@ -276,41 +262,42 @@ router.put('/profile', async (req, res) => {
     const query = getQuery(req);
 
     if (!token) {
-      return res.status(401).json({ error: 'Token não fornecido' });
+      return res.status(401).json({ error: 'Token nÃ£o fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.userId;
 
-    // Tratar valores undefined como null
-    const params = [
-      full_name !== undefined ? full_name : null,
-      position !== undefined ? position : null,
-      bio !== undefined ? bio : null,
-      avatar_url !== undefined ? avatar_url : null,
-      userId
-    ];
-    
     // Atualizar dados no banco
     await query(
       `UPDATE users 
-       SET name = COALESCE($1, name),
+       SET name = COALESCE(?, name),
+           position = COALESCE(?, position),
+           bio = COALESCE(?, bio),
+           avatar_url = COALESCE(?, avatar_url),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
-      [full_name, userId]
+       WHERE id = ?`,
+      [
+        full_name !== undefined ? full_name : null,
+        position !== undefined ? position : null,
+        bio !== undefined ? bio : null,
+        avatar_url !== undefined ? avatar_url : null,
+        userId
+      ]
     );
 
-    // Buscar o usuário atualizado
+    // Buscar o usuÃ¡rio atualizado
     const result = await query(
       `SELECT id, email, name as full_name, role,
+              position, bio, avatar_url,
               can_access_dashboard, can_access_projects, can_access_briefings, 
               can_access_codes, can_access_expenses, can_access_crm, can_access_users 
-       FROM users WHERE id = $1`,
+       FROM users WHERE id = ?`,
       [userId]
     );
 
     if (!result.rows || result.rows.length === 0) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
+      return res.status(404).json({ error: 'UsuÃ¡rio nÃ£o encontrado' });
     }
 
     const updatedUser = result.rows[0];
@@ -319,6 +306,9 @@ router.put('/profile', async (req, res) => {
       email: updatedUser.email,
       full_name: updatedUser.full_name,
       role: updatedUser.role,
+      position: updatedUser.position,
+      bio: updatedUser.bio,
+      avatar_url: updatedUser.avatar_url,
       can_access_dashboard: updatedUser.can_access_dashboard,
       can_access_projects: updatedUser.can_access_projects,
       can_access_briefings: updatedUser.can_access_briefings,
@@ -341,24 +331,24 @@ router.put('/change-password', async (req, res) => {
     const query = getQuery(req);
 
     if (!token) {
-      return res.status(401).json({ error: 'Token não fornecido' });
+      return res.status(401).json({ error: 'Token nÃ£o fornecido' });
     }
 
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias' });
+      return res.status(400).json({ error: 'Senha atual e nova senha sÃ£o obrigatÃ³rias' });
     }
 
-    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.userId;
 
-    // Buscar o usuário atual
+    // Buscar o usuÃ¡rio atual
     const userResult = await query(
-      'SELECT password FROM users WHERE id = $1',
+      'SELECT password FROM users WHERE id = ?',
       [userId]
     );
 
     if (!userResult.rows || userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
+      return res.status(404).json({ error: 'UsuÃ¡rio nÃ£o encontrado' });
     }
 
     const user = userResult.rows[0];
@@ -374,7 +364,7 @@ router.put('/change-password', async (req, res) => {
 
     // Atualizar senha no banco
     await query(
-      'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      'UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [newPasswordHash, userId]
     );
 
@@ -392,29 +382,29 @@ router.post('/forgot-password', async (req, res) => {
     const query = getQuery(req);
 
     if (!email) {
-      return res.status(400).json({ error: 'Email é obrigatório' });
+      return res.status(400).json({ error: 'Email Ã© obrigatÃ³rio' });
     }
 
-    // Verificar se o usuário existe
+    // Verificar se o usuÃ¡rio existe
     const userResult = await query(
-      'SELECT id, email, full_name FROM users WHERE email = $1 AND is_active = true',
+      'SELECT id, email, name as full_name FROM users WHERE email = ? AND is_active = 1',
       [email]
     );
 
-    // Sempre retornar sucesso por segurança (não revelar se email existe)
+    // Sempre retornar sucesso por seguranÃ§a (nÃ£o revelar se email existe)
     if (!userResult.rows || userResult.rows.length === 0) {
-      return res.json({ message: 'Se o email estiver cadastrado, você receberá um link de recuperação.' });
+      return res.json({ message: 'Se o email estiver cadastrado, vocÃª receberÃ¡ um link de recuperaÃ§Ã£o.' });
     }
 
     const user = userResult.rows[0];
 
-    // Gerar token de recuperação
+    // Gerar token de recuperaÃ§Ã£o
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora
 
     // Salvar token no banco de dados
     await query(
-      'UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3',
+      'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?',
       [resetToken, resetTokenExpiry, user.id]
     );
 
@@ -423,12 +413,12 @@ router.post('/forgot-password', async (req, res) => {
     
     if (!emailResult.success) {
       console.error('Falha ao enviar email:', emailResult.error);
-      return res.status(500).json({ error: 'Erro ao enviar email de recuperação' });
+      return res.status(500).json({ error: 'Erro ao enviar email de recuperaÃ§Ã£o' });
     }
 
-    res.json({ message: 'Se o email estiver cadastrado, você receberá um link de recuperação.' });
+    res.json({ message: 'Se o email estiver cadastrado, vocÃª receberÃ¡ um link de recuperaÃ§Ã£o.' });
   } catch (error) {
-    console.error('Erro na recuperação de senha:', error);
+    console.error('Erro na recuperaÃ§Ã£o de senha:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -440,22 +430,22 @@ router.post('/reset-password', async (req, res) => {
     const query = getQuery(req);
 
     if (!token || !newPassword) {
-      return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
+      return res.status(400).json({ error: 'Token e nova senha sÃ£o obrigatÃ³rios' });
     }
 
-    // Buscar usuário pelo token
+    // Buscar usuÃ¡rio pelo token
     const userResult = await query(
-      'SELECT id, email, reset_token_expiry FROM users WHERE reset_token = $1 AND is_active = true',
+      'SELECT id, email, reset_token_expiry FROM users WHERE reset_token = ? AND is_active = 1',
       [token]
     );
 
     if (!userResult.rows || userResult.rows.length === 0) {
-      return res.status(400).json({ error: 'Token inválido ou expirado' });
+      return res.status(400).json({ error: 'Token invÃ¡lido ou expirado' });
     }
 
     const user = userResult.rows[0];
 
-    // Verificar se o token não expirou
+    // Verificar se o token nÃ£o expirou
     if (new Date() > new Date(user.reset_token_expiry)) {
       return res.status(400).json({ error: 'Token expirado' });
     }
@@ -465,7 +455,7 @@ router.post('/reset-password', async (req, res) => {
 
     // Atualizar senha e limpar token
     await query(
-      'UPDATE users SET password = $1, reset_token = NULL, reset_token_expiry = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      'UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [newPasswordHash, user.id]
     );
 

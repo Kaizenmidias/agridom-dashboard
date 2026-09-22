@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { addDays, format, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,7 +26,7 @@ ChartJS.register(
   Tooltip,
   Legend
 );
-import { dashboardAPI, DashboardStats } from '@/api/supabase-client';
+import { dashboardAPI, DashboardStats } from '@/api/api-client';
 import { toast } from 'sonner';
 
 const DashboardWithFilter: React.FC = () => {
@@ -79,7 +79,7 @@ const DashboardWithFilter: React.FC = () => {
     receivable: Number(dashboardStats?.current_period?.receivable || 0)
   };
 
-  // Dados do mês anterior (dados reais da API)
+  // Dados do mÃªs anterior (dados reais da API)
   const previousMonthData = {
     revenue: Number(dashboardStats?.previous_period?.revenue || 0),
     expenses: Number(dashboardStats?.previous_period?.expenses || 0),
@@ -231,7 +231,7 @@ const DashboardWithFilter: React.FC = () => {
   const getMetricLabel = () => {
     switch (selectedMetric) {
       case 'todos':
-        return 'Todas as Métricas';
+        return 'Todas as MÃ©tricas';
       case 'faturamento':
         return 'Faturamento';
       case 'despesas':
@@ -256,16 +256,16 @@ const DashboardWithFilter: React.FC = () => {
     }
   };
 
-  // Dados do gráfico por período - usando dados reais
+  // Dados do grÃ¡fico por perÃ­odo - usando dados reais
   const getChartDataForPeriod = (period: string, metric: string) => {
     if (!dashboardStats) return { labels: [], datasets: [] };
     
     if (period === 'year') {
-      // Exibir dados mensais do ano atual até o presente momento
+      // Exibir dados mensais do ano atual atÃ© o presente momento
       const currentYear = new Date().getFullYear();
       const currentMonth = new Date().getMonth(); // 0-11
       
-      // Criar array com todos os meses do ano atual até o mês atual
+      // Criar array com todos os meses do ano atual atÃ© o mÃªs atual
       const labels = [];
       const faturamentoData = [];
       const despesasData = [];
@@ -274,7 +274,7 @@ const DashboardWithFilter: React.FC = () => {
       for (let month = 0; month <= currentMonth; month++) {
         const monthStr = `${currentYear}-${String(month + 1).padStart(2, '0')}`;
         
-        // Buscar dados reais para este mês
+        // Buscar dados reais para este mÃªs
         const monthData = dashboardStats.revenue_by_month?.find(item => 
           item.month === monthStr
         );
@@ -346,13 +346,13 @@ const DashboardWithFilter: React.FC = () => {
         };
       }
     } else {
-      let periodLabel = 'Período selecionado';
+      let periodLabel = 'PerÃ­odo selecionado';
 
       if (period === 'custom') {
         periodLabel =
           customDateRange?.from && customDateRange?.to
             ? `${format(customDateRange.from, 'dd/MM')} - ${format(customDateRange.to, 'dd/MM')}`
-            : 'Período personalizado';
+            : 'PerÃ­odo personalizado';
       } else {
         const [year, month] = period.split('-');
         periodLabel = format(new Date(parseInt(year), parseInt(month) - 1, 1), 'MMMM/yyyy', { locale: pt });
@@ -429,7 +429,7 @@ const DashboardWithFilter: React.FC = () => {
       if (customDateRange?.from && customDateRange?.to) {
         return `${format(customDateRange.from, 'dd/MM/yyyy', { locale: pt })} - ${format(customDateRange.to, 'dd/MM/yyyy', { locale: pt })}`;
       }
-      return 'período personalizado';
+      return 'perÃ­odo personalizado';
     }
     const [year, month] = selectedPeriod.split('-');
     return format(new Date(parseInt(year), parseInt(month)), 'MMMM', { locale: pt });
@@ -439,7 +439,7 @@ const DashboardWithFilter: React.FC = () => {
     const options = [];
     const currentYear = new Date().getFullYear();
     
-    // Adicionar opção "Este ano"
+    // Adicionar opÃ§Ã£o "Este ano"
     options.push({ value: 'year', label: 'Este ano' });
     
     // Adicionar meses do ano atual
@@ -450,7 +450,7 @@ const DashboardWithFilter: React.FC = () => {
       options.push({ value, label });
     }
     
-    // Adicionar opção "Personalizado"
+    // Adicionar opÃ§Ã£o "Personalizado"
     options.push({ value: 'custom', label: 'Personalizado' });
     
     return options;
@@ -461,13 +461,13 @@ const DashboardWithFilter: React.FC = () => {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
-          Visão geral dos seus projetos e finanças
+          VisÃ£o geral dos seus projetos e finanÃ§as
         </p>
       </div>
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
           <p className="text-muted-foreground">
-            Visão geral das métricas do sistema
+            VisÃ£o geral das mÃ©tricas do sistema
           </p>
         </div>
         
@@ -475,7 +475,7 @@ const DashboardWithFilter: React.FC = () => {
           <div className="w-full md:w-auto md:min-w-[200px]">
             <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
               <SelectTrigger className="w-full md:w-auto">
-                <SelectValue placeholder="Selecionar período" />
+                <SelectValue placeholder="Selecionar perÃ­odo" />
               </SelectTrigger>
               <SelectContent>
                 {getPeriodOptions().map((option) => (
@@ -492,7 +492,7 @@ const DashboardWithFilter: React.FC = () => {
               <DatePickerWithRange
                 date={customDateRange}
                 setDate={handleCustomDateRangeChange}
-                placeholderText="Selecionar período personalizado"
+                placeholderText="Selecionar perÃ­odo personalizado"
                 className="w-full"
               />
             </div>
@@ -529,14 +529,14 @@ const DashboardWithFilter: React.FC = () => {
           />
         )}
 
-      {/* Gráfico de Relatório */}
+      {/* GrÃ¡fico de RelatÃ³rio */}
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Relatório de {getMetricLabel()}</CardTitle>
+          <CardTitle>RelatÃ³rio de {getMetricLabel()}</CardTitle>
           <div className="w-full sm:w-auto sm:min-w-[150px]">
             <Select value={selectedMetric} onValueChange={setSelectedMetric}>
               <SelectTrigger className="w-full sm:w-auto">
-                <SelectValue placeholder="Selecionar métrica" />
+                <SelectValue placeholder="Selecionar mÃ©trica" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
@@ -552,7 +552,7 @@ const DashboardWithFilter: React.FC = () => {
             <div className="h-[400px] flex items-center justify-center">
               <div className="text-center">
                 <div className="text-lg font-medium">Carregando dados...</div>
-                <div className="text-sm text-muted-foreground mt-2">Aguarde enquanto buscamos as informações</div>
+                <div className="text-sm text-muted-foreground mt-2">Aguarde enquanto buscamos as informaÃ§Ãµes</div>
               </div>
             </div>
           ) : (
@@ -603,12 +603,12 @@ const DashboardWithFilter: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Cards de Métricas Rápidas */}
+      {/* Cards de MÃ©tricas RÃ¡pidas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Projetos Ativos</CardTitle>
-            <div className="h-4 w-4 text-muted-foreground">📊</div>
+            <div className="h-4 w-4 text-muted-foreground">ðŸ“Š</div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -624,8 +624,8 @@ const DashboardWithFilter: React.FC = () => {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Projetos Concluídos</CardTitle>
-            <div className="h-4 w-4 text-muted-foreground">✅</div>
+            <CardTitle className="text-sm font-medium">Projetos ConcluÃ­dos</CardTitle>
+            <div className="h-4 w-4 text-muted-foreground">âœ…</div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -642,7 +642,7 @@ const DashboardWithFilter: React.FC = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Projetos</CardTitle>
-            <div className="h-4 w-4 text-muted-foreground">📈</div>
+            <div className="h-4 w-4 text-muted-foreground">ðŸ“ˆ</div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -659,7 +659,7 @@ const DashboardWithFilter: React.FC = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Despesas</CardTitle>
-            <div className="h-4 w-4 text-muted-foreground">💰</div>
+            <div className="h-4 w-4 text-muted-foreground">ðŸ’°</div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -668,7 +668,7 @@ const DashboardWithFilter: React.FC = () => {
               <div className="text-2xl font-bold">{dashboardStats?.expenses?.total_expenses || 0}</div>
             )}
             <p className="text-xs text-muted-foreground">
-              Número de despesas
+              NÃºmero de despesas
             </p>
           </CardContent>
         </Card>
