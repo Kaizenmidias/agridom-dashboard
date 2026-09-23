@@ -14,6 +14,9 @@ test('2D.1 migration adds persistent event state and run idempotency without des
   assert.match(migration, /engine_processed_at/);
   assert.match(migration, /uq_automation_run_event_automation_version/);
   assert.match(migration, /idx_automation_events_engine_pending/);
+  assert.match(migration, /information_schema\.COLUMNS/);
+  assert.match(migration, /CREATE PROCEDURE apply_phase_2d1_schema/);
+  assert.doesNotMatch(migration, /ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS/i);
   assert.doesNotMatch(migration, /DROP\s+TABLE|TRUNCATE\s+TABLE|DELETE\s+FROM|DROP\s+COLUMN|ALTER\s+DATABASE/i);
 });
 
