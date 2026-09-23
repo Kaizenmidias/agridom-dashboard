@@ -10,6 +10,7 @@ const {
   getVersion,
   updateAutomation,
   createVersion,
+  updateDraftVersion,
   publishVersion,
   transitionAutomation,
   listRuns,
@@ -145,6 +146,19 @@ automationsRouter.get('/:id/versions/:versionId', async (req, res) => {
     res.json(version);
   } catch (error) {
     handleError(res, error, 'Nao foi possivel carregar a versao.');
+  }
+});
+
+automationsRouter.patch('/:id/versions/:versionId', requireCommercialAdmin, async (req, res) => {
+  const automationId = parseId(req.params.id);
+  const versionId = parseId(req.params.versionId);
+  if (!automationId || !versionId) return res.status(400).json({ error: 'ID da automacao ou versao invalido.' });
+  if (req.body?.definition === undefined) return res.status(400).json({ error: 'Definition e obrigatoria.' });
+  try {
+    const version = await updateDraftVersion(req.userId, automationId, versionId, req.body.definition);
+    res.json(version);
+  } catch (error) {
+    handleError(res, error, 'Nao foi possivel atualizar o rascunho.');
   }
 });
 

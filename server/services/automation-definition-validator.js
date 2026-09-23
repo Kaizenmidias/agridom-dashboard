@@ -107,6 +107,10 @@ function validateAutomationDefinition(input, options = {}) {
         errors.push(error(`${path}.config.actionType`, 'UNKNOWN_ACTION_TYPE', 'Tipo de action nao reconhecido.'));
       } else if (step.type === 'wait' && step.config.duration !== undefined && (!Number.isInteger(step.config.duration) || step.config.duration <= 0)) {
         errors.push(error(`${path}.config.duration`, 'INVALID_WAIT_DURATION', 'Duracao de wait deve ser um inteiro positivo.'));
+      } else if (step.type === 'wait' && step.config.amount !== undefined && (!Number.isInteger(step.config.amount) || step.config.amount <= 0)) {
+        errors.push(error(`${path}.config.amount`, 'INVALID_WAIT_AMOUNT', 'Quantidade de wait deve ser um inteiro positivo.'));
+      } else if (step.type === 'wait' && step.config.unit !== undefined && !['minutes', 'hours', 'days'].includes(step.config.unit)) {
+        errors.push(error(`${path}.config.unit`, 'INVALID_WAIT_UNIT', 'Unidade de wait deve ser minutes, hours ou days.'));
       }
 
       for (const field of ['next']) {

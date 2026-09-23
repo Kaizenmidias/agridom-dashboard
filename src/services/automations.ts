@@ -99,6 +99,7 @@ export const automationsAPI = {
   get: (id: number) => request<AutomationDetail>(`/${id}`),
   update: (id: number, values: { name?: string; description?: string }) => request<AutomationDetail>(`/${id}`, { method: "PATCH", body: JSON.stringify(values) }),
   createVersion: (id: number, definition: AutomationDefinition) => request<AutomationVersion>(`/${id}/versions`, { method: "POST", body: JSON.stringify({ definition }) }),
+  updateVersion: (id: number, versionId: number, definition: AutomationDefinition) => request<AutomationVersion>(`/${id}/versions/${versionId}`, { method: "PATCH", body: JSON.stringify({ definition }) }),
   publish: (id: number, versionId: number) => request<AutomationSummary>(`/${id}/publish`, { method: "POST", body: JSON.stringify({ version_id: versionId }) }),
   pause: (id: number) => request<AutomationSummary>(`/${id}/pause`, { method: "POST" }),
   activate: (id: number) => request<AutomationSummary>(`/${id}/activate`, { method: "POST" }),

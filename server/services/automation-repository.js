@@ -198,6 +198,31 @@ async function createVersion(userId, automationId, definition) {
   });
 }
 
+async function updateDraftVersion(userId, automationId, versionId, definition) {
+  const validation = validateAutomationDefinition(definition, { requireSteps: false });
+  if (!validation.valid) throw new AutomationError(400, 'Definition invalida.', validation.errors);
+
+  return withTransaction(async (connection) => {
+    const automation = await ownedAutomation(connection, automationId, userId, true);
+    if (!automation) throw new AutomationError(404, 'Automacao nao encontrada.');
+    if (automation.status === 'archived') throw new AutomationError(409, 'Automacao arquivada nao aceita edicao.');
+    if (validation.definition.trigger?.type !== automation.trigger_type) {
+      throw new AutomationError(400, 'Trigger da definition deve ser igual ao trigger_type da automacao.');
+    }
+    const [versions] = await connection.execute(
+      "SELECT id, version_number, status FROM automation_versions WHERE id = ? AND automation_id = ? FOR UPDATE",
+      [versionId, automationId]
+    );
+    const version = versions[0];
+    if (!version) throw new AutomationError(404, 'Versao nao encontrada.');
+    if (version.status !== 'draft') throw new AutomationError(409, 'Somente rascunhos podem ser editados.');
+    await connection.execute('UPDATE automation_versions SET definition = ? WHERE id = ?', [JSON.stringify(validation.definition), versionId]);
+    await connection.execute('UPDATE automations SET updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [userId, automationId]);
+    await writeAudit(connection, automationId, userId, 'automation.version_updated', { versionId: Number(versionId), versionNumber: version.version_number });
+    return { id: Number(versionId), automationId: Number(automationId), versionNumber: version.version_number, status: 'draft', definition: validation.definition };
+  });
+}
+
 async function publishVersion(userId, automationId, versionId) {
   return withTransaction(async (connection) => {
     const automation = await ownedAutomation(connection, automationId, userId, true);
@@ -305,6 +330,7 @@ module.exports = {
   getVersion,
   updateAutomation,
   createVersion,
+  updateDraftVersion,
   publishVersion,
   transitionAutomation,
   listRuns,

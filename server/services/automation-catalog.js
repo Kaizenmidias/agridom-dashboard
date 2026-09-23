@@ -11,7 +11,7 @@ const TRIGGER_TYPES = Object.freeze([
   'activity.completed',
 ]);
 
-const STEP_TYPES = Object.freeze(['condition', 'wait', 'action']);
+const STEP_TYPES = Object.freeze(['condition', 'wait', 'action', 'finish']);
 
 const ACTION_TYPES = Object.freeze([
   'lead.update_status',
