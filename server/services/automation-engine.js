@@ -1,0 +1,258 @@
+const os = require('node:os');
+const crypto = require('node:crypto');
+const { getPool } = require('../config/database');
+const { validateAutomationDefinition } = require('./automation-definition-validator');
+
+const DEFAULT_BATCH_SIZE = 25;
+const DEFAULT_POLL_MS = 1000;
+const DEFAULT_LOCK_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_MAX_EVENT_ATTEMPTS = 3;
+const BACKOFF_MS = [5000, 30000, 120000];
+
+const positiveInt = (value, fallback, max = Number.MAX_SAFE_INTEGER) => {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? Math.min(number, max) : fallback;
+};
+
+const parseJson = (value, fallback = {}) => {
+  if (value && typeof value === 'object') return value;
+  try { return JSON.parse(value || JSON.stringify(fallback)); } catch { return fallback; }
+};
+
+const workerId = (provided) => provided || `${os.hostname()}:${process.pid}:${crypto.randomUUID()}`;
+const lockSeconds = (value) => Math.max(1, Math.ceil(positiveInt(value, DEFAULT_LOCK_TIMEOUT_MS, 24 * 60 * 60 * 1000) / 1000));
+const safeError = (error) => `ENGINE_ERROR:${String(error?.code || 'UNEXPECTED').replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80) || 'UNEXPECTED'}`;
+
+async function matchAutomationsForEvent(connection, event) {
+  const [rows] = await connection.execute(
+    `SELECT a.id AS automation_id, a.active_version_id AS automation_version_id, av.version_number, av.definition
+     FROM automations a
+     JOIN automation_versions av ON av.id = a.active_version_id
+       AND av.automation_id = a.id AND av.status = 'published'
+     WHERE a.status = 'active'
+       AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.type')) = ?
+     ORDER BY a.id`,
+    [event.event_type]
+  );
+  return rows.map((row) => ({ ...row, automation_id: Number(row.automation_id), automation_version_id: Number(row.automation_version_id), definition: parseJson(row.definition) }));
+}
+
+async function createRunAndJob(connection, event, match) {
+  const runKey = `event:${event.id}:automation:${match.automation_id}:version:${match.automation_version_id}`;
+  const [runResult] = await connection.execute(
+    `INSERT INTO automation_runs
+      (automation_id, automation_version_id, event_id, entity_type, entity_id, status, correlation_id, idempotency_key)
+     VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
+     ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+    [match.automation_id, match.automation_version_id, event.id, event.entity_type, event.entity_id, event.correlation_id, runKey]
+  );
+  const runId = Number(runResult.insertId);
+  const jobKey = `run:${runId}:bootstrap`;
+  const [jobResult] = await connection.execute(
+    `INSERT INTO automation_jobs
+      (automation_run_id, job_type, status, execute_at, available_at, attempts, max_attempts, idempotency_key)
+     VALUES (?, 'engine.bootstrap', 'pending', UTC_TIMESTAMP(), UTC_TIMESTAMP(), 0, 3, ?)
+     ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+    [runId, jobKey]
+  );
+  return { runId, jobId: Number(jobResult.insertId), runKey, jobKey };
+}
+
+async function recoverStaleEvents(connection, timeoutMs) {
+  const seconds = lockSeconds(timeoutMs);
+  await connection.execute(
+    `UPDATE automation_events
+     SET engine_status = 'pending', engine_locked_at = NULL, engine_locked_by = NULL
+     WHERE (engine_status = 'processing' OR (engine_status = 'failed' AND engine_attempts < ?))
+       AND engine_locked_at IS NOT NULL
+       AND engine_locked_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${seconds} SECOND)`,
+    [DEFAULT_MAX_EVENT_ATTEMPTS]
+  );
+}
+
+async function processOneEvent({ workerId: currentWorkerId, lockTimeoutMs = DEFAULT_LOCK_TIMEOUT_MS } = {}) {
+  const connection = await getPool().getConnection();
+  let claimedEventId = null;
+  try {
+    await connection.beginTransaction();
+    await recoverStaleEvents(connection, lockTimeoutMs);
+    const [pendingRows] = await connection.execute(
+      `SELECT * FROM automation_events
+       WHERE engine_status = 'pending'
+       ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED`
+    );
+    const event = pendingRows[0];
+    if (!event) { await connection.rollback(); return { processed: false }; }
+    claimedEventId = Number(event.id);
+    await connection.execute(
+      `UPDATE automation_events
+       SET engine_status = 'processing', engine_locked_at = UTC_TIMESTAMP(), engine_locked_by = ?, engine_attempts = engine_attempts + 1
+       WHERE id = ?`,
+      [currentWorkerId, event.id]
+    );
+    const matches = await matchAutomationsForEvent(connection, event);
+    const created = [];
+    for (const match of matches) created.push(await createRunAndJob(connection, event, match));
+    await connection.execute(
+      `UPDATE automation_events
+       SET engine_status = 'processed', engine_processed_at = UTC_TIMESTAMP(), engine_locked_at = NULL, engine_locked_by = NULL, engine_last_error = NULL
+       WHERE id = ?`,
+      [event.id]
+    );
+    await connection.commit();
+    console.info('Automation event processed:', { event_id: Number(event.id), event_type: event.event_type, matches: created.length });
+    return { processed: true, eventId: Number(event.id), matches: created.length, created };
+  } catch (error) {
+    await connection.rollback();
+    await markEventFailed(claimedEventId, currentWorkerId, error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function markEventFailed(eventId, currentWorkerId, error) {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.execute(
+      `UPDATE automation_events
+       SET engine_status = 'failed', engine_locked_at = UTC_TIMESTAMP(), engine_locked_by = ?, engine_attempts = engine_attempts + 1, engine_last_error = ?
+       WHERE id = ? AND engine_status = 'pending' AND engine_locked_by IS NULL`,
+      [currentWorkerId, safeError(error), eventId]
+    );
+  } finally { connection.release(); }
+}
+
+async function processEventBatch(options = {}) {
+  const count = positiveInt(options.batchSize, DEFAULT_BATCH_SIZE, 100);
+  let processed = 0;
+  for (let index = 0; index < count; index += 1) {
+    try {
+      const result = await processOneEvent(options);
+      if (!result.processed) break;
+      processed += 1;
+    } catch (error) {
+      console.error('Automation event processing failed:', safeError(error));
+    }
+  }
+  return processed;
+}
+
+async function claimNextJob({ currentWorkerId, lockTimeoutMs = DEFAULT_LOCK_TIMEOUT_MS } = {}) {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const seconds = lockSeconds(lockTimeoutMs);
+    await connection.execute(
+      `UPDATE automation_runs ar JOIN automation_jobs aj ON aj.automation_run_id = ar.id
+       SET ar.status = 'failed', ar.error_code = 'JOB_STALE_MAX_ATTEMPTS', ar.error_message = 'ENGINE_ERROR:STALE_MAX_ATTEMPTS'
+       WHERE aj.status = 'processing' AND aj.attempts >= aj.max_attempts AND aj.locked_at IS NOT NULL
+         AND aj.locked_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${seconds} SECOND)`
+    );
+    await connection.execute(
+      `UPDATE automation_jobs
+       SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
+           locked_at = NULL, locked_by = NULL,
+           failed_at = CASE WHEN attempts >= max_attempts THEN UTC_TIMESTAMP() ELSE failed_at END
+       WHERE status = 'processing' AND locked_at IS NOT NULL
+         AND locked_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${seconds} SECOND)`
+    );
+    const [rows] = await connection.execute(
+      `SELECT * FROM automation_jobs
+       WHERE status = 'pending' AND available_at <= UTC_TIMESTAMP() AND execute_at <= UTC_TIMESTAMP()
+       ORDER BY available_at, id LIMIT 1 FOR UPDATE SKIP LOCKED`
+    );
+    const job = rows[0];
+    if (!job) { await connection.rollback(); return null; }
+    await connection.execute(
+      `UPDATE automation_jobs SET status = 'processing', locked_at = UTC_TIMESTAMP(), locked_by = ?, attempts = attempts + 1 WHERE id = ?`,
+      [currentWorkerId, job.id]
+    );
+    await connection.commit();
+    return { ...job, id: Number(job.id), automation_run_id: Number(job.automation_run_id), attempts: Number(job.attempts) + 1 };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally { connection.release(); }
+}
+
+async function completeBootstrapJob(job, currentWorkerId) {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.execute(
+      `SELECT aj.*, ar.automation_version_id, ar.status AS run_status, av.definition
+       FROM automation_jobs aj
+       JOIN automation_runs ar ON ar.id = aj.automation_run_id
+       JOIN automation_versions av ON av.id = ar.automation_version_id
+       WHERE aj.id = ? AND aj.status = 'processing' AND aj.locked_by = ? FOR UPDATE`,
+      [job.id, currentWorkerId]
+    );
+    const current = rows[0];
+    if (!current) { await connection.rollback(); return { skipped: true }; }
+    const definition = parseJson(current.definition);
+    const validation = validateAutomationDefinition(definition, { requireSteps: true });
+    if (!validation.valid) throw new Error('PUBLISHED_DEFINITION_INVALID');
+    const firstStep = validation.definition.steps[0];
+    await connection.execute(`UPDATE automation_runs SET status = 'running', started_at = COALESCE(started_at, UTC_TIMESTAMP()), current_step_key = ? WHERE id = ?`, [firstStep?.id || null, job.automation_run_id]);
+    if (firstStep) {
+      const [stepResult] = await connection.execute(
+        `INSERT INTO automation_run_steps (automation_run_id, step_key, step_type, status, attempt, input, output, started_at, finished_at)
+         VALUES (?, ?, ?, 'completed', 1, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+        [job.automation_run_id, firstStep.id, firstStep.type, JSON.stringify({ execution_mode: 'bootstrap' }), JSON.stringify({ execution_mode: 'bootstrap/no-op', action_executed: false, note: 'Fase 2D.1 nao executa actions comerciais.' })]
+      );
+      if (!stepResult.insertId) await connection.execute('UPDATE automation_run_steps SET status = \'completed\', finished_at = COALESCE(finished_at, UTC_TIMESTAMP()) WHERE automation_run_id = ? AND step_key = ?', [job.automation_run_id, firstStep.id]);
+    }
+    await connection.execute(`UPDATE automation_runs SET status = 'completed', finished_at = UTC_TIMESTAMP(), error_code = NULL, error_message = NULL WHERE id = ?`, [job.automation_run_id]);
+    await connection.execute(`UPDATE automation_jobs SET status = 'completed', completed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL, last_error = NULL WHERE id = ?`, [job.id]);
+    await connection.commit();
+    console.info('Automation job completed:', { job_id: Number(job.id), run_id: Number(job.automation_run_id) });
+    return { completed: true, jobId: Number(job.id), runId: Number(job.automation_run_id) };
+  } catch (error) {
+    await connection.rollback();
+    await failJob(job, currentWorkerId, error);
+    throw error;
+  } finally { connection.release(); }
+}
+
+async function failJob(job, currentWorkerId, error) {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.execute('SELECT attempts, max_attempts, automation_run_id FROM automation_jobs WHERE id = ? AND status = \'processing\' AND locked_by = ? FOR UPDATE', [job.id, currentWorkerId]);
+    const current = rows[0];
+    if (!current) { await connection.rollback(); return; }
+    const attempts = Number(current.attempts);
+    const terminal = attempts >= Number(current.max_attempts);
+    const delay = BACKOFF_MS[Math.min(Math.max(attempts - 1, 0), BACKOFF_MS.length - 1)];
+    await connection.execute(
+      `UPDATE automation_jobs SET status = ?, available_at = ${terminal ? 'available_at' : `DATE_ADD(UTC_TIMESTAMP(), INTERVAL ${Math.ceil(delay / 1000)} SECOND)`}, locked_at = NULL, locked_by = NULL, last_error = ?${terminal ? ', failed_at = UTC_TIMESTAMP()' : ''} WHERE id = ?`,
+      [terminal ? 'failed' : 'pending', safeError(error), job.id]
+    );
+    if (terminal) await connection.execute("UPDATE automation_runs SET status = 'failed', error_code = 'JOB_FAILED', error_message = ? WHERE id = ?", [safeError(error), current.automation_run_id]);
+    else await connection.execute("UPDATE automation_runs SET status = 'queued', error_code = NULL, error_message = NULL WHERE id = ?", [current.automation_run_id]);
+    await connection.commit();
+  } catch (failure) {
+    await connection.rollback();
+    console.error('Automation job failure handling failed:', safeError(failure));
+  } finally { connection.release(); }
+}
+
+async function processJobBatch(options = {}) {
+  const count = positiveInt(options.batchSize, DEFAULT_BATCH_SIZE, 100);
+  let processed = 0;
+  for (let index = 0; index < count; index += 1) {
+    try {
+      const job = await claimNextJob(options);
+      if (!job) break;
+      await completeBootstrapJob(job, options.currentWorkerId);
+      processed += 1;
+    } catch (error) {
+      console.error('Automation job processing failed:', safeError(error));
+    }
+  }
+  return processed;
+}
+
+module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, claimNextJob, completeBootstrapJob, createRunAndJob, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, workerId };

@@ -8,5 +8,13 @@ module.exports = {
         NODE_ENV: 'production',
       },
     },
+    {
+      name: 'kaizen-crm-worker',
+      script: './worker.js',
+      cwd: __dirname,
+      env_production: {
+        NODE_ENV: 'production',
+      },
+    },
   ],
 };

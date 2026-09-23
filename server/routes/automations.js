@@ -13,6 +13,7 @@ const {
   publishVersion,
   transitionAutomation,
   listRuns,
+  listAllRuns,
   getRun,
 } = require('../services/automation-repository');
 
@@ -40,6 +41,14 @@ const defaultDefinition = (triggerType) => ({
   schemaVersion: 1,
   trigger: { type: triggerType, config: {} },
   steps: [],
+});
+
+automationRunsRouter.get('/', requireCommercialAdmin, async (req, res) => {
+  try {
+    res.json(await listAllRuns({ page: req.query.page, pageSize: req.query.page_size }));
+  } catch (error) {
+    handleError(res, error, 'Nao foi possivel listar as execucoes.');
+  }
 });
 
 automationsRouter.get('/', async (req, res) => {

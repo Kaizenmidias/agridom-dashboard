@@ -1,0 +1,28 @@
+import { useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight, Eye, RefreshCw } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
+import { automationsAPI, type AutomationRun } from "@/services/automations";
+
+const formatDate = (value?: string | null) => value ? new Date(value).toLocaleString("pt-BR") : "-";
+
+export function AutomationRunsPage() {
+  const navigate = useNavigate(); const [runs, setRuns] = useState<AutomationRun[]>([]); const [page, setPage] = useState(1); const [total, setTotal] = useState(0); const [totalPages, setTotalPages] = useState(1); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [selected, setSelected] = useState<(AutomationRun & { steps: unknown[]; jobs: unknown[] }) | null>(null);
+  const load = async (nextPage = page) => { setLoading(true); setError(null); try { const result = await automationsAPI.allRuns(nextPage); setRuns(result.runs); setPage(result.pagination.page); setTotal(result.pagination.total); setTotalPages(result.pagination.totalPages || 1); } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível carregar as execuções."); } finally { setLoading(false); } };
+  useEffect(() => { void load(1); }, []);
+  const open = async (run: AutomationRun) => { try { setSelected(await automationsAPI.getRun(run.id)); } catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível carregar a execução."); } };
+  return <div className="space-y-5 p-4 md:p-6"><div className="flex items-end justify-between"><div><AppBreadcrumbs /><div className="mt-3 flex items-center gap-2"><Button variant="ghost" size="icon" title="Voltar" onClick={() => navigate("/comercial/automacoes")}><ChevronLeft className="h-4 w-4" /></Button><div><h1 className="text-2xl font-semibold">Execuções</h1><p className="text-sm text-muted-foreground">Runs técnicos persistidos pela Automation Engine.</p></div></div></div><Button variant="outline" size="icon" title="Atualizar" onClick={() => void load()}><RefreshCw className="h-4 w-4" /></Button></div>
+    {error && <Alert variant="destructive"><AlertTitle>Erro ao carregar execuções</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+    <Card className="rounded-lg border shadow-none"><CardHeader><CardTitle className="text-base">{total} execuções</CardTitle></CardHeader><CardContent className="p-0">{loading ? <div className="space-y-3 p-5"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div> : runs.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma execução registrada.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Automação</TableHead><TableHead>Versão</TableHead><TableHead>Evento</TableHead><TableHead>Entidade</TableHead><TableHead>Status</TableHead><TableHead>Início</TableHead><TableHead>Término</TableHead><TableHead>Ação</TableHead></TableRow></TableHeader><TableBody>{runs.map((run) => <TableRow key={run.id}><TableCell>{run.automation_name || `#${run.automation_id}`}</TableCell><TableCell>v{run.version_number || "-"}</TableCell><TableCell>{run.event_type || "-"}</TableCell><TableCell>{run.entity_type} #{run.entity_id}</TableCell><TableCell><Badge variant="outline">{run.status}</Badge></TableCell><TableCell>{formatDate(run.started_at)}</TableCell><TableCell>{formatDate(run.finished_at)}</TableCell><TableCell><Button variant="ghost" size="icon" title="Ver detalhes" onClick={() => void open(run)}><Eye className="h-4 w-4" /></Button></TableCell></TableRow>)}</TableBody></Table></div>}</CardContent></Card>
+    <div className="flex items-center justify-end gap-2"><Button variant="outline" size="icon" title="Página anterior" disabled={page <= 1 || loading} onClick={() => void load(page - 1)}><ChevronLeft className="h-4 w-4" /></Button><span className="text-sm text-muted-foreground">Página {page} de {totalPages}</span><Button variant="outline" size="icon" title="Próxima página" disabled={page >= totalPages || loading} onClick={() => void load(page + 1)}><ChevronRight className="h-4 w-4" /></Button></div>
+    <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Execução #{selected?.id}</DialogTitle><DialogDescription>Evento #{selected?.event_id || "-"} · correlação {selected?.correlation_id || "-"}</DialogDescription></DialogHeader>{selected && <div className="space-y-4 text-sm"><div><p className="mb-1 text-xs text-muted-foreground">Steps</p><pre className="max-h-56 overflow-auto rounded-md border bg-muted/20 p-3 text-xs">{JSON.stringify(selected.steps, null, 2)}</pre></div><div><p className="mb-1 text-xs text-muted-foreground">Jobs</p><pre className="max-h-56 overflow-auto rounded-md border bg-muted/20 p-3 text-xs">{JSON.stringify(selected.jobs, null, 2)}</pre></div></div>}</DialogContent></Dialog>
+  </div>;
+}

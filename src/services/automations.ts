@@ -55,6 +55,13 @@ export type AutomationRun = {
   entity_type: string;
   entity_id: string;
   created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  event_id?: number | null;
+  event_type?: string | null;
+  automation_name?: string;
+  version_number?: number;
+  correlation_id?: string | null;
 };
 
 function headers() {
@@ -97,5 +104,6 @@ export const automationsAPI = {
   activate: (id: number) => request<AutomationSummary>(`/${id}/activate`, { method: "POST" }),
   archive: (id: number) => request<AutomationSummary>(`/${id}/archive`, { method: "POST" }),
   runs: (id: number) => request<{ runs: AutomationRun[] }>(`/${id}/runs`),
+  allRuns: (page = 1) => requestAt<{ runs: AutomationRun[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }>("automation-runs", `?page=${page}&page_size=25`),
   getRun: (id: number) => requestAt<AutomationRun & { steps: unknown[]; jobs: unknown[] }>("automation-runs", `/${id}`),
 };

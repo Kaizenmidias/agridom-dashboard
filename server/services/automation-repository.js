@@ -265,6 +265,25 @@ async function listRuns(userId, automationId) {
   return rows;
 }
 
+async function listAllRuns({ page = 1, pageSize = 25 } = {}) {
+  const safePage = Number.isSafeInteger(Number(page)) && Number(page) > 0 ? Number(page) : 1;
+  const safePageSize = Number.isSafeInteger(Number(pageSize)) && Number(pageSize) > 0 ? Math.min(Number(pageSize), 100) : 25;
+  const offset = (safePage - 1) * safePageSize;
+  const [countRows] = await getPool().execute('SELECT COUNT(*) AS total FROM automation_runs');
+  const [rows] = await getPool().execute(
+    `SELECT ar.id, ar.automation_id, ar.automation_version_id, ar.event_id, ar.entity_type, ar.entity_id,
+            ar.status, ar.started_at, ar.finished_at, ar.correlation_id, ar.created_at, ar.updated_at,
+            a.name AS automation_name, av.version_number, ae.event_type
+     FROM automation_runs ar
+     JOIN automations a ON a.id = ar.automation_id
+     JOIN automation_versions av ON av.id = ar.automation_version_id
+     LEFT JOIN automation_events ae ON ae.id = ar.event_id
+     ORDER BY ar.created_at DESC, ar.id DESC LIMIT ? OFFSET ?`,
+    [safePageSize, offset]
+  );
+  return { runs: rows, pagination: { page: safePage, pageSize: safePageSize, total: Number(countRows[0]?.total || 0), totalPages: Math.ceil(Number(countRows[0]?.total || 0) / safePageSize) } };
+}
+
 async function getRun(userId, runId) {
   const [runs] = await getPool().execute(
     `SELECT ar.*, a.name AS automation_name
@@ -289,5 +308,6 @@ module.exports = {
   publishVersion,
   transitionAutomation,
   listRuns,
+  listAllRuns,
   getRun,
 };
