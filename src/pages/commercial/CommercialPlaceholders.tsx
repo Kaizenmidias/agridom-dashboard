@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { getLeads } from "@/services/leads/lead-service";
 import type { Lead, LeadStatus } from "@/types/lead";
 
 const LEADS_KEY = "kaizen.pipeline.leads";
@@ -32,7 +33,23 @@ const brl = (value: number) => value.toLocaleString("pt-BR", { style: "currency"
 export function ChatsPage() { return <ModulePlaceholderPage title="Chats" area="Comercial" icon={MessagesSquare} description="Centralize conversas comerciais." moduleSummary="A area Chats sera utilizada para acompanhar conversas com leads e clientes." />; }
 export function PipelinePage() {
   const [leads, setLeads] = useState<Lead[]>([]); const [columns, setColumns] = useState(defaults); const [dragged, setDragged] = useState<Lead | null>(null); const [editing, setEditing] = useState<string | null>(null); const [name, setName] = useState(""); const { isAdmin } = useAuth();
-  useEffect(() => { setLeads(read(LEADS_KEY, [])); setColumns(read(COLUMNS_KEY, defaults)); }, []);
+  useEffect(() => {
+    const storedLeads = read<Lead[]>(LEADS_KEY, []);
+    setLeads(storedLeads);
+    setColumns(read(COLUMNS_KEY, defaults));
+
+    void getLeads().then((freshLeads) => {
+      const freshById = new Map(freshLeads.map((lead) => [lead.id, lead]));
+      const synchronized = storedLeads.map((stored) => {
+        const fresh = freshById.get(stored.id);
+        return fresh ? { ...fresh, status: stored.status, folderId: stored.folderId, folderName: stored.folderName } : stored;
+      });
+      setLeads(synchronized);
+      localStorage.setItem(LEADS_KEY, JSON.stringify(synchronized));
+    }).catch(() => {
+      // A falha temporaria da API nao impede a visualizacao do cache local.
+    });
+  }, []);
   const saveColumns = (next: PipelineColumn[]) => { setColumns(next); localStorage.setItem(COLUMNS_KEY, JSON.stringify(next)); };
   const move = (lead: Lead, status: LeadStatus) => { const next = leads.map((item) => item.id === lead.id ? { ...item, status, updatedAt: new Date().toISOString() } : item); setLeads(next); localStorage.setItem(LEADS_KEY, JSON.stringify(next)); };
   const groups = useMemo(() => columns.map((column) => ({ ...column, leads: leads.filter((lead) => lead.status === column.status) })), [columns, leads]);
