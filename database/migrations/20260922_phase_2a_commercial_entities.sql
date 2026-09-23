@@ -138,8 +138,8 @@ CREATE TABLE IF NOT EXISTS internal_notifications (
 -- Os dados antigos permanecem intactos no JSON para validacao e rollback logico.
 INSERT IGNORE INTO lead_labels (owner_user_id, name, color)
 SELECT p.owner_user_id,
-  COALESCE(labels.label_name, labels.label_string) AS label_name,
-  COALESCE(labels.label_color, '#4D6EDB') AS label_color
+  CONVERT(COALESCE(labels.label_name, labels.label_string) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS label_name,
+  CONVERT(COALESCE(labels.label_color, _utf8mb4'#4D6EDB') USING utf8mb4) COLLATE utf8mb4_unicode_ci AS label_color
 FROM prospects p
 JOIN JSON_TABLE(
   COALESCE(p.analysis_report, JSON_OBJECT()),
@@ -151,7 +151,7 @@ JOIN JSON_TABLE(
 ) labels
 WHERE p.owner_user_id IS NOT NULL
   AND COALESCE(labels.label_name, labels.label_string) IS NOT NULL
-  AND COALESCE(labels.label_name, labels.label_string) <> '';
+  AND CONVERT(COALESCE(labels.label_name, labels.label_string) USING utf8mb4) COLLATE utf8mb4_unicode_ci <> _utf8mb4'' COLLATE utf8mb4_unicode_ci;
 
 INSERT IGNORE INTO prospect_labels (prospect_id, label_id, created_by)
 SELECT p.id, ll.id, p.owner_user_id
@@ -163,7 +163,8 @@ JOIN JSON_TABLE(
     label_string VARCHAR(100) PATH '$' NULL ON EMPTY NULL ON ERROR
   )
 ) labels
-JOIN lead_labels ll ON ll.owner_user_id = p.owner_user_id AND ll.name = COALESCE(labels.label_name, labels.label_string)
+JOIN lead_labels ll ON ll.owner_user_id = p.owner_user_id
+  AND ll.name COLLATE utf8mb4_unicode_ci = CONVERT(COALESCE(labels.label_name, labels.label_string) USING utf8mb4) COLLATE utf8mb4_unicode_ci
 WHERE COALESCE(labels.label_name, labels.label_string) IS NOT NULL;
 
 -- Backfill de responsavel somente quando existe exatamente um usuario com nome ou e-mail correspondente.
@@ -173,8 +174,10 @@ JOIN (
   FROM (
     SELECT p2.id AS prospect_id, u.id AS user_id
     FROM prospects p2
-    JOIN users u ON LOWER(TRIM(u.name)) = LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(p2.analysis_report, '$.assignedTo'))))
-      OR LOWER(TRIM(u.email)) = LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(p2.analysis_report, '$.assignedTo'))))
+    JOIN users u ON LOWER(TRIM(u.name)) COLLATE utf8mb4_unicode_ci
+        = CONVERT(LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(p2.analysis_report, '$.assignedTo')))) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      OR LOWER(TRIM(u.email)) COLLATE utf8mb4_unicode_ci
+        = CONVERT(LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(p2.analysis_report, '$.assignedTo')))) USING utf8mb4) COLLATE utf8mb4_unicode_ci
     WHERE JSON_EXTRACT(p2.analysis_report, '$.assignedTo') IS NOT NULL
   ) candidate
   GROUP BY candidate.prospect_id

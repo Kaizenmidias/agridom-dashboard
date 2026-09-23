@@ -32,3 +32,19 @@ test('backfills preservam JSON legado e exigem correspondencia unica de responsa
   assert.match(migration, /HAVING COUNT\(\*\) = 1/i);
   assert.doesNotMatch(migration, /SET\s+analysis_report\s*=\s*NULL/i);
 });
+
+test('comparacoes entre JSON e tabelas usam collation explicita do schema', () => {
+  assert.match(migration, /CONVERT\(COALESCE\(labels\.label_name, labels\.label_string\) USING utf8mb4\) COLLATE utf8mb4_unicode_ci/i);
+  assert.match(migration, /ll\.name COLLATE utf8mb4_unicode_ci\s*=\s*CONVERT\(COALESCE\(labels\.label_name, labels\.label_string\) USING utf8mb4\) COLLATE utf8mb4_unicode_ci/i);
+  assert.match(migration, /LOWER\(TRIM\(u\.name\)\) COLLATE utf8mb4_unicode_ci/i);
+  assert.match(migration, /LOWER\(TRIM\(u\.email\)\) COLLATE utf8mb4_unicode_ci/i);
+  assert.equal((migration.match(/CONVERT\(LOWER\(TRIM\(JSON_UNQUOTE/g) || []).length, 2);
+});
+
+test('migration pode continuar depois de execucao parcial', () => {
+  assert.ok((migration.match(/CREATE TABLE IF NOT EXISTS/gi) || []).length >= 7);
+  assert.match(migration, /information_schema\.COLUMNS/i);
+  assert.match(migration, /information_schema\.STATISTICS/i);
+  assert.match(migration, /information_schema\.TABLE_CONSTRAINTS/i);
+  assert.match(migration, /WHERE p\.assigned_user_id IS NULL/i);
+});
