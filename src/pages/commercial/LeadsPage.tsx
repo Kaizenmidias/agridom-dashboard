@@ -100,6 +100,14 @@ const BRAZILIAN_STATES = [
 
 const PIPELINE_STORAGE_KEY = "kaizen.pipeline.leads";
 
+function formatLeadBudget(lead: Lead) {
+  const legacyBudget = (lead as Lead & { budget?: string | number }).budget;
+  const raw = lead.metadata?.budget ?? legacyBudget ?? "";
+  if (typeof raw === "number") return raw.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const value = Number(String(raw).replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(value) && value > 0 ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não informado";
+}
+
 const statusLabels: Record<LeadStatus, string> = {
   novo: "Novo",
   nao_contatado: "Não contatado",
@@ -781,7 +789,8 @@ export default function LeadsPage() {
                         <TableHead>E-mail</TableHead>
                         <TableHead>Telefone</TableHead>
                         <TableHead>Cidade</TableHead>
-                        <TableHead>Origem</TableHead>
+                         <TableHead>Orçamento</TableHead>
+                         <TableHead>Origem</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Responsável</TableHead>
                         <TableHead>Último contato</TableHead>
@@ -832,6 +841,7 @@ export default function LeadsPage() {
                               </div>
                             </TableCell>
                             <TableCell>{[lead.city, lead.state].filter(Boolean).join(" / ") || "Não informada"}</TableCell>
+                            <TableCell className="whitespace-nowrap font-medium text-primary">{formatLeadBudget(lead)}</TableCell>
                             <TableCell>{sourceLabels[lead.source]}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">

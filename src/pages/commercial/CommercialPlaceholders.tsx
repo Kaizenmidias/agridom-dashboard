@@ -20,7 +20,13 @@ const defaults: PipelineColumn[] = [
   { id: "convertido", status: "convertido", title: "Convertidos" },
 ];
 const read = <T,>(key: string, fallback: T): T => { try { const value = localStorage.getItem(key); return value ? JSON.parse(value) as T : fallback; } catch { return fallback; } };
-const money = (lead: Lead) => { const value = Number((lead.metadata?.budget || "").replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".")); return Number.isFinite(value) ? value : 0; };
+const money = (lead: Lead) => {
+  const legacyBudget = (lead as Lead & { budget?: string | number }).budget;
+  const raw = lead.metadata?.budget ?? legacyBudget ?? "";
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : 0;
+  const value = Number(String(raw).replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(value) ? value : 0;
+};
 const brl = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export function ChatsPage() { return <ModulePlaceholderPage title="Chats" area="Comercial" icon={MessagesSquare} description="Centralize conversas comerciais." moduleSummary="A area Chats sera utilizada para acompanhar conversas com leads e clientes." />; }
