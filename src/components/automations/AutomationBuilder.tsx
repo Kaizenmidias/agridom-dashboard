@@ -1,5 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Background,
+  Controls,
+  Handle,
+  MiniMap,
+  NodeToolbar,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  addEdge,
+  reconnectEdge,
+  useReactFlow,
+  useEdgesState,
+  useNodesState,
+  type Connection,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import {
   Activity,
   ArrowDown,
   ArrowRight,
@@ -254,7 +274,194 @@ function nextOf(node: BuilderNode, branch?: "yes" | "no") {
   return branch ? node.branches?.[branch] || null : node.next || null;
 }
 
-export function AutomationBuilder({
+type FlowNodeData = BuilderNode;
+type FlowNode = Node<FlowNodeData, "kaizen">;
+
+const flowNodeTypes = { kaizen: KaizenFlowNode };
+
+function flowDefinition(definition: AutomationDefinition): { nodes: FlowNode[]; edges: Edge[] } {
+  const steps = Array.isArray(definition.steps) ? definition.steps : [];
+  if (!steps.length) return { nodes: [], edges: [] };
+  const layout = (definition as AutomationDefinition & { layout?: { nodes?: Record<string, { x?: number; y?: number }> } }).layout?.nodes || {};
+  const nodes: FlowNode[] = [
+    {
+      id: "trigger_1",
+      type: "kaizen",
+      position: { x: layout.trigger_1?.x ?? 80, y: layout.trigger_1?.y ?? 220 },
+      data: {
+        id: "trigger_1",
+        type: "trigger",
+        label: triggers[definition.trigger.type] || definition.trigger.type,
+        config: { ...definition.trigger.config, triggerType: definition.trigger.type },
+        x: layout.trigger_1?.x ?? 80,
+        y: layout.trigger_1?.y ?? 220,
+      },
+    },
+    ...steps.filter((step) => ["condition", "wait", "action", "finish"].includes(String(step.type))).map((step, index) => {
+      const type = step.type as BuilderType;
+      const config = { ...((step.config as Record<string, unknown>) || {}) };
+      const id = String(step.id || `step_${index + 1}`);
+      const position = layout[id] || { x: 360 + (index % 4) * 300, y: 180 + Math.floor(index / 4) * 180 };
+      return {
+        id,
+        type: "kaizen" as const,
+        position: { x: position.x ?? 360, y: position.y ?? 180 },
+        data: {
+          id,
+          type,
+          config,
+          label: type === "condition" ? "Verificar condição" : type === "wait" ? "Aguardar" : type === "action" ? ACTION_CATALOG.find((item) => item.id === String(config.actionType))?.name || "Executar ação" : "Finalizar",
+          x: position.x ?? 360,
+          y: position.y ?? 180,
+          next: step.next as string | null | undefined,
+          branches: step.branches as BuilderNode["branches"],
+        },
+      };
+    }),
+  ];
+  const known = new Set(nodes.map((node) => node.id));
+  const edges: Edge[] = [];
+  const addFlowEdge = (source: string, target: string | null | undefined, sourceHandle?: string) => {
+    if (!target || !known.has(target) || source === target) return;
+    edges.push({ id: `${source}-${sourceHandle || "next"}-${target}`, source, target, sourceHandle, targetHandle: "input", type: "smoothstep", label: sourceHandle === "yes" ? "SIM" : sourceHandle === "no" ? "NÃO" : undefined, data: { branch: sourceHandle } });
+  };
+  nodes.forEach((node) => {
+    if (node.data.type === "trigger" || node.data.type === "action" || node.data.type === "wait" || node.data.type === "finish") addFlowEdge(node.id, node.data.next);
+    if (node.data.type === "condition") {
+      addFlowEdge(node.id, node.data.branches?.yes, "yes");
+      addFlowEdge(node.id, node.data.branches?.no, "no");
+    }
+  });
+  return { nodes, edges };
+}
+
+function definitionFromFlow(nodes: FlowNode[], edges: Edge[], triggerType: string): AutomationDefinition {
+  const trigger = nodes.find((node) => node.data.type === "trigger");
+  const steps = nodes.filter((node) => node.data.type !== "trigger").map((node) => {
+    const outgoing = edges.filter((edge) => edge.source === node.id);
+    const next = outgoing.find((edge) => edge.sourceHandle !== "yes" && edge.sourceHandle !== "no")?.target || null;
+    return {
+      id: node.id,
+      type: node.data.type,
+      config: node.data.config,
+      next: node.data.type === "condition" ? null : next,
+      ...(node.data.type === "condition" ? {
+        branches: {
+          yes: outgoing.find((edge) => edge.sourceHandle === "yes")?.target || null,
+          no: outgoing.find((edge) => edge.sourceHandle === "no")?.target || null,
+        },
+      } : {}),
+    };
+  });
+  return {
+    schemaVersion: 1,
+    trigger: {
+      type: String(trigger?.data.config.triggerType || triggerType || "lead.created"),
+      config: Object.fromEntries(Object.entries(trigger?.data.config || {}).filter(([key]) => key !== "triggerType")),
+    },
+    steps,
+    layout: {
+      nodes: Object.fromEntries(nodes.map((node) => [node.id, { x: node.position.x, y: node.position.y }])),
+    },
+  } as AutomationDefinition;
+}
+
+function KaizenFlowNode({ data, selected }: NodeProps<FlowNode>) {
+  const meta = nodeMeta[data.type];
+  const Icon = meta.icon;
+  return (
+    <div className={`relative w-[232px] rounded-lg border bg-[#181A1F] p-3 text-[#F4F5F7] shadow-lg ${data.type === "condition" ? "border-violet-400/70" : data.type === "trigger" ? "border-[#B7FF3C]/70" : data.type === "finish" ? "border-emerald-400/60" : "border-white/10"} ${selected ? "ring-2 ring-[#B7FF3C]" : ""}`}>
+      {data.type !== "trigger" ? <Handle type="target" position={Position.Left} id="input" className="!h-3 !w-3 !border-2 !border-[#0A0A0A] !bg-[#B7FF3C]" /> : null}
+      <NodeToolbar isVisible={selected} position={Position.Top} className="flex gap-1 rounded-md border border-white/10 bg-[#181A1F] p-1 shadow-xl">
+        <span className="px-1 text-[10px] text-[#9CA3AF]">Clique para configurar</span>
+      </NodeToolbar>
+      <div className="flex items-center gap-2">
+        <span className="rounded-md bg-[#0A0A0A] p-1.5"><Icon className="h-4 w-4 text-[#B7FF3C]" /></span>
+        <div className="min-w-0 flex-1"><p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">{meta.title}</p><p className="truncate text-sm font-medium">{data.label}</p></div>
+      </div>
+      {data.type === "condition" ? <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]"><span className="text-emerald-300">SIM</span><span className="text-red-300">NÃO</span></div> : null}
+      {data.type === "action" ? <p className="mt-2 truncate text-xs text-[#9CA3AF]">{String(data.config.actionType || "Ação interna")}</p> : null}
+      {data.type === "trigger" || data.type === "action" || data.type === "wait" || data.type === "condition" ? <Handle type="source" position={Position.Right} id={data.type === "condition" ? "yes" : "output"} className="!h-3 !w-3 !border-2 !border-[#0A0A0A] !bg-[#B7FF3C]" /> : null}
+      {data.type === "condition" ? <Handle type="source" position={Position.Right} id="no" style={{ top: "78%" }} className="!h-3 !w-3 !border-2 !border-[#0A0A0A] !bg-[#DC3035]" /> : null}
+    </div>
+  );
+}
+
+function FreeformAutomationBuilder(props: {
+  automationId: number;
+  triggerType: string;
+  draft?: AutomationVersion;
+  active?: AutomationVersion;
+  onSaved: () => Promise<void>;
+  onPublish?: () => Promise<void>;
+  readOnly?: boolean;
+}) {
+  const definition = props.draft?.definition || props.active?.definition || { schemaVersion: 1 as const, trigger: { type: props.triggerType, config: {} }, steps: [] };
+  const initial = useMemo(() => flowDefinition(definition), [definition]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initial.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(true);
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [pipelines, setPipelines] = useState<PipelineDefinition[]>([]);
+  const [stages, setStages] = useState<PipelineStage[]>([]);
+  const [labels, setLabels] = useState<Array<{ id: number; name: string; color: string }>>([]);
+  const [users, setUsers] = useState<UserOption[]>([]);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const history = useRef<Array<{ nodes: FlowNode[]; edges: Edge[] }>>([]);
+  const future = useRef<Array<{ nodes: FlowNode[]; edges: Edge[] }>>([]);
+  const { screenToFlowPosition, fitView } = useReactFlow();
+
+  useEffect(() => {
+    void Promise.all([commercialEntitiesAPI.getPipelines(), commercialEntitiesAPI.getLabels(), commercialEntitiesAPI.getUsers()]).then(([pipelineData, labelData, userData]) => {
+      setPipelines(pipelineData.pipelines); setStages(pipelineData.stages); setLabels(labelData.labels); setUsers(userData.users);
+    }).catch(() => undefined);
+  }, []);
+  const selected = nodes.find((node) => node.id === selectedId);
+  const remember = () => { history.current = [...history.current.slice(-39), { nodes, edges }]; future.current = []; };
+  const undo = () => { const previous = history.current.pop(); if (!previous) return; future.current.push({ nodes, edges }); setNodes(previous.nodes); setEdges(previous.edges); setSelectedId(null); setSelectedEdgeId(null); };
+  const redo = () => { const next = future.current.pop(); if (!next) return; history.current.push({ nodes, edges }); setNodes(next.nodes); setEdges(next.edges); };
+  const updateSelected = (patch: Partial<BuilderNode>) => setNodes((current) => current.map((node) => node.id === selectedId ? { ...node, data: { ...node.data, ...patch } } : node));
+  const updateConfig = (key: string, value: unknown) => updateSelected({ config: { ...(selected?.data.config || {}), [key]: value }, label: key === "actionType" ? ACTION_CATALOG.find((item) => item.id === String(value))?.name || "Executar ação" : selected?.data.label });
+  const validConnection = (connection: Connection) => {
+    if (!connection.source || !connection.target || connection.source === connection.target || connection.target === "trigger_1") return false;
+    if (edges.some((edge) => edge.source === connection.source && edge.target === connection.target && edge.sourceHandle === connection.sourceHandle)) return false;
+    const graph = new Map<string, string[]>();
+    edges.concat({ id: "candidate", source: connection.source, target: connection.target }).forEach((edge) => graph.set(edge.source, [...(graph.get(edge.source) || []), edge.target]));
+    const seen = new Set<string>(); const visit = (id: string): boolean => { if (id === connection.source) return true; if (seen.has(id)) return false; seen.add(id); return (graph.get(id) || []).some(visit); };
+    return !visit(connection.target);
+  };
+  const onConnect = (connection: Connection) => { if (!props.readOnly && validConnection(connection)) { remember(); setEdges((current) => addEdge({ ...connection, id: `${connection.source}-${connection.sourceHandle || "next"}-${connection.target}`, type: "smoothstep", data: { branch: connection.sourceHandle } }, current)); } else if (!props.readOnly) toast.error("Conexão inválida ou ciclo não suportado."); };
+  const onReconnect = (oldEdge: Edge, connection: Connection) => { if (!props.readOnly && validConnection(connection)) { remember(); setEdges((current) => reconnectEdge(oldEdge, connection, current)); } else if (!props.readOnly) toast.error("Reconexão inválida ou ciclo não suportado."); };
+  const addNodeAt = (kind: string, position: { x: number; y: number }, actionId?: string) => {
+    if (props.readOnly) return;
+    const type = kind === "trigger" ? "trigger" : kind === "condition" ? "condition" : kind === "wait" ? "wait" : "action";
+    if (type === "trigger" && nodes.some((node) => node.data.type === "trigger")) { toast.error("Esta automação já possui um gatilho."); return; }
+    const id = `${type}_${Date.now()}`; const config = type === "trigger" ? { triggerType: actionId || props.triggerType } : actionId ? { ...defaultConfig("action"), actionType: actionId } : defaultConfig(type);
+    remember(); setNodes((current) => current.concat({ id, type: "kaizen", position, data: { id, type, label: type === "trigger" ? triggers[String(config.triggerType)] || String(config.triggerType) : actionId ? ACTION_CATALOG.find((item) => item.id === actionId)?.name || "Executar ação" : nodeMeta[type].title, config, x: position.x, y: position.y } }));
+    setSelectedId(id);
+  };
+  const addTool = (kind: string, actionId?: string) => addNodeAt(kind, screenToFlowPosition({ x: 500, y: 280 }), actionId);
+  const onDrop = (event: React.DragEvent) => { event.preventDefault(); const kind = event.dataTransfer.getData("application/kaizen-node"); const actionId = event.dataTransfer.getData("application/kaizen-action"); if (kind) addNodeAt(kind, screenToFlowPosition({ x: event.clientX, y: event.clientY }), actionId || undefined); };
+  const deleteSelected = () => { if (props.readOnly) return; if (selectedEdgeId) { remember(); setEdges((current) => current.filter((edge) => edge.id !== selectedEdgeId)); setSelectedEdgeId(null); return; } if (!selectedId) return; remember(); setNodes((current) => current.filter((node) => node.id !== selectedId)); setEdges((current) => current.filter((edge) => edge.source !== selectedId && edge.target !== selectedId)); setSelectedId(null); };
+  const duplicateSelected = () => { if (!selected || props.readOnly || selected.data.type === "trigger") return; remember(); const id = `${selected.data.type}_${Date.now()}`; setNodes((current) => current.concat({ ...selected, id, position: { x: selected.position.x + 40, y: selected.position.y + 40 }, data: { ...selected.data, id, x: selected.position.x + 40, y: selected.position.y + 40 } })); setSelectedId(id); };
+  const organize = () => { if (props.readOnly) return; remember(); setNodes((current) => current.map((node, index) => ({ ...node, position: { x: 80 + (index % 4) * 300, y: 160 + Math.floor(index / 4) * 190 }, data: { ...node.data, x: 80 + (index % 4) * 300, y: 160 + Math.floor(index / 4) * 190 } }))); };
+  const save = async () => { if (!props.draft) { toast.error("Crie um rascunho antes de salvar o fluxo."); return; } setSaving(true); try { await automationsAPI.updateVersion(props.automationId, props.draft.id, definitionFromFlow(nodes, edges, props.triggerType)); toast.success("Rascunho salvo."); await props.onSaved(); } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível salvar o rascunho."); } finally { setSaving(false); } };
+  useEffect(() => { const onKey = (event: KeyboardEvent) => { const target = event.target as HTMLElement; if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return; if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; } if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; } if ((event.key === "Delete" || event.key === "Backspace") && (selectedId || selectedEdgeId)) { event.preventDefault(); deleteSelected(); } if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void save(); } }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); });
+  const matches = ACTION_CATALOG.filter((item) => [item.name, item.description, item.category, ...item.aliases].join(" ").toLowerCase().includes(search.toLowerCase()));
+  const toolButton = (label: string, kind: string, actionId?: string) => <button type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/kaizen-node", kind); if (actionId) event.dataTransfer.setData("application/kaizen-action", actionId); }} onClick={() => addTool(kind, actionId)} className="flex w-full items-center gap-2 rounded-md border border-white/10 bg-[#0A0A0A]/60 px-2.5 py-2 text-left text-xs transition hover:border-[#B7FF3C]/70 hover:bg-[#B7FF3C]/10"><span className="rounded bg-[#181A1F] p-1 text-[#B7FF3C]">{kind === "condition" ? <GitBranch className="h-3.5 w-3.5" /> : kind === "wait" ? <Clock3 className="h-3.5 w-3.5" /> : <Activity className="h-3.5 w-3.5" />}</span><span className="min-w-0 flex-1 truncate">{label}</span><span className="text-[10px] text-[#7E8792]">{kind === "action" ? "ação" : kind}</span></button>;
+  return <div className="overflow-hidden rounded-lg border border-white/10 bg-[#0A0A0A]">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#181A1F] px-3 py-2"><div className="flex items-center gap-2"><Badge variant="outline" className="border-[#B7FF3C]/60 text-[#B7FF3C]">Editor visual</Badge><span className="text-xs text-[#9CA3AF]">{props.draft ? "Rascunho" : "Somente leitura"}</span></div><div className="flex items-center gap-1"><Button size="sm" variant="ghost" onClick={() => fitView({ padding: 0.2 })}>Organizar visão</Button><Button size="sm" variant="ghost" onClick={() => void save()} disabled={props.readOnly || saving}>Salvar</Button>{props.onPublish ? <Button size="sm" onClick={() => void props.onPublish()} disabled={props.readOnly}>Publicar</Button> : null}</div></div>
+    <div className="flex min-h-[680px] flex-col lg:flex-row-reverse"><aside className="w-full shrink-0 border-b border-white/10 bg-[#181A1F] lg:w-[290px] lg:border-b-0 lg:border-l"><div className="flex items-center justify-between border-b border-white/10 px-4 py-3"><span className="text-sm font-semibold">{selected ? "Configuração do node" : "Ações"}</span>{selected ? <Button size="sm" variant="ghost" onClick={() => setSelectedId(null)}>Voltar</Button> : null}</div>{selected ? <div className="max-h-[630px] overflow-y-auto p-4"><NodeInspector node={selected.data} updateConfig={updateConfig} updateNode={updateSelected} triggers={triggers} actions={actions} labels={labels} users={users} pipelines={pipelines} stages={stages} /><div className="mt-4 flex gap-2"><Button size="sm" variant="outline" onClick={duplicateSelected}>Duplicar</Button><Button size="sm" variant="ghost" onClick={deleteSelected}>Excluir</Button></div></div> : <div className="max-h-[630px] overflow-y-auto p-3"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar ação..." className="mb-3" /><details open><summary className="mb-2 cursor-pointer text-xs font-semibold uppercase tracking-wide text-[#B7FF3C]">Gatilhos</summary><div className="space-y-1">{Object.entries(triggers).map(([id, label]) => toolButton(label, "trigger", id))}</div></details><details open className="mt-4"><summary className="mb-2 cursor-pointer text-xs font-semibold uppercase tracking-wide text-[#B7FF3C]">Lógica</summary><div className="space-y-1">{toolButton("Condição", "condition")}{toolButton("Aguardar", "wait")}</div></details><details open className="mt-4"><summary className="mb-2 cursor-pointer text-xs font-semibold uppercase tracking-wide text-[#B7FF3C]">Ações</summary><div className="space-y-1">{matches.map((item) => toolButton(item.name, "action", item.id))}</div></details></div>}</aside><main className="relative min-h-[620px] min-w-0 flex-1 bg-[#0E1013]" onDrop={onDrop} onDragOver={(event) => event.preventDefault()}><ReactFlow nodes={nodes} edges={edges} nodeTypes={flowNodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onReconnect={onReconnect} onNodeClick={(_event, node) => { setSelectedId(node.id); setSelectedEdgeId(null); }} onEdgeClick={(_event, edge) => { setSelectedEdgeId(edge.id); setSelectedId(null); }} onPaneClick={() => { setSelectedId(null); setSelectedEdgeId(null); }} onNodeDragStart={() => remember()} fitView deleteKeyCode={null} nodesDraggable={!props.readOnly} nodesConnectable={!props.readOnly} edgesFocusable><Background color="#2A2D33" gap={24} size={1} /><Controls className="!border-white/10 !bg-[#181A1F]" /><MiniMap pannable zoomable className="!bg-[#181A1F]" nodeColor={(node) => node.data.type === "condition" ? "#A63DA5" : node.data.type === "trigger" ? "#B7FF3C" : "#4D6EDB"} /></ReactFlow>{!nodes.length ? <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="text-center"><p className="text-lg font-semibold text-[#F4F5F7]">Canvas vazio</p><p className="mt-1 text-sm text-[#9CA3AF]">Arraste um bloco da biblioteca para começar.</p></div></div> : null}<div className="absolute left-3 top-3 z-10 flex gap-1 rounded-md border border-white/10 bg-[#181A1F]/90 p-1"><Button size="icon" variant="ghost" title="Ajustar visão" onClick={() => fitView({ padding: 0.2 })}><Square className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Organizar nós" onClick={organize}><LayoutDashboard className="h-4 w-4" /></Button></div></main></div>
+  </div>;
+}
+
+export function AutomationBuilder(props: React.ComponentProps<typeof FreeformAutomationBuilder>) {
+  return <ReactFlowProvider><FreeformAutomationBuilder {...props} /></ReactFlowProvider>;
+}
+
+function LegacyAutomationBuilder({
   automationId,
   triggerType,
   draft,

@@ -50,3 +50,14 @@ test('2D.2 validates variable tokens against the supported variable catalog', ()
   assert.equal(valid.valid, true);
   assert.ok(invalid.errors.some((item) => item.code === 'UNKNOWN_VARIABLE'));
 });
+
+test('2E.1.1 exposes a free-form graph editor with implicit terminals', () => {
+  assert.match(builder, /@xyflow\/react/);
+  assert.match(builder, /ReactFlowProvider/);
+  assert.match(builder, /onConnect/);
+  assert.match(builder, /onReconnect/);
+  assert.match(builder, /screenToFlowPosition/);
+  assert.match(builder, /Canvas vazio/);
+  assert.match(builder, /layout:/);
+  assert.doesNotMatch(builder, /type === "finish".*toolButton/);
+});
