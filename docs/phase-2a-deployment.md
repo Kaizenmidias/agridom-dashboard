@@ -39,3 +39,26 @@ SELECT COUNT(*) FROM prospects WHERE assigned_user_id IS NOT NULL;
 ```
 
 O arquivo `analysis_report` nao deve ser apagado nesta fase. Sua remocao futura depende de validacao dos backfills em producao.
+
+## Consolidacao 2A.1
+
+A Fase 2A.1 nao adiciona migration. Depois que a migration da Fase 2A estiver aplicada, atualize o codigo e o processo com:
+
+```bash
+cd /var/www/crm.kaizenmidias.com
+git pull origin main
+npm ci
+npm run build
+cd server
+npm ci --omit=dev
+pm2 startOrReload ecosystem.config.cjs --env production
+pm2 save
+pm2 status kaizen-crm-api
+curl -fsS https://crm.kaizenmidias.com/api/health
+```
+
+O `NODE_ENV=production` fica em `server/ecosystem.config.cjs`, no ambiente do processo Node. Nao adicione `NODE_ENV` aos arquivos `.env` consumidos pelo Vite.
+
+Antes do `startOrReload`, confira `pm2 list`. Se a API atual estiver registrada com outro nome e usando a mesma porta, remova ou pare apenas esse processo antigo para evitar duas instancias concorrendo pela porta. Nao use `pm2 restart all` em servidores que hospedam outros sistemas.
+
+A origem oficial liberada pelo CORS e `https://crm.kaizenmidias.com`. A origem legada `https://agridom-dashboard.vercel.app` permanece bloqueada.

@@ -184,29 +184,22 @@ router.post('/register', async (req, res) => {
 router.get('/verify', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    console.log('ðŸ” Authorization header:', authHeader);
-    
     const token = authHeader?.replace('Bearer ', '');
-    console.log('ðŸ” Token extraÃ­do:', token ? `${token.substring(0, 20)}...` : 'null');
     
     const query = getQuery(req);
 
     if (!token) {
-      console.log('âŒ Token nÃ£o fornecido');
       return res.status(401).json({ error: 'Token nÃ£o fornecido' });
     }
 
     // Verificar formato bÃ¡sico do token JWT
     const tokenParts = token.split('.');
     if (tokenParts.length !== 3) {
-      console.log('âŒ Token malformado - partes:', tokenParts.length);
       return res.status(401).json({ error: 'Token malformado' });
     }
 
     const jwtSecret = process.env.JWT_SECRET || 'default-secret-key';
-    console.log('ðŸ”‘ Verificando token com secret...');
     const decoded = jwt.verify(token, jwtSecret);
-    console.log('âœ… Token decodificado:', { userId: decoded.userId, email: decoded.email });
     
     // Buscar usuÃ¡rio atual com todas as permissÃµes do banco
     const userResult = await query(

@@ -12,9 +12,9 @@ const NotificationButton: React.FC = () => {
     const types = ['info', 'success', 'warning', 'error'] as const;
     const randomType = types[Math.floor(Math.random() * types.length)];
     
-    addNotification(
-      `Test ${randomType}`,
-      `Ceci est une notification de test de type ${randomType} créée le ${new Date().toLocaleTimeString()}`,
+    void addNotification(
+      `Teste ${randomType}`,
+      `Notificação de teste criada às ${new Date().toLocaleTimeString("pt-BR")}`,
       randomType
     );
   };
@@ -23,7 +23,7 @@ const NotificationButton: React.FC = () => {
     <div className="flex items-center space-x-2">
       <Button variant="outline" size="sm" onClick={handleCreateTestNotification}>
         <Bell className="h-4 w-4 mr-2" />
-        Test Notification
+        Testar notificação
       </Button>
       <NotificationCenter />
     </div>
@@ -31,4 +31,3 @@ const NotificationButton: React.FC = () => {
 };
 
 export default NotificationButton;
-

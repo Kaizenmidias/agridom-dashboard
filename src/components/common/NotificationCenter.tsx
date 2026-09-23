@@ -22,19 +22,19 @@ const NotificationCenter: React.FC = () => {
   } = useNotifications();
 
   const handleMarkAsRead = (id: number) => {
-    markAsRead(id);
+    void markAsRead(id);
   };
 
   const handleMarkAllAsRead = () => {
-    markAllAsRead();
+    void markAllAsRead();
   };
 
   const handleDelete = (id: number) => {
-    deleteNotification(id);
+    void deleteNotification(id);
   };
 
   const handleClearAll = () => {
-    clearAllNotifications();
+    void clearAllNotifications();
     setOpen(false);
   };
 
@@ -85,17 +85,17 @@ const NotificationCenter: React.FC = () => {
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="end">
         <div className="flex items-center justify-between p-4 bg-muted/50">
-          <h3 className="font-medium">Notifications</h3>
+          <h3 className="font-medium">Notificações</h3>
           <div className="flex gap-1">
             {unreadCount > 0 && (
               <Button variant="ghost" size="sm" onClick={handleMarkAllAsRead}>
                 <Check className="h-4 w-4 mr-1" />
-                Tout marquer lu
+                Marcar todas como lidas
               </Button>
             )}
             <Button variant="ghost" size="sm" onClick={handleClearAll}>
               <Trash2 className="h-4 w-4 mr-1" />
-              Effacer tout
+              Limpar todas
             </Button>
           </div>
         </div>
@@ -104,7 +104,7 @@ const NotificationCenter: React.FC = () => {
           {notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
               <BellOff className="h-8 w-8 mb-2" />
-              <p>Aucune notification</p>
+              <p>Nenhuma notificação</p>
             </div>
           ) : (
             <div className="divide-y">
@@ -161,4 +161,3 @@ const NotificationCenter: React.FC = () => {
 };
 
 export default NotificationCenter;
-

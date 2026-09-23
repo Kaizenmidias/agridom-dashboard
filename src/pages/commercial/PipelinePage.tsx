@@ -68,7 +68,8 @@ export default function PipelinePage() {
         const stage = migrationStages.find((item) => item.name.localeCompare(targetName, "pt-BR", { sensitivity: "base" }) === 0);
         return stage ? { prospect_id: lead.id, stage_id: stage.id, sort_order: index } : null;
       }).filter((item): item is { prospect_id: string; stage_id: number; sort_order: number } => Boolean(item));
-      if (items.length) await commercialEntitiesAPI.importLocalPipeline(current.id, items);
+      const confirmation = await commercialEntitiesAPI.importLocalPipeline(current.id, items);
+      if (!confirmation.confirmed) throw new Error("A API não confirmou a importação do Pipeline legado.");
       localStorage.removeItem(LEGACY_LEADS_KEY);
       localStorage.removeItem(LEGACY_COLUMNS_KEY);
       const refreshed = await commercialEntitiesAPI.getPipelines();
@@ -88,10 +89,13 @@ export default function PipelinePage() {
     if (!pipeline) return;
     const previous = positions;
     const existing = positions.find((item) => String(item.prospect_id) === lead.id);
-    const optimistic: PipelinePosition = existing ? { ...existing, stage_id: stageId } : { id: Date.now(), prospect_id: Number(lead.id), pipeline_id: pipeline.id, stage_id: stageId, sort_order: 0 };
+    const destinationOrder = positions
+      .filter((item) => item.stage_id === stageId && String(item.prospect_id) !== lead.id)
+      .reduce((largest, item) => Math.max(largest, item.sort_order), -1) + 1;
+    const optimistic: PipelinePosition = existing ? { ...existing, stage_id: stageId, sort_order: destinationOrder } : { id: Date.now(), prospect_id: Number(lead.id), pipeline_id: pipeline.id, stage_id: stageId, sort_order: destinationOrder };
     setPositions([...positions.filter((item) => String(item.prospect_id) !== lead.id), optimistic]);
     try {
-      const saved = await commercialEntitiesAPI.moveLead(pipeline.id, lead.id, stageId);
+      const saved = await commercialEntitiesAPI.moveLead(pipeline.id, lead.id, stageId, destinationOrder);
       setPositions((current) => [...current.filter((item) => String(item.prospect_id) !== lead.id), saved]);
     } catch { setPositions(previous); }
   };

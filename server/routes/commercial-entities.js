@@ -1,22 +1,43 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
+const { requireCommercialAccess, requireCommercialAdmin } = require('../middleware/commercial-access');
 const { getPool } = require('../config/database');
 
 const router = express.Router();
 router.use(authenticateToken);
+router.use(requireCommercialAccess);
 const getQuery = (req) => req.app.locals.query;
 
-router.use(async (req, res, next) => {
-  try {
-    const result = await getQuery(req)('SELECT role, is_active, can_access_crm FROM users WHERE id = ? LIMIT 1', [req.userId]);
-    const user = result.rows?.[0];
-    const isAdmin = ['admin', 'administrator', 'administrador'].includes(String(user?.role || '').toLowerCase());
-    if (!user?.is_active || (!isAdmin && !user?.can_access_crm)) return res.status(403).json({ error: 'Sem permissao para acessar entidades comerciais.' });
-    next();
-  } catch (error) {
-    res.status(500).json({ error: 'Nao foi possivel validar a permissao.' });
-  }
-});
+const parseId = (value) => {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+};
+
+const parseSortOrder = (value) => {
+  const order = Number(value);
+  return Number.isSafeInteger(order) && order >= 0 ? order : 0;
+};
+
+const validColor = (value, fallback = '#4D6EDB') => /^#[0-9A-F]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : fallback;
+
+const normalizeDateTime = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
+
+async function validAssignableUser(query, userId) {
+  if (userId === null) return true;
+  const result = await query(
+    `SELECT id FROM users
+     WHERE id = ? AND is_active = 1
+       AND (can_access_crm = 1 OR LOWER(role) IN ('admin', 'administrator', 'administrador'))
+     LIMIT 1`,
+    [userId]
+  );
+  return Boolean(result.rows?.length);
+}
 
 const defaultStages = ['Qualificados', 'Reuniao', 'Proposta', 'Negociacao', 'Convertidos'];
 
@@ -64,7 +85,7 @@ router.get('/pipelines', async (req, res) => {
   }
 });
 
-router.post('/pipelines', async (req, res) => {
+router.post('/pipelines', requireCommercialAdmin, async (req, res) => {
   try {
     const name = String(req.body?.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Nome da Pipeline e obrigatorio.' });
@@ -76,14 +97,18 @@ router.post('/pipelines', async (req, res) => {
   }
 });
 
-router.post('/pipelines/:pipelineId/stages', async (req, res) => {
+router.post('/pipelines/:pipelineId/stages', requireCommercialAdmin, async (req, res) => {
   try {
     const query = getQuery(req);
-    if (!await ownedPipeline(query, req.params.pipelineId, req.userId)) return res.status(404).json({ error: 'Pipeline nao encontrada.' });
+    const pipelineId = parseId(req.params.pipelineId);
+    if (!pipelineId) return res.status(400).json({ error: 'ID da Pipeline invalido.' });
+    if (!await ownedPipeline(query, pipelineId, req.userId)) return res.status(404).json({ error: 'Pipeline nao encontrada.' });
     const name = String(req.body?.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Nome da etapa e obrigatorio.' });
-    const order = await query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM pipeline_stages WHERE pipeline_id = ?', [req.params.pipelineId]);
-    const inserted = await query('INSERT INTO pipeline_stages (pipeline_id, name, color, sort_order) VALUES (?, ?, ?, ?)', [req.params.pipelineId, name, req.body?.color || null, order.rows[0].next_order]);
+    const duplicate = await query('SELECT id FROM pipeline_stages WHERE pipeline_id = ? AND LOWER(name) = LOWER(?) LIMIT 1', [pipelineId, name]);
+    if (duplicate.rows?.length) return res.status(409).json({ error: 'Ja existe uma etapa com este nome nesta Pipeline.' });
+    const order = await query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM pipeline_stages WHERE pipeline_id = ?', [pipelineId]);
+    const inserted = await query('INSERT INTO pipeline_stages (pipeline_id, name, color, sort_order) VALUES (?, ?, ?, ?)', [pipelineId, name, req.body?.color ? validColor(req.body.color, null) : null, order.rows[0].next_order]);
     const result = await query('SELECT * FROM pipeline_stages WHERE id = ?', [inserted.insertId]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -91,27 +116,39 @@ router.post('/pipelines/:pipelineId/stages', async (req, res) => {
   }
 });
 
-router.patch('/pipeline-stages/:stageId', async (req, res) => {
+router.patch('/pipeline-stages/:stageId', requireCommercialAdmin, async (req, res) => {
   try {
     const query = getQuery(req);
-    const stage = await query(`SELECT ps.* FROM pipeline_stages ps JOIN pipeline_definitions pd ON pd.id = ps.pipeline_id WHERE ps.id = ? AND pd.owner_user_id = ?`, [req.params.stageId, req.userId]);
+    const stageId = parseId(req.params.stageId);
+    if (!stageId) return res.status(400).json({ error: 'ID da etapa invalido.' });
+    const stage = await query(`SELECT ps.* FROM pipeline_stages ps JOIN pipeline_definitions pd ON pd.id = ps.pipeline_id WHERE ps.id = ? AND pd.owner_user_id = ?`, [stageId, req.userId]);
     if (!stage.rows?.length) return res.status(404).json({ error: 'Etapa nao encontrada.' });
-    await query('UPDATE pipeline_stages SET name = COALESCE(?, name), color = COALESCE(?, color), sort_order = COALESCE(?, sort_order) WHERE id = ?', [req.body?.name || null, req.body?.color || null, req.body?.sort_order ?? null, req.params.stageId]);
-    const result = await query('SELECT * FROM pipeline_stages WHERE id = ?', [req.params.stageId]);
+    const name = req.body?.name === undefined ? null : String(req.body.name).trim();
+    if (req.body?.name !== undefined && !name) return res.status(400).json({ error: 'Nome da etapa e obrigatorio.' });
+    if (name) {
+      const duplicate = await query('SELECT id FROM pipeline_stages WHERE pipeline_id = ? AND LOWER(name) = LOWER(?) AND id <> ? LIMIT 1', [stage.rows[0].pipeline_id, name, stageId]);
+      if (duplicate.rows?.length) return res.status(409).json({ error: 'Ja existe uma etapa com este nome nesta Pipeline.' });
+    }
+    await query('UPDATE pipeline_stages SET name = COALESCE(?, name), color = COALESCE(?, color), sort_order = COALESCE(?, sort_order) WHERE id = ?', [name, req.body?.color ? validColor(req.body.color, null) : null, req.body?.sort_order === undefined ? null : parseSortOrder(req.body.sort_order), stageId]);
+    const result = await query('SELECT * FROM pipeline_stages WHERE id = ?', [stageId]);
     res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: 'Nao foi possivel atualizar a etapa.' });
   }
 });
 
-router.delete('/pipeline-stages/:stageId', async (req, res) => {
+router.delete('/pipeline-stages/:stageId', requireCommercialAdmin, async (req, res) => {
   try {
     const query = getQuery(req);
-    const stage = await query(`SELECT ps.* FROM pipeline_stages ps JOIN pipeline_definitions pd ON pd.id = ps.pipeline_id WHERE ps.id = ? AND pd.owner_user_id = ?`, [req.params.stageId, req.userId]);
+    const stageId = parseId(req.params.stageId);
+    if (!stageId) return res.status(400).json({ error: 'ID da etapa invalido.' });
+    const stage = await query(`SELECT ps.* FROM pipeline_stages ps JOIN pipeline_definitions pd ON pd.id = ps.pipeline_id WHERE ps.id = ? AND pd.owner_user_id = ?`, [stageId, req.userId]);
     if (!stage.rows?.length) return res.status(404).json({ error: 'Etapa nao encontrada.' });
-    const usage = await query('SELECT COUNT(*) AS total FROM prospect_pipeline_positions WHERE stage_id = ?', [req.params.stageId]);
+    const stageCount = await query('SELECT COUNT(*) AS total FROM pipeline_stages WHERE pipeline_id = ?', [stage.rows[0].pipeline_id]);
+    if (Number(stageCount.rows[0].total) <= 1) return res.status(409).json({ error: 'A Pipeline precisa manter pelo menos uma etapa.' });
+    const usage = await query('SELECT COUNT(*) AS total FROM prospect_pipeline_positions WHERE stage_id = ?', [stageId]);
     if (Number(usage.rows[0].total) > 0) return res.status(409).json({ error: 'Mova os Leads desta etapa antes de remove-la.' });
-    await query('DELETE FROM pipeline_stages WHERE id = ?', [req.params.stageId]);
+    await query('DELETE FROM pipeline_stages WHERE id = ?', [stageId]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Nao foi possivel remover a etapa.' });
@@ -121,17 +158,21 @@ router.delete('/pipeline-stages/:stageId', async (req, res) => {
 router.put('/pipelines/:pipelineId/positions/:prospectId', async (req, res) => {
   try {
     const query = getQuery(req);
-    const pipeline = await ownedPipeline(query, req.params.pipelineId, req.userId);
-    const prospect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.prospectId, req.userId]);
-    const stage = await query('SELECT id FROM pipeline_stages WHERE id = ? AND pipeline_id = ?', [req.body?.stage_id, req.params.pipelineId]);
+    const pipelineId = parseId(req.params.pipelineId);
+    const prospectId = parseId(req.params.prospectId);
+    const stageId = parseId(req.body?.stage_id);
+    if (!pipelineId || !prospectId || !stageId) return res.status(400).json({ error: 'Pipeline, etapa ou Lead invalido.' });
+    const pipeline = await ownedPipeline(query, pipelineId, req.userId);
+    const prospect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [prospectId, req.userId]);
+    const stage = await query('SELECT id FROM pipeline_stages WHERE id = ? AND pipeline_id = ?', [stageId, pipelineId]);
     if (!pipeline || !prospect.rows?.length || !stage.rows?.length) return res.status(404).json({ error: 'Pipeline, etapa ou Lead nao encontrado.' });
     await query(
       `INSERT INTO prospect_pipeline_positions (prospect_id, pipeline_id, stage_id, sort_order)
        VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE stage_id = VALUES(stage_id), sort_order = VALUES(sort_order), entered_stage_at = IF(stage_id <> VALUES(stage_id), CURRENT_TIMESTAMP, entered_stage_at), updated_at = CURRENT_TIMESTAMP`,
-      [req.params.prospectId, req.params.pipelineId, req.body.stage_id, Number(req.body?.sort_order || 0)]
+       ON DUPLICATE KEY UPDATE entered_stage_at = IF(stage_id <> VALUES(stage_id), CURRENT_TIMESTAMP, entered_stage_at), stage_id = VALUES(stage_id), sort_order = VALUES(sort_order), updated_at = CURRENT_TIMESTAMP`,
+      [prospectId, pipelineId, stageId, parseSortOrder(req.body?.sort_order)]
     );
-    const result = await query('SELECT * FROM prospect_pipeline_positions WHERE prospect_id = ? AND pipeline_id = ?', [req.params.prospectId, req.params.pipelineId]);
+    const result = await query('SELECT * FROM prospect_pipeline_positions WHERE prospect_id = ? AND pipeline_id = ?', [prospectId, pipelineId]);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Erro ao mover Lead na Pipeline:', error);
@@ -142,17 +183,27 @@ router.put('/pipelines/:pipelineId/positions/:prospectId', async (req, res) => {
 router.post('/pipelines/:pipelineId/import-local', async (req, res) => {
   try {
     const query = getQuery(req);
-    if (!await ownedPipeline(query, req.params.pipelineId, req.userId)) return res.status(404).json({ error: 'Pipeline nao encontrada.' });
+    const pipelineId = parseId(req.params.pipelineId);
+    if (!pipelineId) return res.status(400).json({ error: 'ID da Pipeline invalido.' });
+    if (!await ownedPipeline(query, pipelineId, req.userId)) return res.status(404).json({ error: 'Pipeline nao encontrada.' });
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
     let imported = 0;
     for (const item of items.slice(0, 1000)) {
-      const prospect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [item.prospect_id, req.userId]);
-      const stage = await query('SELECT id FROM pipeline_stages WHERE id = ? AND pipeline_id = ?', [item.stage_id, req.params.pipelineId]);
+      const prospectId = parseId(item.prospect_id);
+      const stageId = parseId(item.stage_id);
+      if (!prospectId || !stageId) continue;
+      const prospect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [prospectId, req.userId]);
+      const stage = await query('SELECT id FROM pipeline_stages WHERE id = ? AND pipeline_id = ?', [stageId, pipelineId]);
       if (!prospect.rows?.length || !stage.rows?.length) continue;
-      await query(`INSERT IGNORE INTO prospect_pipeline_positions (prospect_id, pipeline_id, stage_id, sort_order) VALUES (?, ?, ?, ?)`, [item.prospect_id, req.params.pipelineId, item.stage_id, Number(item.sort_order || 0)]);
+      await query(
+        `INSERT INTO prospect_pipeline_positions (prospect_id, pipeline_id, stage_id, sort_order)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE stage_id = VALUES(stage_id), sort_order = VALUES(sort_order), updated_at = CURRENT_TIMESTAMP`,
+        [prospectId, pipelineId, stageId, parseSortOrder(item.sort_order)]
+      );
       imported += 1;
     }
-    res.json({ imported });
+    res.json({ confirmed: true, imported });
   } catch (error) {
     res.status(500).json({ error: 'Nao foi possivel importar o estado local da Pipeline.' });
   }
@@ -168,7 +219,7 @@ router.post('/labels', async (req, res) => {
     const name = String(req.body?.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Nome da etiqueta e obrigatorio.' });
     const query = getQuery(req);
-    await query(`INSERT INTO lead_labels (owner_user_id, name, color) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE color = VALUES(color), updated_at = CURRENT_TIMESTAMP`, [req.userId, name, req.body?.color || '#4D6EDB']);
+    await query(`INSERT INTO lead_labels (owner_user_id, name, color) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE color = VALUES(color), updated_at = CURRENT_TIMESTAMP`, [req.userId, name, validColor(req.body?.color)]);
     const result = await query('SELECT * FROM lead_labels WHERE owner_user_id = ? AND name = ?', [req.userId, name]);
     res.status(201).json(result.rows[0]);
   } catch (error) { res.status(500).json({ error: 'Nao foi possivel salvar a etiqueta.' }); }
@@ -177,8 +228,12 @@ router.post('/labels', async (req, res) => {
 router.patch('/labels/:labelId', async (req, res) => {
   try {
     const query = getQuery(req);
-    await query('UPDATE lead_labels SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE id = ? AND owner_user_id = ?', [req.body?.name || null, req.body?.color || null, req.params.labelId, req.userId]);
-    const result = await query('SELECT * FROM lead_labels WHERE id = ? AND owner_user_id = ?', [req.params.labelId, req.userId]);
+    const labelId = parseId(req.params.labelId);
+    if (!labelId) return res.status(400).json({ error: 'ID da etiqueta invalido.' });
+    const name = req.body?.name === undefined ? null : String(req.body.name).trim();
+    if (req.body?.name !== undefined && !name) return res.status(400).json({ error: 'Nome da etiqueta e obrigatorio.' });
+    await query('UPDATE lead_labels SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE id = ? AND owner_user_id = ?', [name, req.body?.color ? validColor(req.body.color) : null, labelId, req.userId]);
+    const result = await query('SELECT * FROM lead_labels WHERE id = ? AND owner_user_id = ?', [labelId, req.userId]);
     if (!result.rows?.length) return res.status(404).json({ error: 'Etiqueta nao encontrada.' });
     res.json(result.rows[0]);
   } catch (error) { res.status(500).json({ error: 'Nao foi possivel editar a etiqueta.' }); }
@@ -186,7 +241,9 @@ router.patch('/labels/:labelId', async (req, res) => {
 
 router.delete('/labels/:labelId', async (req, res) => {
   try {
-    const result = await getQuery(req)('DELETE FROM lead_labels WHERE id = ? AND owner_user_id = ?', [req.params.labelId, req.userId]);
+    const labelId = parseId(req.params.labelId);
+    if (!labelId) return res.status(400).json({ error: 'ID da etiqueta invalido.' });
+    const result = await getQuery(req)('DELETE FROM lead_labels WHERE id = ? AND owner_user_id = ?', [labelId, req.userId]);
     if (!result.affectedRows) return res.status(404).json({ error: 'Etiqueta nao encontrada.' });
     res.json({ success: true });
   } catch (error) { res.status(500).json({ error: 'Nao foi possivel remover a etiqueta.' }); }
@@ -195,16 +252,20 @@ router.delete('/labels/:labelId', async (req, res) => {
 router.put('/prospects/:prospectId/labels', async (req, res) => {
   const connection = await getPool().getConnection();
   try {
-    const [prospects] = await connection.execute('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.prospectId, req.userId]);
+    const prospectId = parseId(req.params.prospectId);
+    if (!prospectId) return res.status(400).json({ error: 'ID do Lead invalido.' });
+    const [prospects] = await connection.execute('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [prospectId, req.userId]);
     if (!prospects.length) return res.status(404).json({ error: 'Lead nao encontrado.' });
-    const ids = [...new Set((Array.isArray(req.body?.label_ids) ? req.body.label_ids : []).map(Number).filter(Boolean))];
+    const rawIds = Array.isArray(req.body?.label_ids) ? req.body.label_ids : [];
+    const ids = [...new Set(rawIds.map(parseId))];
+    if (ids.some((id) => id === null)) return res.status(400).json({ error: 'Uma ou mais etiquetas sao invalidas.' });
     await connection.beginTransaction();
     if (ids.length) {
       const [owned] = await connection.execute(`SELECT id FROM lead_labels WHERE owner_user_id = ? AND id IN (${ids.map(() => '?').join(',')})`, [req.userId, ...ids]);
       if (owned.length !== ids.length) throw new Error('Uma ou mais etiquetas nao pertencem ao usuario.');
     }
-    await connection.execute('DELETE FROM prospect_labels WHERE prospect_id = ?', [req.params.prospectId]);
-    for (const id of ids) await connection.execute('INSERT INTO prospect_labels (prospect_id, label_id, created_by) VALUES (?, ?, ?)', [req.params.prospectId, id, req.userId]);
+    await connection.execute('DELETE FROM prospect_labels WHERE prospect_id = ?', [prospectId]);
+    for (const id of ids) await connection.execute('INSERT INTO prospect_labels (prospect_id, label_id, created_by) VALUES (?, ?, ?)', [prospectId, id, req.userId]);
     await connection.commit();
     res.json({ label_ids: ids });
   } catch (error) {
@@ -214,25 +275,36 @@ router.put('/prospects/:prospectId/labels', async (req, res) => {
 });
 
 router.get('/users/options', async (req, res) => {
-  const result = await getQuery(req)('SELECT id, name, email FROM users WHERE is_active = 1 ORDER BY name');
+  const result = await getQuery(req)(`SELECT id, name, email FROM users
+    WHERE is_active = 1 AND (can_access_crm = 1 OR LOWER(role) IN ('admin', 'administrator', 'administrador'))
+    ORDER BY name`);
   res.json({ users: result.rows || [] });
 });
 
 router.get('/prospects/:prospectId/activities', async (req, res) => {
-  const result = await getQuery(req)(`SELECT la.*, u.name AS assigned_user_name FROM lead_activities la LEFT JOIN users u ON u.id = la.assigned_user_id JOIN prospects p ON p.id = la.prospect_id WHERE la.prospect_id = ? AND p.owner_user_id = ? ORDER BY la.created_at DESC`, [req.params.prospectId, req.userId]);
+  const prospectId = parseId(req.params.prospectId);
+  if (!prospectId) return res.status(400).json({ error: 'ID do Lead invalido.' });
+  const result = await getQuery(req)(`SELECT la.*, u.name AS assigned_user_name FROM lead_activities la LEFT JOIN users u ON u.id = la.assigned_user_id JOIN prospects p ON p.id = la.prospect_id WHERE la.prospect_id = ? AND p.owner_user_id = ? ORDER BY la.created_at DESC`, [prospectId, req.userId]);
   res.json({ activities: result.rows || [] });
 });
 
 router.post('/prospects/:prospectId/activities', async (req, res) => {
   try {
     const query = getQuery(req);
-    const prospect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.prospectId, req.userId]);
+    const prospectId = parseId(req.params.prospectId);
+    if (!prospectId) return res.status(400).json({ error: 'ID do Lead invalido.' });
+    const prospect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [prospectId, req.userId]);
     if (!prospect.rows?.length) return res.status(404).json({ error: 'Lead nao encontrado.' });
     const title = String(req.body?.title || '').trim();
     if (!title) return res.status(400).json({ error: 'Titulo da atividade e obrigatorio.' });
     const allowedTypes = ['task', 'call', 'follow_up', 'activity'];
     const type = allowedTypes.includes(req.body?.type) ? req.body.type : 'activity';
-    const inserted = await query(`INSERT INTO lead_activities (prospect_id, type, title, description, assigned_user_id, due_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`, [req.params.prospectId, type, title, req.body?.description || null, req.body?.assigned_user_id || null, req.body?.due_at || null, req.userId]);
+    const assignedUserId = req.body?.assigned_user_id == null ? null : parseId(req.body.assigned_user_id);
+    if (req.body?.assigned_user_id != null && !assignedUserId) return res.status(400).json({ error: 'Responsavel invalido.' });
+    if (!await validAssignableUser(query, assignedUserId)) return res.status(400).json({ error: 'Responsavel inexistente, inativo ou sem acesso ao CRM.' });
+    const dueAt = normalizeDateTime(req.body?.due_at);
+    if (dueAt === undefined) return res.status(400).json({ error: 'Prazo da atividade invalido.' });
+    const inserted = await query(`INSERT INTO lead_activities (prospect_id, type, title, description, assigned_user_id, due_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`, [prospectId, type, title, req.body?.description || null, assignedUserId, dueAt, req.userId]);
     const result = await query('SELECT * FROM lead_activities WHERE id = ?', [inserted.insertId]);
     res.status(201).json(result.rows[0]);
   } catch (error) { res.status(500).json({ error: 'Nao foi possivel criar a atividade.' }); }
@@ -241,11 +313,20 @@ router.post('/prospects/:prospectId/activities', async (req, res) => {
 router.patch('/activities/:activityId', async (req, res) => {
   try {
     const query = getQuery(req);
-    const activity = await query(`SELECT la.id FROM lead_activities la JOIN prospects p ON p.id = la.prospect_id WHERE la.id = ? AND p.owner_user_id = ?`, [req.params.activityId, req.userId]);
+    const activityId = parseId(req.params.activityId);
+    if (!activityId) return res.status(400).json({ error: 'ID da atividade invalido.' });
+    const activity = await query(`SELECT la.id FROM lead_activities la JOIN prospects p ON p.id = la.prospect_id WHERE la.id = ? AND p.owner_user_id = ?`, [activityId, req.userId]);
     if (!activity.rows?.length) return res.status(404).json({ error: 'Atividade nao encontrada.' });
     const status = ['pending', 'completed', 'cancelled'].includes(req.body?.status) ? req.body.status : null;
-    await query(`UPDATE lead_activities SET title = COALESCE(?, title), description = COALESCE(?, description), assigned_user_id = COALESCE(?, assigned_user_id), due_at = COALESCE(?, due_at), status = COALESCE(?, status), completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP WHEN ? = 'pending' THEN NULL ELSE completed_at END WHERE id = ?`, [req.body?.title || null, req.body?.description || null, req.body?.assigned_user_id || null, req.body?.due_at || null, status, status, status, req.params.activityId]);
-    const result = await query('SELECT * FROM lead_activities WHERE id = ?', [req.params.activityId]);
+    const hasAssignee = Object.prototype.hasOwnProperty.call(req.body || {}, 'assigned_user_id');
+    const assignedUserId = hasAssignee && req.body.assigned_user_id !== null ? parseId(req.body.assigned_user_id) : null;
+    if (hasAssignee && req.body.assigned_user_id !== null && !assignedUserId) return res.status(400).json({ error: 'Responsavel invalido.' });
+    if (hasAssignee && !await validAssignableUser(query, assignedUserId)) return res.status(400).json({ error: 'Responsavel inexistente, inativo ou sem acesso ao CRM.' });
+    const hasDueAt = Object.prototype.hasOwnProperty.call(req.body || {}, 'due_at');
+    const dueAt = hasDueAt ? normalizeDateTime(req.body.due_at) : null;
+    if (dueAt === undefined) return res.status(400).json({ error: 'Prazo da atividade invalido.' });
+    await query(`UPDATE lead_activities SET title = COALESCE(?, title), description = COALESCE(?, description), assigned_user_id = IF(?, ?, assigned_user_id), due_at = IF(?, ?, due_at), status = COALESCE(?, status), completed_at = CASE WHEN ? = 'completed' THEN COALESCE(completed_at, CURRENT_TIMESTAMP) WHEN ? = 'pending' THEN NULL ELSE completed_at END WHERE id = ?`, [req.body?.title || null, req.body?.description ?? null, hasAssignee, assignedUserId, hasDueAt, dueAt, status, status, status, activityId]);
+    const result = await query('SELECT * FROM lead_activities WHERE id = ?', [activityId]);
     res.json(result.rows[0]);
   } catch (error) { res.status(500).json({ error: 'Nao foi possivel atualizar a atividade.' }); }
 });
@@ -255,8 +336,47 @@ router.get('/notifications', async (req, res) => {
   res.json({ notifications: result.rows || [] });
 });
 
+router.post('/notifications', async (req, res) => {
+  try {
+    const type = ['info', 'success', 'warning', 'error'].includes(req.body?.type) ? req.body.type : 'info';
+    const title = String(req.body?.title || '').trim().slice(0, 255);
+    const message = String(req.body?.message || '').trim();
+    if (!title || !message) return res.status(400).json({ error: 'Titulo e mensagem sao obrigatorios.' });
+    const query = getQuery(req);
+    const inserted = await query(
+      `INSERT INTO internal_notifications (user_id, type, title, message, entity_type, entity_id, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [req.userId, type, title, message, req.body?.entity_type || null, req.body?.entity_id || null, JSON.stringify(req.body?.metadata || {})]
+    );
+    const result = await query('SELECT * FROM internal_notifications WHERE id = ? AND user_id = ?', [inserted.insertId, req.userId]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) { res.status(500).json({ error: 'Nao foi possivel criar a notificacao.' }); }
+});
+
 router.patch('/notifications/:notificationId/read', async (req, res) => {
-  await getQuery(req)('UPDATE internal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE id = ? AND user_id = ?', [req.params.notificationId, req.userId]);
+  const notificationId = parseId(req.params.notificationId);
+  if (!notificationId) return res.status(400).json({ error: 'ID da notificacao invalido.' });
+  const owned = await getQuery(req)('SELECT id FROM internal_notifications WHERE id = ? AND user_id = ?', [notificationId, req.userId]);
+  if (!owned.rows?.length) return res.status(404).json({ error: 'Notificacao nao encontrada.' });
+  await getQuery(req)('UPDATE internal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE id = ? AND user_id = ?', [notificationId, req.userId]);
+  res.json({ success: true });
+});
+
+router.patch('/notifications/read-all', async (req, res) => {
+  await getQuery(req)('UPDATE internal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE user_id = ?', [req.userId]);
+  res.json({ success: true });
+});
+
+router.delete('/notifications/:notificationId', async (req, res) => {
+  const notificationId = parseId(req.params.notificationId);
+  if (!notificationId) return res.status(400).json({ error: 'ID da notificacao invalido.' });
+  const result = await getQuery(req)('DELETE FROM internal_notifications WHERE id = ? AND user_id = ?', [notificationId, req.userId]);
+  if (!result.affectedRows) return res.status(404).json({ error: 'Notificacao nao encontrada.' });
+  res.json({ success: true });
+});
+
+router.delete('/notifications', async (req, res) => {
+  await getQuery(req)('DELETE FROM internal_notifications WHERE user_id = ?', [req.userId]);
   res.json({ success: true });
 });
 

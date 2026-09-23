@@ -7,15 +7,11 @@ type ProspectAnalysisReport = {
   folderName?: string | null;
   source?: string | null;
   origem?: string | null;
-  responsible?: string | null;
-  assignedTo?: string | null;
-  assignedUserId?: number | null;
   contactName?: string | null;
   email_secundario?: string | null;
   bairro?: string | null;
   crmSent?: boolean;
   crmSentAt?: string | null;
-  labels?: Array<string | LeadLabel>;
   address?: string | null;
   linkedin?: string | null;
   sector?: string | null;
@@ -39,7 +35,7 @@ const statusMap: Record<ProspectStatus, LeadStatus> = {
   Perdido: "perdido",
 };
 
-function normalizeLabels(labels?: Array<string | LeadLabel>): LeadLabel[] {
+function normalizeLabels(labels?: Array<string | LeadLabel | { id: number | string; name: string; color: string }>): LeadLabel[] {
   if (!Array.isArray(labels)) return [];
 
   return labels
@@ -50,7 +46,7 @@ function normalizeLabels(labels?: Array<string | LeadLabel>): LeadLabel[] {
 
       if (!label?.name) return null;
       return {
-        id: label.id || slugify(label.name),
+        id: String(label.id || slugify(label.name)),
         name: label.name,
         color: label.color || "#4D6EDB",
       };
@@ -97,8 +93,8 @@ export function prospectToLead(prospect: Prospect): Lead {
     status: statusMap[prospect.status] || "novo",
     folderId: slugify(folderName),
     folderName,
-    assignedTo: report.assignedTo || report.responsible || null,
-    assignedUserId: report.assignedUserId || prospect.assigned_user_id || null,
+    assignedTo: prospect.assigned_user_name || null,
+    assignedUserId: prospect.assigned_user_id || null,
     googleMapsUrl: prospect.google_maps_url,
     lastContactAt: prospect.last_contact_date,
     createdAt: prospect.created_at,
@@ -108,7 +104,7 @@ export function prospectToLead(prospect: Prospect): Lead {
       origin: report.source || report.origem || "manual",
       crmSent: Boolean(report.crmSent),
       crmSentAt: report.crmSentAt || null,
-      labels: normalizeLabels(report.labels),
+      labels: normalizeLabels(prospect.labels),
       address: report.address || prospect.address || null,
       linkedin: report.linkedin || null,
       sector: report.sector || null,
@@ -118,7 +114,7 @@ export function prospectToLead(prospect: Prospect): Lead {
       notes: report.notes || null,
       nextMeetingAt: report.nextMeetingAt || null,
       meetingOwner: report.meetingOwner || null,
-      assignedUserId: report.assignedUserId || prospect.assigned_user_id || null,
+      assignedUserId: prospect.assigned_user_id || null,
       documents: report.documents || [],
     },
   };

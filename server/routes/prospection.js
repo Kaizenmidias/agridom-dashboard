@@ -1,26 +1,13 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
+const { authenticateToken } = require('../middleware/auth');
+const { requireCommercialAccess } = require('../middleware/commercial-access');
 
 const router = express.Router();
 
 const getQuery = (req) => req.app.locals.query;
 
-const authenticateRequest = (req, res, next) => {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Token nao fornecido' });
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
-    req.userId = decoded.userId;
-    req.user = decoded;
-    next();
-  } catch {
-    res.status(401).json({ error: 'Token invalido' });
-  }
-};
-
-router.use(authenticateRequest);
+router.use(authenticateToken);
+router.use(requireCommercialAccess);
 
 const defaultSettings = {
   whatsapp_template: 'Olá, {{business_name}}! Tudo bem?',
@@ -46,14 +33,44 @@ const normalizeBusinessName = (value) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
-const buildAnalysisReport = (body = {}, previous = {}) => ({
-  ...(previous || {}),
-  ...(body.metadata || {}),
-  source: normalizeNullable(body.source) || previous?.source || 'manual',
-  contactName: normalizeNullable(body.contact_name) || null,
-  assignedTo: normalizeNullable(body.assigned_to) || null,
-  folderName: previous?.folderName || 'Todos os Leads',
-});
+const buildAnalysisReport = (body = {}, previous = {}) => {
+  const { labels, assignedUserId, assignedTo, ...legacyMetadata } = body.metadata || {};
+  return {
+    ...(previous || {}),
+    ...legacyMetadata,
+    source: normalizeNullable(body.source) || previous?.source || 'manual',
+    contactName: normalizeNullable(body.contact_name) || null,
+    folderName: previous?.folderName || 'Todos os Leads',
+  };
+};
+
+const parseId = (value) => {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+};
+
+async function validateAssignedUser(query, value) {
+  if (value === null) return true;
+  const result = await query(
+    `SELECT id FROM users
+     WHERE id = ? AND is_active = 1
+       AND (can_access_crm = 1 OR LOWER(role) IN ('admin', 'administrator', 'administrador'))
+     LIMIT 1`,
+    [value]
+  );
+  return Boolean(result.rows?.length);
+}
+
+async function hydrateProspect(query, prospect, ownerUserId) {
+  if (!prospect) return null;
+  const labels = await query(
+    `SELECT ll.id, ll.name, ll.color
+     FROM prospect_labels pl JOIN lead_labels ll ON ll.id = pl.label_id
+     WHERE pl.prospect_id = ? AND ll.owner_user_id = ? ORDER BY ll.name`,
+    [prospect.id, ownerUserId]
+  );
+  return { ...prospect, labels: labels.rows || [] };
+}
 
 async function insertHistory(query, { prospectId, ownerUserId, channel = 'system', subject = null, message, recipient = null, metadata = {} }) {
   await query(
@@ -110,11 +127,10 @@ router.get('/bootstrap', async (req, res) => {
       acc[key] = [...(acc[key] || []), { id: String(label.id), name: label.name, color: label.color }];
       return acc;
     }, {});
-    const rows = (prospects.rows || []).map((prospect) => {
-      let report = {};
-      try { report = typeof prospect.analysis_report === 'string' ? JSON.parse(prospect.analysis_report || '{}') : (prospect.analysis_report || {}); } catch { report = {}; }
-      return { ...prospect, analysis_report: { ...report, labels: labelsByProspect[String(prospect.id)] || [], assignedUserId: prospect.assigned_user_id, assignedTo: prospect.assigned_user_name || report.assignedTo || null } };
-    });
+    const rows = (prospects.rows || []).map((prospect) => ({
+      ...prospect,
+      labels: labelsByProspect[String(prospect.id)] || [],
+    }));
     res.json({
       prospects: rows,
       settings: settings.rows?.[0] || { id: 0, owner_user_id: req.userId, ...defaultSettings },
@@ -162,6 +178,12 @@ router.post('/prospects', async (req, res) => {
     const phone = normalizeNullable(req.body.phone);
     const website = normalizeNullable(req.body.website);
     const analysisReport = buildAnalysisReport(req.body);
+    const requestedAssignee = Object.prototype.hasOwnProperty.call(req.body || {}, 'assigned_user_id')
+      ? req.body.assigned_user_id
+      : (req.body.metadata?.assignedUserId ?? null);
+    const assignedUserId = requestedAssignee === null || requestedAssignee === '' ? null : parseId(requestedAssignee);
+    if (requestedAssignee !== null && requestedAssignee !== '' && !assignedUserId) return res.status(400).json({ error: 'Responsavel invalido' });
+    if (!await validateAssignedUser(query, assignedUserId)) return res.status(400).json({ error: 'Responsavel inexistente, inativo ou sem acesso ao CRM' });
 
     const insert = await query(
       `INSERT INTO prospects (
@@ -171,7 +193,7 @@ router.post('/prospects', async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.userId,
-        req.body.assigned_user_id ?? req.body.metadata?.assignedUserId ?? null,
+        assignedUserId,
         businessName,
         normalizeBusinessName(businessName),
         normalizeNullable(req.body.category),
@@ -200,8 +222,10 @@ router.post('/prospects', async (req, res) => {
 
     await syncProspectLabels(query, insert.insertId, req.userId, req.body.metadata?.labels);
 
-    const result = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [insert.insertId, req.userId]);
-    res.status(201).json(result.rows[0]);
+    const result = await query(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
+      FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
+      WHERE p.id = ? AND p.owner_user_id = ?`, [insert.insertId, req.userId]);
+    res.status(201).json(await hydrateProspect(query, result.rows[0], req.userId));
   } catch (error) {
     console.error('Erro ao criar prospect:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
@@ -212,7 +236,9 @@ router.patch('/prospects/:id', async (req, res) => {
   try {
     const { status, last_contact_date, approach_suggestion, diagnostic_summary, problems_found, folder_name } = req.body;
     const query = getQuery(req);
-    const existing = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.id, req.userId]);
+    const prospectId = parseId(req.params.id);
+    if (!prospectId) return res.status(400).json({ error: 'ID do Lead invalido' });
+    const existing = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [prospectId, req.userId]);
     if (!existing.rows?.length) return res.status(404).json({ error: 'Prospect nao encontrado' });
 
     let previousReport = {};
@@ -231,6 +257,14 @@ router.patch('/prospects/:id', async (req, res) => {
     const businessName = normalizeNullable(req.body.business_name);
     const phone = normalizeNullable(req.body.phone);
     const website = normalizeNullable(req.body.website);
+    const hasAssignee = Object.prototype.hasOwnProperty.call(req.body || {}, 'assigned_user_id')
+      || Object.prototype.hasOwnProperty.call(req.body?.metadata || {}, 'assignedUserId');
+    const requestedAssignee = Object.prototype.hasOwnProperty.call(req.body || {}, 'assigned_user_id')
+      ? req.body.assigned_user_id
+      : (req.body.metadata?.assignedUserId ?? null);
+    const assignedUserId = requestedAssignee === null || requestedAssignee === '' ? null : parseId(requestedAssignee);
+    if (hasAssignee && requestedAssignee !== null && requestedAssignee !== '' && !assignedUserId) return res.status(400).json({ error: 'Responsavel invalido' });
+    if (hasAssignee && !await validateAssignedUser(query, assignedUserId)) return res.status(400).json({ error: 'Responsavel inexistente, inativo ou sem acesso ao CRM' });
 
     await query(
       `UPDATE prospects
@@ -251,7 +285,7 @@ router.patch('/prospects/:id', async (req, res) => {
            approach_suggestion = COALESCE(?, approach_suggestion),
            diagnostic_summary = COALESCE(?, diagnostic_summary),
            problems_found = COALESCE(?, problems_found),
-           assigned_user_id = COALESCE(?, assigned_user_id),
+           assigned_user_id = IF(?, ?, assigned_user_id),
            analysis_report = ?,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND owner_user_id = ?`,
@@ -273,25 +307,28 @@ router.patch('/prospects/:id', async (req, res) => {
         approach_suggestion ?? null,
         diagnostic_summary ?? null,
         problems_found ? JSON.stringify(problems_found) : null,
-        req.body.assigned_user_id ?? req.body.metadata?.assignedUserId ?? null,
+        hasAssignee,
+        assignedUserId,
         JSON.stringify(nextReport),
-        req.params.id,
+        prospectId,
         req.userId,
       ]
     );
 
-    await syncProspectLabels(query, req.params.id, req.userId, req.body.metadata?.labels);
+    await syncProspectLabels(query, prospectId, req.userId, req.body.metadata?.labels);
 
     await insertHistory(query, {
-      prospectId: req.params.id,
+      prospectId,
       ownerUserId: req.userId,
       message: 'Informacoes do lead atualizadas.',
       recipient: normalizeNullable(req.body.email) || phone,
       metadata: { action: 'updated' },
     });
 
-    const result = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.id, req.userId]);
-    res.json(result.rows[0]);
+    const result = await query(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
+      FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
+      WHERE p.id = ? AND p.owner_user_id = ?`, [prospectId, req.userId]);
+    res.json(await hydrateProspect(query, result.rows[0], req.userId));
   } catch (error) {
     console.error('Erro ao atualizar prospect:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
@@ -311,20 +348,27 @@ router.delete('/prospects/:id', async (req, res) => {
 router.post('/prospects/:id/add-to-crm', async (req, res) => {
   try {
     const query = getQuery(req);
-    const ownedProspect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.id, req.userId]);
+    const prospectId = parseId(req.params.id);
+    if (!prospectId) return res.status(400).json({ error: 'ID do Lead invalido' });
+    const ownedProspect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [prospectId, req.userId]);
     if (!ownedProspect.rows?.length) return res.status(404).json({ error: 'Prospect nao encontrado' });
     await query(
       `UPDATE prospects
        SET analysis_report = JSON_SET(
          COALESCE(analysis_report, JSON_OBJECT()),
          '$.crmSent', true,
-         '$.crmSentAt', ?,
-         '$.labels', COALESCE(JSON_EXTRACT(analysis_report, '$.labels'), JSON_ARRAY(JSON_OBJECT('id', 'frio', 'name', 'Frio', 'color', '#4D6EDB')))
+         '$.crmSentAt', ?
        ),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND owner_user_id = ?`,
-      [new Date().toISOString(), req.params.id, req.userId]
+      [new Date().toISOString(), prospectId, req.userId]
     );
+    await query(`INSERT INTO lead_labels (owner_user_id, name, color) VALUES (?, 'Frio', '#4D6EDB')
+      ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP`, [req.userId]);
+    const coldLabel = await query("SELECT id FROM lead_labels WHERE owner_user_id = ? AND name = 'Frio' LIMIT 1", [req.userId]);
+    if (coldLabel.rows?.length) {
+      await query('INSERT IGNORE INTO prospect_labels (prospect_id, label_id, created_by) VALUES (?, ?, ?)', [prospectId, coldLabel.rows[0].id, req.userId]);
+    }
     let pipeline = await query('SELECT id FROM pipeline_definitions WHERE owner_user_id = ? ORDER BY is_default DESC, id LIMIT 1', [req.userId]);
     if (!pipeline.rows?.length) {
       const inserted = await query("INSERT INTO pipeline_definitions (owner_user_id, name, is_default) VALUES (?, 'Pipeline Comercial', 1)", [req.userId]);
@@ -336,17 +380,19 @@ router.post('/prospects/:id/add-to-crm', async (req, res) => {
     const firstStage = await query('SELECT id FROM pipeline_stages WHERE pipeline_id = ? ORDER BY sort_order, id LIMIT 1', [pipeline.rows[0].id]);
     if (firstStage.rows?.length) {
       await query(`INSERT INTO prospect_pipeline_positions (prospect_id, pipeline_id, stage_id, sort_order)
-        VALUES (?, ?, ?, 0) ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP`, [req.params.id, pipeline.rows[0].id, firstStage.rows[0].id]);
+        VALUES (?, ?, ?, 0) ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP`, [prospectId, pipeline.rows[0].id, firstStage.rows[0].id]);
     }
     await insertHistory(query, {
-      prospectId: req.params.id,
+      prospectId,
       ownerUserId: req.userId,
       channel: 'crm',
       message: 'Lead adicionado ao Kanban comercial.',
       metadata: { action: 'added_to_kanban' },
     });
-    const result = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.id, req.userId]);
-    res.json(result.rows[0]);
+    const result = await query(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
+      FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
+      WHERE p.id = ? AND p.owner_user_id = ?`, [prospectId, req.userId]);
+    res.json(await hydrateProspect(query, result.rows[0], req.userId));
   } catch (error) {
     console.error('Erro ao adicionar prospect ao CRM:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });

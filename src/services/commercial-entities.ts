@@ -16,6 +16,15 @@ export type LeadActivityRecord = {
   due_at?: string | null;
   status: "pending" | "completed" | "cancelled";
   completed_at?: string | null;
+  created_by?: number;
+  created_at: string;
+};
+export type InternalNotificationRecord = {
+  id: number;
+  type: "info" | "success" | "warning" | "error";
+  title: string;
+  message: string;
+  read_at?: string | null;
   created_at: string;
 };
 
@@ -39,7 +48,7 @@ export const commercialEntitiesAPI = {
   updateStage: (stageId: number, values: Partial<PipelineStage>) => request<PipelineStage>(`/pipeline-stages/${stageId}`, { method: "PATCH", body: JSON.stringify(values) }),
   deleteStage: (stageId: number) => request<{ success: true }>(`/pipeline-stages/${stageId}`, { method: "DELETE" }),
   moveLead: (pipelineId: number, prospectId: string, stageId: number, sortOrder = 0) => request<PipelinePosition>(`/pipelines/${pipelineId}/positions/${prospectId}`, { method: "PUT", body: JSON.stringify({ stage_id: stageId, sort_order: sortOrder }) }),
-  importLocalPipeline: (pipelineId: number, items: Array<{ prospect_id: string; stage_id: number; sort_order: number }>) => request<{ imported: number }>(`/pipelines/${pipelineId}/import-local`, { method: "POST", body: JSON.stringify({ items }) }),
+  importLocalPipeline: (pipelineId: number, items: Array<{ prospect_id: string; stage_id: number; sort_order: number }>) => request<{ confirmed: boolean; imported: number }>(`/pipelines/${pipelineId}/import-local`, { method: "POST", body: JSON.stringify({ items }) }),
   getLabels: () => request<{ labels: Array<{ id: number; name: string; color: string }> }>("/labels"),
   createLabel: (name: string, color: string) => request<{ id: number; name: string; color: string }>("/labels", { method: "POST", body: JSON.stringify({ name, color }) }),
   updateLabel: (id: string, values: Partial<LeadLabel>) => request<{ id: number; name: string; color: string }>(`/labels/${id}`, { method: "PATCH", body: JSON.stringify(values) }),
@@ -49,4 +58,10 @@ export const commercialEntitiesAPI = {
   getActivities: (prospectId: string) => request<{ activities: LeadActivityRecord[] }>(`/prospects/${prospectId}/activities`),
   createActivity: (prospectId: string, values: Partial<LeadActivityRecord>) => request<LeadActivityRecord>(`/prospects/${prospectId}/activities`, { method: "POST", body: JSON.stringify(values) }),
   updateActivity: (activityId: number, values: Partial<LeadActivityRecord>) => request<LeadActivityRecord>(`/activities/${activityId}`, { method: "PATCH", body: JSON.stringify(values) }),
+  getNotifications: () => request<{ notifications: InternalNotificationRecord[] }>("/notifications"),
+  createNotification: (values: Pick<InternalNotificationRecord, "title" | "message" | "type">) => request<InternalNotificationRecord>("/notifications", { method: "POST", body: JSON.stringify(values) }),
+  markNotificationRead: (id: number) => request<{ success: true }>(`/notifications/${id}/read`, { method: "PATCH" }),
+  markAllNotificationsRead: () => request<{ success: true }>("/notifications/read-all", { method: "PATCH" }),
+  deleteNotification: (id: number) => request<{ success: true }>(`/notifications/${id}`, { method: "DELETE" }),
+  clearNotifications: () => request<{ success: true }>("/notifications", { method: "DELETE" }),
 };

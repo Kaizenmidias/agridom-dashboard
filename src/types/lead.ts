@@ -85,8 +85,11 @@ export interface LeadActivity {
   createdAt: string;
   type?: "task" | "call" | "follow_up" | "activity";
   status?: "pending" | "completed" | "cancelled";
+  completedAt?: string | null;
   dueAt?: string | null;
+  createdBy?: number;
   assignedUserId?: number | null;
+  assignedUserName?: string | null;
 }
 
 export interface LeadFolder {

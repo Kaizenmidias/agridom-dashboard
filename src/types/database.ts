@@ -242,6 +242,9 @@ export interface Prospect {
   id: number;
   owner_user_id?: number | null;
   assigned_user_id?: number | null;
+  assigned_user_name?: string | null;
+  assigned_user_email?: string | null;
+  labels?: Array<{ id: number | string; name: string; color: string }>;
   business_name: string;
   normalized_business_name?: string | null;
   category?: string | null;

@@ -1076,12 +1076,16 @@ export default function LeadsPage() {
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="lead-owner">Responsável</Label>
-              <Select value={leadForm.assignedUserId || undefined} onValueChange={(value) => {
+              <Select value={leadForm.assignedUserId || "unassigned"} onValueChange={(value) => {
+                if (value === "unassigned") {
+                  setLeadForm((current) => ({ ...current, assignedUserId: "", assignedTo: "" }));
+                  return;
+                }
                 const selected = userOptions.find((user) => String(user.id) === value);
                 setLeadForm((current) => ({ ...current, assignedUserId: value, assignedTo: selected?.name || "" }));
               }}>
                 <SelectTrigger id="lead-owner"><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
-                <SelectContent>{userOptions.map((user) => <SelectItem key={user.id} value={String(user.id)}>{user.name} ({user.email})</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="unassigned">Sem responsável</SelectItem>{userOptions.map((user) => <SelectItem key={user.id} value={String(user.id)}>{user.name} ({user.email})</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>

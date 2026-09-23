@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { commercialEntitiesAPI } from "@/services/commercial-entities";
 
-export type NotificationType = 'info' | 'success' | 'warning' | 'error';
+export type NotificationType = "info" | "success" | "warning" | "error";
 
 export interface Notification {
   id: number;
@@ -12,107 +13,65 @@ export interface Notification {
   date: Date;
 }
 
-const STORAGE_KEY = 'crm_notifications';
-const MAX_NOTIFICATIONS = 50;
+const mapNotification = (item: Awaited<ReturnType<typeof commercialEntitiesAPI.createNotification>>): Notification => ({
+  id: item.id,
+  type: item.type,
+  title: item.title,
+  message: item.message,
+  read: Boolean(item.read_at),
+  date: new Date(item.created_at),
+});
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  
-  // Load notifications from localStorage on init
-  useEffect(() => {
+
+  const loadNotifications = useCallback(async () => {
     try {
-      const storedNotifications = localStorage.getItem(STORAGE_KEY);
-      if (storedNotifications) {
-        const parsedNotifications = JSON.parse(storedNotifications).map((notification: any) => ({
-          ...notification,
-          date: new Date(notification.date)
-        }));
-        
-        setNotifications(parsedNotifications);
-        setUnreadCount(parsedNotifications.filter((note: Notification) => !note.read).length);
-      }
+      const payload = await commercialEntitiesAPI.getNotifications();
+      setNotifications(payload.notifications.map(mapNotification));
     } catch (error) {
-      console.error('Failed to load notifications:', error);
+      console.error("Não foi possível carregar as notificações.", error);
     }
   }, []);
-  
-  // Save notifications to localStorage whenever they change
+
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
-    } catch (error) {
-      console.error('Failed to save notifications:', error);
-    }
-  }, [notifications]);
-  
-  // Add a new notification
-  const addNotification = useCallback((
+    void loadNotifications();
+  }, [loadNotifications]);
+
+  const unreadCount = useMemo(() => notifications.filter((notification) => !notification.read).length, [notifications]);
+
+  const addNotification = useCallback(async (
     title: string,
     message: string,
-    type: NotificationType = 'info',
+    type: NotificationType = "info",
     showToast = true
-  ): Notification => {
-    const newNotification: Notification = {
-      id: Date.now(),
-      title,
-      message,
-      type,
-      read: false,
-      date: new Date()
-    };
-    
-    // Add to notifications and keep only the most recent MAX_NOTIFICATIONS
-    setNotifications(prev => [newNotification, ...prev].slice(0, MAX_NOTIFICATIONS));
-    setUnreadCount(prev => prev + 1);
-    
-    // Show a toast if requested
-    if (showToast) {
-      toast[type](title, { description: message });
-    }
-    
-    return newNotification;
+  ) => {
+    const persisted = mapNotification(await commercialEntitiesAPI.createNotification({ title, message, type }));
+    setNotifications((current) => [persisted, ...current]);
+    if (showToast) toast[type](title, { description: message });
+    return persisted;
   }, []);
-  
-  // Mark a notification as read
-  const markAsRead = useCallback((id: number) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id 
-          ? { ...notification, read: true } 
-          : notification
-      )
-    );
-    
-    setUnreadCount(prev => Math.max(0, prev - 1));
+
+  const markAsRead = useCallback(async (id: number) => {
+    await commercialEntitiesAPI.markNotificationRead(id);
+    setNotifications((current) => current.map((notification) => notification.id === id ? { ...notification, read: true } : notification));
   }, []);
-  
-  // Mark all notifications as read
-  const markAllAsRead = useCallback(() => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-    
-    setUnreadCount(0);
+
+  const markAllAsRead = useCallback(async () => {
+    await commercialEntitiesAPI.markAllNotificationsRead();
+    setNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
   }, []);
-  
-  // Delete a notification
-  const deleteNotification = useCallback((id: number) => {
-    setNotifications(prev => {
-      const notification = prev.find(n => n.id === id);
-      if (notification && !notification.read) {
-        setUnreadCount(prevCount => Math.max(0, prevCount - 1));
-      }
-      return prev.filter(n => n.id !== id);
-    });
+
+  const deleteNotification = useCallback(async (id: number) => {
+    await commercialEntitiesAPI.deleteNotification(id);
+    setNotifications((current) => current.filter((notification) => notification.id !== id));
   }, []);
-  
-  // Clear all notifications
-  const clearAllNotifications = useCallback(() => {
+
+  const clearAllNotifications = useCallback(async () => {
+    await commercialEntitiesAPI.clearNotifications();
     setNotifications([]);
-    setUnreadCount(0);
   }, []);
-  
+
   return {
     notifications,
     unreadCount,
@@ -120,9 +79,9 @@ export const useNotifications = () => {
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    clearAllNotifications
+    clearAllNotifications,
+    refresh: loadNotifications,
   };
 };
 
 export default useNotifications;
-

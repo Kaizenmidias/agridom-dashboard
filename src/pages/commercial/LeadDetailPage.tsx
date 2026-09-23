@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
 import { getLeads, updateLeadDetails } from "@/services/leads/lead-service";
-import { commercialEntitiesAPI } from "@/services/commercial-entities";
+import { commercialEntitiesAPI, type UserOption } from "@/services/commercial-entities";
 import type { Lead, LeadLabel } from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
 
@@ -69,17 +69,27 @@ export default function LeadDetailPage() {
     meetingOwner: "",
     documentName: "",
     documentUrl: "",
+    assignedUserId: "unassigned",
   });
   const [labels, setLabels] = useState<LeadLabel[]>([]);
+  const [userOptions, setUserOptions] = useState<UserOption[]>([]);
   const [activityTitle, setActivityTitle] = useState("");
   const [activityType, setActivityType] = useState<"task" | "call" | "follow_up" | "activity">("task");
+  const [activityAssignee, setActivityAssignee] = useState("unassigned");
+  const [activityDueAt, setActivityDueAt] = useState("");
 
   const createActivity = async () => {
     if (!lead || !activityTitle.trim()) return;
-    await commercialEntitiesAPI.createActivity(lead.id, { title: activityTitle.trim(), type: activityType });
+    await commercialEntitiesAPI.createActivity(lead.id, {
+      title: activityTitle.trim(),
+      type: activityType,
+      assigned_user_id: activityAssignee === "unassigned" ? null : Number(activityAssignee),
+      due_at: activityDueAt ? new Date(activityDueAt).toISOString() : null,
+    });
     const refreshed = await getLeads();
     setLead(refreshed.find((item) => item.id === lead.id) || lead);
     setActivityTitle("");
+    setActivityDueAt("");
   };
 
   const completeActivity = async (activityId: string) => {
@@ -92,10 +102,14 @@ export default function LeadDetailPage() {
   useEffect(() => {
     async function loadLead() {
       const id = getIdFromSlug(leadSlug);
-      const leads = await getLeads();
+      const [leads, usersPayload] = await Promise.all([
+        getLeads(),
+        commercialEntitiesAPI.getUsers().catch(() => ({ users: [] })),
+      ]);
       const found = leads.find((item) => item.id === id) || null;
       setAvailableLabels(leads.flatMap((item) => item.metadata?.labels || []));
       setLead(found);
+      setUserOptions(usersPayload.users);
 
       if (found) {
         setDetails({
@@ -117,6 +131,7 @@ export default function LeadDetailPage() {
           meetingOwner: found.metadata?.meetingOwner || "",
           documentName: "",
           documentUrl: "",
+          assignedUserId: found.assignedUserId ? String(found.assignedUserId) : "unassigned",
         });
         setLabels(found.metadata?.labels || []);
       }
@@ -128,6 +143,19 @@ export default function LeadDetailPage() {
   }, [leadSlug]);
 
   const documents = useMemo(() => lead?.metadata?.documents || [], [lead]);
+
+  const saveLabels = async (nextLabels: LeadLabel[]) => {
+    if (!lead) return;
+    const previous = labels;
+    setLabels(nextLabels);
+    try {
+      await commercialEntitiesAPI.setLeadLabels(lead.id, nextLabels.map((label) => label.id));
+      setLead((current) => current ? { ...current, metadata: { ...current.metadata, labels: nextLabels } } : current);
+    } catch (error) {
+      setLabels(previous);
+      throw error;
+    }
+  };
 
   const saveDetails = async (options?: { registerContact?: boolean; addDocument?: boolean }) => {
     if (!lead) return;
@@ -156,6 +184,7 @@ export default function LeadDetailPage() {
         city: details.city || null,
         state: details.state || null,
         category: details.sector || null,
+        assignedUserId: details.assignedUserId === "unassigned" ? null : Number(details.assignedUserId),
         lastContactAt: options?.registerContact ? new Date().toISOString() : lead.lastContactAt,
         metadata: {
           ...lead.metadata,
@@ -261,7 +290,17 @@ export default function LeadDetailPage() {
               </div>
               <div className="space-y-3 md:col-span-3">
                 <Label>Etiquetas</Label>
-                <LeadLabelPicker labels={labels} availableLabels={availableLabels} onChange={setLabels} />
+                <LeadLabelPicker labels={labels} availableLabels={availableLabels} onChange={(next) => void saveLabels(next)} />
+              </div>
+              <div className="space-y-2 md:col-span-3">
+                <Label>Responsável</Label>
+                <Select value={details.assignedUserId} onValueChange={(value) => setDetails({ ...details, assignedUserId: value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Sem responsável</SelectItem>
+                    {userOptions.map((user) => <SelectItem key={user.id} value={String(user.id)}>{user.name} ({user.email})</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
@@ -281,12 +320,20 @@ export default function LeadDetailPage() {
           <Card className="rounded-lg shadow-none">
             <CardHeader><CardTitle className="text-base">Histórico de atividade</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-[160px_1fr_auto]">
+              <div className="grid gap-2 rounded-md border p-3 md:grid-cols-[150px_minmax(180px,1fr)_minmax(180px,1fr)_190px_auto]">
                 <Select value={activityType} onValueChange={(value) => setActivityType(value as typeof activityType)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="task">Tarefa</SelectItem><SelectItem value="call">Ligação</SelectItem><SelectItem value="follow_up">Follow-up</SelectItem><SelectItem value="activity">Atividade</SelectItem></SelectContent>
                 </Select>
                 <Input value={activityTitle} onChange={(event) => setActivityTitle(event.target.value)} placeholder="Título da atividade" />
+                <Select value={activityAssignee} onValueChange={setActivityAssignee}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Sem responsável</SelectItem>
+                    {userOptions.map((user) => <SelectItem key={user.id} value={String(user.id)}>{user.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input type="datetime-local" value={activityDueAt} onChange={(event) => setActivityDueAt(event.target.value)} />
                 <Button onClick={() => void createActivity()} disabled={!activityTitle.trim()}>Criar</Button>
               </div>
               {(lead.activities || []).length ? lead.activities!.map((activity) => (
@@ -297,6 +344,8 @@ export default function LeadDetailPage() {
                   </div>
                   {activity.subject ? <p className="mt-2 text-sm font-medium">{activity.subject}</p> : null}
                   <p className="mt-2 text-sm text-muted-foreground">{activity.message}</p>
+                  {activity.assignedUserName ? <p className="mt-1 text-xs text-muted-foreground">Responsável: {activity.assignedUserName}</p> : null}
+                  {activity.dueAt ? <p className="mt-1 text-xs text-muted-foreground">Prazo: {new Date(activity.dueAt).toLocaleString("pt-BR")}</p> : null}
                   {activity.recipient ? <p className="mt-1 text-xs text-muted-foreground">Destino: {activity.recipient}</p> : null}
                   {activity.status === "pending" ? <Button size="sm" variant="outline" className="mt-3" onClick={() => void completeActivity(activity.id)}>Concluir</Button> : null}
                 </div>
