@@ -296,6 +296,7 @@ export function AutomationBuilder({
   const [pickerAfter, setPickerAfter] = useState("trigger_1");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const canvasDragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
 
   useEffect(() => {
     void Promise.all([
@@ -490,6 +491,11 @@ export function AutomationBuilder({
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: React.PointerEvent) => {
+    if (canvasDragRef.current) {
+      const drag = canvasDragRef.current;
+      setPan({ x: drag.panX + event.clientX - drag.x, y: drag.panY + event.clientY - drag.y });
+      return;
+    }
     if (!dragRef.current) return;
     const drag = dragRef.current;
     setNodes((current) =>
@@ -506,6 +512,15 @@ export function AutomationBuilder({
   };
   const stopDrag = () => {
     dragRef.current = null;
+    canvasDragRef.current = null;
+  };
+  const onCanvasPointerDown = (event: React.PointerEvent) => {
+    if (readOnly || event.target !== event.currentTarget) return;
+    canvasDragRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+  };
+  const fitView = () => {
+    setZoom(Math.min(0.9, 900 / Math.max(900, nodes.length * 285)));
+    setPan({ x: 32, y: 105 });
   };
   const testFlow = () => {
     const definition = builderToDefinition(nodes, triggerType);
@@ -590,6 +605,7 @@ export function AutomationBuilder({
       <div className="flex min-h-[620px] flex-col lg:flex-row">
         <div
           className="relative min-h-[520px] flex-1 overflow-hidden bg-[radial-gradient(#2a2d33_1px,transparent_1px)] [background-size:24px_24px]"
+          onPointerDown={onCanvasPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={stopDrag}
           onPointerLeave={stopDrag}
@@ -601,8 +617,8 @@ export function AutomationBuilder({
             <Button
               size="icon"
               variant="ghost"
-              title="Centralizar"
-              onClick={() => setPan({ x: 20, y: 20 })}
+              title="Ajustar fluxo"
+              onClick={fitView}
             >
               <Square className="h-4 w-4" />
             </Button>
@@ -741,6 +757,11 @@ export function AutomationBuilder({
                 </div>
               );
             })}
+          </div>
+          <div className="pointer-events-none absolute bottom-3 right-3 z-10 h-20 w-28 rounded-md border border-border bg-card/85 p-2 shadow-lg" aria-label="Minimapa do fluxo">
+            <div className="relative h-full w-full">
+              {nodes.map((node) => <span key={`map-${node.id}`} className={`absolute h-1.5 w-3 rounded-sm ${node.type === "condition" ? "bg-violet-300" : node.type === "action" ? "bg-sky-300" : node.type === "finish" ? "bg-emerald-300" : "bg-primary"}`} style={{ left: `${Math.min(92, node.x / 12)}%`, top: `${Math.min(88, node.y / 5)}%` }} />)}
+            </div>
           </div>
         </div>
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>

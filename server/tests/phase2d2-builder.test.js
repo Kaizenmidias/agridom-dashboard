@@ -26,6 +26,8 @@ test('2D.2 builder keeps the semantic definition separate from visual coordinate
   assert.match(builder, /schemaVersion: 1/);
   assert.match(builder, /steps:\s*nodes\s*\.filter/);
   assert.match(builder, /style=\{\{ left: node\.x, top: node\.y \}\}/);
+  assert.match(builder, /Minimapa do fluxo/);
+  assert.match(builder, /canvasDragRef/);
 });
 
 test('2D.2 exposes draft update and keeps actions internal', () => {
