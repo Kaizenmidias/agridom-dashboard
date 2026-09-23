@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  Building2,
   CalendarDays,
   Edit,
   FileText,
@@ -11,23 +10,21 @@ import {
   Mail,
   MapPin,
   Phone,
-  Plus,
   Save,
   Tag,
   Users,
-  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LeadLabelPicker } from "@/components/leads/LeadLabelPicker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { LEAD_LABEL_COLORS, LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
+import { LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
 import { getLeads, updateLeadDetails } from "@/services/leads/lead-service";
 import type { Lead, LeadLabel } from "@/types/lead";
-import { slugify } from "@/utils/lead-formatters";
 import { formatPhone } from "@/utils/phone";
 
 const sourceLabels: Record<string, string> = {
@@ -50,9 +47,8 @@ export default function LeadDetailPage() {
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tagName, setTagName] = useState("");
-  const [tagColor, setTagColor] = useState(LEAD_LABEL_COLORS[0].value);
   const [editingField, setEditingField] = useState<string | null>(null);
+  const [availableLabels, setAvailableLabels] = useState<LeadLabel[]>([]);
   const [details, setDetails] = useState({
     companyName: "",
     contactName: "",
@@ -80,6 +76,7 @@ export default function LeadDetailPage() {
       const id = getIdFromSlug(leadSlug);
       const leads = await getLeads();
       const found = leads.find((item) => item.id === id) || null;
+      setAvailableLabels(leads.flatMap((item) => item.metadata?.labels || []));
       setLead(found);
 
       if (found) {
@@ -113,18 +110,6 @@ export default function LeadDetailPage() {
   }, [leadSlug]);
 
   const documents = useMemo(() => lead?.metadata?.documents || [], [lead]);
-
-  const addLabel = () => {
-    const name = tagName.trim();
-    if (!name) return;
-    setLabels((current) => [...current, { id: `${slugify(name)}-${Date.now()}`, name, color: tagColor }]);
-    setTagName("");
-    setTagColor(LEAD_LABEL_COLORS[0].value);
-  };
-
-  const removeLabel = (id: string) => {
-    setLabels((current) => current.filter((label) => label.id !== id));
-  };
 
   const saveDetails = async (options?: { registerContact?: boolean; addDocument?: boolean }) => {
     if (!lead) return;
@@ -217,7 +202,7 @@ export default function LeadDetailPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {labels.map((label) => <ColorBadge key={label.id} label={label} onRemove={() => removeLabel(label.id)} />)}
+            {labels.map((label) => <Badge key={label.id} className="border-0 text-white" style={{ backgroundColor: label.color }}>{label.name}</Badge>)}
             <Badge variant="outline">Score {lead.score || 0}</Badge>
             <Badge variant="outline">{lead.folderName || "Sem pasta"}</Badge>
           </div>
@@ -258,21 +243,7 @@ export default function LeadDetailPage() {
               </div>
               <div className="space-y-3 md:col-span-3">
                 <Label>Etiquetas</Label>
-                <div className="flex flex-wrap gap-2">
-                  {labels.map((label) => <ColorBadge key={label.id} label={label} onRemove={() => removeLabel(label.id)} />)}
-                </div>
-                <div className="grid gap-2 sm:grid-cols-[1fr_180px_auto]">
-                  <Input value={tagName} onChange={(event) => setTagName(event.target.value)} placeholder="Nome da etiqueta" />
-                  <Select value={tagColor} onValueChange={setTagColor}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {LEAD_LABEL_COLORS.map((color) => (
-                        <SelectItem key={color.value} value={color.value}>{color.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button type="button" variant="outline" onClick={addLabel}><Plus className="mr-2 h-4 w-4" />Adicionar</Button>
-                </div>
+                <LeadLabelPicker labels={labels} availableLabels={availableLabels} onChange={setLabels} />
               </div>
             </CardContent>
           </Card>
@@ -355,17 +326,6 @@ export default function LeadDetailPage() {
         </aside>
       </div>
     </div>
-  );
-}
-
-function ColorBadge({ label, onRemove }: { label: LeadLabel; onRemove: () => void }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-white" style={{ backgroundColor: label.color }}>
-      {label.name}
-      <button type="button" onClick={onRemove} className="rounded-sm opacity-80 hover:opacity-100">
-        <X className="h-3 w-3" />
-      </button>
-    </span>
   );
 }
 

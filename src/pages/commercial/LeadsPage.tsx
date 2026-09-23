@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { LeadLabelPicker } from "@/components/leads/LeadLabelPicker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,7 +59,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import { LEAD_LABEL_COLORS, LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
+import { LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
 import { useLeads } from "@/hooks/leads/useLeads";
 import { addLeadToPipeline as persistLeadToPipeline, createLead, updateLead } from "@/services/leads/lead-service";
 import type { Lead, LeadFilters, LeadFolder, LeadLabel, LeadSource, LeadStatus } from "@/types/lead";
@@ -202,8 +203,6 @@ function leadToForm(lead: Lead) {
     notes: lead.metadata?.notes || "",
     nextMeetingAt: lead.metadata?.nextMeetingAt ? lead.metadata.nextMeetingAt.slice(0, 16) : "",
     meetingOwner: lead.metadata?.meetingOwner || "",
-    labelName: "",
-    labelColor: LEAD_LABEL_COLORS[0].value,
     labels: lead.metadata?.labels || [],
   };
 }
@@ -288,8 +287,6 @@ const emptyLeadForm = {
   notes: "",
   nextMeetingAt: "",
   meetingOwner: "",
-  labelName: "",
-  labelColor: LEAD_LABEL_COLORS[0].value,
   labels: [] as LeadLabel[],
 };
 
@@ -323,6 +320,7 @@ export default function LeadsPage() {
   const selectedFolder = folders.find((folder) => folder.id === filters.folderId) || folders[0];
   const cities = useMemo(() => Array.from(new Set(allLeads.map((lead) => lead.city).filter(Boolean))).sort() as string[], [allLeads]);
   const owners = useMemo(() => Array.from(new Set(allLeads.map((lead) => lead.assignedTo).filter(Boolean))).sort() as string[], [allLeads]);
+  const availableLabels = useMemo(() => allLeads.flatMap((lead) => lead.metadata?.labels || []), [allLeads]);
 
   useEffect(() => {
     if (!leadForm.state) {
@@ -452,25 +450,6 @@ export default function LeadsPage() {
       if (key === "employees") return { ...current, employees: value.replace(/\D/g, "") };
       return { ...current, [key]: value };
     });
-  };
-
-  const addLeadFormLabel = () => {
-    const name = leadForm.labelName.trim();
-    if (!name) return;
-
-    setLeadForm((current) => ({
-      ...current,
-      labels: [...current.labels, { id: `${slugify(name)}-${Date.now()}`, name, color: current.labelColor }],
-      labelName: "",
-      labelColor: LEAD_LABEL_COLORS[0].value,
-    }));
-  };
-
-  const removeLeadFormLabel = (id: string) => {
-    setLeadForm((current) => ({
-      ...current,
-      labels: current.labels.filter((label) => label.id !== id),
-    }));
   };
 
   const openCreateLeadDialog = () => {
@@ -1080,28 +1059,11 @@ export default function LeadsPage() {
             </div>
             <div className="space-y-3 sm:col-span-2">
               <Label>Etiquetas</Label>
-              <div className="flex flex-wrap gap-2">
-                {leadForm.labels.map((label) => (
-                  <span key={label.id} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-white" style={{ backgroundColor: label.color }}>
-                    {label.name}
-                    <button type="button" onClick={() => removeLeadFormLabel(label.id)} className="rounded-sm opacity-80 hover:opacity-100">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="grid gap-2 sm:grid-cols-[1fr_180px_auto]">
-                <Input value={leadForm.labelName} onChange={(event) => handleLeadFormChange("labelName", event.target.value)} placeholder="Nome da etiqueta" />
-                <Select value={leadForm.labelColor} onValueChange={(value) => handleLeadFormChange("labelColor", value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {LEAD_LABEL_COLORS.map((color) => (
-                      <SelectItem key={color.value} value={color.value}>{color.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button type="button" variant="outline" onClick={addLeadFormLabel}><Plus className="mr-2 h-4 w-4" />Adicionar</Button>
-              </div>
+              <LeadLabelPicker
+                labels={leadForm.labels}
+                availableLabels={availableLabels}
+                onChange={(labels) => setLeadForm((current) => ({ ...current, labels }))}
+              />
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="lead-notes">Anotações</Label>
