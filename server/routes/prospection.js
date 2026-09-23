@@ -63,21 +63,63 @@ async function insertHistory(query, { prospectId, ownerUserId, channel = 'system
   );
 }
 
+async function syncProspectLabels(query, prospectId, ownerUserId, labels) {
+  if (!Array.isArray(labels)) return;
+  const labelIds = [];
+  for (const item of labels) {
+    const name = normalizeText(typeof item === 'string' ? item : item?.name);
+    if (!name) continue;
+    const color = normalizeText(item?.color) || '#4D6EDB';
+    await query(
+      `INSERT INTO lead_labels (owner_user_id, name, color) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE color = VALUES(color), updated_at = CURRENT_TIMESTAMP`,
+      [ownerUserId, name, color]
+    );
+    const label = await query('SELECT id FROM lead_labels WHERE owner_user_id = ? AND name = ?', [ownerUserId, name]);
+    if (label.rows?.[0]) labelIds.push(label.rows[0].id);
+  }
+  await query('DELETE FROM prospect_labels WHERE prospect_id = ?', [prospectId]);
+  for (const labelId of labelIds) {
+    await query('INSERT IGNORE INTO prospect_labels (prospect_id, label_id, created_by) VALUES (?, ?, ?)', [prospectId, labelId, ownerUserId]);
+  }
+}
+
 router.get('/bootstrap', async (req, res) => {
   try {
     const query = getQuery(req);
-    const prospects = await query('SELECT * FROM prospects WHERE owner_user_id = ? ORDER BY created_at DESC', [req.userId]);
+    const prospects = await query(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
+      FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
+      WHERE p.owner_user_id = ? ORDER BY p.created_at DESC`, [req.userId]);
     const settings = await query('SELECT * FROM prospecting_settings WHERE owner_user_id = ? LIMIT 1', [req.userId]);
     const history = await query(
       'SELECT * FROM prospect_contact_history WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT 100',
       [req.userId]
     );
 
-    const rows = prospects.rows || [];
+    const labels = await query(`SELECT pl.prospect_id, ll.id, ll.name, ll.color
+      FROM prospect_labels pl JOIN lead_labels ll ON ll.id = pl.label_id
+      JOIN prospects p ON p.id = pl.prospect_id
+      WHERE p.owner_user_id = ? ORDER BY ll.name`, [req.userId]);
+    const activities = await query(`SELECT la.*, u.name AS assigned_user_name
+      FROM lead_activities la LEFT JOIN users u ON u.id = la.assigned_user_id
+      JOIN prospects p ON p.id = la.prospect_id
+      WHERE p.owner_user_id = ? ORDER BY la.created_at DESC`, [req.userId]);
+
+    const labelsByProspect = (labels.rows || []).reduce((acc, label) => {
+      const key = String(label.prospect_id);
+      acc[key] = [...(acc[key] || []), { id: String(label.id), name: label.name, color: label.color }];
+      return acc;
+    }, {});
+    const rows = (prospects.rows || []).map((prospect) => {
+      let report = {};
+      try { report = typeof prospect.analysis_report === 'string' ? JSON.parse(prospect.analysis_report || '{}') : (prospect.analysis_report || {}); } catch { report = {}; }
+      return { ...prospect, analysis_report: { ...report, labels: labelsByProspect[String(prospect.id)] || [], assignedUserId: prospect.assigned_user_id, assignedTo: prospect.assigned_user_name || report.assignedTo || null } };
+    });
     res.json({
       prospects: rows,
       settings: settings.rows?.[0] || { id: 0, owner_user_id: req.userId, ...defaultSettings },
       history: history.rows || [],
+      activities: activities.rows || [],
       metrics: {
         leadsFound: rows.length,
         hotLeads: rows.filter((item) => Number(item.lead_score || 0) >= 70).length,
@@ -123,12 +165,13 @@ router.post('/prospects', async (req, res) => {
 
     const insert = await query(
       `INSERT INTO prospects (
-        owner_user_id, business_name, normalized_business_name, category, address, city, state,
+        owner_user_id, assigned_user_id, business_name, normalized_business_name, category, address, city, state,
         phone, normalized_phone, email, website, normalized_website, website_exists,
         lead_score, status, analysis_report
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.userId,
+        req.body.assigned_user_id ?? req.body.metadata?.assignedUserId ?? null,
         businessName,
         normalizeBusinessName(businessName),
         normalizeNullable(req.body.category),
@@ -154,6 +197,8 @@ router.post('/prospects', async (req, res) => {
       recipient: normalizeNullable(req.body.email) || phone,
       metadata: { action: 'created', source: analysisReport.source },
     });
+
+    await syncProspectLabels(query, insert.insertId, req.userId, req.body.metadata?.labels);
 
     const result = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [insert.insertId, req.userId]);
     res.status(201).json(result.rows[0]);
@@ -206,6 +251,7 @@ router.patch('/prospects/:id', async (req, res) => {
            approach_suggestion = COALESCE(?, approach_suggestion),
            diagnostic_summary = COALESCE(?, diagnostic_summary),
            problems_found = COALESCE(?, problems_found),
+           assigned_user_id = COALESCE(?, assigned_user_id),
            analysis_report = ?,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND owner_user_id = ?`,
@@ -227,11 +273,14 @@ router.patch('/prospects/:id', async (req, res) => {
         approach_suggestion ?? null,
         diagnostic_summary ?? null,
         problems_found ? JSON.stringify(problems_found) : null,
+        req.body.assigned_user_id ?? req.body.metadata?.assignedUserId ?? null,
         JSON.stringify(nextReport),
         req.params.id,
         req.userId,
       ]
     );
+
+    await syncProspectLabels(query, req.params.id, req.userId, req.body.metadata?.labels);
 
     await insertHistory(query, {
       prospectId: req.params.id,
@@ -262,6 +311,8 @@ router.delete('/prospects/:id', async (req, res) => {
 router.post('/prospects/:id/add-to-crm', async (req, res) => {
   try {
     const query = getQuery(req);
+    const ownedProspect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.id, req.userId]);
+    if (!ownedProspect.rows?.length) return res.status(404).json({ error: 'Prospect nao encontrado' });
     await query(
       `UPDATE prospects
        SET analysis_report = JSON_SET(
@@ -274,6 +325,19 @@ router.post('/prospects/:id/add-to-crm', async (req, res) => {
        WHERE id = ? AND owner_user_id = ?`,
       [new Date().toISOString(), req.params.id, req.userId]
     );
+    let pipeline = await query('SELECT id FROM pipeline_definitions WHERE owner_user_id = ? ORDER BY is_default DESC, id LIMIT 1', [req.userId]);
+    if (!pipeline.rows?.length) {
+      const inserted = await query("INSERT INTO pipeline_definitions (owner_user_id, name, is_default) VALUES (?, 'Pipeline Comercial', 1)", [req.userId]);
+      for (const [index, name] of ['Qualificados', 'Reuniao', 'Proposta', 'Negociacao', 'Convertidos'].entries()) {
+        await query('INSERT INTO pipeline_stages (pipeline_id, name, sort_order, is_system) VALUES (?, ?, ?, 1)', [inserted.insertId, name, index]);
+      }
+      pipeline = { rows: [{ id: inserted.insertId }] };
+    }
+    const firstStage = await query('SELECT id FROM pipeline_stages WHERE pipeline_id = ? ORDER BY sort_order, id LIMIT 1', [pipeline.rows[0].id]);
+    if (firstStage.rows?.length) {
+      await query(`INSERT INTO prospect_pipeline_positions (prospect_id, pipeline_id, stage_id, sort_order)
+        VALUES (?, ?, ?, 0) ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP`, [req.params.id, pipeline.rows[0].id, firstStage.rows[0].id]);
+    }
     await insertHistory(query, {
       prospectId: req.params.id,
       ownerUserId: req.userId,
@@ -282,7 +346,6 @@ router.post('/prospects/:id/add-to-crm', async (req, res) => {
       metadata: { action: 'added_to_kanban' },
     });
     const result = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [req.params.id, req.userId]);
-    if (!result.rows?.length) return res.status(404).json({ error: 'Prospect nao encontrado' });
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Erro ao adicionar prospect ao CRM:', error);

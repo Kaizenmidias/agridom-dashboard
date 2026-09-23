@@ -44,6 +44,7 @@ export interface Lead {
   folderId?: string | null;
   folderName?: string | null;
   assignedTo?: string | null;
+  assignedUserId?: number | null;
   googleMapsUrl?: string | null;
   lastContactAt?: string | null;
   createdAt: string;
@@ -64,6 +65,7 @@ export interface Lead {
     notes?: string | null;
     nextMeetingAt?: string | null;
     meetingOwner?: string | null;
+    assignedUserId?: number | null;
     documents?: Array<{
       id: string;
       name: string;
@@ -81,6 +83,10 @@ export interface LeadActivity {
   recipient?: string | null;
   deliveryStatus?: string | null;
   createdAt: string;
+  type?: "task" | "call" | "follow_up" | "activity";
+  status?: "pending" | "completed" | "cancelled";
+  dueAt?: string | null;
+  assignedUserId?: number | null;
 }
 
 export interface LeadFolder {

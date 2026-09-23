@@ -23,18 +23,36 @@ export async function getLeads(): Promise<Lead[]> {
     acc[key] = [...(acc[key] || []), item];
     return acc;
   }, {});
+  const activities = ((payload?.activities || []) as Array<Record<string, any>>).reduce<Record<string, Array<Record<string, any>>>>((acc, item) => {
+    const key = String(item.prospect_id);
+    acc[key] = [...(acc[key] || []), item];
+    return acc;
+  }, {});
 
   return ((payload?.prospects || []) as Prospect[]).map((prospect) => ({
     ...prospectToLead(prospect),
-    activities: (history[String(prospect.id)] || []).map((item) => ({
-      id: String(item.id),
+    activities: [
+      ...(activities[String(prospect.id)] || []).map((item) => ({
+        id: `activity-${item.id}`,
+        channel: "crm",
+        subject: item.title,
+        message: item.description || item.title,
+        createdAt: item.created_at,
+        type: item.type,
+        status: item.status,
+        dueAt: item.due_at,
+        assignedUserId: item.assigned_user_id,
+      })),
+      ...(history[String(prospect.id)] || []).map((item) => ({
+      id: `history-${item.id}`,
       channel: item.channel,
       subject: item.subject,
       message: item.message,
       recipient: item.recipient,
       deliveryStatus: item.delivery_status,
       createdAt: item.created_at,
-    })),
+      })),
+    ],
   }));
 }
 
@@ -62,6 +80,7 @@ async function sendLead(endpoint: string, method: "POST" | "PATCH", lead: Partia
       city: lead.city,
       state: lead.state,
       assigned_to: lead.assignedTo,
+      assigned_user_id: lead.assignedUserId || lead.metadata?.assignedUserId,
       source: lead.source || "manual",
       last_contact_date: lead.lastContactAt,
       metadata: lead.metadata,

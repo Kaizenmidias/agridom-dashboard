@@ -241,6 +241,7 @@ export type ProspectStatus =
 export interface Prospect {
   id: number;
   owner_user_id?: number | null;
+  assigned_user_id?: number | null;
   business_name: string;
   normalized_business_name?: string | null;
   category?: string | null;
@@ -513,4 +514,3 @@ export namespace Database {
   export type DashboardStats = DashboardStats;
   export type Prospect = Prospect;
 }
-

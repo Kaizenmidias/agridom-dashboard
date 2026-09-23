@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
 import { getLeads, updateLeadDetails } from "@/services/leads/lead-service";
+import { commercialEntitiesAPI } from "@/services/commercial-entities";
 import type { Lead, LeadLabel } from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
 
@@ -70,6 +71,23 @@ export default function LeadDetailPage() {
     documentUrl: "",
   });
   const [labels, setLabels] = useState<LeadLabel[]>([]);
+  const [activityTitle, setActivityTitle] = useState("");
+  const [activityType, setActivityType] = useState<"task" | "call" | "follow_up" | "activity">("task");
+
+  const createActivity = async () => {
+    if (!lead || !activityTitle.trim()) return;
+    await commercialEntitiesAPI.createActivity(lead.id, { title: activityTitle.trim(), type: activityType });
+    const refreshed = await getLeads();
+    setLead(refreshed.find((item) => item.id === lead.id) || lead);
+    setActivityTitle("");
+  };
+
+  const completeActivity = async (activityId: string) => {
+    if (!lead || !activityId.startsWith("activity-")) return;
+    await commercialEntitiesAPI.updateActivity(Number(activityId.replace("activity-", "")), { status: "completed" });
+    const refreshed = await getLeads();
+    setLead(refreshed.find((item) => item.id === lead.id) || lead);
+  };
 
   useEffect(() => {
     async function loadLead() {
@@ -263,6 +281,14 @@ export default function LeadDetailPage() {
           <Card className="rounded-lg shadow-none">
             <CardHeader><CardTitle className="text-base">Histórico de atividade</CardTitle></CardHeader>
             <CardContent className="space-y-3">
+              <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-[160px_1fr_auto]">
+                <Select value={activityType} onValueChange={(value) => setActivityType(value as typeof activityType)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="task">Tarefa</SelectItem><SelectItem value="call">Ligação</SelectItem><SelectItem value="follow_up">Follow-up</SelectItem><SelectItem value="activity">Atividade</SelectItem></SelectContent>
+                </Select>
+                <Input value={activityTitle} onChange={(event) => setActivityTitle(event.target.value)} placeholder="Título da atividade" />
+                <Button onClick={() => void createActivity()} disabled={!activityTitle.trim()}>Criar</Button>
+              </div>
               {(lead.activities || []).length ? lead.activities!.map((activity) => (
                 <div key={activity.id} className="rounded-md border bg-muted/20 p-3">
                   <div className="flex items-center justify-between gap-3">
@@ -272,6 +298,7 @@ export default function LeadDetailPage() {
                   {activity.subject ? <p className="mt-2 text-sm font-medium">{activity.subject}</p> : null}
                   <p className="mt-2 text-sm text-muted-foreground">{activity.message}</p>
                   {activity.recipient ? <p className="mt-1 text-xs text-muted-foreground">Destino: {activity.recipient}</p> : null}
+                  {activity.status === "pending" ? <Button size="sm" variant="outline" className="mt-3" onClick={() => void completeActivity(activity.id)}>Concluir</Button> : null}
                 </div>
               )) : <p className="text-sm text-muted-foreground">Nenhuma atividade registrada ainda.</p>}
             </CardContent>

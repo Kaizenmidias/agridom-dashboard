@@ -17,13 +17,13 @@ import ProspectingPage from "./pages/commercial/ProspectingPage";
 import UsuariosPage from "./pages/UsuariosPage";
 import LeadsPage from "./pages/commercial/LeadsPage";
 import LeadDetailPage from "./pages/commercial/LeadDetailPage";
+import PipelinePage from "./pages/commercial/PipelinePage";
 import {
   AgendaPage,
   AutomationsPage,
   BroadcastPage,
   ChatsPage,
   MetricsPage,
-  PipelinePage,
 } from "./pages/commercial/CommercialPlaceholders";
 import { AgentsPage, AssistantsPage, ContentsPage, PromptsPage } from "./pages/ai/AiPlaceholders";
 import { CashFlowPage, RevenuesPage } from "./pages/finance/FinancePlaceholders";

@@ -1,28 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Pencil, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LEAD_LABEL_COLORS } from "@/constants/lead-options";
+import { commercialEntitiesAPI } from "@/services/commercial-entities";
 import type { LeadLabel } from "@/types/lead";
 import { slugify } from "@/utils/lead-formatters";
 
-const LABEL_LIBRARY_STORAGE_KEY = "kaizen.lead.labels";
 const ADD_NEW_VALUE = "__add_new_label__";
-
-function readLabelLibrary(): LeadLabel[] {
-  try {
-    const stored = localStorage.getItem(LABEL_LIBRARY_STORAGE_KEY);
-    return stored ? JSON.parse(stored) as LeadLabel[] : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeLabelLibrary(labels: LeadLabel[]) {
-  localStorage.setItem(LABEL_LIBRARY_STORAGE_KEY, JSON.stringify(labels));
-}
+const LEGACY_LABEL_LIBRARY_KEY = "kaizen.lead.labels";
 
 function mergeLabels(...groups: Array<LeadLabel[] | undefined>) {
   const map = new Map<string, LeadLabel>();
@@ -57,7 +45,22 @@ export function LeadLabelPicker({
   const [selectValue, setSelectValue] = useState<string | undefined>();
 
   useEffect(() => {
-    setLibraryLabels(readLabelLibrary());
+    void commercialEntitiesAPI.getLabels()
+      .then(async ({ labels: items }) => {
+        let persisted = items.map((item) => ({ ...item, id: String(item.id) }));
+        const legacyRaw = localStorage.getItem(LEGACY_LABEL_LIBRARY_KEY);
+        if (legacyRaw) {
+          const legacy = JSON.parse(legacyRaw) as LeadLabel[];
+          for (const label of legacy) {
+            if (persisted.some((item) => slugify(item.name) === slugify(label.name))) continue;
+            const created = await commercialEntitiesAPI.createLabel(label.name, label.color);
+            persisted = [...persisted, { ...created, id: String(created.id) }];
+          }
+          localStorage.removeItem(LEGACY_LABEL_LIBRARY_KEY);
+        }
+        setLibraryLabels(persisted);
+      })
+      .catch(() => setLibraryLabels([]));
   }, []);
 
   const options = useMemo(
@@ -83,14 +86,23 @@ export function LeadLabelPicker({
     onChange(labels.filter((label) => label.id !== id));
   };
 
-  const createLabel = () => {
+  const editLabel = async (label: LeadLabel) => {
+    const name = window.prompt("Nome da etiqueta", label.name)?.trim();
+    if (!name || name === label.name) return;
+    const updated = await commercialEntitiesAPI.updateLabel(label.id, { name });
+    const next = { ...updated, id: String(updated.id) };
+    setLibraryLabels((current) => current.map((item) => item.id === label.id ? next : item));
+    onChange(labels.map((item) => item.id === label.id ? next : item));
+  };
+
+  const createLabel = async () => {
     const name = newName.trim();
     if (!name) return;
 
-    const label = { id: `${slugify(name)}-${Date.now()}`, name, color: newColor };
+    const created = await commercialEntitiesAPI.createLabel(name, newColor);
+    const label = { id: String(created.id), name: created.name, color: created.color };
     const nextLibrary = mergeLabels(libraryLabels, [label]);
     setLibraryLabels(nextLibrary);
-    writeLabelLibrary(nextLibrary);
     onChange([...labels.filter((item) => slugify(item.name) !== slugify(name)), label]);
     setNewName("");
     setNewColor(LEAD_LABEL_COLORS[0].value);
@@ -103,6 +115,9 @@ export function LeadLabelPicker({
         {labels.map((label) => (
           <span key={label.id} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-white" style={{ backgroundColor: label.color }}>
             {label.name}
+            <button type="button" title="Editar etiqueta" onClick={() => void editLabel(label)} className="rounded-sm opacity-80 hover:opacity-100">
+              <Pencil className="h-3 w-3" />
+            </button>
             <button type="button" onClick={() => removeLabel(label.id)} className="rounded-sm opacity-80 hover:opacity-100">
               <X className="h-3 w-3" />
             </button>
@@ -152,7 +167,7 @@ export function LeadLabelPicker({
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setAdding(false)}>Cancelar</Button>
-            <Button type="button" onClick={createLabel} disabled={!newName.trim()}>Adicionar</Button>
+            <Button type="button" onClick={() => void createLabel()} disabled={!newName.trim()}>Adicionar</Button>
           </div>
         </div>
       ) : null}

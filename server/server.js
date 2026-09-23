@@ -51,6 +51,7 @@ const crudRoutes = require('./routes/crud');
 const uploadRoutes = require('./routes/upload');
 const prospectionRoutes = require('./routes/prospection');
 const prospectingRoutes = require('./routes/prospecting');
+const commercialEntityRoutes = require('./routes/commercial-entities');
 
 
 app.locals.query = query;
@@ -62,6 +63,7 @@ app.use('/api', crudRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/prospection', prospectionRoutes);
 app.use('/api/prospecting', prospectingRoutes);
+app.use('/api/commercial', commercialEntityRoutes);
 
 
 // Rota de teste

@@ -9,6 +9,7 @@ type ProspectAnalysisReport = {
   origem?: string | null;
   responsible?: string | null;
   assignedTo?: string | null;
+  assignedUserId?: number | null;
   contactName?: string | null;
   email_secundario?: string | null;
   bairro?: string | null;
@@ -97,6 +98,7 @@ export function prospectToLead(prospect: Prospect): Lead {
     folderId: slugify(folderName),
     folderName,
     assignedTo: report.assignedTo || report.responsible || null,
+    assignedUserId: report.assignedUserId || prospect.assigned_user_id || null,
     googleMapsUrl: prospect.google_maps_url,
     lastContactAt: prospect.last_contact_date,
     createdAt: prospect.created_at,
@@ -116,6 +118,7 @@ export function prospectToLead(prospect: Prospect): Lead {
       notes: report.notes || null,
       nextMeetingAt: report.nextMeetingAt || null,
       meetingOwner: report.meetingOwner || null,
+      assignedUserId: report.assignedUserId || prospect.assigned_user_id || null,
       documents: report.documents || [],
     },
   };

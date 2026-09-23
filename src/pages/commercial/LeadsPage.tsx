@@ -62,6 +62,7 @@ import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
 import { useLeads } from "@/hooks/leads/useLeads";
 import { addLeadToPipeline as persistLeadToPipeline, createLead, updateLead } from "@/services/leads/lead-service";
+import { commercialEntitiesAPI, type UserOption } from "@/services/commercial-entities";
 import type { Lead, LeadFilters, LeadFolder, LeadLabel, LeadSource, LeadStatus } from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
 import { buildWhatsAppUrl } from "@/utils/whatsapp";
@@ -97,8 +98,6 @@ const BRAZILIAN_STATES = [
   { uf: "SE", name: "Sergipe" },
   { uf: "TO", name: "Tocantins" },
 ];
-
-const PIPELINE_STORAGE_KEY = "kaizen.pipeline.leads";
 
 function formatLeadBudget(lead: Lead) {
   const legacyBudget = (lead as Lead & { budget?: string | number }).budget;
@@ -203,6 +202,7 @@ function leadToForm(lead: Lead) {
     state: lead.state || "",
     category: lead.metadata?.sector || lead.category || "",
     assignedTo: lead.assignedTo || "",
+    assignedUserId: lead.assignedUserId ? String(lead.assignedUserId) : "",
     address: lead.metadata?.address || "",
     linkedin: lead.metadata?.linkedin || "",
     revenue: lead.metadata?.revenue || "",
@@ -213,21 +213,6 @@ function leadToForm(lead: Lead) {
     meetingOwner: lead.metadata?.meetingOwner || "",
     labels: lead.metadata?.labels || [],
   };
-}
-
-function readPipelineLeads() {
-  try {
-    const stored = localStorage.getItem(PIPELINE_STORAGE_KEY);
-    return stored ? (JSON.parse(stored) as Lead[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writePipelineLead(lead: Lead) {
-  const current = readPipelineLeads();
-  const next = [lead, ...current.filter((item) => item.id !== lead.id)];
-  localStorage.setItem(PIPELINE_STORAGE_KEY, JSON.stringify(next));
 }
 
 function folderMatchesLead(folderId: string, lead: Lead) {
@@ -287,6 +272,7 @@ const emptyLeadForm = {
   state: "",
   category: "",
   assignedTo: "",
+  assignedUserId: "",
   address: "",
   linkedin: "",
   revenue: "",
@@ -319,6 +305,11 @@ export default function LeadsPage() {
   const [savingLead, setSavingLead] = useState(false);
   const [cityOptions, setCityOptions] = useState<string[]>([]);
   const [citiesLoading, setCitiesLoading] = useState(false);
+  const [userOptions, setUserOptions] = useState<UserOption[]>([]);
+
+  useEffect(() => {
+    void commercialEntitiesAPI.getUsers().then(({ users }) => setUserOptions(users)).catch(() => setUserOptions([]));
+  }, []);
 
   const allLeads = useMemo(() => {
     const localIds = new Set(sessionLeads.map((lead) => lead.id));
@@ -493,6 +484,7 @@ export default function LeadsPage() {
       state: leadForm.state.trim() || null,
       category: leadForm.category.trim() || null,
       assignedTo: leadForm.assignedTo.trim() || null,
+      assignedUserId: leadForm.assignedUserId ? Number(leadForm.assignedUserId) : null,
       source: "manual",
       status: currentLead?.status || "novo",
       score: currentLead?.score || 0,
@@ -547,7 +539,6 @@ export default function LeadsPage() {
       updatedAt: pipelineLead.updatedAt || now,
     };
     upsertLocalLead(normalizedPipelineLead);
-    writePipelineLead(normalizedPipelineLead);
     await reload();
     navigate("/comercial/pipeline");
   };
@@ -567,7 +558,6 @@ export default function LeadsPage() {
           updatedAt: new Date().toISOString(),
         };
         upsertLocalLead(pipelineLead);
-        writePipelineLead(pipelineLead);
     }
     await reload();
     setSelectedIds([]);
@@ -1086,12 +1076,13 @@ export default function LeadsPage() {
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="lead-owner">Responsável</Label>
-              <Input
-                id="lead-owner"
-                value={leadForm.assignedTo}
-                onChange={(event) => handleLeadFormChange("assignedTo", event.target.value)}
-                placeholder="Nome do responsável comercial"
-              />
+              <Select value={leadForm.assignedUserId || undefined} onValueChange={(value) => {
+                const selected = userOptions.find((user) => String(user.id) === value);
+                setLeadForm((current) => ({ ...current, assignedUserId: value, assignedTo: selected?.name || "" }));
+              }}>
+                <SelectTrigger id="lead-owner"><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
+                <SelectContent>{userOptions.map((user) => <SelectItem key={user.id} value={String(user.id)}>{user.name} ({user.email})</SelectItem>)}</SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
