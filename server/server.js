@@ -52,6 +52,7 @@ const uploadRoutes = require('./routes/upload');
 const prospectionRoutes = require('./routes/prospection');
 const prospectingRoutes = require('./routes/prospecting');
 const commercialEntityRoutes = require('./routes/commercial-entities');
+const { automationsRouter, automationRunsRouter } = require('./routes/automations');
 
 
 app.locals.query = query;
@@ -64,6 +65,8 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/prospection', prospectionRoutes);
 app.use('/api/prospecting', prospectingRoutes);
 app.use('/api/commercial', commercialEntityRoutes);
+app.use('/api/automations', automationsRouter);
+app.use('/api/automation-runs', automationRunsRouter);
 
 
 // Rota de teste

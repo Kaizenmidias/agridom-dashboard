@@ -1,4 +1,4 @@
-import { CalendarDays, ChartNoAxesCombined, MessagesSquare, Send, Workflow } from "lucide-react";
+import { CalendarDays, ChartNoAxesCombined, MessagesSquare, Send } from "lucide-react";
 import { ModulePlaceholderPage } from "@/components/layout/ModulePlaceholderPage";
 
 export function ChatsPage() {
@@ -11,10 +11,6 @@ export function MetricsPage() {
 
 export function BroadcastPage() {
   return <ModulePlaceholderPage title="Disparar" area="Comercial" icon={Send} description="Prepare disparos comerciais segmentados." moduleSummary="Organize campanhas de contato comercial." />;
-}
-
-export function AutomationsPage() {
-  return <ModulePlaceholderPage title="Automações" area="Comercial" icon={Workflow} description="Gerencie fluxos comerciais automatizados." moduleSummary="Conecte eventos comerciais e tarefas recorrentes." />;
 }
 
 export function AgendaPage() {
