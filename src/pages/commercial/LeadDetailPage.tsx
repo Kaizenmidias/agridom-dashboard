@@ -4,25 +4,30 @@ import {
   ArrowLeft,
   Building2,
   CalendarDays,
-  DollarSign,
+  Edit,
   FileText,
   Globe,
   Linkedin,
   Mail,
   MapPin,
   Phone,
+  Plus,
   Save,
   Tag,
   Users,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { LEAD_LABEL_COLORS, LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
 import { getLeads, updateLeadDetails } from "@/services/leads/lead-service";
-import type { Lead } from "@/types/lead";
+import type { Lead, LeadLabel } from "@/types/lead";
+import { slugify } from "@/utils/lead-formatters";
 import { formatPhone } from "@/utils/phone";
 
 const sourceLabels: Record<string, string> = {
@@ -39,22 +44,23 @@ function getIdFromSlug(value = "") {
   return value.split("-").pop() || value;
 }
 
-function labelsToText(value?: string[]) {
-  return (value || []).join(", ");
-}
-
-function textToLabels(value: string) {
-  return value.split(",").map((label) => label.trim()).filter(Boolean);
-}
-
 export default function LeadDetailPage() {
   const { leadSlug } = useParams();
   const navigate = useNavigate();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tagName, setTagName] = useState("");
+  const [tagColor, setTagColor] = useState(LEAD_LABEL_COLORS[0].value);
+  const [editingField, setEditingField] = useState<string | null>(null);
   const [details, setDetails] = useState({
-    labels: "",
+    companyName: "",
+    contactName: "",
+    email: "",
+    phone: "",
+    website: "",
+    city: "",
+    state: "",
     address: "",
     linkedin: "",
     sector: "",
@@ -67,6 +73,7 @@ export default function LeadDetailPage() {
     documentName: "",
     documentUrl: "",
   });
+  const [labels, setLabels] = useState<LeadLabel[]>([]);
 
   useEffect(() => {
     async function loadLead() {
@@ -77,10 +84,16 @@ export default function LeadDetailPage() {
 
       if (found) {
         setDetails({
-          labels: labelsToText(found.metadata?.labels),
+          companyName: found.companyName || "",
+          contactName: found.contactName || "",
+          email: found.email || "",
+          phone: formatPhone(found.phone),
+          website: found.website || "",
+          city: found.city || "",
+          state: found.state || "",
           address: found.metadata?.address || "",
           linkedin: found.metadata?.linkedin || "",
-          sector: found.metadata?.sector || "",
+          sector: found.metadata?.sector || found.category || "",
           revenue: found.metadata?.revenue || "",
           employees: found.metadata?.employees || "",
           budget: found.metadata?.budget || "",
@@ -90,6 +103,7 @@ export default function LeadDetailPage() {
           documentName: "",
           documentUrl: "",
         });
+        setLabels(found.metadata?.labels || []);
       }
 
       setLoading(false);
@@ -99,6 +113,18 @@ export default function LeadDetailPage() {
   }, [leadSlug]);
 
   const documents = useMemo(() => lead?.metadata?.documents || [], [lead]);
+
+  const addLabel = () => {
+    const name = tagName.trim();
+    if (!name) return;
+    setLabels((current) => [...current, { id: `${slugify(name)}-${Date.now()}`, name, color: tagColor }]);
+    setTagName("");
+    setTagColor(LEAD_LABEL_COLORS[0].value);
+  };
+
+  const removeLabel = (id: string) => {
+    setLabels((current) => current.filter((label) => label.id !== id));
+  };
 
   const saveDetails = async (options?: { registerContact?: boolean; addDocument?: boolean }) => {
     if (!lead) return;
@@ -119,10 +145,18 @@ export default function LeadDetailPage() {
 
       const updated = await updateLeadDetails(lead.id, {
         ...lead,
+        companyName: details.companyName || lead.companyName,
+        contactName: details.contactName || null,
+        email: details.email || null,
+        phone: details.phone || null,
+        website: details.website || null,
+        city: details.city || null,
+        state: details.state || null,
+        category: details.sector || null,
         lastContactAt: options?.registerContact ? new Date().toISOString() : lead.lastContactAt,
         metadata: {
           ...lead.metadata,
-          labels: textToLabels(details.labels),
+          labels,
           address: details.address || null,
           linkedin: details.linkedin || null,
           sector: details.sector || null,
@@ -136,8 +170,9 @@ export default function LeadDetailPage() {
         },
       });
 
-      setLead({ ...updated, metadata: { ...updated.metadata, documents: nextDocuments } });
+      setLead({ ...updated, metadata: { ...updated.metadata, labels, documents: nextDocuments } });
       setDetails((current) => ({ ...current, documentName: "", documentUrl: "" }));
+      setEditingField(null);
     } finally {
       setSaving(false);
     }
@@ -158,8 +193,6 @@ export default function LeadDetailPage() {
     );
   }
 
-  const labelList = textToLabels(details.labels);
-
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-background">
       <div className="border-b border-border/70 px-4 py-4 md:px-6">
@@ -171,13 +204,20 @@ export default function LeadDetailPage() {
         </Button>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">{lead.companyName}</h1>
+            <EditableText
+              name="companyName"
+              value={details.companyName}
+              editingField={editingField}
+              setEditingField={setEditingField}
+              onChange={(value) => setDetails({ ...details, companyName: value })}
+              className="text-2xl font-semibold"
+            />
             <p className="text-sm text-muted-foreground">
-              {lead.contactName || "Contato não informado"} · {sourceLabels[lead.source] || lead.source}
+              {details.contactName || "Contato não informado"} · {sourceLabels[lead.source] || lead.source}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {labelList.map((label) => <Badge key={label} variant="secondary">{label}</Badge>)}
+            {labels.map((label) => <ColorBadge key={label.id} label={label} onRemove={() => removeLabel(label.id)} />)}
             <Badge variant="outline">Score {lead.score || 0}</Badge>
             <Badge variant="outline">{lead.folderName || "Sem pasta"}</Badge>
           </div>
@@ -199,15 +239,40 @@ export default function LeadDetailPage() {
           <Card className="rounded-lg shadow-none">
             <CardHeader><CardTitle className="text-base">Dados comerciais</CardTitle></CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
-              <Field label="Setor" value={details.sector} onChange={(value) => setDetails({ ...details, sector: value })} />
-              <Field label="Receita estimada" value={details.revenue} onChange={(value) => setDetails({ ...details, revenue: value })} />
-              <Field label="Número de funcionários" value={details.employees} onChange={(value) => setDetails({ ...details, employees: value })} />
-              <Field icon={DollarSign} label="Valor do orçamento" value={details.budget} onChange={(value) => setDetails({ ...details, budget: value })} />
+              <div className="space-y-2">
+                <Label>Setor</Label>
+                <Select value={details.sector || undefined} onValueChange={(value) => setDetails({ ...details, sector: value })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o setor" /></SelectTrigger>
+                  <SelectContent>
+                    {LEAD_SECTORS.map((sector) => <SelectItem key={sector} value={sector}>{sector}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Field label="Receita estimada" value={details.revenue} onChange={(value) => setDetails({ ...details, revenue: formatBRLInput(value) })} />
+              <Field label="Número de funcionários" value={details.employees} onChange={(value) => setDetails({ ...details, employees: value.replace(/\D/g, "") })} />
+              <Field label="Valor do orçamento" value={details.budget} onChange={(value) => setDetails({ ...details, budget: formatBRLInput(value) })} />
               <Field label="LinkedIn" value={details.linkedin} onChange={(value) => setDetails({ ...details, linkedin: value })} />
-              <Field label="Etiquetas" value={details.labels} onChange={(value) => setDetails({ ...details, labels: value })} placeholder="Cliente ideal, quente, agência" />
               <div className="space-y-2 md:col-span-3">
                 <Label>Endereço</Label>
                 <Input value={details.address} onChange={(event) => setDetails({ ...details, address: event.target.value })} placeholder="Rua, número, bairro, cidade" />
+              </div>
+              <div className="space-y-3 md:col-span-3">
+                <Label>Etiquetas</Label>
+                <div className="flex flex-wrap gap-2">
+                  {labels.map((label) => <ColorBadge key={label.id} label={label} onRemove={() => removeLabel(label.id)} />)}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_180px_auto]">
+                  <Input value={tagName} onChange={(event) => setTagName(event.target.value)} placeholder="Nome da etiqueta" />
+                  <Select value={tagColor} onValueChange={setTagColor}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {LEAD_LABEL_COLORS.map((color) => (
+                        <SelectItem key={color.value} value={color.value}>{color.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="outline" onClick={addLabel}><Plus className="mr-2 h-4 w-4" />Adicionar</Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -246,12 +311,12 @@ export default function LeadDetailPage() {
           <Card className="rounded-lg shadow-none">
             <CardHeader><CardTitle className="text-base">Contato</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <Contact icon={Building2} value={lead.companyName} />
-              <Contact icon={Mail} value={lead.email || "E-mail não informado"} />
-              <Contact icon={Phone} value={formatPhone(lead.phone)} />
-              <Contact icon={Globe} value={lead.website || "Site não informado"} />
-              <Contact icon={Linkedin} value={details.linkedin || "LinkedIn não informado"} />
-              <Contact icon={MapPin} value={details.address || [lead.city, lead.state].filter(Boolean).join(" / ") || "Endereço não informado"} />
+              <EditableContact icon={Users} name="contactName" label="Nome" value={details.contactName} editingField={editingField} setEditingField={setEditingField} onChange={(value) => setDetails({ ...details, contactName: value })} />
+              <EditableContact icon={Mail} name="email" label="E-mail" value={details.email} editingField={editingField} setEditingField={setEditingField} onChange={(value) => setDetails({ ...details, email: value })} />
+              <EditableContact icon={Phone} name="phone" label="Telefone" value={details.phone} editingField={editingField} setEditingField={setEditingField} onChange={(value) => setDetails({ ...details, phone: value })} />
+              <EditableContact icon={Globe} name="website" label="Site" value={details.website} editingField={editingField} setEditingField={setEditingField} onChange={(value) => setDetails({ ...details, website: value })} />
+              <EditableContact icon={Linkedin} name="linkedin" label="LinkedIn" value={details.linkedin} editingField={editingField} setEditingField={setEditingField} onChange={(value) => setDetails({ ...details, linkedin: value })} />
+              <EditableContact icon={MapPin} name="address" label="Endereço" value={details.address || [details.city, details.state].filter(Boolean).join(" / ")} editingField={editingField} setEditingField={setEditingField} onChange={(value) => setDetails({ ...details, address: value })} />
             </CardContent>
           </Card>
 
@@ -293,6 +358,17 @@ export default function LeadDetailPage() {
   );
 }
 
+function ColorBadge({ label, onRemove }: { label: LeadLabel; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-white" style={{ backgroundColor: label.color }}>
+      {label.name}
+      <button type="button" onClick={onRemove} className="rounded-sm opacity-80 hover:opacity-100">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
 function Info({ icon: Icon, label, value }: { icon: ComponentType<{ className?: string }>; label: string; value: string }) {
   return (
     <div className="rounded-md border p-3">
@@ -303,37 +379,77 @@ function Info({ icon: Icon, label, value }: { icon: ComponentType<{ className?: 
   );
 }
 
-function Field({
-  icon: Icon,
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-}: {
-  icon?: ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  type?: string;
-  placeholder?: string;
-  onChange: (value: string) => void;
-}) {
+function Field({ label, value, onChange, type = "text" }: { label: string; value: string; type?: string; onChange: (value: string) => void }) {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <div className="relative">
-        {Icon ? <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /> : null}
-        <Input className={Icon ? "pl-9" : undefined} type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
-      </div>
+      <Input type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }
 
-function Contact({ icon: Icon, value }: { icon: ComponentType<{ className?: string }>; value: string }) {
+function EditableText({
+  name,
+  value,
+  editingField,
+  setEditingField,
+  onChange,
+  className,
+}: {
+  name: string;
+  value: string;
+  editingField: string | null;
+  setEditingField: (value: string | null) => void;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  if (editingField === name) {
+    return <Input autoFocus value={value} onChange={(event) => onChange(event.target.value)} onBlur={() => setEditingField(null)} className="max-w-xl" />;
+  }
+
   return (
-    <p className="flex items-center gap-2">
+    <div className="group inline-flex items-center gap-2">
+      <h1 className={className}>{value || "Não informado"}</h1>
+      <button type="button" onClick={() => setEditingField(name)} className="opacity-0 transition group-hover:opacity-100">
+        <Edit className="h-4 w-4 text-muted-foreground" />
+      </button>
+    </div>
+  );
+}
+
+function EditableContact({
+  icon: Icon,
+  name,
+  label,
+  value,
+  editingField,
+  setEditingField,
+  onChange,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  name: string;
+  label: string;
+  value: string;
+  editingField: string | null;
+  setEditingField: (value: string | null) => void;
+  onChange: (value: string) => void;
+}) {
+  if (editingField === name) {
+    return (
+      <div className="space-y-1">
+        <Label>{label}</Label>
+        <Input autoFocus value={value} onChange={(event) => onChange(event.target.value)} onBlur={() => setEditingField(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-2">
       <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <span className="break-all">{value}</span>
-    </p>
+      <span className="min-w-0 flex-1 break-all">{value || `${label} não informado`}</span>
+      <button type="button" onClick={() => setEditingField(name)} className="opacity-0 transition group-hover:opacity-100">
+        <Edit className="h-4 w-4 text-muted-foreground" />
+      </button>
+    </div>
   );
 }

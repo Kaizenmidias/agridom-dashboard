@@ -19,6 +19,12 @@ export type LeadSource =
   | "manual"
   | "n8n";
 
+export interface LeadLabel {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Lead {
   id: string;
   companyName: string;
@@ -48,7 +54,7 @@ export interface Lead {
     origin?: string | null;
     crmSent?: boolean;
     crmSentAt?: string | null;
-    labels?: string[];
+    labels?: LeadLabel[];
     address?: string | null;
     linkedin?: string | null;
     sector?: string | null;

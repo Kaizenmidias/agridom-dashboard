@@ -58,9 +58,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { LEAD_LABEL_COLORS, LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
 import { useLeads } from "@/hooks/leads/useLeads";
 import { addLeadToPipeline as persistLeadToPipeline, createLead, updateLead } from "@/services/leads/lead-service";
-import type { Lead, LeadFilters, LeadFolder, LeadSource, LeadStatus } from "@/types/lead";
+import type { Lead, LeadFilters, LeadFolder, LeadLabel, LeadSource, LeadStatus } from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
 import { buildWhatsAppUrl } from "@/utils/whatsapp";
 import { getWebsiteDomain, normalizeEmail, normalizeWebsiteUrl, slugify } from "@/utils/lead-formatters";
@@ -191,8 +192,19 @@ function leadToForm(lead: Lead) {
     website: lead.website || "",
     city: lead.city || "",
     state: lead.state || "",
-    category: lead.category || "",
+    category: lead.metadata?.sector || lead.category || "",
     assignedTo: lead.assignedTo || "",
+    address: lead.metadata?.address || "",
+    linkedin: lead.metadata?.linkedin || "",
+    revenue: lead.metadata?.revenue || "",
+    employees: lead.metadata?.employees || "",
+    budget: lead.metadata?.budget || "",
+    notes: lead.metadata?.notes || "",
+    nextMeetingAt: lead.metadata?.nextMeetingAt ? lead.metadata.nextMeetingAt.slice(0, 16) : "",
+    meetingOwner: lead.metadata?.meetingOwner || "",
+    labelName: "",
+    labelColor: LEAD_LABEL_COLORS[0].value,
+    labels: lead.metadata?.labels || [],
   };
 }
 
@@ -268,6 +280,17 @@ const emptyLeadForm = {
   state: "",
   category: "",
   assignedTo: "",
+  address: "",
+  linkedin: "",
+  revenue: "",
+  employees: "",
+  budget: "",
+  notes: "",
+  nextMeetingAt: "",
+  meetingOwner: "",
+  labelName: "",
+  labelColor: LEAD_LABEL_COLORS[0].value,
+  labels: [] as LeadLabel[],
 };
 
 export default function LeadsPage() {
@@ -425,13 +448,34 @@ export default function LeadsPage() {
     setLeadForm((current) => {
       if (key === "phone") return { ...current, phone: formatBrazilianPhoneInput(value) };
       if (key === "state") return { ...current, state: value, city: "" };
+      if (key === "budget" || key === "revenue") return { ...current, [key]: formatBRLInput(value) };
+      if (key === "employees") return { ...current, employees: value.replace(/\D/g, "") };
       return { ...current, [key]: value };
     });
   };
 
+  const addLeadFormLabel = () => {
+    const name = leadForm.labelName.trim();
+    if (!name) return;
+
+    setLeadForm((current) => ({
+      ...current,
+      labels: [...current.labels, { id: `${slugify(name)}-${Date.now()}`, name, color: current.labelColor }],
+      labelName: "",
+      labelColor: LEAD_LABEL_COLORS[0].value,
+    }));
+  };
+
+  const removeLeadFormLabel = (id: string) => {
+    setLeadForm((current) => ({
+      ...current,
+      labels: current.labels.filter((label) => label.id !== id),
+    }));
+  };
+
   const openCreateLeadDialog = () => {
     setEditingLeadId(null);
-    setLeadForm(emptyLeadForm);
+    setLeadForm({ ...emptyLeadForm, labels: [] });
     setLeadDialogOpen(true);
   };
 
@@ -470,6 +514,19 @@ export default function LeadsPage() {
       lastContactAt: currentLead?.lastContactAt || null,
       createdAt: currentLead?.createdAt || now,
       updatedAt: now,
+      metadata: {
+        ...currentLead?.metadata,
+        labels: leadForm.labels,
+        address: leadForm.address.trim() || null,
+        linkedin: leadForm.linkedin.trim() || null,
+        sector: leadForm.category.trim() || null,
+        revenue: leadForm.revenue.trim() || null,
+        employees: leadForm.employees.trim() || null,
+        budget: leadForm.budget.trim() || null,
+        notes: leadForm.notes.trim() || null,
+        nextMeetingAt: leadForm.nextMeetingAt ? new Date(leadForm.nextMeetingAt).toISOString() : null,
+        meetingOwner: leadForm.meetingOwner.trim() || null,
+      },
     };
 
     try {
@@ -484,7 +541,7 @@ export default function LeadsPage() {
       await reload();
       setFilters((current) => ({ ...current, folderId: "todos-os-leads" }));
       setPage(1);
-      setLeadForm(emptyLeadForm);
+      setLeadForm({ ...emptyLeadForm, labels: [] });
       setEditingLeadId(null);
       setLeadDialogOpen(false);
     } finally {
@@ -866,12 +923,12 @@ export default function LeadsPage() {
       </div>
 
       <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>{editingLeadId ? "Editar lead" : "Novo lead"}</DialogTitle>
             <DialogDescription>{editingLeadId ? "Atualize as informações principais do contato comercial." : "Cadastre as informações principais do contato comercial."}</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid max-h-[68vh] gap-4 overflow-y-auto pr-2 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="lead-company">Organização *</Label>
               <Input
@@ -891,13 +948,17 @@ export default function LeadsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lead-category">Segmento</Label>
-              <Input
-                id="lead-category"
-                value={leadForm.category}
-                onChange={(event) => handleLeadFormChange("category", event.target.value)}
-                placeholder="Ex.: Clínica, Restaurante"
-              />
+              <Label htmlFor="lead-category">Setor</Label>
+              <Select value={leadForm.category || undefined} onValueChange={(value) => handleLeadFormChange("category", value)}>
+                <SelectTrigger id="lead-category">
+                  <SelectValue placeholder="Selecione o setor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_SECTORS.map((sector) => (
+                    <SelectItem key={sector} value={sector}>{sector}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="lead-email">E-mail</Label>
@@ -924,6 +985,42 @@ export default function LeadsPage() {
                 value={leadForm.website}
                 onChange={(event) => handleLeadFormChange("website", event.target.value)}
                 placeholder="empresa.com.br"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-linkedin">LinkedIn</Label>
+              <Input
+                id="lead-linkedin"
+                value={leadForm.linkedin}
+                onChange={(event) => handleLeadFormChange("linkedin", event.target.value)}
+                placeholder="linkedin.com/company/empresa"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-budget">Valor do orçamento</Label>
+              <Input
+                id="lead-budget"
+                value={leadForm.budget}
+                onChange={(event) => handleLeadFormChange("budget", event.target.value)}
+                placeholder="R$ 0,00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-revenue">Receita estimada</Label>
+              <Input
+                id="lead-revenue"
+                value={leadForm.revenue}
+                onChange={(event) => handleLeadFormChange("revenue", event.target.value)}
+                placeholder="R$ 0,00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-employees">Número de funcionários</Label>
+              <Input
+                id="lead-employees"
+                value={leadForm.employees}
+                onChange={(event) => handleLeadFormChange("employees", event.target.value)}
+                placeholder="Ex.: 25"
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-[1fr_88px]">
@@ -953,6 +1050,67 @@ export default function LeadsPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="lead-address">Endereço</Label>
+              <Input
+                id="lead-address"
+                value={leadForm.address}
+                onChange={(event) => handleLeadFormChange("address", event.target.value)}
+                placeholder="Rua, número, bairro"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-meeting-date">Próxima reunião</Label>
+              <Input
+                id="lead-meeting-date"
+                type="datetime-local"
+                value={leadForm.nextMeetingAt}
+                onChange={(event) => handleLeadFormChange("nextMeetingAt", event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead-meeting-owner">Responsável pela reunião</Label>
+              <Input
+                id="lead-meeting-owner"
+                value={leadForm.meetingOwner}
+                onChange={(event) => handleLeadFormChange("meetingOwner", event.target.value)}
+                placeholder="Nome do responsável"
+              />
+            </div>
+            <div className="space-y-3 sm:col-span-2">
+              <Label>Etiquetas</Label>
+              <div className="flex flex-wrap gap-2">
+                {leadForm.labels.map((label) => (
+                  <span key={label.id} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-white" style={{ backgroundColor: label.color }}>
+                    {label.name}
+                    <button type="button" onClick={() => removeLeadFormLabel(label.id)} className="rounded-sm opacity-80 hover:opacity-100">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[1fr_180px_auto]">
+                <Input value={leadForm.labelName} onChange={(event) => handleLeadFormChange("labelName", event.target.value)} placeholder="Nome da etiqueta" />
+                <Select value={leadForm.labelColor} onValueChange={(value) => handleLeadFormChange("labelColor", value)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {LEAD_LABEL_COLORS.map((color) => (
+                      <SelectItem key={color.value} value={color.value}>{color.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" onClick={addLeadFormLabel}><Plus className="mr-2 h-4 w-4" />Adicionar</Button>
+              </div>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="lead-notes">Anotações</Label>
+              <Input
+                id="lead-notes"
+                value={leadForm.notes}
+                onChange={(event) => handleLeadFormChange("notes", event.target.value)}
+                placeholder="Contexto inicial, dores e próximos passos"
+              />
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="lead-owner">Responsável</Label>

@@ -1,4 +1,4 @@
-import type { Lead, LeadSource, LeadStatus } from "@/types/lead";
+import type { Lead, LeadLabel, LeadSource, LeadStatus } from "@/types/lead";
 import type { Prospect, ProspectStatus } from "@/types/database";
 import { buildWhatsAppUrl } from "@/utils/whatsapp";
 import { slugify } from "@/utils/lead-formatters";
@@ -14,7 +14,7 @@ type ProspectAnalysisReport = {
   bairro?: string | null;
   crmSent?: boolean;
   crmSentAt?: string | null;
-  labels?: string[];
+  labels?: Array<string | LeadLabel>;
   address?: string | null;
   linkedin?: string | null;
   sector?: string | null;
@@ -37,6 +37,25 @@ const statusMap: Record<ProspectStatus, LeadStatus> = {
   Fechado: "convertido",
   Perdido: "perdido",
 };
+
+function normalizeLabels(labels?: Array<string | LeadLabel>): LeadLabel[] {
+  if (!Array.isArray(labels)) return [];
+
+  return labels
+    .map((label) => {
+      if (typeof label === "string") {
+        return { id: slugify(label), name: label, color: "#4D6EDB" };
+      }
+
+      if (!label?.name) return null;
+      return {
+        id: label.id || slugify(label.name),
+        name: label.name,
+        color: label.color || "#4D6EDB",
+      };
+    })
+    .filter((label): label is LeadLabel => Boolean(label));
+}
 
 function mapSource(value?: string | null): LeadSource {
   const normalized = slugify(value || "");
@@ -84,7 +103,7 @@ export function prospectToLead(prospect: Prospect): Lead {
       origin: report.source || report.origem || "manual",
       crmSent: Boolean(report.crmSent),
       crmSentAt: report.crmSentAt || null,
-      labels: report.labels || [],
+      labels: normalizeLabels(report.labels),
       address: report.address || prospect.address || null,
       linkedin: report.linkedin || null,
       sector: report.sector || null,
