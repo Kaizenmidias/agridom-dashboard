@@ -701,13 +701,8 @@ export default function ProspectingPage() {
               Encontre, valide e organize novas oportunidades comerciais a partir do Google Maps, CNPJ e Instagram.
             </p>
           </div>
-          <Button variant="outline" asChild>
-            <Link to="/administracao/integracoes"><ExternalLink className="mr-2 h-4 w-4" />Integrações</Link>
-          </Button>
         </div>
       </div>
-
-      <IntegrationConsumption integrations={integrations} />
 
       <Card className="rounded-lg border shadow-none">
         <CardHeader>
@@ -736,13 +731,10 @@ export default function ProspectingPage() {
         </CardContent>
       </Card>
 
-      <ProspectingJobProgress job={job} events={events} onCancel={() => void cancelJob()} />
       <ProspectingSummaryCards results={results} />
       <ProspectingResultsTable results={results} selectedIds={selectedIds} onToggle={toggleResult} onToggleAll={toggleAllResults} onImport={() => setImportOpen(true)} />
-      <ProspectingHistory items={history} onRefresh={() => void loadInitialData()} />
 
       <ProspectingImportDialog open={importOpen} onOpenChange={setImportOpen} selectedCount={selectedIds.length} source={source} onConfirm={importSelected} />
     </div>
   );
 }
-
