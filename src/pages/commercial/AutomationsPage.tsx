@@ -535,10 +535,15 @@ export function AutomationDetailPage() {
     }
   };
 
-  const publish = async (versionId: number) => {
+  const publish = async (_definition?: AutomationDefinition, versionId?: number) => {
     if (!automation) return;
+    const targetVersionId = versionId || automation.versions.find((version) => version.status === "draft")?.id;
+    if (!targetVersionId) {
+      toast.error("Não foi possível preparar o rascunho para publicação.");
+      return;
+    }
     try {
-      await automationsAPI.publish(automation.id, versionId);
+      await automationsAPI.publish(automation.id, targetVersionId);
       toast.success("Versão publicada.");
       await load();
     } catch (publishError) {
@@ -611,13 +616,19 @@ export function AutomationDetailPage() {
     <AutomationBuilder
       automationId={automation.id}
       triggerType={automation.trigger_type}
+      title={automation.name}
+      onBack={() => navigate("/comercial/automacoes")}
       draft={draft}
       active={active}
       onSaved={load}
-      onPublish={draft ? () => publish(draft.id) : undefined}
+      onPublish={isAdmin && automation.status !== "archived" ? publish : undefined}
       readOnly={!isAdmin || automation.status === "archived"}
     />
   );
+
+  if (isAdmin || automation.status !== "archived") {
+    return <div className="fixed inset-0 z-40 overflow-hidden bg-[#0A0A0A]">{visualBuilder}</div>;
+  }
 
   return (
     <div className="space-y-5 p-4 md:p-6">
@@ -740,7 +751,7 @@ export function AutomationDetailPage() {
                                   variant="ghost"
                                   size="icon"
                                   title="Publicar"
-                                  onClick={() => void publish(version.id)}
+                                  onClick={() => void publish(undefined, version.id)}
                                 >
                                   <CheckCircle2 className="h-4 w-4" />
                                 </Button>

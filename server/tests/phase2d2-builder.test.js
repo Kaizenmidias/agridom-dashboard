@@ -6,6 +6,7 @@ const { validateAutomationDefinition } = require('../services/automation-definit
 const { ACTION_CATALOG, ACTION_TYPES, STEP_TYPES } = require('../services/automation-catalog');
 
 const builder = fs.readFileSync(path.join(__dirname, '../../src/components/automations/AutomationBuilder.tsx'), 'utf8');
+const repository = fs.readFileSync(path.join(__dirname, '../services/automation-repository.js'), 'utf8');
 const routes = fs.readFileSync(path.join(__dirname, '../routes/automations.js'), 'utf8');
 
 test('2D.2 accepts terminal finish nodes and unit-based waits', () => {
@@ -60,4 +61,12 @@ test('2E.1.1 exposes a free-form graph editor with implicit terminals', () => {
   assert.match(builder, /Canvas vazio/);
   assert.match(builder, /layout:/);
   assert.doesNotMatch(builder, /type === "finish".*toolButton/);
+});
+
+test('2E.1.2 auto-draft saves before publish and uses the concurrency lock', () => {
+  assert.match(builder, /automationsAPI\.createVersion/);
+  assert.match(builder, /publishCurrent/);
+  assert.match(builder, /onPublish\(latest, versionId\)/);
+  assert.match(repository, /ownedAutomation\(connection, automationId, userId, true\)/);
+  assert.match(repository, /status = 'draft'.*LIMIT 1 FOR UPDATE/s);
 });
