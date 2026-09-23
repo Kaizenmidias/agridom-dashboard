@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess, requireCommercialAdmin } = require('../middleware/commercial-access');
 const { getPool } = require('../config/database');
+const { dispatchDomainEvent, requestEventContext } = require('../services/domain-events');
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -156,6 +157,8 @@ router.delete('/pipeline-stages/:stageId', requireCommercialAdmin, async (req, r
 });
 
 router.put('/pipelines/:pipelineId/positions/:prospectId', async (req, res) => {
+  let connection;
+  let transactionStarted = false;
   try {
     const query = getQuery(req);
     const pipelineId = parseId(req.params.pipelineId);
@@ -166,17 +169,30 @@ router.put('/pipelines/:pipelineId/positions/:prospectId', async (req, res) => {
     const prospect = await query('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ?', [prospectId, req.userId]);
     const stage = await query('SELECT id FROM pipeline_stages WHERE id = ? AND pipeline_id = ?', [stageId, pipelineId]);
     if (!pipeline || !prospect.rows?.length || !stage.rows?.length) return res.status(404).json({ error: 'Pipeline, etapa ou Lead nao encontrado.' });
-    await query(
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+    const [currentRows] = await connection.execute('SELECT * FROM prospect_pipeline_positions WHERE prospect_id = ? AND pipeline_id = ? FOR UPDATE', [prospectId, pipelineId]);
+    const previousStageId = currentRows[0]?.stage_id ?? null;
+    await connection.execute(
       `INSERT INTO prospect_pipeline_positions (prospect_id, pipeline_id, stage_id, sort_order)
        VALUES (?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE entered_stage_at = IF(stage_id <> VALUES(stage_id), CURRENT_TIMESTAMP, entered_stage_at), stage_id = VALUES(stage_id), sort_order = VALUES(sort_order), updated_at = CURRENT_TIMESTAMP`,
       [prospectId, pipelineId, stageId, parseSortOrder(req.body?.sort_order)]
     );
-    const result = await query('SELECT * FROM prospect_pipeline_positions WHERE prospect_id = ? AND pipeline_id = ?', [prospectId, pipelineId]);
-    res.json(result.rows[0]);
+    if (Number(previousStageId || 0) !== Number(stageId)) {
+      await dispatchDomainEvent({ type: 'lead.pipeline_stage_changed', entityType: 'lead', entityId: prospectId, actorUserId: req.userId, payload: { leadId: prospectId, pipelineId, oldStageId: previousStageId, newStageId: stageId }, ...requestEventContext(req) }, { connection });
+    }
+    const [resultRows] = await connection.execute('SELECT * FROM prospect_pipeline_positions WHERE prospect_id = ? AND pipeline_id = ?', [prospectId, pipelineId]);
+    await connection.commit();
+    transactionStarted = false;
+    res.json(resultRows[0]);
   } catch (error) {
+    if (connection && transactionStarted) await connection.rollback();
     console.error('Erro ao mover Lead na Pipeline:', error);
     res.status(500).json({ error: 'Nao foi possivel mover o Lead.' });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
@@ -260,12 +276,20 @@ router.put('/prospects/:prospectId/labels', async (req, res) => {
     const ids = [...new Set(rawIds.map(parseId))];
     if (ids.some((id) => id === null)) return res.status(400).json({ error: 'Uma ou mais etiquetas sao invalidas.' });
     await connection.beginTransaction();
+    const [previousRows] = await connection.execute('SELECT label_id FROM prospect_labels WHERE prospect_id = ? FOR UPDATE', [prospectId]);
+    const previousIds = new Set(previousRows.map((row) => Number(row.label_id)));
     if (ids.length) {
       const [owned] = await connection.execute(`SELECT id FROM lead_labels WHERE owner_user_id = ? AND id IN (${ids.map(() => '?').join(',')})`, [req.userId, ...ids]);
       if (owned.length !== ids.length) throw new Error('Uma ou mais etiquetas nao pertencem ao usuario.');
     }
     await connection.execute('DELETE FROM prospect_labels WHERE prospect_id = ?', [prospectId]);
     for (const id of ids) await connection.execute('INSERT INTO prospect_labels (prospect_id, label_id, created_by) VALUES (?, ?, ?)', [prospectId, id, req.userId]);
+    for (const labelId of ids.filter((id) => !previousIds.has(id))) {
+      await dispatchDomainEvent({ type: 'lead.tag_added', entityType: 'lead', entityId: prospectId, actorUserId: req.userId, payload: { leadId: prospectId, labelId }, ...requestEventContext(req) }, { connection });
+    }
+    for (const labelId of [...previousIds].filter((id) => !ids.includes(id))) {
+      await dispatchDomainEvent({ type: 'lead.tag_removed', entityType: 'lead', entityId: prospectId, actorUserId: req.userId, payload: { leadId: prospectId, labelId }, ...requestEventContext(req) }, { connection });
+    }
     await connection.commit();
     res.json({ label_ids: ids });
   } catch (error) {
@@ -289,6 +313,8 @@ router.get('/prospects/:prospectId/activities', async (req, res) => {
 });
 
 router.post('/prospects/:prospectId/activities', async (req, res) => {
+  let connection;
+  let transactionStarted = false;
   try {
     const query = getQuery(req);
     const prospectId = parseId(req.params.prospectId);
@@ -304,18 +330,27 @@ router.post('/prospects/:prospectId/activities', async (req, res) => {
     if (!await validAssignableUser(query, assignedUserId)) return res.status(400).json({ error: 'Responsavel inexistente, inativo ou sem acesso ao CRM.' });
     const dueAt = normalizeDateTime(req.body?.due_at);
     if (dueAt === undefined) return res.status(400).json({ error: 'Prazo da atividade invalido.' });
-    const inserted = await query(`INSERT INTO lead_activities (prospect_id, type, title, description, assigned_user_id, due_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`, [prospectId, type, title, req.body?.description || null, assignedUserId, dueAt, req.userId]);
-    const result = await query('SELECT * FROM lead_activities WHERE id = ?', [inserted.insertId]);
-    res.status(201).json(result.rows[0]);
-  } catch (error) { res.status(500).json({ error: 'Nao foi possivel criar a atividade.' }); }
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+    const [inserted] = await connection.execute('INSERT INTO lead_activities (prospect_id, type, title, description, assigned_user_id, due_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)', [prospectId, type, title, req.body?.description || null, assignedUserId, dueAt, req.userId]);
+    await dispatchDomainEvent({ type: 'activity.created', entityType: 'activity', entityId: inserted.insertId, actorUserId: req.userId, payload: { activityId: inserted.insertId, leadId: prospectId, type, assignedUserId, dueAt }, ...requestEventContext(req) }, { connection });
+    const [resultRows] = await connection.execute('SELECT * FROM lead_activities WHERE id = ?', [inserted.insertId]);
+    await connection.commit();
+    transactionStarted = false;
+    res.status(201).json(resultRows[0]);
+  } catch (error) { if (connection && transactionStarted) await connection.rollback(); res.status(500).json({ error: 'Nao foi possivel criar a atividade.' }); }
+  finally { if (connection) connection.release(); }
 });
 
 router.patch('/activities/:activityId', async (req, res) => {
+  let connection;
+  let transactionStarted = false;
   try {
     const query = getQuery(req);
     const activityId = parseId(req.params.activityId);
     if (!activityId) return res.status(400).json({ error: 'ID da atividade invalido.' });
-    const activity = await query(`SELECT la.id FROM lead_activities la JOIN prospects p ON p.id = la.prospect_id WHERE la.id = ? AND p.owner_user_id = ?`, [activityId, req.userId]);
+    const activity = await query(`SELECT la.id, la.prospect_id, la.status, la.completed_at FROM lead_activities la JOIN prospects p ON p.id = la.prospect_id WHERE la.id = ? AND p.owner_user_id = ?`, [activityId, req.userId]);
     if (!activity.rows?.length) return res.status(404).json({ error: 'Atividade nao encontrada.' });
     const status = ['pending', 'completed', 'cancelled'].includes(req.body?.status) ? req.body.status : null;
     const hasAssignee = Object.prototype.hasOwnProperty.call(req.body || {}, 'assigned_user_id');
@@ -325,10 +360,27 @@ router.patch('/activities/:activityId', async (req, res) => {
     const hasDueAt = Object.prototype.hasOwnProperty.call(req.body || {}, 'due_at');
     const dueAt = hasDueAt ? normalizeDateTime(req.body.due_at) : null;
     if (dueAt === undefined) return res.status(400).json({ error: 'Prazo da atividade invalido.' });
-    await query(`UPDATE lead_activities SET title = COALESCE(?, title), description = COALESCE(?, description), assigned_user_id = IF(?, ?, assigned_user_id), due_at = IF(?, ?, due_at), status = COALESCE(?, status), completed_at = CASE WHEN ? = 'completed' THEN COALESCE(completed_at, CURRENT_TIMESTAMP) WHEN ? = 'pending' THEN NULL ELSE completed_at END WHERE id = ?`, [req.body?.title || null, req.body?.description ?? null, hasAssignee, assignedUserId, hasDueAt, dueAt, status, status, status, activityId]);
-    const result = await query('SELECT * FROM lead_activities WHERE id = ?', [activityId]);
-    res.json(result.rows[0]);
-  } catch (error) { res.status(500).json({ error: 'Nao foi possivel atualizar a atividade.' }); }
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+    const [lockedRows] = await connection.execute('SELECT la.id, la.prospect_id, la.status, la.completed_at FROM lead_activities la JOIN prospects p ON p.id = la.prospect_id WHERE la.id = ? AND p.owner_user_id = ? FOR UPDATE', [activityId, req.userId]);
+    const lockedActivity = lockedRows[0];
+    if (!lockedActivity) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(404).json({ error: 'Atividade nao encontrada.' });
+    }
+    await connection.execute(`UPDATE lead_activities SET title = COALESCE(?, title), description = COALESCE(?, description), assigned_user_id = IF(?, ?, assigned_user_id), due_at = IF(?, ?, due_at), status = COALESCE(?, status), completed_at = CASE WHEN ? = 'completed' THEN COALESCE(completed_at, CURRENT_TIMESTAMP) WHEN ? = 'pending' THEN NULL ELSE completed_at END WHERE id = ?`, [req.body?.title || null, req.body?.description ?? null, hasAssignee, assignedUserId, hasDueAt, dueAt, status, status, status, activityId]);
+    if (lockedActivity.status !== 'completed' && status === 'completed') {
+      const [completedRows] = await connection.execute('SELECT completed_at FROM lead_activities WHERE id = ?', [activityId]);
+      await dispatchDomainEvent({ type: 'activity.completed', entityType: 'activity', entityId: activityId, actorUserId: req.userId, payload: { activityId, leadId: lockedActivity.prospect_id, completedBy: req.userId, completedAt: completedRows[0]?.completed_at }, ...requestEventContext(req) }, { connection });
+    }
+    const [resultRows] = await connection.execute('SELECT * FROM lead_activities WHERE id = ?', [activityId]);
+    await connection.commit();
+    transactionStarted = false;
+    res.json(resultRows[0]);
+  } catch (error) { if (connection && transactionStarted) await connection.rollback(); res.status(500).json({ error: 'Nao foi possivel atualizar a atividade.' }); }
+  finally { if (connection) connection.release(); }
 });
 
 router.get('/notifications', async (req, res) => {

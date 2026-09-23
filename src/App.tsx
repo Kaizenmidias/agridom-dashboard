@@ -19,6 +19,7 @@ import LeadsPage from "./pages/commercial/LeadsPage";
 import LeadDetailPage from "./pages/commercial/LeadDetailPage";
 import PipelinePage from "./pages/commercial/PipelinePage";
 import { AutomationsPage, AutomationDetailPage } from "./pages/commercial/AutomationsPage";
+import { DomainEventsPage } from "./pages/commercial/DomainEventsPage";
 import {
   AgendaPage,
   BroadcastPage,
@@ -63,6 +64,7 @@ const routes = [
   { path: "/comercial/metricas", element: <MetricsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/disparar", element: <BroadcastPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/automacoes", element: <AutomationsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/automacoes/eventos", element: <DomainEventsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/automacoes/:automationId", element: <AutomationDetailPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/agenda", element: <AgendaPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/kanban", element: <Navigate to="/comercial/pipeline" replace />, protected: true, restrictedForRicardo: false },

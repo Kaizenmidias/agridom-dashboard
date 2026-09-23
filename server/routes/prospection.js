@@ -1,10 +1,16 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess } = require('../middleware/commercial-access');
+const { getPool } = require('../config/database');
+const { dispatchDomainEvent, requestEventContext } = require('../services/domain-events');
 
 const router = express.Router();
 
 const getQuery = (req) => req.app.locals.query;
+const connectionQuery = async (connection, sql, params = []) => {
+  const [rows] = await connection.execute(sql, params);
+  return { rows: Array.isArray(rows) ? rows : [], rowCount: Array.isArray(rows) ? rows.length : rows.affectedRows || 0, insertId: rows?.insertId, affectedRows: rows?.affectedRows };
+};
 
 router.use(authenticateToken);
 router.use(requireCommercialAccess);
@@ -80,8 +86,10 @@ async function insertHistory(query, { prospectId, ownerUserId, channel = 'system
   );
 }
 
-async function syncProspectLabels(query, prospectId, ownerUserId, labels) {
+async function syncProspectLabels(query, prospectId, ownerUserId, labels, options = {}) {
   if (!Array.isArray(labels)) return;
+  const previous = await query('SELECT label_id FROM prospect_labels WHERE prospect_id = ?', [prospectId]);
+  const previousIds = new Set((previous.rows || []).map((row) => Number(row.label_id)));
   const labelIds = [];
   for (const item of labels) {
     const name = normalizeText(typeof item === 'string' ? item : item?.name);
@@ -98,6 +106,14 @@ async function syncProspectLabels(query, prospectId, ownerUserId, labels) {
   await query('DELETE FROM prospect_labels WHERE prospect_id = ?', [prospectId]);
   for (const labelId of labelIds) {
     await query('INSERT IGNORE INTO prospect_labels (prospect_id, label_id, created_by) VALUES (?, ?, ?)', [prospectId, labelId, ownerUserId]);
+  }
+  if (options.connection) {
+    for (const labelId of labelIds.filter((id) => !previousIds.has(id))) {
+      await dispatchDomainEvent({ type: 'lead.tag_added', entityType: 'lead', entityId: prospectId, actorUserId: ownerUserId, payload: { leadId: prospectId, labelId }, ...options.eventContext }, { connection: options.connection });
+    }
+    for (const labelId of [...previousIds].filter((id) => !labelIds.includes(id))) {
+      await dispatchDomainEvent({ type: 'lead.tag_removed', entityType: 'lead', entityId: prospectId, actorUserId: ownerUserId, payload: { leadId: prospectId, labelId }, ...options.eventContext }, { connection: options.connection });
+    }
   }
 }
 
@@ -170,6 +186,8 @@ router.post('/search', async (req, res) => {
 });
 
 router.post('/prospects', async (req, res) => {
+  let connection;
+  let transactionStarted = false;
   try {
     const businessName = normalizeText(req.body.business_name);
     if (!businessName) return res.status(400).json({ error: 'Nome da organizacao e obrigatorio' });
@@ -185,7 +203,11 @@ router.post('/prospects', async (req, res) => {
     if (requestedAssignee !== null && requestedAssignee !== '' && !assignedUserId) return res.status(400).json({ error: 'Responsavel invalido' });
     if (!await validateAssignedUser(query, assignedUserId)) return res.status(400).json({ error: 'Responsavel inexistente, inativo ou sem acesso ao CRM' });
 
-    const insert = await query(
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+    const db = (sql, params) => connectionQuery(connection, sql, params);
+    const insert = await db(
       `INSERT INTO prospects (
         owner_user_id, assigned_user_id, business_name, normalized_business_name, category, address, city, state,
         phone, normalized_phone, email, website, normalized_website, website_exists,
@@ -212,7 +234,7 @@ router.post('/prospects', async (req, res) => {
       ]
     );
 
-    await insertHistory(query, {
+    await insertHistory(db, {
       prospectId: insert.insertId,
       ownerUserId: req.userId,
       message: 'Lead cadastrado manualmente no CRM.',
@@ -220,26 +242,50 @@ router.post('/prospects', async (req, res) => {
       metadata: { action: 'created', source: analysisReport.source },
     });
 
-    await syncProspectLabels(query, insert.insertId, req.userId, req.body.metadata?.labels);
+    await syncProspectLabels(db, insert.insertId, req.userId, req.body.metadata?.labels, { connection, eventContext: requestEventContext(req) });
 
-    const result = await query(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
+    await dispatchDomainEvent({
+      type: 'lead.created',
+      entityType: 'lead',
+      entityId: insert.insertId,
+      actorUserId: req.userId,
+      payload: { leadId: insert.insertId, source: analysisReport.source, status: 'Novo', assignedUserId },
+      ...requestEventContext(req),
+    }, { connection });
+
+    const result = await db(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
       FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
       WHERE p.id = ? AND p.owner_user_id = ?`, [insert.insertId, req.userId]);
-    res.status(201).json(await hydrateProspect(query, result.rows[0], req.userId));
+    await connection.commit();
+    transactionStarted = false;
+    res.status(201).json(await hydrateProspect(getQuery(req), result.rows[0], req.userId));
   } catch (error) {
+    if (connection && transactionStarted) await connection.rollback();
     console.error('Erro ao criar prospect:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
 router.patch('/prospects/:id', async (req, res) => {
+  let connection;
+  let transactionStarted = false;
   try {
     const { status, last_contact_date, approach_suggestion, diagnostic_summary, problems_found, folder_name } = req.body;
     const query = getQuery(req);
     const prospectId = parseId(req.params.id);
     if (!prospectId) return res.status(400).json({ error: 'ID do Lead invalido' });
-    const existing = await query('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ?', [prospectId, req.userId]);
-    if (!existing.rows?.length) return res.status(404).json({ error: 'Prospect nao encontrado' });
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+    const db = (sql, params) => connectionQuery(connection, sql, params);
+    const existing = await db('SELECT * FROM prospects WHERE id = ? AND owner_user_id = ? FOR UPDATE', [prospectId, req.userId]);
+    if (!existing.rows?.length) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(404).json({ error: 'Prospect nao encontrado' });
+    }
 
     let previousReport = {};
     try {
@@ -266,7 +312,7 @@ router.patch('/prospects/:id', async (req, res) => {
     if (hasAssignee && requestedAssignee !== null && requestedAssignee !== '' && !assignedUserId) return res.status(400).json({ error: 'Responsavel invalido' });
     if (hasAssignee && !await validateAssignedUser(query, assignedUserId)) return res.status(400).json({ error: 'Responsavel inexistente, inativo ou sem acesso ao CRM' });
 
-    await query(
+    await db(
       `UPDATE prospects
        SET business_name = COALESCE(?, business_name),
            normalized_business_name = COALESCE(?, normalized_business_name),
@@ -315,9 +361,26 @@ router.patch('/prospects/:id', async (req, res) => {
       ]
     );
 
-    await syncProspectLabels(query, prospectId, req.userId, req.body.metadata?.labels);
+    await syncProspectLabels(db, prospectId, req.userId, req.body.metadata?.labels, { connection, eventContext: requestEventContext(req) });
 
-    await insertHistory(query, {
+    const previous = existing.rows[0];
+    const nextStatus = status ?? previous.status;
+    if (nextStatus !== previous.status) {
+      await dispatchDomainEvent({ type: 'lead.status_changed', entityType: 'lead', entityId: prospectId, actorUserId: req.userId, payload: { leadId: prospectId, oldStatus: previous.status, newStatus: nextStatus }, ...requestEventContext(req) }, { connection });
+    }
+    const nextAssignedUserId = hasAssignee ? assignedUserId : previous.assigned_user_id;
+    if (Number(nextAssignedUserId || 0) !== Number(previous.assigned_user_id || 0)) {
+      await dispatchDomainEvent({ type: 'lead.assigned', entityType: 'lead', entityId: prospectId, actorUserId: req.userId, payload: { leadId: prospectId, oldUserId: previous.assigned_user_id, newUserId: nextAssignedUserId }, ...requestEventContext(req) }, { connection });
+    }
+    const generalFieldsChanged = [
+      ['business_name', businessName], ['phone', phone], ['email', normalizeNullable(req.body.email)],
+      ['website', website], ['category', normalizeNullable(req.body.category)], ['city', normalizeNullable(req.body.city)], ['state', normalizeNullable(req.body.state)],
+    ].some(([field, value]) => value !== null && String(value) !== String(previous[field] ?? ''));
+    if (generalFieldsChanged) {
+      await dispatchDomainEvent({ type: 'lead.updated', entityType: 'lead', entityId: prospectId, actorUserId: req.userId, payload: { leadId: prospectId, changedFields: ['profile'] }, ...requestEventContext(req) }, { connection });
+    }
+
+    await insertHistory(db, {
       prospectId,
       ownerUserId: req.userId,
       message: 'Informacoes do lead atualizadas.',
@@ -325,13 +388,18 @@ router.patch('/prospects/:id', async (req, res) => {
       metadata: { action: 'updated' },
     });
 
-    const result = await query(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
+    const result = await db(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
       FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
       WHERE p.id = ? AND p.owner_user_id = ?`, [prospectId, req.userId]);
+    await connection.commit();
+    transactionStarted = false;
     res.json(await hydrateProspect(query, result.rows[0], req.userId));
   } catch (error) {
+    if (connection && transactionStarted) await connection.rollback();
     console.error('Erro ao atualizar prospect:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
+  } finally {
+    if (connection) connection.release();
   }
 });
 

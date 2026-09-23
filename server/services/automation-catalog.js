@@ -1,5 +1,6 @@
 const TRIGGER_TYPES = Object.freeze([
   'lead.created',
+  'lead.updated',
   'lead.status_changed',
   'lead.pipeline_stage_changed',
   'lead.tag_added',

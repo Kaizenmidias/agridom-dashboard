@@ -19,6 +19,7 @@ import { automationsAPI, type AutomationDefinition, type AutomationDetail, type 
 
 const TRIGGER_LABELS: Record<string, string> = {
   "lead.created": "Lead criado",
+  "lead.updated": "Lead atualizado",
   "lead.status_changed": "Status do Lead alterado",
   "lead.pipeline_stage_changed": "Etapa da Pipeline alterada",
   "lead.tag_added": "Etiqueta adicionada",
@@ -125,7 +126,7 @@ export function AutomationsPage() {
   return <div className="space-y-5 p-4 md:p-6">
     <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div><AppBreadcrumbs /><h1 className="mt-3 text-2xl font-semibold">Automações</h1><p className="text-sm text-muted-foreground">Gerencie versões e estados dos fluxos comerciais.</p></div>
-      <div className="flex gap-2"><Button variant="outline" size="icon" title="Atualizar" onClick={() => void load()}><RefreshCw className="h-4 w-4" /></Button>{isAdmin ? <Button onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Criar automação</Button> : null}</div>
+      <div className="flex gap-2"><Button asChild variant="outline"><Link to="/comercial/automacoes/eventos"><Eye className="mr-2 h-4 w-4" />Eventos</Link></Button><Button variant="outline" size="icon" title="Atualizar" onClick={() => void load()}><RefreshCw className="h-4 w-4" /></Button>{isAdmin ? <Button onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Criar automação</Button> : null}</div>
     </div>
 
     {error ? <Alert variant="destructive"><AlertTitle>Não foi possível carregar as automações</AlertTitle><AlertDescription className="flex items-center justify-between gap-3">{error}<Button variant="outline" size="sm" onClick={() => void load()}>Tentar novamente</Button></AlertDescription></Alert> : null}
