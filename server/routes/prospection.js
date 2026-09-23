@@ -264,7 +264,12 @@ router.post('/prospects/:id/add-to-crm', async (req, res) => {
     const query = getQuery(req);
     await query(
       `UPDATE prospects
-       SET analysis_report = JSON_SET(COALESCE(analysis_report, JSON_OBJECT()), '$.crmSent', true, '$.crmSentAt', ?),
+       SET analysis_report = JSON_SET(
+         COALESCE(analysis_report, JSON_OBJECT()),
+         '$.crmSent', true,
+         '$.crmSentAt', ?,
+         '$.labels', COALESCE(JSON_EXTRACT(analysis_report, '$.labels'), JSON_ARRAY(JSON_OBJECT('id', 'frio', 'name', 'Frio', 'color', '#4D6EDB')))
+       ),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND owner_user_id = ?`,
       [new Date().toISOString(), req.params.id, req.userId]

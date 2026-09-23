@@ -760,10 +760,6 @@ const ProspeccaoPage = () => {
       <Tabs defaultValue="leads" className="space-y-4">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-2 bg-transparent p-0">
           <TabsTrigger value="leads">Leads</TabsTrigger>
-          <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
-          <TabsTrigger value="mensagens">Mensagens</TabsTrigger>
-          <TabsTrigger value="histórico">Histórico</TabsTrigger>
-          <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
         </TabsList>
 
         <TabsContent value="leads" className="space-y-4">
@@ -890,7 +886,7 @@ const ProspeccaoPage = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 lg:hidden">
+              <div className="grid gap-4">
                 {paginatedProspects.length === 0 ? (
                   <div className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
                     Nenhum lead encontrado com os filtros atuais.
@@ -1012,7 +1008,7 @@ const ProspeccaoPage = () => {
                 )}
               </div>
 
-              <div className="hidden rounded-lg border overflow-x-auto lg:block">
+              <div className="hidden rounded-lg border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1518,4 +1514,3 @@ const ProspeccaoPage = () => {
 }
 
 export default ProspeccaoPage
-
