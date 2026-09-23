@@ -71,7 +71,10 @@ function mapSource(value?: string | null): LeadSource {
 }
 
 export function prospectToLead(prospect: Prospect): Lead {
-  const report = (prospect.analysis_report || {}) as ProspectAnalysisReport;
+  let report: ProspectAnalysisReport = {};
+  if (typeof prospect.analysis_report === "string") {
+    try { report = JSON.parse(prospect.analysis_report || "{}"); } catch { report = {}; }
+  } else report = (prospect.analysis_report || {}) as ProspectAnalysisReport;
   const folderName = report.folderName || (prospect.website_exists ? "Qualificados" : "Sem Site");
   const source = mapSource(report.source || report.origem || "google_maps");
 
