@@ -2,12 +2,16 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { getPool } = require('../config/database');
 const { validateAutomationDefinition } = require('./automation-definition-validator');
+const { executeAction } = require('./automation/action-executor');
+const { evaluateCondition } = require('./automation/condition-evaluator');
 
 const DEFAULT_BATCH_SIZE = 25;
 const DEFAULT_POLL_MS = 1000;
 const DEFAULT_LOCK_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_EVENT_ATTEMPTS = 3;
 const BACKOFF_MS = [5000, 30000, 120000];
+const MAX_LINEAGE_DEPTH = 10;
+const LEGACY_BOOTSTRAP_MARKER = 'bootstrap/no-op';
 
 const positiveInt = (value, fallback, max = Number.MAX_SAFE_INTEGER) => {
   const number = Number(value);
@@ -31,8 +35,10 @@ async function matchAutomationsForEvent(connection, event) {
        AND av.automation_id = a.id AND av.status = 'published'
      WHERE a.status = 'active'
        AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.type')) = ?
+       AND COALESCE(?, 0) < ${MAX_LINEAGE_DEPTH}
+       AND (COALESCE(?, 0) = 0 OR a.id <> COALESCE(?, 0))
      ORDER BY a.id`,
-    [event.event_type]
+    [event.event_type, event.lineage_depth, event.source_automation_id, event.source_automation_id]
   );
   return rows.map((row) => ({ ...row, automation_id: Number(row.automation_id), automation_version_id: Number(row.automation_version_id), definition: parseJson(row.definition) }));
 }
@@ -181,34 +187,97 @@ async function completeBootstrapJob(job, currentWorkerId) {
   try {
     await connection.beginTransaction();
     const [rows] = await connection.execute(
-      `SELECT aj.*, ar.automation_version_id, ar.status AS run_status, av.definition
+      `SELECT aj.*, ar.automation_id, ar.automation_version_id, ar.event_id, ar.entity_id, ar.status AS run_status,
+              ar.current_step_key, ar.correlation_id, av.definition, ae.event_uuid, ae.lineage_depth,
+              a.owner_user_id
        FROM automation_jobs aj
        JOIN automation_runs ar ON ar.id = aj.automation_run_id
        JOIN automation_versions av ON av.id = ar.automation_version_id
+       JOIN automations a ON a.id = ar.automation_id
+       LEFT JOIN automation_events ae ON ae.id = ar.event_id
        WHERE aj.id = ? AND aj.status = 'processing' AND aj.locked_by = ? FOR UPDATE`,
       [job.id, currentWorkerId]
     );
     const current = rows[0];
     if (!current) { await connection.rollback(); return { skipped: true }; }
-    const definition = parseJson(current.definition);
-    const validation = validateAutomationDefinition(definition, { requireSteps: true });
-    if (!validation.valid) throw new Error('PUBLISHED_DEFINITION_INVALID');
-    const firstStep = validation.definition.steps[0];
-    await connection.execute(`UPDATE automation_runs SET status = 'running', started_at = COALESCE(started_at, UTC_TIMESTAMP()), current_step_key = ? WHERE id = ?`, [firstStep?.id || null, job.automation_run_id]);
-    if (firstStep) {
-      const [stepResult] = await connection.execute(
-        `INSERT INTO automation_run_steps (automation_run_id, step_key, step_type, status, attempt, input, output, started_at, finished_at)
-         VALUES (?, ?, ?, 'completed', 1, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())
-         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-        [job.automation_run_id, firstStep.id, firstStep.type, JSON.stringify({ execution_mode: 'bootstrap' }), JSON.stringify({ execution_mode: 'bootstrap/no-op', action_executed: false, note: 'Fase 2D.1 nao executa actions comerciais.' })]
-      );
-      if (!stepResult.insertId) await connection.execute('UPDATE automation_run_steps SET status = \'completed\', finished_at = COALESCE(finished_at, UTC_TIMESTAMP()) WHERE automation_run_id = ? AND step_key = ?', [job.automation_run_id, firstStep.id]);
+    if (['completed', 'failed', 'cancelled'].includes(current.run_status)) {
+      await connection.execute("UPDATE automation_jobs SET status = 'completed', completed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL WHERE id = ?", [job.id]);
+      await connection.commit();
+      return { skipped: true };
     }
-    await connection.execute(`UPDATE automation_runs SET status = 'completed', finished_at = UTC_TIMESTAMP(), error_code = NULL, error_message = NULL WHERE id = ?`, [job.automation_run_id]);
-    await connection.execute(`UPDATE automation_jobs SET status = 'completed', completed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL, last_error = NULL WHERE id = ?`, [job.id]);
+    const validation = validateAutomationDefinition(parseJson(current.definition), { requireSteps: true });
+    if (!validation.valid) throw new Error('PUBLISHED_DEFINITION_INVALID');
+    const steps = validation.definition.steps;
+    const step = steps.find((item) => item.id === current.current_step_key) || steps[0];
+    if (!step) throw new Error('AUTOMATION_STEP_NOT_FOUND');
+    await connection.execute("UPDATE automation_run_steps SET status = 'completed', finished_at = COALESCE(finished_at, UTC_TIMESTAMP()) WHERE automation_run_id = ? AND status = 'waiting' AND step_key <> ?", [job.automation_run_id, step.id]);
+    const nextJobKey = (stepId) => `run:${job.automation_run_id}:step:${stepId}`;
+    const schedule = async (stepId, executeAt = null) => {
+      if (!stepId) return;
+      const nextDefinition = steps.find((item) => item.id === stepId);
+      if (!nextDefinition) throw new Error('UNKNOWN_STEP_REFERENCE');
+      await connection.execute(
+        `INSERT INTO automation_run_steps (automation_run_id, step_key, step_type, status, attempt, input)
+         VALUES (?, ?, ?, 'queued', 0, ?)
+         ON DUPLICATE KEY UPDATE step_type = VALUES(step_type)`,
+        [job.automation_run_id, stepId, nextDefinition.type, JSON.stringify({ node: stepId })]
+      );
+      await connection.execute(
+        `INSERT INTO automation_jobs (automation_run_id, run_step_id, job_type, status, execute_at, available_at, attempts, max_attempts, idempotency_key)
+         VALUES (?, (SELECT id FROM automation_run_steps WHERE automation_run_id = ? AND step_key = ? LIMIT 1), 'engine.step', 'pending', COALESCE(?, UTC_TIMESTAMP()), COALESCE(?, UTC_TIMESTAMP()), 0, 3, ?)
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+        [job.automation_run_id, job.automation_run_id, stepId, executeAt, executeAt, nextJobKey(stepId)]
+      );
+    };
+    const [existingSteps] = await connection.execute('SELECT * FROM automation_run_steps WHERE automation_run_id = ? AND step_key = ? FOR UPDATE', [job.automation_run_id, step.id]);
+    const attempt = Number(existingSteps[0]?.attempt || 0) + 1;
+    await connection.execute(
+      `INSERT INTO automation_run_steps (automation_run_id, step_key, step_type, status, attempt, input, started_at)
+       VALUES (?, ?, ?, 'running', ?, ?, UTC_TIMESTAMP())
+       ON DUPLICATE KEY UPDATE status = 'running', attempt = ?, input = ?, started_at = COALESCE(started_at, UTC_TIMESTAMP()), error_code = NULL, error_message = NULL`,
+      [job.automation_run_id, step.id, step.type, attempt, JSON.stringify({ node: step.id, type: step.type }), attempt, JSON.stringify({ node: step.id, type: step.type })]
+    );
+    const context = { runId: Number(job.automation_run_id), automationId: Number(current.automation_id), ownerUserId: Number(current.owner_user_id), leadId: Number(current.entity_id), correlationId: current.correlation_id, causationId: current.event_uuid, lineageDepth: Number(current.lineage_depth || 0) + 1, idempotencyKey: nextJobKey(step.id) };
+    let nextStep = step.next || null;
+    let output = {};
+    let status = 'completed';
+    if (step.type === 'condition') {
+      const result = await evaluateCondition(connection, step.config, context);
+      nextStep = result.result ? step.branches?.yes || null : step.branches?.no || null;
+      output = { result: result.result, branch: result.result ? 'yes' : 'no', field: result.field, operator: result.operator };
+    } else if (step.type === 'wait') {
+      const amount = Number(step.config?.amount ?? step.config?.duration);
+      const unit = step.config?.unit || 'minutes';
+      if (!Number.isInteger(amount) || amount <= 0 || !['minutes', 'hours', 'days'].includes(unit)) throw new Error('INVALID_WAIT');
+      const seconds = amount * (unit === 'days' ? 86400 : unit === 'hours' ? 3600 : 60);
+      const executeAt = new Date(Date.now() + seconds * 1000).toISOString().slice(0, 19).replace('T', ' ');
+      status = 'waiting';
+      output = { wait: { amount, unit }, resume_at: executeAt };
+      await connection.execute("UPDATE automation_runs SET status = 'waiting', current_step_key = ?, started_at = COALESCE(started_at, UTC_TIMESTAMP()) WHERE id = ?", [nextStep, job.automation_run_id]);
+      await connection.execute("UPDATE automation_run_steps SET status = 'waiting', output = ?, finished_at = NULL WHERE automation_run_id = ? AND step_key = ?", [JSON.stringify(output), job.automation_run_id, step.id]);
+      await connection.execute("UPDATE automation_jobs SET status = 'completed', completed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL, last_error = NULL WHERE id = ?", [job.id]);
+      await schedule(nextStep, executeAt);
+      await connection.commit();
+      return { completed: true, waiting: true, jobId: Number(job.id), runId: Number(job.automation_run_id) };
+    } else if (step.type === 'action') {
+      output = await executeAction(connection, step.config.actionType, step.config, context);
+    } else if (step.type === 'finish') {
+      nextStep = null;
+      output = { finished: true };
+    } else {
+      throw new Error(`UNKNOWN_STEP_TYPE:${step.type}`);
+    }
+    await connection.execute("UPDATE automation_run_steps SET status = ?, output = ?, finished_at = UTC_TIMESTAMP() WHERE automation_run_id = ? AND step_key = ?", [status, JSON.stringify(output), job.automation_run_id, step.id]);
+    if (nextStep) {
+      await connection.execute("UPDATE automation_runs SET status = 'queued', current_step_key = ?, started_at = COALESCE(started_at, UTC_TIMESTAMP()) WHERE id = ?", [nextStep, job.automation_run_id]);
+      await schedule(nextStep);
+    } else {
+      await connection.execute("UPDATE automation_runs SET status = 'completed', current_step_key = NULL, finished_at = UTC_TIMESTAMP(), error_code = NULL, error_message = NULL WHERE id = ?", [job.automation_run_id]);
+    }
+    await connection.execute("UPDATE automation_jobs SET status = 'completed', completed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL, last_error = NULL WHERE id = ?", [job.id]);
     await connection.commit();
-    console.info('Automation job completed:', { job_id: Number(job.id), run_id: Number(job.automation_run_id) });
-    return { completed: true, jobId: Number(job.id), runId: Number(job.automation_run_id) };
+    console.info('Automation job completed:', { job_id: Number(job.id), run_id: Number(job.automation_run_id), step: step.id });
+    return { completed: true, jobId: Number(job.id), runId: Number(job.automation_run_id), step: step.id };
   } catch (error) {
     await connection.rollback();
     await failJob(job, currentWorkerId, error);

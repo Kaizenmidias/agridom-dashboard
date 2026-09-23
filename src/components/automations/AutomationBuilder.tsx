@@ -522,14 +522,19 @@ export function AutomationBuilder({
     setZoom(Math.min(0.9, 900 / Math.max(900, nodes.length * 285)));
     setPan({ x: 32, y: 105 });
   };
-  const testFlow = () => {
+  const testFlow = async () => {
     const definition = builderToDefinition(nodes, triggerType);
-    const actionsInFlow = definition.steps.filter(
-      (step) => step.type === "action",
-    ).length;
-    toast.success(
+    const leadId = Number(window.prompt("Informe o ID do Lead para o dry-run:"));
+    if (!Number.isSafeInteger(leadId) || leadId <= 0) return;
+    try {
+      const result = await automationsAPI.dryRun(automationId, leadId, definition);
+      toast.success(`Dry-run concluido: ${result.steps.length} etapas avaliadas, sem gravacoes.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel testar o fluxo.");
+    }
+    /*
       `Fluxo válido para pré-visualização: ${definition.steps.length} etapas, ${actionsInFlow} ações.`,
-    );
+    ); */
   };
 
   return (
@@ -1141,6 +1146,9 @@ function NodeInspector({
           bloqueada enquanto não houver executor seguro.
         </p>
       ) : null}
+      {actionType === "lead.update_status" ? <FieldLabel label="Novo status"><Input value={String(node.config.status || "")} onChange={(event) => updateConfig("status", event.target.value)} placeholder="Ex.: Qualificado" /></FieldLabel> : null}
+      {actionType === "lead.update_field" ? <><FieldLabel label="Campo permitido"><Select value={String(node.config.field || "")} onValueChange={(value) => updateConfig("field", value)}><SelectTrigger><SelectValue placeholder="Selecione um campo" /></SelectTrigger><SelectContent>{["business_name", "category", "address", "city", "state", "phone", "email", "website"].map((field) => <SelectItem key={field} value={field}>{field}</SelectItem>)}</SelectContent></Select></FieldLabel><FieldLabel label="Valor"><Input value={String(node.config.value || "")} onChange={(event) => updateConfig("value", event.target.value)} /></FieldLabel></> : null}
+      {actionType === "lead.add_note" ? <FieldLabel label="Observação"><Textarea value={String(node.config.note || "")} onChange={(event) => updateConfig("note", event.target.value)} /></FieldLabel> : null}
       {["lead.add_tag", "lead.remove_tag"].includes(actionType) ? (
         <FieldLabel label="Etiqueta">
           <Select
@@ -1204,7 +1212,7 @@ function NodeInspector({
           </Select>
         </FieldLabel>
       ) : null}
-      {actionType === "activity.create" ? (
+      {["activity.create", "activity.create_task", "activity.create_call", "activity.create_follow_up"].includes(actionType) ? (
         <>
           <FieldLabel label="Titulo">
             <Input
@@ -1222,6 +1230,8 @@ function NodeInspector({
           </FieldLabel>
         </>
       ) : null}
+      {actionType === "activity.complete" ? <FieldLabel label="ID da atividade"><Input type="number" min="1" value={String(node.config.activityId || "")} onChange={(event) => updateConfig("activityId", Number(event.target.value))} /></FieldLabel> : null}
+      {actionType === "notification.create" ? <><FieldLabel label="Título"><Input value={String(node.config.title || "")} onChange={(event) => updateConfig("title", event.target.value)} /></FieldLabel><FieldLabel label="Mensagem"><Textarea value={String(node.config.message || "")} onChange={(event) => updateConfig("message", event.target.value)} /></FieldLabel></> : null}
       {[
         "email.send",
         "whatsapp.send_message",

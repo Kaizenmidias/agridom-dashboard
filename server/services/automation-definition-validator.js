@@ -134,12 +134,26 @@ function validateAutomationDefinition(input, options = {}) {
         if (!catalogItem || catalogItem.availability !== 'available') {
           errors.push(error(`${path}.config.actionType`, 'ACTION_NOT_EXECUTABLE', catalogItem?.availability === 'requires_integration' ? `Action requer integracao: ${catalogItem.requiredIntegration}.` : 'Action ainda nao possui executor seguro.'));
         }
+        const requiredFields = {
+          'lead.add_tag': ['labelId'], 'lead.remove_tag': ['labelId'], 'lead.assign_user': ['userId'],
+          'lead.update_status': ['status'], 'lead.update_field': ['field', 'value'], 'lead.add_note': ['note'],
+          'lead.move_pipeline_stage': ['stageId'], 'activity.create': ['title'], 'activity.create_task': ['title'],
+          'activity.create_call': ['title'], 'activity.create_follow_up': ['title'], 'activity.complete': ['activityId'],
+          'notification.create': ['title', 'message'],
+        }[step.config.actionType] || [];
+        requiredFields.forEach((field) => {
+          if (step.config[field] === undefined || step.config[field] === null || step.config[field] === '') errors.push(error(`${path}.config.${field}`, 'MISSING_ACTION_CONFIG', `Configuracao obrigatoria ausente: ${field}.`));
+        });
+        if (step.config.actionType === 'lead.update_field' && !['business_name', 'category', 'address', 'city', 'state', 'phone', 'email', 'website'].includes(step.config.field)) errors.push(error(`${path}.config.field`, 'INVALID_LEAD_FIELD', 'Campo de Lead nao permitido.'));
       } else if (step.type === 'wait' && step.config.duration !== undefined && (!Number.isInteger(step.config.duration) || step.config.duration <= 0)) {
         errors.push(error(`${path}.config.duration`, 'INVALID_WAIT_DURATION', 'Duracao de wait deve ser um inteiro positivo.'));
       } else if (step.type === 'wait' && step.config.amount !== undefined && (!Number.isInteger(step.config.amount) || step.config.amount <= 0)) {
         errors.push(error(`${path}.config.amount`, 'INVALID_WAIT_AMOUNT', 'Quantidade de wait deve ser um inteiro positivo.'));
       } else if (step.type === 'wait' && step.config.unit !== undefined && !['minutes', 'hours', 'days'].includes(step.config.unit)) {
         errors.push(error(`${path}.config.unit`, 'INVALID_WAIT_UNIT', 'Unidade de wait deve ser minutes, hours ou days.'));
+      }
+      if (options.requireSteps && step.type === 'condition' && (!['status', 'pipeline', 'pipeline_stage', 'assigned_user', 'origin', 'source', 'phone', 'email', 'website', 'label'].includes(step.config?.field) || !['equals', 'not_equals', 'contains', 'not_contains', 'is_empty', 'is_not_empty', 'has_label', 'does_not_have_label'].includes(step.config?.operator))) {
+        errors.push(error(`${path}.config`, 'INVALID_CONDITION', 'Campo ou operador de condicao nao permitido.'));
       }
 
       for (const field of ['next']) {
@@ -169,6 +183,20 @@ function validateAutomationDefinition(input, options = {}) {
         }
       }
     });
+    if (options.requireSteps && definition.steps.length) {
+      const byId = new Map(definition.steps.filter((step) => isPlainObject(step) && typeof step.id === 'string').map((step) => [step.id, step]));
+      const reachable = new Set();
+      const queue = [definition.steps[0].id];
+      while (queue.length) {
+        const currentId = queue.shift();
+        if (!currentId || reachable.has(currentId)) continue;
+        reachable.add(currentId);
+        const current = byId.get(currentId);
+        if (!current) continue;
+        [current.next, current.branches?.yes, current.branches?.no].forEach((target) => { if (target && !reachable.has(target)) queue.push(target); });
+      }
+      definition.steps.forEach((step, index) => { if (typeof step?.id === 'string' && !reachable.has(step.id)) errors.push(error(`steps[${index}]`, 'ORPHAN_STEP', 'Step nao alcancavel a partir do primeiro node.')); });
+    }
   }
 
   return { valid: errors.length === 0, definition, errors };

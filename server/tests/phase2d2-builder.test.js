@@ -37,7 +37,7 @@ test('2D.2 exposes draft update and keeps actions internal', () => {
 
 test('2D.2 action catalog separates executable, integration and future actions', () => {
   assert.ok(ACTION_CATALOG.some((item) => item.id === 'whatsapp.send_message' && item.availability === 'requires_integration'));
-  assert.ok(ACTION_CATALOG.some((item) => item.id === 'lead.add_tag' && item.availability === 'coming_soon'));
+  assert.ok(ACTION_CATALOG.some((item) => item.id === 'lead.add_tag' && item.availability === 'available'));
   assert.ok(ACTION_TYPES.includes('instagram.send_direct'));
   const blocked = validateAutomationDefinition({ schemaVersion: 1, trigger: { type: 'lead.created', config: {} }, steps: [{ id: 'send', type: 'action', config: { actionType: 'whatsapp.send_message' }, next: null }] }, { requireSteps: true, requireExecutableActions: true });
   assert.equal(blocked.valid, false);

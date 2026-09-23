@@ -12,7 +12,7 @@ Na revisão 2D.2.1, o canvas passou a dominar a área útil, o inspetor virou um
 
 O catálogo tipado fica em `src/components/automations/action-catalog.ts` e a allowlist autoritativa fica em `server/services/automation-catalog.js`. Ele cobre CRM, comunicação, Instagram, tempo, dados e integrações futuras. Cada item informa disponibilidade: `Disponível`, `Requer integração` ou `Em breve`.
 
-Como a engine atual ainda executa apenas o bootstrap técnico no-op da 2D.1, nenhuma ação de CRM, e-mail, WhatsApp ou Instagram é apresentada como funcional. A publicação valida o catálogo no backend e bloqueia ações sem executor seguro. Não há scraping, credencial fictícia ou executor HTTP genérico.
+Na Fase 2E.1, as ações internas de CRM, etiquetas, pipeline, atividades, notificações e waits persistentes passaram a possuir executor real. E-mail, WhatsApp e Instagram continuam bloqueados como `Requer integração`; não há scraping, credencial fictícia ou executor HTTP genérico.
 
 O Drawer inclui configuração contextual e um seletor de variáveis permitidas. O backend aceita somente `lead.name`, `lead.first_name`, `lead.company`, `lead.phone`, `lead.email`, `assignee.name`, `assignee.email`, `pipeline.name` e `pipeline.stage`.
 
@@ -24,7 +24,7 @@ Foi adicionado `PATCH /api/automations/:id/versions/:versionId` para atualizar u
 
 ## Limites desta fase
 
-O construtor não executa ações externas e não usa `setTimeout`. A engine da Fase 2D.1 permanece responsável pelo worker persistente, que ainda faz o bootstrap técnico no-op previsto naquela fase. O editor oferece apenas ações internas catalogadas para preparar o contrato das próximas fases.
+O construtor não executa ações externas e não usa `setTimeout`. O worker percorre os steps com jobs persistentes, retries, locks e retomada de waits. Actions externas continuam sem executor até a configuração dos providers.
 
 ## Operação
 

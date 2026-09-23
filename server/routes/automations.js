@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess, requireCommercialAdmin } = require('../middleware/commercial-access');
 const { TRIGGER_TYPES } = require('../services/automation-catalog');
+const { dryRunAutomation } = require('../services/automation/dry-run');
 const {
   AutomationError,
   createAutomation,
@@ -196,6 +197,22 @@ automationsRouter.get('/:id/runs', async (req, res) => {
     res.json({ runs: await listRuns(req.userId, automationId) });
   } catch (error) {
     handleError(res, error, 'Nao foi possivel listar as execucoes.');
+  }
+});
+
+automationsRouter.post('/:id/dry-run', async (req, res) => {
+  const automationId = parseId(req.params.id);
+  const leadId = parseId(req.body?.lead_id);
+  if (!automationId || !leadId) return res.status(400).json({ error: 'ID da automacao e do lead sao obrigatorios.' });
+  try {
+    const automation = await getAutomation(req.userId, automationId);
+    if (!automation) return res.status(404).json({ error: 'Automacao nao encontrada.' });
+    const definition = req.body?.definition || automation.versions.find((version) => version.status === 'draft')?.definition || automation.versions.find((version) => version.id === automation.active_version_id)?.definition;
+    if (!definition) return res.status(400).json({ error: 'A automacao ainda nao possui uma definicao para testar.' });
+    res.json(await dryRunAutomation({ definition, leadId, ownerUserId: req.userId }));
+  } catch (error) {
+    if (error.details) return res.status(400).json({ error: 'Definition invalida.', details: error.details });
+    handleError(res, error, 'Nao foi possivel testar a automacao.');
   }
 });
 

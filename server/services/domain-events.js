@@ -98,9 +98,9 @@ async function dispatchDomainEvent(input, options = {}) {
     try {
       const [result] = await connection.execute(
         `INSERT INTO automation_events
-          (event_uuid, idempotency_key, event_type, entity_type, entity_id, actor_user_id, payload, correlation_id, causation_id, occurred_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [eventUuid, idempotencyKey, input.type, validated.entityType, validated.entityId, actorUserId, JSON.stringify(validated.payload), correlationId, causationId, occurredAt.toISOString().slice(0, 19).replace('T', ' ')]
+          (event_uuid, idempotency_key, event_type, entity_type, entity_id, actor_user_id, payload, correlation_id, causation_id, occurred_at, source_automation_id, lineage_depth)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [eventUuid, idempotencyKey, input.type, validated.entityType, validated.entityId, actorUserId, JSON.stringify(validated.payload), correlationId, causationId, occurredAt.toISOString().slice(0, 19).replace('T', ' '), input.sourceAutomationId || null, Number(input.lineageDepth || 0)]
       );
       const [rows] = await connection.execute('SELECT * FROM automation_events WHERE id = ?', [result.insertId]);
       console.info('Domain event persisted:', { type: input.type, event_uuid: eventUuid, entity_type: validated.entityType, entity_id: validated.entityId });

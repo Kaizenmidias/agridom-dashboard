@@ -107,4 +107,5 @@ export const automationsAPI = {
   runs: (id: number) => request<{ runs: AutomationRun[] }>(`/${id}/runs`),
   allRuns: (page = 1) => requestAt<{ runs: AutomationRun[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }>("automation-runs", `?page=${page}&page_size=25`),
   getRun: (id: number) => requestAt<AutomationRun & { steps: unknown[]; jobs: unknown[] }>("automation-runs", `/${id}`),
+  dryRun: (id: number, leadId: number, definition: AutomationDefinition) => request<{ dryRun: boolean; leadId: number; steps: unknown[]; writes: number; externalMessages: number }>(`/${id}/dry-run`, { method: "POST", body: JSON.stringify({ lead_id: leadId, definition }) }),
 };
