@@ -35,6 +35,40 @@ test('2E.1 publication rejects invalid internal action configuration', () => {
   assert.ok(result.errors.some((item) => item.code === 'MISSING_ACTION_CONFIG'));
 });
 
+test('2E.1.1 semantic graph contract publishes wait/action terminals without finish', () => {
+  const definition = {
+    schemaVersion: 1,
+    trigger: { type: 'lead.created', config: {} },
+    steps: [
+      { id: 'wait_1', type: 'wait', config: { amount: 1, unit: 'minutes' }, next: 'tag_1' },
+      { id: 'tag_1', type: 'action', config: { actionType: 'lead.add_tag', labelId: 4 }, next: null },
+    ],
+    layout: { nodes: { trigger_1: { x: 80, y: 200 }, wait_1: { x: 360, y: 200 }, tag_1: { x: 650, y: 200 } } },
+  };
+  const result = validateAutomationDefinition(definition, { requireSteps: true, requireExecutableActions: true });
+  assert.equal(result.valid, true);
+  assert.equal(result.definition.steps.length, 2);
+  assert.equal(result.definition.steps[0].next, 'tag_1');
+  assert.equal(result.definition.steps[1].next, null);
+});
+
+test('2E.1.1 condition branches remain semantic and finish is only legacy-compatible', () => {
+  const definition = {
+    schemaVersion: 1,
+    trigger: { type: 'lead.created', config: {} },
+    steps: [
+      { id: 'condition_1', type: 'condition', config: { field: 'phone', operator: 'is_not_empty' }, branches: { yes: 'tag_1', no: 'activity_1' } },
+      { id: 'tag_1', type: 'action', config: { actionType: 'lead.add_tag', labelId: 4 }, next: null },
+      { id: 'activity_1', type: 'action', config: { actionType: 'activity.create', title: 'Contato' }, next: null },
+    ],
+  };
+  const result = validateAutomationDefinition(definition, { requireSteps: true, requireExecutableActions: true });
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.definition.steps[0].branches, { yes: 'tag_1', no: 'activity_1' });
+  const legacy = validateAutomationDefinition({ ...definition, steps: [...definition.steps.map((step) => ({ ...step, next: step.id === 'tag_1' || step.id === 'activity_1' ? 'finish_1' : step.next })), { id: 'finish_1', type: 'finish', config: {}, next: null }] }, { requireSteps: true, requireExecutableActions: true });
+  assert.equal(legacy.valid, true);
+});
+
 test('2E.1 migration is additive and supports lineage without IF NOT EXISTS column syntax', () => {
   assert.match(migration, /source_automation_id/);
   assert.match(migration, /lineage_depth/);
