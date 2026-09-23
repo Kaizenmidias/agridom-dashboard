@@ -1,4 +1,4 @@
-const { ACTION_TYPES, STEP_TYPES, TRIGGER_TYPES } = require('./automation-catalog');
+const { ACTION_CATALOG, ACTION_TYPES, STEP_TYPES, TRIGGER_TYPES } = require('./automation-catalog');
 
 const SECRET_KEYS = new Set([
   'token',
@@ -12,6 +12,7 @@ const SECRET_KEYS = new Set([
   'credential',
   'credentials',
 ]);
+const ALLOWED_VARIABLES = new Set(['lead.name', 'lead.first_name', 'lead.company', 'lead.phone', 'lead.email', 'assignee.name', 'assignee.email', 'pipeline.name', 'pipeline.stage']);
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -40,6 +41,27 @@ function findSecretKey(value, path = '') {
   return null;
 }
 
+function findInvalidVariable(value, path = '') {
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const found = findInvalidVariable(value[index], `${path}[${index}]`);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof value === 'string') {
+    const matches = value.matchAll(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g);
+    for (const match of matches) if (!ALLOWED_VARIABLES.has(match[1])) return error(path, 'UNKNOWN_VARIABLE', `Variavel nao permitida: ${match[1]}.`);
+    return null;
+  }
+  if (!isPlainObject(value)) return null;
+  for (const [key, child] of Object.entries(value)) {
+    const found = findInvalidVariable(child, path ? `${path}.${key}` : key);
+    if (found) return found;
+  }
+  return null;
+}
+
 function validateAutomationDefinition(input, options = {}) {
   const errors = [];
   let definition = input;
@@ -58,6 +80,8 @@ function validateAutomationDefinition(input, options = {}) {
 
   const secretError = findSecretKey(definition);
   if (secretError) errors.push(secretError);
+  const invalidVariable = findInvalidVariable(definition);
+  if (invalidVariable) errors.push(invalidVariable);
 
   if (definition.schemaVersion !== 1) {
     errors.push(error('schemaVersion', 'UNSUPPORTED_SCHEMA_VERSION', 'Apenas schemaVersion 1 e suportado.'));
@@ -105,6 +129,11 @@ function validateAutomationDefinition(input, options = {}) {
         errors.push(error(`${path}.config`, 'INVALID_STEP_CONFIG', 'Configuracao do step deve ser um objeto.'));
       } else if (step.type === 'action' && !ACTION_TYPES.includes(step.config.actionType)) {
         errors.push(error(`${path}.config.actionType`, 'UNKNOWN_ACTION_TYPE', 'Tipo de action nao reconhecido.'));
+      } else if (step.type === 'action' && options.requireExecutableActions) {
+        const catalogItem = ACTION_CATALOG.find((item) => item.id === step.config.actionType);
+        if (!catalogItem || catalogItem.availability !== 'available') {
+          errors.push(error(`${path}.config.actionType`, 'ACTION_NOT_EXECUTABLE', catalogItem?.availability === 'requires_integration' ? `Action requer integracao: ${catalogItem.requiredIntegration}.` : 'Action ainda nao possui executor seguro.'));
+        }
       } else if (step.type === 'wait' && step.config.duration !== undefined && (!Number.isInteger(step.config.duration) || step.config.duration <= 0)) {
         errors.push(error(`${path}.config.duration`, 'INVALID_WAIT_DURATION', 'Duracao de wait deve ser um inteiro positivo.'));
       } else if (step.type === 'wait' && step.config.amount !== undefined && (!Number.isInteger(step.config.amount) || step.config.amount <= 0)) {

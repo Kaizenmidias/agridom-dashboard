@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { validateAutomationDefinition } = require('../services/automation-definition-validator');
-const { STEP_TYPES } = require('../services/automation-catalog');
+const { ACTION_CATALOG, ACTION_TYPES, STEP_TYPES } = require('../services/automation-catalog');
 
 const builder = fs.readFileSync(path.join(__dirname, '../../src/components/automations/AutomationBuilder.tsx'), 'utf8');
 const routes = fs.readFileSync(path.join(__dirname, '../routes/automations.js'), 'utf8');
@@ -30,5 +30,21 @@ test('2D.2 builder keeps the semantic definition separate from visual coordinate
 
 test('2D.2 exposes draft update and keeps actions internal', () => {
   assert.match(routes, /patch\('\/:id\/versions\/:versionId'/);
-  assert.doesNotMatch(builder, /whatsapp\.send|email\.send/);
+  assert.match(builder, /requires_integration/);
+});
+
+test('2D.2 action catalog separates executable, integration and future actions', () => {
+  assert.ok(ACTION_CATALOG.some((item) => item.id === 'whatsapp.send_message' && item.availability === 'requires_integration'));
+  assert.ok(ACTION_CATALOG.some((item) => item.id === 'lead.add_tag' && item.availability === 'coming_soon'));
+  assert.ok(ACTION_TYPES.includes('instagram.send_direct'));
+  const blocked = validateAutomationDefinition({ schemaVersion: 1, trigger: { type: 'lead.created', config: {} }, steps: [{ id: 'send', type: 'action', config: { actionType: 'whatsapp.send_message' }, next: null }] }, { requireSteps: true, requireExecutableActions: true });
+  assert.equal(blocked.valid, false);
+  assert.ok(blocked.errors.some((item) => item.code === 'ACTION_NOT_EXECUTABLE'));
+});
+
+test('2D.2 validates variable tokens against the supported variable catalog', () => {
+  const valid = validateAutomationDefinition({ schemaVersion: 1, trigger: { type: 'lead.created', config: {} }, steps: [{ id: 'message', type: 'action', config: { actionType: 'email.send', message: 'Ola {{lead.name}}' }, next: null }] });
+  const invalid = validateAutomationDefinition({ schemaVersion: 1, trigger: { type: 'lead.created', config: {} }, steps: [{ id: 'message', type: 'action', config: { actionType: 'email.send', message: 'Ola {{lead.secret_value}}' }, next: null }] });
+  assert.equal(valid.valid, true);
+  assert.ok(invalid.errors.some((item) => item.code === 'UNKNOWN_VARIABLE'));
 });

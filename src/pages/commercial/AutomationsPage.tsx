@@ -614,6 +614,7 @@ export function AutomationDetailPage() {
       draft={draft}
       active={active}
       onSaved={load}
+      onPublish={draft ? () => publish(draft.id) : undefined}
       readOnly={!isAdmin || automation.status === "archived"}
     />
   );

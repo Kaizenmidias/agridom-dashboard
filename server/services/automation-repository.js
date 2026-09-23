@@ -232,7 +232,7 @@ async function publishVersion(userId, automationId, versionId) {
     const version = versions[0];
     if (!version) throw new AutomationError(404, 'Versao nao encontrada.');
     if (version.status !== 'draft') throw new AutomationError(409, 'Somente rascunhos podem ser publicados.');
-    const validation = validateAutomationDefinition(version.definition, { requireSteps: true });
+    const validation = validateAutomationDefinition(version.definition, { requireSteps: true, requireExecutableActions: true });
     if (!validation.valid) throw new AutomationError(400, 'Definition invalida para publicacao.', validation.errors);
     if (validation.definition.trigger?.type !== automation.trigger_type) {
       throw new AutomationError(400, 'Trigger da definition deve ser igual ao trigger_type da automacao.');

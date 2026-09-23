@@ -36,6 +36,26 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  ACTION_CATALOG,
+  AVAILABILITY_LABELS,
+  CATEGORY_LABELS,
+  type ActionCatalogItem,
+} from "./action-catalog";
+import {
   commercialEntitiesAPI,
   type PipelineDefinition,
   type PipelineStage,
@@ -240,6 +260,7 @@ export function AutomationBuilder({
   draft,
   active,
   onSaved,
+  onPublish,
   readOnly = false,
 }: {
   automationId: number;
@@ -247,6 +268,7 @@ export function AutomationBuilder({
   draft?: AutomationVersion;
   active?: AutomationVersion;
   onSaved: () => Promise<void>;
+  onPublish?: () => Promise<void>;
   readOnly?: boolean;
 }) {
   const [nodes, setNodes] = useState<BuilderNode[]>(() =>
@@ -269,6 +291,10 @@ export function AutomationBuilder({
     Array<{ id: number; name: string; color: string }>
   >([]);
   const [users, setUsers] = useState<UserOption[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerAfter, setPickerAfter] = useState("trigger_1");
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
 
   useEffect(() => {
@@ -313,10 +339,14 @@ export function AutomationBuilder({
       config: { ...(selected?.config || {}), [key]: value },
       label:
         selected?.type === "action" && key === "actionType"
-          ? actions[String(value)] || "Executar acao"
+          ? ACTION_CATALOG.find((item) => item.id === String(value))?.name || actions[String(value)] || "Executar acao"
           : selected?.label,
     });
-  const addNode = (type: BuilderType, afterId = selectedId) => {
+  const addNode = (
+    type: BuilderType,
+    afterId = selectedId,
+    actionId?: string,
+  ) => {
     const id = `${type}_${Date.now()}`;
     setNodes((current) => {
       const source = current.find((node) => node.id === afterId);
@@ -325,8 +355,10 @@ export function AutomationBuilder({
       const created = {
         id,
         type,
-        label: nodeMeta[type].title,
-        config: defaultConfig(type),
+        label: actionId ? ACTION_CATALOG.find((item) => item.id === actionId)?.name || nodeMeta[type].title : nodeMeta[type].title,
+        config: actionId
+          ? { ...defaultConfig(type), actionType: actionId }
+          : defaultConfig(type),
         x: (source?.x || 100) + 300,
         y: source?.y || 210,
         next: target || null,
@@ -344,6 +376,40 @@ export function AutomationBuilder({
         .concat(created);
     });
     setSelectedId(id);
+    setDrawerOpen(true);
+  };
+  const openActionPicker = (afterId: string) => {
+    setPickerAfter(afterId);
+    setPickerQuery("");
+    setPickerOpen(true);
+  };
+  const chooseAction = (item: ActionCatalogItem) => {
+    if (item.id === "wait.period") addNode("wait", pickerAfter);
+    else if (
+      [
+        "lead.update_status",
+        "lead.assign_user",
+        "lead.remove_assignee",
+        "lead.update_field",
+        "lead.add_note",
+        "lead.move_pipeline",
+        "activity.create_task",
+        "activity.create_call",
+        "activity.create_follow_up",
+        "activity.complete",
+        "notification.create",
+      ].includes(item.id)
+    )
+      addNode("action", pickerAfter, item.id);
+    else if (
+      item.id === "lead.add_tag" ||
+      item.id === "lead.remove_tag" ||
+      item.id === "lead.move_pipeline_stage" ||
+      item.id === "activity.create"
+    )
+      addNode("action", pickerAfter, item.id);
+    else addNode("action", pickerAfter, item.id);
+    setPickerOpen(false);
   };
   const removeSelected = () => {
     if (!selected || selected.type === "trigger" || selected.type === "finish")
@@ -420,6 +486,7 @@ export function AutomationBuilder({
       dy: event.clientY - node.y * zoom - pan.y,
     };
     setSelectedId(node.id);
+    setDrawerOpen(true);
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: React.PointerEvent) => {
@@ -440,6 +507,15 @@ export function AutomationBuilder({
   const stopDrag = () => {
     dragRef.current = null;
   };
+  const testFlow = () => {
+    const definition = builderToDefinition(nodes, triggerType);
+    const actionsInFlow = definition.steps.filter(
+      (step) => step.type === "action",
+    ).length;
+    toast.success(
+      `Fluxo válido para pré-visualização: ${definition.steps.length} etapas, ${actionsInFlow} ações.`,
+    );
+  };
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-[#0d0f12]">
@@ -454,6 +530,15 @@ export function AutomationBuilder({
           </span>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={testFlow}
+            title="Validar fluxo"
+          >
+            <Check className="mr-1 h-4 w-4" />
+            Testar
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -490,6 +575,16 @@ export function AutomationBuilder({
             <Save className="mr-1 h-4 w-4" />
             {saving ? "Salvando" : "Salvar rascunho"}
           </Button>
+          {onPublish ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void onPublish()}
+              disabled={readOnly}
+            >
+              Publicar
+            </Button>
+          ) : null}
         </div>
       </div>
       <div className="flex min-h-[620px] flex-col lg:flex-row">
@@ -578,6 +673,25 @@ export function AutomationBuilder({
               );
             })}
           </svg>
+          {edges.map((edge) => {
+            const to = nodes.find((node) => node.id === edge.to);
+            if (!to) return null;
+            return (
+              <button
+                key={`insert-${edge.from.id}-${edge.branch || "next"}`}
+                type="button"
+                title="Adicionar etapa"
+                className="absolute z-10 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow transition hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                style={{
+                  left: pan.x + ((edge.from.x + 210 + to.x) / 2) * zoom,
+                  top: pan.y + ((edge.from.y + to.y) / 2 + 55) * zoom,
+                }}
+                onClick={() => openActionPicker(edge.from.id)}
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            );
+          })}
           <div
             className="absolute inset-0"
             style={{
@@ -629,31 +743,39 @@ export function AutomationBuilder({
             })}
           </div>
         </div>
-        <aside className="w-full border-t border-border bg-card/70 p-4 lg:w-[310px] lg:border-l lg:border-t-0">
-          {selected ? (
-            <NodeInspector
-              node={selected}
-              updateConfig={updateConfig}
-              updateNode={updateNode}
-              triggers={triggers}
-              actions={actions}
-              labels={labels}
-              users={users}
-              pipelines={pipelines}
-              stages={stages}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Selecione um bloco para configurar.
-            </p>
-          )}
-          <div className="mt-5 border-t border-border pt-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Adicionar bloco
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {(["condition", "wait", "action", "finish"] as BuilderType[]).map(
-                (type) => {
+        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <SheetContent className="w-full overflow-y-auto border-border bg-card sm:max-w-[380px]">
+            <SheetHeader className="mb-5">
+              <SheetTitle>Configurar etapa</SheetTitle>
+              <SheetDescription>
+                As configurações ficam fora do node para manter o canvas limpo.
+              </SheetDescription>
+            </SheetHeader>
+            {selected ? (
+              <NodeInspector
+                node={selected}
+                updateConfig={updateConfig}
+                updateNode={updateNode}
+                triggers={triggers}
+                actions={actions}
+                labels={labels}
+                users={users}
+                pipelines={pipelines}
+                stages={stages}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Selecione um bloco para configurar.
+              </p>
+            )}
+            <div className="mt-5 border-t border-border pt-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Adicionar bloco
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  ["condition", "wait", "action", "finish"] as BuilderType[]
+                ).map((type) => {
                   const Icon = nodeMeta[type].icon;
                   return (
                     <Button
@@ -661,43 +783,155 @@ export function AutomationBuilder({
                       variant="outline"
                       size="sm"
                       disabled={readOnly}
-                      onClick={() => addNode(type)}
+                      onClick={() =>
+                        type === "action"
+                          ? openActionPicker(selectedId)
+                          : addNode(type)
+                      }
                     >
                       <Icon className="mr-1 h-3.5 w-3.5" />
                       {nodeMeta[type].title}
                     </Button>
                   );
-                },
-              )}
+                })}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={readOnly || selected?.type === "trigger"}
+                  onClick={duplicateSelected}
+                >
+                  <Copy className="mr-1 h-3.5 w-3.5" />
+                  Duplicar
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={
+                    readOnly ||
+                    selected?.type === "trigger" ||
+                    selected?.type === "finish"
+                  }
+                  onClick={removeSelected}
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                  Excluir
+                </Button>
+              </div>
             </div>
-            <div className="mt-2 flex gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={readOnly || selected?.type === "trigger"}
-                onClick={duplicateSelected}
-              >
-                <Copy className="mr-1 h-3.5 w-3.5" />
-                Duplicar
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={
-                  readOnly ||
-                  selected?.type === "trigger" ||
-                  selected?.type === "finish"
-                }
-                onClick={removeSelected}
-              >
-                <Trash2 className="mr-1 h-3.5 w-3.5" />
-                Excluir
-              </Button>
-            </div>
-          </div>
-        </aside>
+          </SheetContent>
+        </Sheet>
+        <ActionPicker
+          open={pickerOpen}
+          query={pickerQuery}
+          onQueryChange={setPickerQuery}
+          onOpenChange={setPickerOpen}
+          onChoose={chooseAction}
+        />
       </div>
     </div>
+  );
+}
+
+function ActionPicker({
+  open,
+  query,
+  onQueryChange,
+  onOpenChange,
+  onChoose,
+}: {
+  open: boolean;
+  query: string;
+  onQueryChange: (value: string) => void;
+  onOpenChange: (open: boolean) => void;
+  onChoose: (item: ActionCatalogItem) => void;
+}) {
+  const normalized = query.trim().toLowerCase();
+  const matches = ACTION_CATALOG.filter((item) =>
+    [item.name, item.description, item.category, ...item.aliases]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalized),
+  );
+  const grouped = matches.reduce<Record<string, ActionCatalogItem[]>>(
+    (result, item) => {
+      (result[item.category] ||= []).push(item);
+      return result;
+    },
+    {},
+  );
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[82vh] max-w-2xl overflow-hidden border-border bg-card">
+        <DialogHeader>
+          <DialogTitle>Adicionar etapa</DialogTitle>
+          <DialogDescription>
+            Busque por nome, categoria ou sinônimo. A disponibilidade indica o
+            que pode ser executado.
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          autoFocus
+          placeholder="Buscar ação, por exemplo: whats, responsável ou esperar"
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+        />
+        <div className="max-h-[55vh] space-y-5 overflow-y-auto pr-1">
+          {Object.entries(grouped).map(([category, items]) => (
+            <section key={category}>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] ||
+                  category}
+              </h3>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const disabled =
+                    item.availability !== "available" &&
+                    item.availability !== "coming_soon";
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onChoose(item)}
+                      className="flex items-start gap-3 rounded-md border border-border bg-background/40 p-3 text-left transition hover:border-primary/60 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      <span className="rounded-md bg-muted p-2">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium">
+                          {item.name}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {item.description}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={`mt-2 text-[10px] ${item.availability === "requires_integration" ? "border-amber-400/50 text-amber-300" : item.availability === "coming_soon" ? "border-muted-foreground/40 text-muted-foreground" : "border-primary/50 text-primary"}`}
+                        >
+                          {AVAILABILITY_LABELS[item.availability]}
+                          {item.requiredIntegration
+                            ? ` · ${item.requiredIntegration}`
+                            : ""}
+                        </Badge>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+          {matches.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Nenhuma ação encontrada.
+            </p>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -852,6 +1086,7 @@ function NodeInspector({
       </div>
     );
   const actionType = String(node.config.actionType || "lead.add_tag");
+  const selectedAction = ACTION_CATALOG.find((item) => item.id === actionType);
   return (
     <div className="space-y-3">
       <h3 className="flex items-center gap-2 text-sm font-semibold">
@@ -867,14 +1102,24 @@ function NodeInspector({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(actions).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
+            {ACTION_CATALOG.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {item.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </FieldLabel>
+      {selectedAction?.availability !== "available" ? (
+        <p className="rounded-md border border-amber-400/40 bg-amber-400/10 p-2 text-xs text-amber-200">
+          {AVAILABILITY_LABELS[selectedAction?.availability || "coming_soon"]}
+          {selectedAction?.requiredIntegration
+            ? `: ${selectedAction.requiredIntegration}`
+            : ""}
+          . Esta etapa pode ser preparada no rascunho, mas a publicação será
+          bloqueada enquanto não houver executor seguro.
+        </p>
+      ) : null}
       {["lead.add_tag", "lead.remove_tag"].includes(actionType) ? (
         <FieldLabel label="Etiqueta">
           <Select
@@ -955,6 +1200,45 @@ function NodeInspector({
             />
           </FieldLabel>
         </>
+      ) : null}
+      {[
+        "email.send",
+        "whatsapp.send_message",
+        "whatsapp.send",
+        "whatsapp.send_template",
+        "instagram.send_direct",
+      ].includes(actionType) ? (
+        <FieldLabel label="Mensagem">
+          <Textarea
+            value={String(node.config.message || "")}
+            placeholder="Use o seletor para inserir variáveis"
+            onChange={(event) => updateConfig("message", event.target.value)}
+          />
+          <Select
+            onValueChange={(value) =>
+              updateConfig(
+                "message",
+                `${String(node.config.message || "")}${value}`,
+              )
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Inserir variável" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="{{lead.name}}">Lead · Nome</SelectItem>
+              <SelectItem value="{{lead.company}}">Lead · Empresa</SelectItem>
+              <SelectItem value="{{lead.phone}}">Lead · Telefone</SelectItem>
+              <SelectItem value="{{lead.email}}">Lead · E-mail</SelectItem>
+              <SelectItem value="{{assignee.name}}">
+                Responsável · Nome
+              </SelectItem>
+              <SelectItem value="{{pipeline.stage}}">
+                Pipeline · Etapa
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </FieldLabel>
       ) : null}
     </div>
   );

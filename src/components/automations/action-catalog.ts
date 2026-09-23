@@ -1,0 +1,254 @@
+import {
+  Activity,
+  Bell,
+  Bot,
+  Calendar,
+  Clock3,
+  Database,
+  FileText,
+  GitBranch,
+  Instagram,
+  ListTodo,
+  Mail,
+  MessageCircle,
+  Tag,
+  UserPlus,
+  UserRound,
+  Webhook,
+  type LucideIcon,
+} from "lucide-react";
+
+export type ActionAvailability =
+  "available" | "requires_integration" | "coming_soon";
+export type ActionCategory =
+  | "crm"
+  | "communication"
+  | "instagram"
+  | "time"
+  | "logic"
+  | "data"
+  | "integrations";
+export type ActionCatalogItem = {
+  id: string;
+  name: string;
+  description: string;
+  category: ActionCategory;
+  icon: LucideIcon;
+  availability: ActionAvailability;
+  requiredIntegration?: string;
+  aliases: string[];
+  configSchema?: Record<string, unknown>;
+};
+
+export const ACTION_CATALOG: ActionCatalogItem[] = [
+  {
+    id: "lead.add_tag",
+    name: "Adicionar etiqueta",
+    description: "Marca o Lead com uma etiqueta",
+    category: "crm",
+    icon: Tag,
+    availability: "coming_soon",
+    aliases: ["tag", "marcar", "etiqueta"],
+  },
+  {
+    id: "lead.remove_tag",
+    name: "Remover etiqueta",
+    description: "Remove uma etiqueta do Lead",
+    category: "crm",
+    icon: Tag,
+    availability: "coming_soon",
+    aliases: ["tag", "desmarcar"],
+  },
+  {
+    id: "lead.assign_user",
+    name: "Atribuir responsável",
+    description: "Define o responsável comercial",
+    category: "crm",
+    icon: UserPlus,
+    availability: "coming_soon",
+    aliases: ["responsável", "usuario", "dono"],
+  },
+  {
+    id: "lead.remove_assignee",
+    name: "Remover responsável",
+    description: "Remove o responsável atual",
+    category: "crm",
+    icon: UserRound,
+    availability: "coming_soon",
+    aliases: ["responsável", "desatribuir"],
+  },
+  {
+    id: "lead.update_status",
+    name: "Alterar status do Lead",
+    description: "Atualiza o status comercial",
+    category: "crm",
+    icon: Activity,
+    availability: "coming_soon",
+    aliases: ["status", "qualificar"],
+  },
+  {
+    id: "lead.update_field",
+    name: "Atualizar campo do Lead",
+    description: "Escreve um valor em um campo",
+    category: "data",
+    icon: Database,
+    availability: "coming_soon",
+    aliases: ["campo", "editar"],
+  },
+  {
+    id: "lead.move_pipeline_stage",
+    name: "Mover para etapa",
+    description: "Move o Lead dentro da Pipeline",
+    category: "crm",
+    icon: GitBranch,
+    availability: "coming_soon",
+    aliases: ["pipeline", "etapa", "kanban"],
+  },
+  {
+    id: "activity.create",
+    name: "Criar atividade",
+    description: "Registra uma atividade no Lead",
+    category: "crm",
+    icon: Calendar,
+    availability: "coming_soon",
+    aliases: ["atividade", "agenda"],
+  },
+  {
+    id: "activity.create_task",
+    name: "Criar tarefa",
+    description: "Cria uma tarefa para acompanhamento",
+    category: "crm",
+    icon: ListTodo,
+    availability: "coming_soon",
+    aliases: ["task", "follow-up", "acompanhamento"],
+  },
+  {
+    id: "activity.create_follow_up",
+    name: "Criar follow-up",
+    description: "Agenda o próximo contato",
+    category: "crm",
+    icon: Calendar,
+    availability: "coming_soon",
+    aliases: ["retorno", "contato"],
+  },
+  {
+    id: "notification.create",
+    name: "Criar notificação interna",
+    description: "Avisa a equipe dentro do CRM",
+    category: "crm",
+    icon: Bell,
+    availability: "coming_soon",
+    aliases: ["alerta", "aviso"],
+  },
+  {
+    id: "wait.period",
+    name: "Aguardar período",
+    description: "Pausa o caminho por um período persistente",
+    category: "time",
+    icon: Clock3,
+    availability: "coming_soon",
+    aliases: ["esperar", "aguardar", "delay"],
+  },
+  {
+    id: "email.send",
+    name: "Enviar e-mail",
+    description: "Prepara um e-mail transacional",
+    category: "communication",
+    icon: Mail,
+    availability: "requires_integration",
+    requiredIntegration: "email",
+    aliases: ["email", "mensagem"],
+  },
+  {
+    id: "whatsapp.send_message",
+    name: "Enviar mensagem no WhatsApp",
+    description: "Envia uma mensagem pelo provider conectado",
+    category: "communication",
+    icon: MessageCircle,
+    availability: "requires_integration",
+    requiredIntegration: "whatsapp",
+    aliases: ["whats", "zap", "wpp"],
+  },
+  {
+    id: "whatsapp.send_template",
+    name: "Enviar template WhatsApp",
+    description: "Envia um template aprovado",
+    category: "communication",
+    icon: MessageCircle,
+    availability: "requires_integration",
+    requiredIntegration: "whatsapp",
+    aliases: ["whats", "template"],
+  },
+  {
+    id: "instagram.send_direct",
+    name: "Enviar mensagem no Direct",
+    description: "Envia uma mensagem pelo Instagram",
+    category: "instagram",
+    icon: Instagram,
+    availability: "requires_integration",
+    requiredIntegration: "instagram",
+    aliases: ["instagram", "direct", "dm"],
+  },
+  {
+    id: "instagram.follow",
+    name: "Seguir perfil",
+    description: "Segue um perfil pelo provider conectado",
+    category: "instagram",
+    icon: Instagram,
+    availability: "requires_integration",
+    requiredIntegration: "instagram",
+    aliases: ["instagram", "seguir"],
+  },
+  {
+    id: "instagram.unfollow",
+    name: "Deixar de seguir perfil",
+    description: "Deixa de seguir um perfil",
+    category: "instagram",
+    icon: Instagram,
+    availability: "requires_integration",
+    requiredIntegration: "instagram",
+    aliases: ["instagram", "deixar"],
+  },
+  {
+    id: "webhook.send",
+    name: "Webhook",
+    description: "Integração externa segura, em preparação",
+    category: "integrations",
+    icon: Webhook,
+    availability: "coming_soon",
+    aliases: ["integração", "api"],
+  },
+  {
+    id: "ai.run",
+    name: "Executar IA",
+    description: "Ação de inteligência artificial em preparação",
+    category: "integrations",
+    icon: Bot,
+    availability: "coming_soon",
+    aliases: ["ia", "agente", "assistente"],
+  },
+  {
+    id: "data.copy_field",
+    name: "Copiar valor entre campos",
+    description: "Copia um valor para outro campo",
+    category: "data",
+    icon: FileText,
+    availability: "coming_soon",
+    aliases: ["campo", "copiar"],
+  },
+];
+
+export const CATEGORY_LABELS: Record<ActionCategory, string> = {
+  crm: "CRM",
+  communication: "Comunicação",
+  instagram: "Instagram",
+  time: "Tempo",
+  logic: "Lógica",
+  data: "Dados",
+  integrations: "Integrações",
+};
+export const AVAILABILITY_LABELS: Record<ActionAvailability, string> = {
+  available: "Disponível",
+  requires_integration: "Requer integração",
+  coming_soon: "Em breve",
+};
