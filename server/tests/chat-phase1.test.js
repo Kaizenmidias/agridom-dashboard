@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '../..');
 const route = fs.readFileSync(path.join(root, 'server/routes/conversations.js'), 'utf8');
 const api = fs.readFileSync(path.join(root, 'src/api/conversations.ts'), 'utf8');
 const page = fs.readFileSync(path.join(root, 'src/pages/commercial/ChatsPage.tsx'), 'utf8');
+const composer = fs.readFileSync(path.join(root, 'src/components/commercial/MessageComposer.tsx'), 'utf8');
 
 test('CHAT-1 persiste filtros, busca, leitura e contexto da conversa', () => {
   assert.match(route, /communication_messages sm/);
@@ -32,6 +33,6 @@ test('CHAT-1 prepara canais futuros sem fingir integrações ativas', () => {
 });
 
 test('CHAT-1 mantém composer textual com Enter e Shift+Enter', () => {
-  assert.match(page, /event\.key === "Enter" && !event\.shiftKey/);
+  assert.match(composer, /event\.key === "Enter" && !event\.shiftKey/);
   assert.match(route, /Apenas mensagens de texto estao disponiveis nesta fase/);
 });
