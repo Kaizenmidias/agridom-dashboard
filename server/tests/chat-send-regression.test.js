@@ -35,7 +35,7 @@ test('Evolution provider sends the v2 text payload and never exposes credentials
 
 test('chat send keeps the explicit guards for missing conversation, text and connection', () => {
   assert.match(routeSource, /if \(!conversation\) return res\.status\(404\)/);
-  assert.match(routeSource, /if \(!text \|\| text\.length > 10000\) return res\.status\(400\)/);
+  assert.match(routeSource, /requestedType === 'text' && \(!text \|\| text\.length > 10000\)/);
   assert.match(routeSource, /ca\.status AS account_status/);
   assert.match(serviceSource, /account\.account_status \?\? account\.status/);
   assert.match(providerSource, /EVOLUTION_AUTH_FAILED/);

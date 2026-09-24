@@ -73,9 +73,26 @@ class EvolutionWhatsAppProvider {
     return { status: normalizeState(data.instance?.state || data.state), raw: data };
   }
 
-  async sendText(instanceName, number, text) {
-    const data = await this.request('POST', `/message/sendText/${encodeURIComponent(instanceName)}`, { number, text: String(text), linkPreview: false });
+  async sendText(instanceName, number, text, quoted) {
+    const data = await this.request('POST', `/message/sendText/${encodeURIComponent(instanceName)}`, { number, text: String(text), linkPreview: false, ...(quoted ? { quoted } : {}) });
     return { externalMessageId: data.key?.id || data.message?.key?.id || data.id || null, status: 'sent', raw: data };
+  }
+
+  async sendMedia(instanceName, { number, mediaType, mimeType, media, filename, caption, quoted }) {
+    const data = await this.request('POST', `/message/sendMedia/${encodeURIComponent(instanceName)}`, {
+      number, mediatype: mediaType, mimetype: mimeType, media, fileName: filename || undefined, caption: caption || undefined, quoted: quoted || undefined
+    });
+    return { externalMessageId: data.key?.id || data.message?.key?.id || data.id || null, status: 'sent', raw: data };
+  }
+
+  async sendAudio(instanceName, { number, audio, quoted }) {
+    const data = await this.request('POST', `/message/sendWhatsAppAudio/${encodeURIComponent(instanceName)}`, { number, audio, encoding: true, quoted: quoted || undefined });
+    return { externalMessageId: data.key?.id || data.message?.key?.id || data.id || null, status: 'sent', raw: data };
+  }
+
+  async downloadMedia(instanceName, message, { convertToMp4 = false } = {}) {
+    const data = await this.request('POST', `/chat/getBase64FromMediaMessage/${encodeURIComponent(instanceName)}`, { message, convertToMp4 });
+    return { base64: data.base64 || data.data?.base64 || data.message?.base64 || null, mimeType: data.mimetype || data.mimeType || data.data?.mimetype || data.data?.mimeType || null, filename: data.fileName || data.filename || data.data?.fileName || null, raw: data };
   }
 
   async logout(instanceName) {

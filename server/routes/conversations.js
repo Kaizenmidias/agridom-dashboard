@@ -1,12 +1,15 @@
 const express = require('express');
+const multer = require('multer');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess } = require('../middleware/commercial-access');
 const { getPool } = require('../config/database');
-const { sendWhatsAppMessage } = require('../services/whatsapp-service');
+const { sendWhatsAppMessage, sendWhatsAppMedia } = require('../services/whatsapp-service');
+const { sendFile, LIMITS } = require('../services/chat-media');
 
 const router = express.Router();
 router.use(authenticateToken, requireCommercialAccess);
 const parsePage = (value, fallback, max) => Math.min(Math.max(Number(value) || fallback, 1), max);
+const mediaUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: Math.max(...Object.values(LIMITS)) } });
 
 router.get('/', async (req, res) => {
   try {
@@ -31,8 +34,17 @@ router.get('/:id', async (req, res) => {
 });
 
 router.get('/:id/messages', async (req, res) => {
-  try { const limit = parsePage(req.query.limit, 100, 200); const [rows] = await getPool().execute('SELECT * FROM communication_messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT ?', [req.params.id, limit + 1]); const hasMore = rows.length > limit; res.json({ messages: rows.slice(0, limit).reverse(), hasMore }); }
+  try { const limit = parsePage(req.query.limit, 40, 100); const beforeId = req.query.beforeId ? Number(req.query.beforeId) : null; const params = [req.params.id]; const before = beforeId ? ' AND id < ?' : ''; if (beforeId) params.push(beforeId); params.push(limit + 1); const [rows] = await getPool().execute(`SELECT * FROM communication_messages WHERE conversation_id = ?${before} ORDER BY created_at DESC, id DESC LIMIT ?`, params); const hasMore = rows.length > limit; res.json({ messages: rows.slice(0, limit).reverse(), hasMore }); }
   catch { res.status(500).json({ error: 'Nao foi possivel carregar as mensagens.' }); }
+});
+
+router.get('/:id/messages/:messageId/media', async (req, res) => {
+  try {
+    const [rows] = await getPool().execute('SELECT cm.* FROM communication_messages cm JOIN conversations c ON c.id = cm.conversation_id WHERE cm.id = ? AND cm.conversation_id = ? LIMIT 1', [req.params.messageId, req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Mensagem nao encontrada.' });
+    if (!rows[0].media_storage_path) return res.status(404).json({ error: 'Arquivo de midia nao disponivel.' });
+    return sendFile(req, res, rows[0]);
+  } catch (error) { return res.status(error?.code === 'MEDIA_PATH_INVALID' ? 400 : 404).json({ error: 'Arquivo de midia nao encontrado.' }); }
 });
 
 router.patch('/:id/read', async (req, res) => {
@@ -68,15 +80,25 @@ router.get('/:id/activities', async (req, res) => {
   catch { res.status(500).json({ error: 'Nao foi possivel carregar a timeline.' }); }
 });
 
-router.post('/:id/messages', async (req, res) => {
-  if (String(req.body?.type || 'text') !== 'text') return res.status(400).json({ error: 'Apenas mensagens de texto estao disponiveis nesta fase.' });
+const parseMessageUpload = (req, res, next) => mediaUpload.single('file')(req, res, (error) => {
+  if (!error) return next();
+  return res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'Este arquivo e muito grande.' : 'Nao foi possivel receber o arquivo.', code: error.code || 'MEDIA_UPLOAD_FAILED' });
+});
+
+router.post('/:id/messages', parseMessageUpload, async (req, res) => {
+  const requestedType = String(req.body?.type || 'text');
+  if (!['text', 'image', 'audio', 'video', 'document'].includes(requestedType)) return res.status(400).json({ error: 'Tipo de mensagem nao suportado.', code: 'MESSAGE_TYPE_NOT_SUPPORTED' });
   const text = String(req.body?.text || '').trim();
-  if (!text || text.length > 10000) return res.status(400).json({ error: 'Texto obrigatorio com no maximo 10000 caracteres.' });
+  if (requestedType === 'text' && (!text || text.length > 10000)) return res.status(400).json({ error: 'Texto obrigatorio com no maximo 10000 caracteres.' });
+  return handleMessageSend(req, res, requestedType, text);
+});
+
+async function handleMessageSend(req, res, requestedType, text) {
   try {
     const [rows] = await getPool().execute('SELECT c.*, ca.provider AS account_provider, ca.name AS account_name, ca.external_instance_id, ca.phone_number, ca.status AS account_status, ca.integration_provider_id, ca.owner_user_id, ca.archived_at FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id WHERE c.id = ? AND ca.archived_at IS NULL LIMIT 1', [req.params.id]);
     const conversation = rows[0]; if (!conversation) return res.status(404).json({ error: 'Conversa nao encontrada.' });
     const connection = await getPool().getConnection();
-    try { await connection.beginTransaction(); const result = await sendWhatsAppMessage(connection, { account: conversation, leadId: conversation.lead_id, recipient: conversation.external_conversation_id, text, idempotencyKey: `manual:conversation:${conversation.id}:${req.get('Idempotency-Key') || `${Date.now()}:${req.userId}`}`, ownerUserId: req.userId }); await connection.commit(); res.status(201).json(result); }
+    try { await connection.beginTransaction(); const options = { account: conversation, leadId: conversation.lead_id, recipient: conversation.external_conversation_id, text, idempotencyKey: `manual:conversation:${conversation.id}:${req.get('Idempotency-Key') || `${Date.now()}:${req.userId}`}`, ownerUserId: req.userId, quotedMessageId: req.body?.quotedMessageId ? Number(req.body.quotedMessageId) : null }; const result = requestedType === 'text' ? await sendWhatsAppMessage(connection, options) : await sendWhatsAppMedia(connection, { ...options, messageType: requestedType, file: req.file, mimeType: req.file?.mimetype, filename: req.file?.originalname, caption: String(req.body?.caption || '').trim() || null }); await connection.commit(); res.status(201).json(result); }
     catch (error) {
       await connection.rollback();
       const responseStatus = error?.retryable === false ? 409 : 502;
@@ -85,7 +107,9 @@ router.post('/:id/messages', async (req, res) => {
         conversationId: Number(conversation.id),
         communicationAccountId: Number(conversation.communication_account_id),
         provider: String(conversation.account_provider || 'unknown'),
-        operation: 'send_text',
+            operation: requestedType === 'text' ? 'send_text' : 'send_media',
+            messageType: requestedType,
+            direction: 'outbound',
         httpStatus: responseStatus,
         providerStatus: error?.providerStatus || null,
         errorCode
@@ -94,6 +118,6 @@ router.post('/:id/messages', async (req, res) => {
     }
     finally { connection.release(); }
   } catch { res.status(500).json({ error: 'Nao foi possivel enviar a mensagem.' }); }
-});
+}
 
 module.exports = router;
