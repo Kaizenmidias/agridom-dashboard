@@ -1,4 +1,5 @@
 const { dispatchDomainEvent } = require('../domain-events');
+const { getPool } = require('../../config/database');
 const { getActionDefinition, isExecutable } = require('./action-registry');
 const { resolveConfig } = require('./variable-resolver');
 const { decryptSecret } = require('../integration-crypto');
@@ -162,7 +163,21 @@ async function executeAction(connection, actionType, rawConfig, context) {
     if (existingRows[0]?.status === 'sent') return { recipient, subject, messageId: existingRows[0].provider_message_id, idempotent: true };
     if (existingRows[0]) await connection.execute("UPDATE communication_messages SET status = 'sending', attempt_count = attempt_count + 1, error_code = NULL, error_message = NULL WHERE id = ?", [existingRows[0].id]);
     else await connection.execute("INSERT INTO communication_messages (channel, direction, lead_id, automation_id, automation_run_id, automation_step_id, idempotency_key, recipient, subject, body_text, status, provider, attempt_count) VALUES ('email', 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, 'sending', 'smtp', 1)", [context.leadId, context.automationId, context.runId, context.stepId, idempotencyKey, recipient, subject, message]);
-    const result = await sendSmtp(smtp, { to: recipient, subject, text: message, replyTo: config.replyTo || undefined });
+    let result;
+    try {
+      result = await sendSmtp(smtp, { to: recipient, subject, text: message, replyTo: config.replyTo || undefined });
+    } catch (error) {
+      const auditConnection = await getPool().getConnection();
+      try {
+        await auditConnection.execute(
+          "INSERT INTO communication_messages (channel, direction, lead_id, automation_id, automation_run_id, automation_step_id, idempotency_key, recipient, subject, body_text, status, provider, attempt_count, error_code, error_message, failed_at) VALUES ('email', 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, 'failed', 'smtp', 1, ?, ?, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE status = 'failed', attempt_count = attempt_count + 1, error_code = VALUES(error_code), error_message = VALUES(error_message), failed_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP",
+          [context.leadId, context.automationId, context.runId, context.stepId, idempotencyKey, recipient, subject, message, error.code || 'SMTP_SEND_FAILED', String(error.publicMessage || error.code || 'Falha no envio SMTP').slice(0, 500)]
+        );
+      } finally {
+        auditConnection.release();
+      }
+      throw error;
+    }
     await connection.execute("UPDATE communication_messages SET status = 'sent', provider_message_id = ?, sent_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE idempotency_key = ?", [result.messageId, idempotencyKey]);
     await writeHistory(connection, context.leadId, context.ownerUserId, `E-mail enviado: ${subject}`, { actionType, automationId: context.automationId, runId: context.runId, communicationMessageId: idempotencyKey });
     return { recipient, subject, messageId: result.messageId };
