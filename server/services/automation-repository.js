@@ -83,7 +83,7 @@ async function listAutomations(userId) {
      FROM automations a
      LEFT JOIN automation_versions av ON av.id = a.active_version_id
      LEFT JOIN users creator ON creator.id = a.created_by
-     WHERE a.owner_user_id = ?
+     WHERE a.owner_user_id = ? AND a.status <> 'archived'
      ORDER BY a.updated_at DESC, a.id DESC`,
     [userId]
   );

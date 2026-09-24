@@ -96,6 +96,9 @@ function validateAutomationDefinition(input, options = {}) {
     if (definition.trigger.config !== undefined && !isPlainObject(definition.trigger.config)) {
       errors.push(error('trigger.config', 'INVALID_TRIGGER_CONFIG', 'Configuracao do trigger deve ser um objeto.'));
     }
+    if (definition.trigger.next !== undefined && definition.trigger.next !== null && typeof definition.trigger.next !== 'string') {
+      errors.push(error('trigger.next', 'INVALID_TRIGGER_REFERENCE', 'Referencia do trigger deve ser texto ou null.'));
+    }
   }
 
   if (!Array.isArray(definition.steps)) {
@@ -175,6 +178,12 @@ function validateAutomationDefinition(input, options = {}) {
     }
 
     const knownIds = new Set(definition.steps.filter((step) => isPlainObject(step) && typeof step.id === 'string').map((step) => step.id));
+    if (definition.trigger.next === undefined && !Object.prototype.hasOwnProperty.call(definition, 'layout') && definition.steps.length) {
+      definition = { ...definition, trigger: { ...definition.trigger, next: definition.steps[0]?.id || null } };
+    }
+    if (typeof definition.trigger.next === 'string' && !knownIds.has(definition.trigger.next)) {
+      errors.push(error('trigger.next', 'UNKNOWN_STEP_REFERENCE', 'Referencia do trigger aponta para um step inexistente.'));
+    }
     definition.steps.forEach((step, index) => {
       if (!isPlainObject(step)) return;
       for (const [field, target] of [['next', step.next], ['branches.yes', step.branches?.yes], ['branches.no', step.branches?.no]]) {
@@ -186,7 +195,8 @@ function validateAutomationDefinition(input, options = {}) {
     if (options.requireSteps && definition.steps.length) {
       const byId = new Map(definition.steps.filter((step) => isPlainObject(step) && typeof step.id === 'string').map((step) => [step.id, step]));
       const reachable = new Set();
-      const queue = [definition.steps[0].id];
+      if (!definition.trigger.next) errors.push(error('trigger.next', 'TRIGGER_NOT_CONNECTED', 'O gatilho precisa estar conectado ao fluxo.'));
+      const queue = definition.trigger.next ? [definition.trigger.next] : [];
       while (queue.length) {
         const currentId = queue.shift();
         if (!currentId || reachable.has(currentId)) continue;

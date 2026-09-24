@@ -38,7 +38,7 @@ test('2E.1 publication rejects invalid internal action configuration', () => {
 test('2E.1.1 semantic graph contract publishes wait/action terminals without finish', () => {
   const definition = {
     schemaVersion: 1,
-    trigger: { type: 'lead.created', config: {} },
+    trigger: { type: 'lead.created', config: {}, next: 'wait_1' },
     steps: [
       { id: 'wait_1', type: 'wait', config: { amount: 1, unit: 'minutes' }, next: 'tag_1' },
       { id: 'tag_1', type: 'action', config: { actionType: 'lead.add_tag', labelId: 4 }, next: null },
@@ -55,7 +55,7 @@ test('2E.1.1 semantic graph contract publishes wait/action terminals without fin
 test('2E.1.1 condition branches remain semantic and finish is only legacy-compatible', () => {
   const definition = {
     schemaVersion: 1,
-    trigger: { type: 'lead.created', config: {} },
+    trigger: { type: 'lead.created', config: {}, next: 'condition_1' },
     steps: [
       { id: 'condition_1', type: 'condition', config: { field: 'phone', operator: 'is_not_empty' }, branches: { yes: 'tag_1', no: 'activity_1' } },
       { id: 'tag_1', type: 'action', config: { actionType: 'lead.add_tag', labelId: 4 }, next: null },

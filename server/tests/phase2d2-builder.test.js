@@ -75,3 +75,35 @@ test('2E.1.2 imports every newly used navigation icon in the Builder', () => {
   assert.match(builder, /import \{[\s\S]*ChevronLeft,[\s\S]*\} from "lucide-react";/);
   assert.match(builder, /<ChevronLeft className=/);
 });
+
+test('2E.1.3 persists the trigger connection and rejects disconnected new graphs', () => {
+  assert.match(builder, /next: trigger \? edges\.find/);
+  assert.match(builder, /onEdgesChange=\{handleEdgesChange\}/);
+  assert.match(builder, /onReconnect=\{onReconnect\}/);
+  assert.match(builder, /Remover conexão/);
+  assert.match(builder, /Desconectar/);
+
+  const disconnected = validateAutomationDefinition({
+    schemaVersion: 1,
+    trigger: { type: 'lead.created', config: {}, next: null },
+    steps: [{ id: 'action_1', type: 'action', config: { actionType: 'lead.add_tag', labelId: 4 }, next: null }],
+    layout: { nodes: {} },
+  }, { requireSteps: true, requireExecutableActions: true });
+  assert.equal(disconnected.valid, false);
+  assert.ok(disconnected.errors.some((item) => item.code === 'TRIGGER_NOT_CONNECTED'));
+
+  const connected = validateAutomationDefinition({
+    schemaVersion: 1,
+    trigger: { type: 'lead.created', config: {}, next: 'action_1' },
+    steps: [{ id: 'action_1', type: 'action', config: { actionType: 'lead.add_tag', labelId: 4 }, next: null }],
+    layout: { nodes: {} },
+  }, { requireSteps: true, requireExecutableActions: true });
+  assert.equal(connected.valid, true);
+});
+
+test('2E.1.3 archives automations from the default list without deleting history', () => {
+  assert.match(repository, /a\.status <> 'archived'/);
+  assert.match(routes, /\['pause', 'pause'\], \['activate', 'activate'\], \['archive', 'archive'\]/);
+  assert.match(routes, /transitionAutomation\(req\.userId, automationId, transition\)/);
+  assert.match(routes, /requireCommercialAdmin/);
+});

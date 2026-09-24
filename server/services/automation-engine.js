@@ -208,7 +208,8 @@ async function completeBootstrapJob(job, currentWorkerId) {
     const validation = validateAutomationDefinition(parseJson(current.definition), { requireSteps: true });
     if (!validation.valid) throw new Error('PUBLISHED_DEFINITION_INVALID');
     const steps = validation.definition.steps;
-    const step = steps.find((item) => item.id === current.current_step_key) || steps[0];
+    const triggerNext = parseJson(current.definition, {}).trigger?.next;
+    const step = steps.find((item) => item.id === current.current_step_key) || steps.find((item) => item.id === triggerNext) || steps[0];
     if (!step) throw new Error('AUTOMATION_STEP_NOT_FOUND');
     await connection.execute("UPDATE automation_run_steps SET status = 'completed', finished_at = COALESCE(finished_at, UTC_TIMESTAMP()) WHERE automation_run_id = ? AND status = 'waiting' AND step_key <> ?", [job.automation_run_id, step.id]);
     const nextJobKey = (stepId) => `run:${job.automation_run_id}:step:${stepId}`;

@@ -137,6 +137,7 @@ export function AutomationsPage() {
   const [description, setDescription] = useState("");
   const [triggerType, setTriggerType] = useState("lead.created");
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AutomationSummary | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -175,11 +176,7 @@ export function AutomationsPage() {
   ) => {
     try {
       const response = await automationsAPI[action](item.id);
-      setItems((current) =>
-        current.map((entry) =>
-          entry.id === item.id ? { ...entry, ...response } : entry,
-        ),
-      );
+      setItems((current) => response.status === "archived" ? current.filter((entry) => entry.id !== item.id) : current.map((entry) => entry.id === item.id ? { ...entry, ...response } : entry));
       toast.success("Automação atualizada.");
     } catch (actionError) {
       toast.error(
@@ -370,9 +367,7 @@ export function AutomationsPage() {
                                   variant="ghost"
                                   size="icon"
                                   title="Arquivar"
-                                  onClick={() =>
-                                    void runAction(item, "archive")
-                                  }
+                                  onClick={() => setDeleteTarget(item)}
                                   disabled={!isAdmin}
                                 >
                                   <Archive className="h-4 w-4" />
@@ -444,6 +439,20 @@ export function AutomationsPage() {
               <Plus className="mr-2 h-4 w-4" />
               Criar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir automação?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.name || "Esta automação"} será arquivada e removida da lista padrão. O histórico de execuções será preservado.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => { if (deleteTarget) void runAction(deleteTarget, "archive"); setDeleteTarget(null); }}>Excluir automação</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
