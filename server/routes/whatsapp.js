@@ -14,6 +14,12 @@ const allowed = (key, ms = 5000) => { const now = Date.now(); const previous = l
 const parseJson = (value, fallback = {}) => { if (value && typeof value === 'object') return value; try { return JSON.parse(value || JSON.stringify(fallback)); } catch { return fallback; } };
 const publicConfig = (row) => { const metadata = parseJson(row?.configuration_metadata); return { provider: 'evolution', status: row?.status || 'not_configured', configured: Boolean(row?.secret_ciphertext && metadata.baseUrl), metadata: { baseUrl: metadata.baseUrl || '', timeout: metadata.timeout || 15000, apiKeyMasked: row?.secret_ciphertext ? '********' : '' }, lastTestedAt: row?.last_tested_at || null, lastError: row?.last_error || null }; };
 const publicAccount = (row) => ({ id: Number(row.id), name: row.name, channel: row.channel, provider: row.provider, externalInstanceId: row.external_instance_id, phoneNumber: row.phone_number, displayName: row.display_name, status: row.status, autoCreateLeads: Boolean(row.auto_create_leads), lastConnectedAt: row.last_connected_at, lastDisconnectedAt: row.last_disconnected_at, createdAt: row.created_at, updatedAt: row.updated_at });
+function resolveEvolutionCredential(rawApiKey, current) {
+  const apiKey = String(rawApiKey || '').trim();
+  if (apiKey) return { apiKey, envelope: encryptSecret({ apiKey }) };
+  const stored = current ? decryptSecret(current) : null;
+  return stored?.apiKey ? { apiKey: stored.apiKey, envelope: null } : null;
+}
 
 router.get('/config', ...admin, async (_req, res) => {
   try { const [rows] = await getPool().execute("SELECT * FROM integration_providers WHERE provider = 'evolution' LIMIT 1"); res.json(rows[0] ? publicConfig(rows[0]) : publicConfig(null)); }
@@ -23,15 +29,14 @@ router.get('/config', ...admin, async (_req, res) => {
 router.put('/config', ...admin, async (req, res) => {
   try {
     const baseUrl = validateBaseUrl(req.body?.baseUrl);
-    const apiKey = String(req.body?.apiKey || '');
-    const connection = await getPool().getConnection();
-    try {
-      const [currentRows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'evolution' LIMIT 1");
-      const current = currentRows[0];
-      const secret = apiKey ? encryptSecret({ apiKey }) : current ? decryptSecret(current) : null;
-      if (!secret?.apiKey) return res.status(400).json({ error: 'API Key da Evolution e obrigatoria.' });
+      const connection = await getPool().getConnection();
+      try {
+        const [currentRows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'evolution' LIMIT 1");
+        const current = currentRows[0];
+      const credential = resolveEvolutionCredential(req.body?.apiKey, current);
+      if (!credential) return res.status(400).json({ error: 'API Key da Evolution e obrigatoria.' });
       await connection.execute(`INSERT INTO integration_providers (provider, display_name, status, configuration_metadata, secret_ciphertext, secret_iv, secret_auth_tag) VALUES ('evolution', 'WhatsApp / Evolution API', 'configured', ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE status = 'configured', configuration_metadata = VALUES(configuration_metadata), secret_ciphertext = VALUES(secret_ciphertext), secret_iv = VALUES(secret_iv), secret_auth_tag = VALUES(secret_auth_tag), updated_at = CURRENT_TIMESTAMP`, [JSON.stringify({ baseUrl, timeout: Math.min(Math.max(Number(req.body?.timeout || 15000), 3000), 30000) }), apiKey ? secret.ciphertext : current.secret_ciphertext, apiKey ? secret.iv : current.secret_iv, apiKey ? secret.authTag : current.secret_auth_tag]);
+        ON DUPLICATE KEY UPDATE status = 'configured', configuration_metadata = VALUES(configuration_metadata), secret_ciphertext = VALUES(secret_ciphertext), secret_iv = VALUES(secret_iv), secret_auth_tag = VALUES(secret_auth_tag), updated_at = CURRENT_TIMESTAMP`, [JSON.stringify({ baseUrl, timeout: Math.min(Math.max(Number(req.body?.timeout || 15000), 3000), 30000) }), credential.envelope?.ciphertext || current?.secret_ciphertext || null, credential.envelope?.iv || current?.secret_iv || null, credential.envelope?.authTag || current?.secret_auth_tag || null]);
       const [rows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'evolution' LIMIT 1");
       res.json(publicConfig(rows[0]));
     } finally { connection.release(); }
@@ -113,3 +118,4 @@ router.delete('/accounts/:id', ...admin, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.resolveEvolutionCredential = resolveEvolutionCredential;
