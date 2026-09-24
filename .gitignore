@@ -64,6 +64,7 @@ $RECYCLE_BIN/
 
 # Uploads directory (remova esta linha se quiser versionar uploads)
 uploads/
+server/storage/
 
 # Temporary files
 tmp/
