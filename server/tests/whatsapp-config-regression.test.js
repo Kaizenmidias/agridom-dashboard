@@ -17,7 +17,7 @@ test('Evolution config treats encryptSecret result as an envelope', () => {
     assert.ok(credential.envelope.iv);
     assert.ok(credential.envelope.authTag);
     assert.equal(credential.envelope.apiKey, undefined);
-    assert.deepEqual(decryptSecret({ secret_ciphertext: credential.envelope.ciphertext, secret_iv: credential.envelope.iv, secret_auth_tag: credential.envelope.authTag }), { apiKey: 'evolution-api-key' });
+    assert.deepEqual(decryptSecret({ secret_ciphertext: credential.envelope.ciphertext, secret_iv: credential.envelope.iv, secret_auth_tag: credential.envelope.authTag }), { apiKey: 'evolution-api-key', webhookSecret: credential.webhookSecret });
   } finally {
     if (previous === undefined) delete process.env.INTEGRATION_ENCRYPTION_KEY;
     else process.env.INTEGRATION_ENCRYPTION_KEY = previous;
@@ -31,7 +31,9 @@ test('Evolution config preserves an existing encrypted credential when API Key i
     const envelope = encryptSecret({ apiKey: 'existing-evolution-key' });
     const credential = resolveEvolutionCredential('', { secret_ciphertext: envelope.ciphertext, secret_iv: envelope.iv, secret_auth_tag: envelope.authTag });
     assert.equal(credential.apiKey, 'existing-evolution-key');
-    assert.equal(credential.envelope, null);
+    assert.ok(credential.webhookSecret);
+    assert.ok(credential.envelope);
+    assert.deepEqual(decryptSecret({ secret_ciphertext: credential.envelope.ciphertext, secret_iv: credential.envelope.iv, secret_auth_tag: credential.envelope.authTag }), { apiKey: 'existing-evolution-key', webhookSecret: credential.webhookSecret });
     assert.equal(resolveEvolutionCredential('', null), null);
   } finally {
     if (previous === undefined) delete process.env.INTEGRATION_ENCRYPTION_KEY;

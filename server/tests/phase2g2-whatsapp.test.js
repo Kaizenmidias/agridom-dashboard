@@ -44,7 +44,7 @@ test('2G.2 WhatsApp send existe na engine e eventos de mensagem usam contrato de
 test('2G.2 webhook e provider nao expõem credenciais no frontend ou logs', () => {
   const route = fs.readFileSync(path.join(root, 'server/routes/webhooks.js'), 'utf8');
   const ui = fs.readFileSync(path.join(root, 'src/components/integrations/WhatsAppIntegrationPanel.tsx'), 'utf8');
-  assert.match(route, /apikey/);
+  assert.match(route, /hasWebhookSecret\(readWebhookSecret\(req\)/);
   assert.doesNotMatch(route, /console\.(log|info).*payload/);
   assert.doesNotMatch(ui, /secret_ciphertext|secret_iv|auth_tag/);
 });

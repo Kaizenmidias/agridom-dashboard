@@ -3,6 +3,7 @@ const crypto = require('node:crypto');
 const { getPool } = require('../config/database');
 const { decryptSecret } = require('../services/integration-crypto');
 const { extractInbound } = require('../services/whatsapp-service');
+const { hasWebhookSecret, readWebhookSecret } = require('../services/whatsapp-webhook-auth');
 
 const router = express.Router();
 const hit = new Map();
@@ -20,8 +21,7 @@ router.post('/evolution', async (req, res) => {
     const account = accounts[0];
     if (!account) return res.status(404).json({ error: 'Instancia Evolution nao reconhecida.' });
     const secret = decryptSecret(account);
-    const suppliedKey = String(req.get('apikey') || req.get('x-api-key') || '');
-    if (!suppliedKey || suppliedKey !== secret?.apiKey) return res.status(401).json({ error: 'Webhook nao autorizado.' });
+    if (!hasWebhookSecret(readWebhookSecret(req), secret?.webhookSecret)) return res.status(401).json({ error: 'Webhook nao autorizado.' });
     const parsed = extractInbound(payload);
     const eventId = parsed.externalMessageId || crypto.createHash('sha256').update(JSON.stringify({ instance, event: payload.event || payload.type || 'unknown', data: payload.data || payload })).digest('hex');
     const eventType = String(payload.event || payload.type || 'unknown').slice(0, 80);

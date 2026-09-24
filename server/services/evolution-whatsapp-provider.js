@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { WEBHOOK_SECRET_HEADER } = require('./whatsapp-webhook-auth');
 
 const clean = (value, fallback = 'EVOLUTION_ERROR') => String(value || fallback).replace(/[\r\n]+/g, ' ').replace(/[^a-zA-Z0-9_ .:@/-]/g, '').slice(0, 300);
 
@@ -51,8 +52,13 @@ class EvolutionWhatsAppProvider {
   }
 
   async createInstance({ instanceName, webhookUrl }) {
-    const data = await this.request('POST', '/instance/create', { instanceName, integration: 'WHATSAPP-BAILEYS', qrcode: true, webhook: webhookUrl ? { url: webhookUrl, byEvents: false, base64: false, events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'] } : undefined });
+    const data = await this.request('POST', '/instance/create', { instanceName, integration: 'WHATSAPP-BAILEYS', qrcode: true, webhookUrl: webhookUrl || undefined, webhookByEvents: false, webhookBase64: false, webhookEvents: webhookUrl ? ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'] : undefined });
     return { externalInstanceId: String(data.instance?.instanceName || data.instance?.instanceId || data.instanceName || instanceName), status: normalizeState(data.instance?.status || data.status), raw: data };
+  }
+
+  async setWebhook(instanceName, { url, secret }) {
+    const data = await this.request('POST', `/webhook/set/${encodeURIComponent(instanceName)}`, { webhook: { enabled: true, url, byEvents: false, base64: false, headers: { [WEBHOOK_SECRET_HEADER]: secret }, events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'] } });
+    return { raw: data };
   }
 
   async connect(instanceName) {

@@ -25,6 +25,7 @@ export const whatsappAPI = {
   createAccount: (body: { name: string; instanceName?: string; autoCreateLeads?: boolean }) => request<{ account: WhatsAppAccount }>('/api/integrations/whatsapp/accounts', { method: 'POST', body: JSON.stringify(body) }),
   getQr: (id: number) => request<{ status: string; qrCode?: string | null; pairingCode?: string | null }>(`/api/integrations/whatsapp/accounts/${id}/qr`),
   getStatus: (id: number) => request<{ status: WhatsAppAccount["status"] }>(`/api/integrations/whatsapp/accounts/${id}/status`),
+  syncWebhook: (id: number) => request<{ success: boolean }>(`/api/integrations/whatsapp/accounts/${id}/webhook/sync`, { method: 'POST' }),
   disconnect: (id: number) => request<{ status: string }>(`/api/integrations/whatsapp/accounts/${id}/disconnect`, { method: 'POST' }),
   archive: (id: number) => request<{ success: boolean }>(`/api/integrations/whatsapp/accounts/${id}`, { method: 'DELETE' }),
 };
