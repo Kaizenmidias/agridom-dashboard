@@ -4,6 +4,7 @@ const { getActionDefinition, isExecutable } = require('./action-registry');
 const { resolveConfig } = require('./variable-resolver');
 const { decryptSecret } = require('../integration-crypto');
 const { validateSmtpConfig, sendSmtp } = require('../email-provider');
+const { sendWhatsAppMessage, normalizePhone } = require('../whatsapp-service');
 
 const FIELD_ALLOWLIST = Object.freeze(new Set(['business_name', 'category', 'address', 'city', 'state', 'phone', 'email', 'website', 'status']));
 
@@ -181,6 +182,19 @@ async function executeAction(connection, actionType, rawConfig, context) {
     await connection.execute("UPDATE communication_messages SET status = 'sent', provider_message_id = ?, sent_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE idempotency_key = ?", [result.messageId, idempotencyKey]);
     await writeHistory(connection, context.leadId, context.ownerUserId, `E-mail enviado: ${subject}`, { actionType, automationId: context.automationId, runId: context.runId, communicationMessageId: idempotencyKey });
     return { recipient, subject, messageId: result.messageId };
+  }
+
+  if (actionType === 'whatsapp.send') {
+    const recipient = normalizePhone(config.recipient || lead.phone);
+    if (!recipient) { const error = new Error('RECIPIENT_PHONE_MISSING'); error.code = 'RECIPIENT_PHONE_MISSING'; error.retryable = false; error.publicMessage = 'Telefone do Lead nao informado.'; throw error; }
+    const message = String(config.message || '').trim();
+    if (!message) { const error = new Error('INVALID_WHATSAPP_MESSAGE'); error.code = 'INVALID_WHATSAPP_MESSAGE'; error.retryable = false; error.publicMessage = 'Mensagem WhatsApp obrigatoria.'; throw error; }
+    const accountId = Number(config.accountId || 0);
+    const [accounts] = await connection.execute("SELECT * FROM communication_accounts WHERE channel = 'whatsapp' AND archived_at IS NULL AND status = 'connected' AND (? = 0 OR id = ?) AND (owner_user_id = ? OR owner_user_id IS NULL) ORDER BY id LIMIT 1", [accountId, accountId, context.ownerUserId]);
+    if (!accounts[0]) { const error = new Error(accountId ? 'WHATSAPP_ACCOUNT_NOT_CONNECTED' : 'WHATSAPP_NOT_CONFIGURED'); error.code = error.message; error.retryable = false; error.publicMessage = 'Conecte um numero WhatsApp em Administracao > Integracoes.'; throw error; }
+    const result = await sendWhatsAppMessage(connection, { account: accounts[0], leadId: context.leadId, recipient, text: message, idempotencyKey: `whatsapp:${context.idempotencyKey}`, automationId: context.automationId, runId: context.runId, stepId: context.stepId, ownerUserId: context.ownerUserId });
+    await writeHistory(connection, context.leadId, context.ownerUserId, `WhatsApp enviado: ${message.slice(0, 120)}`, { actionType, automationId: context.automationId, runId: context.runId, communicationMessageId: result.externalMessageId || result.messageId });
+    return { recipient, messageId: result.externalMessageId || result.messageId, conversationId: result.conversationId, idempotent: Boolean(result.idempotent) };
   }
 
   throw new Error(`ACTION_NOT_IMPLEMENTED:${actionType}`);

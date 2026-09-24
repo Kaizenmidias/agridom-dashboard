@@ -4,6 +4,7 @@ require('dotenv').config({ path: path.join(__dirname, envFile) });
 
 const { closeConnection } = require('./config/database');
 const { DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, processEventBatch, processJobBatch, workerId } = require('./services/automation-engine');
+const { processPendingWhatsAppEvents } = require('./services/whatsapp-service');
 
 const positiveInt = (value, fallback, max) => {
   const number = Number(value);
@@ -27,7 +28,8 @@ async function startWorker(options = {}) {
       currentCycle = (async () => {
         const events = await processEventBatch({ workerId: currentWorkerId, batchSize, lockTimeoutMs });
         const jobs = await processJobBatch({ currentWorkerId, batchSize, lockTimeoutMs });
-        return events + jobs;
+        const whatsappEvents = await processPendingWhatsAppEvents({ batchSize });
+        return events + jobs + whatsappEvents;
       })();
       const workCount = await currentCycle;
       if (!workCount && !stopping) await sleep(pollMs);

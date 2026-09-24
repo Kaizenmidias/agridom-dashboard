@@ -9,6 +9,9 @@ const TRIGGER_TYPES = Object.freeze([
   'lead.converted',
   'activity.created',
   'activity.completed',
+  'conversation.created',
+  'message.received',
+  'message.sent',
 ]);
 
 const STEP_TYPES = Object.freeze(['condition', 'wait', 'action', 'finish']);
@@ -67,7 +70,7 @@ const ACTION_CATALOG = Object.freeze([
   { id: 'wait.period', name: 'Aguardar periodo', category: 'time', availability: 'available' },
   { id: 'email.send', name: 'Enviar e-mail', category: 'communication', availability: 'available', requiredIntegration: 'email' },
   { id: 'whatsapp.send_message', name: 'Enviar mensagem no WhatsApp', category: 'communication', availability: 'requires_integration', requiredIntegration: 'whatsapp' },
-  { id: 'whatsapp.send', name: 'Enviar mensagem no WhatsApp', category: 'communication', availability: 'requires_integration', requiredIntegration: 'whatsapp' },
+  { id: 'whatsapp.send', name: 'Enviar mensagem no WhatsApp', category: 'communication', availability: 'available', requiredIntegration: 'whatsapp' },
   { id: 'whatsapp.send_template', name: 'Enviar template WhatsApp', category: 'communication', availability: 'requires_integration', requiredIntegration: 'whatsapp' },
   { id: 'whatsapp.send_file', name: 'Enviar arquivo no WhatsApp', category: 'communication', availability: 'requires_integration', requiredIntegration: 'whatsapp' },
   { id: 'whatsapp.send_image', name: 'Enviar imagem no WhatsApp', category: 'communication', availability: 'requires_integration', requiredIntegration: 'whatsapp' },

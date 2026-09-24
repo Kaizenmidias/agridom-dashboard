@@ -13,6 +13,9 @@ const EVENT_CONTRACTS = Object.freeze({
   'lead.converted': ['leadId'],
   'activity.created': ['activityId', 'leadId'],
   'activity.completed': ['activityId', 'leadId', 'completedAt'],
+  'conversation.created': ['conversationId'],
+  'message.received': ['conversationId', 'messageId'],
+  'message.sent': ['conversationId', 'messageId'],
 });
 
 const FORBIDDEN_KEYS = new Set([

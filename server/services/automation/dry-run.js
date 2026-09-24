@@ -4,6 +4,7 @@ const { evaluateCondition } = require('./condition-evaluator');
 const { resolveConfig } = require('./variable-resolver');
 const { decryptSecret } = require('../integration-crypto');
 const { validateSmtpConfig } = require('../email-provider');
+const { normalizePhone } = require('../whatsapp-service');
 
 async function dryRunAutomation({ definition, leadId, ownerUserId }) {
   const validation = validateAutomationDefinition(definition, { requireSteps: true });
@@ -47,6 +48,15 @@ async function dryRunAutomation({ definition, leadId, ownerUserId }) {
           const secret = decryptSecret(integrationRows[0]);
           validateSmtpConfig({ ...JSON.parse(integrationRows[0].configuration_metadata || '{}'), password: secret?.password });
           planned.push({ id: step.id, type: step.type, actionType: step.config.actionType, recipient: lead.email, subject: resolved.subject, message: resolved.message, wouldExecute: true, sent: false });
+        } else if (step.config.actionType === 'whatsapp.send') {
+          const resolved = resolveConfig(step.config, templateContext);
+          const recipient = normalizePhone(resolved.recipient || lead.phone);
+          if (!recipient) throw new Error('RECIPIENT_PHONE_MISSING');
+          if (!String(resolved.message || '').trim()) throw new Error('INVALID_WHATSAPP_MESSAGE');
+          const accountId = Number(resolved.accountId || 0);
+          const [accounts] = await connection.execute("SELECT id, name, status FROM communication_accounts WHERE channel = 'whatsapp' AND archived_at IS NULL AND status = 'connected' AND (? = 0 OR id = ?) AND (owner_user_id = ? OR owner_user_id IS NULL) ORDER BY id LIMIT 1", [accountId, accountId, ownerUserId]);
+          if (!accounts[0]) throw new Error(accountId ? 'WHATSAPP_ACCOUNT_NOT_CONNECTED' : 'WHATSAPP_NOT_CONFIGURED');
+          planned.push({ id: step.id, type: step.type, actionType: step.config.actionType, accountId: Number(accounts[0].id), accountName: accounts[0].name, recipient, message: String(resolved.message).trim(), wouldExecute: true, sent: false });
         } else planned.push({ id: step.id, type: step.type, actionType: step.config.actionType, wouldExecute: true });
         stepId = step.next || null;
       } else if (step.type === 'finish') {

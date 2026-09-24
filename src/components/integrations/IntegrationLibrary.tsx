@@ -33,6 +33,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { prospectingAPI } from "@/api/prospecting";
 import { emailIntegrationsAPI } from "@/api/email-integrations";
+import { WhatsAppIntegrationPanel } from "@/components/integrations/WhatsAppIntegrationPanel";
 import type { IntegrationProvider, IntegrationSummary } from "@/types/prospecting";
 
 type IntegrationDraft = {
@@ -557,6 +558,8 @@ export function IntegrationLibrary() {
           })}
         </div>
       )}
+
+      <WhatsAppIntegrationPanel />
 
       <Dialog open={Boolean(activeIntegration)} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-3xl overflow-hidden">

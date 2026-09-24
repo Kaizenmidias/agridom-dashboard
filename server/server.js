@@ -55,6 +55,9 @@ const commercialEntityRoutes = require('./routes/commercial-entities');
 const { automationsRouter, automationRunsRouter } = require('./routes/automations');
 const domainEventsRouter = require('./routes/domain-events');
 const integrationsRouter = require('./routes/integrations');
+const whatsappRouter = require('./routes/whatsapp');
+const webhookRouter = require('./routes/webhooks');
+const conversationsRouter = require('./routes/conversations');
 
 
 app.locals.query = query;
@@ -71,6 +74,9 @@ app.use('/api/automations', automationsRouter);
 app.use('/api/automation-runs', automationRunsRouter);
 app.use('/api/automation-events', domainEventsRouter);
 app.use('/api/integrations', integrationsRouter);
+app.use('/api/integrations/whatsapp', whatsappRouter);
+app.use('/api/webhooks', webhookRouter);
+app.use('/api/conversations', conversationsRouter);
 
 
 // Rota de teste
