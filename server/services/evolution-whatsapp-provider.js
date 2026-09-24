@@ -8,7 +8,9 @@ function providerError(message, code, retryable = false, cause) {
   error.code = code;
   error.retryable = retryable;
   error.publicMessage = message;
-  error.providerDetail = clean(cause?.response?.data?.message || cause?.code || cause?.message, code);
+  error.providerStatus = Number.isInteger(cause?.status) ? cause.status : Number.isInteger(cause?.response?.status) ? cause.response.status : null;
+  // Provider responses can echo credentials or message content; keep diagnostics code-only.
+  error.providerDetail = clean(cause?.code || code, code);
   return error;
 }
 

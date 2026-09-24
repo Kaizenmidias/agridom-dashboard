@@ -3,7 +3,12 @@ export type CommunicationMessage = { id: number; direction: string; body_text?: 
 export type ConversationDetail = Conversation & { ai_agent_id?: number | null; lead_city?: string | null; lead_state?: string | null; lead_category?: string | null; lead_created_at?: string | null; assigned_user_email?: string | null };
 export type ConversationActivity = { id: number; title: string; description?: string | null; type: string; created_at: string; actor_name?: string | null };
 const base = () => import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/api\/?$/, '').replace(/\/+$/, '') : 'http://localhost:3001';
-const request = async <T>(path: string, options: RequestInit = {}) => { const response = await fetch(`${base()}${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...(localStorage.getItem('token') ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {}) } }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload?.error || `Erro HTTP ${response.status}`); return payload as T; };
+class ConversationsApiError extends Error {
+  code?: string;
+  status: number;
+  constructor(message: string, status: number, code?: string) { super(message); this.name = "ConversationsApiError"; this.status = status; this.code = code; }
+}
+const request = async <T>(path: string, options: RequestInit = {}) => { const response = await fetch(`${base()}${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...(localStorage.getItem('token') ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {}) } }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new ConversationsApiError(payload?.error || `Erro HTTP ${response.status}`, response.status, payload?.code); return payload as T; };
 export const conversationsAPI = {
   list: (params: { search?: string; filter?: string; assignedUserId?: number } = {}) => { const query = new URLSearchParams({ channel: 'whatsapp' }); if (params.search) query.set('search', params.search); if (params.filter === 'unread') query.set('unread', 'true'); if (params.filter === 'ai' || params.filter === 'human') query.set('handlingMode', params.filter); if (params.assignedUserId) query.set('assignedUserId', String(params.assignedUserId)); return request<{ conversations: Conversation[] }>(`/api/conversations?${query.toString()}`); },
   detail: (id: number) => request<ConversationDetail>(`/api/conversations/${id}`),

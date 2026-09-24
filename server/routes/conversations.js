@@ -77,7 +77,21 @@ router.post('/:id/messages', async (req, res) => {
     const conversation = rows[0]; if (!conversation) return res.status(404).json({ error: 'Conversa nao encontrada.' });
     const connection = await getPool().getConnection();
     try { await connection.beginTransaction(); const result = await sendWhatsAppMessage(connection, { account: conversation, leadId: conversation.lead_id, recipient: conversation.external_conversation_id, text, idempotencyKey: `manual:conversation:${conversation.id}:${req.get('Idempotency-Key') || `${Date.now()}:${req.userId}`}`, ownerUserId: req.userId }); await connection.commit(); res.status(201).json(result); }
-    catch (error) { await connection.rollback(); res.status(error?.retryable === false ? 409 : 502).json({ error: error?.publicMessage || 'Nao foi possivel enviar a mensagem.' }); }
+    catch (error) {
+      await connection.rollback();
+      const responseStatus = error?.retryable === false ? 409 : 502;
+      const errorCode = String(error?.code || 'WHATSAPP_SEND_FAILED').replace(/[^A-Z0-9_]/g, '_').slice(0, 80);
+      console.error('[WhatsApp] envio de mensagem falhou', {
+        conversationId: Number(conversation.id),
+        communicationAccountId: Number(conversation.communication_account_id),
+        provider: String(conversation.account_provider || 'unknown'),
+        operation: 'send_text',
+        httpStatus: responseStatus,
+        providerStatus: error?.providerStatus || null,
+        errorCode
+      });
+      res.status(responseStatus).json({ error: error?.publicMessage || 'Nao foi possivel enviar a mensagem.', code: errorCode });
+    }
     finally { connection.release(); }
   } catch { res.status(500).json({ error: 'Nao foi possivel enviar a mensagem.' }); }
 });
