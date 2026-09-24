@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { EvolutionWhatsAppProvider, providerError } = require('../services/evolution-whatsapp-provider');
+const { sniffMime } = require('../services/chat-media');
 
 const root = path.resolve(__dirname, '../..');
 const routeSource = fs.readFileSync(path.join(root, 'server/routes/conversations.js'), 'utf8');
@@ -32,6 +33,12 @@ test('Evolution provider sends the v2 text payload and never exposes credentials
   assert.equal(error.code, 'EVOLUTION_AUTH_FAILED');
   assert.equal(error.providerStatus, 401);
   assert.doesNotMatch(error.providerDetail, /secret-key/);
+});
+
+test('chat media validates signatures instead of trusting only the browser MIME', () => {
+  assert.equal(sniffMime(Buffer.from('%PDF-1.7')), 'application/pdf');
+  assert.equal(sniffMime(Buffer.from([0xff, 0xd8, 0xff, 0xe0])), 'image/jpeg');
+  assert.equal(sniffMime(Buffer.from('not-a-known-media')), null);
 });
 
 test('chat send keeps the explicit guards for missing conversation, text and connection', () => {

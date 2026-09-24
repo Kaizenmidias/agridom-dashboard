@@ -16,6 +16,18 @@ const EXTENSIONS = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.
 
 function mediaError(message, code) { return Object.assign(new Error(message), { code, publicMessage: message, retryable: false }); }
 function normalizeMediaType(value) { return ['image', 'audio', 'video', 'document', 'sticker'].includes(value) ? value : null; }
+function sniffMime(buffer) {
+  if (!buffer || buffer.length < 4) return null;
+  if (buffer.subarray(0, 4).equals(Buffer.from('%PDF'))) return 'application/pdf';
+  if (buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return 'image/jpeg';
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (buffer.subarray(0, 6).toString() === 'GIF89a' || buffer.subarray(0, 6).toString() === 'GIF87a') return 'image/gif';
+  if (buffer.subarray(0, 4).toString() === 'PK\x03\x04') return 'application/zip';
+  if (buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP') return 'image/webp';
+  if (buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WAVE') return 'audio/wav';
+  if (buffer.subarray(4, 8).toString() === 'ftyp') return 'video/mp4';
+  return null;
+}
 function validateMedia(type, mime, size) {
   const normalizedType = normalizeMediaType(type);
   const normalizedMime = String(mime || '').toLowerCase().split(';')[0].trim();
@@ -25,7 +37,11 @@ function validateMedia(type, mime, size) {
 }
 function safeExtension(mime, fallback = '') { return EXTENSIONS[mime] || fallback; }
 async function storeBuffer(buffer, { type, mime, filename = '' }) {
-  const validation = validateMedia(type, mime, buffer.length);
+  const detected = sniffMime(buffer);
+  const declared = String(mime || '').toLowerCase().split(';')[0].trim();
+  const effectiveMime = detected || declared;
+  const validation = validateMedia(type, effectiveMime, buffer.length);
+  if (detected && declared !== detected && !(type === 'audio' && detected === 'video/webm')) throw mediaError('O conteudo do arquivo nao corresponde ao formato informado.', 'MEDIA_MIME_MISMATCH');
   await fsp.mkdir(MEDIA_ROOT, { recursive: true });
   const extension = safeExtension(validation.mime, path.extname(String(filename || '')).toLowerCase().replace(/[^a-z0-9.]/g, '').slice(0, 8));
   const generated = `${crypto.randomUUID()}${extension}`;
@@ -67,4 +83,4 @@ async function sendFile(req, res, file) {
   return fs.createReadStream(absolute, { start: range.start, end: range.end }).pipe(res);
 }
 
-module.exports = { MEDIA_ROOT, LIMITS, MIME_TYPES, normalizeMediaType, validateMedia, storeBuffer, storeBase64, resolveStoragePath, removeMedia, getMediaRange, sendFile };
+module.exports = { MEDIA_ROOT, LIMITS, MIME_TYPES, normalizeMediaType, validateMedia, sniffMime, storeBuffer, storeBase64, resolveStoragePath, removeMedia, getMediaRange, sendFile };
