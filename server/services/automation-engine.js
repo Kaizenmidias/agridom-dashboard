@@ -238,7 +238,7 @@ async function completeBootstrapJob(job, currentWorkerId) {
        ON DUPLICATE KEY UPDATE status = 'running', attempt = ?, input = ?, started_at = COALESCE(started_at, UTC_TIMESTAMP()), error_code = NULL, error_message = NULL`,
       [job.automation_run_id, step.id, step.type, attempt, JSON.stringify({ node: step.id, type: step.type }), attempt, JSON.stringify({ node: step.id, type: step.type })]
     );
-    const context = { runId: Number(job.automation_run_id), automationId: Number(current.automation_id), ownerUserId: Number(current.owner_user_id), leadId: Number(current.entity_id), correlationId: current.correlation_id, causationId: current.event_uuid, lineageDepth: Number(current.lineage_depth || 0) + 1, idempotencyKey: nextJobKey(step.id) };
+    const context = { runId: Number(job.automation_run_id), automationId: Number(current.automation_id), ownerUserId: Number(current.owner_user_id), leadId: Number(current.entity_id), stepId: step.id, correlationId: current.correlation_id, causationId: current.event_uuid, lineageDepth: Number(current.lineage_depth || 0) + 1, idempotencyKey: nextJobKey(step.id) };
     let nextStep = step.next || null;
     let output = {};
     let status = 'completed';
@@ -294,13 +294,13 @@ async function failJob(job, currentWorkerId, error) {
     const current = rows[0];
     if (!current) { await connection.rollback(); return; }
     const attempts = Number(current.attempts);
-    const terminal = attempts >= Number(current.max_attempts);
+    const terminal = error?.retryable === false || attempts >= Number(current.max_attempts);
     const delay = BACKOFF_MS[Math.min(Math.max(attempts - 1, 0), BACKOFF_MS.length - 1)];
     await connection.execute(
       `UPDATE automation_jobs SET status = ?, available_at = ${terminal ? 'available_at' : `DATE_ADD(UTC_TIMESTAMP(), INTERVAL ${Math.ceil(delay / 1000)} SECOND)`}, locked_at = NULL, locked_by = NULL, last_error = ?${terminal ? ', failed_at = UTC_TIMESTAMP()' : ''} WHERE id = ?`,
       [terminal ? 'failed' : 'pending', safeError(error), job.id]
     );
-    if (terminal) await connection.execute("UPDATE automation_runs SET status = 'failed', error_code = 'JOB_FAILED', error_message = ? WHERE id = ?", [safeError(error), current.automation_run_id]);
+    if (terminal) await connection.execute("UPDATE automation_runs SET status = 'failed', error_code = ?, error_message = ? WHERE id = ?", [String(error?.code || 'JOB_FAILED').slice(0, 100), safeError(error), current.automation_run_id]);
     else await connection.execute("UPDATE automation_runs SET status = 'queued', error_code = NULL, error_message = NULL WHERE id = ?", [current.automation_run_id]);
     await connection.commit();
   } catch (failure) {

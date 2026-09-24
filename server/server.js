@@ -54,6 +54,7 @@ const prospectingRoutes = require('./routes/prospecting');
 const commercialEntityRoutes = require('./routes/commercial-entities');
 const { automationsRouter, automationRunsRouter } = require('./routes/automations');
 const domainEventsRouter = require('./routes/domain-events');
+const integrationsRouter = require('./routes/integrations');
 
 
 app.locals.query = query;
@@ -69,6 +70,7 @@ app.use('/api/commercial', commercialEntityRoutes);
 app.use('/api/automations', automationsRouter);
 app.use('/api/automation-runs', automationRunsRouter);
 app.use('/api/automation-events', domainEventsRouter);
+app.use('/api/integrations', integrationsRouter);
 
 
 // Rota de teste

@@ -1,6 +1,8 @@
 const { dispatchDomainEvent } = require('../domain-events');
 const { getActionDefinition, isExecutable } = require('./action-registry');
 const { resolveConfig } = require('./variable-resolver');
+const { decryptSecret } = require('../integration-crypto');
+const { validateSmtpConfig, sendSmtp } = require('../email-provider');
 
 const FIELD_ALLOWLIST = Object.freeze(new Set(['business_name', 'category', 'address', 'city', 'state', 'phone', 'email', 'website', 'status']));
 
@@ -141,6 +143,29 @@ async function executeAction(connection, actionType, rawConfig, context) {
     if (!recipients[0]) throw new Error('USER_NOT_FOUND');
     await connection.execute('INSERT INTO internal_notifications (user_id, type, title, message, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, \'lead\', ?, ?)', [recipient, config.type || 'info', title, message, context.leadId, JSON.stringify({ automationId: context.automationId, runId: context.runId })]);
     return { recipient, title };
+  }
+
+  if (actionType === 'email.send') {
+    const recipient = String(config.recipient || lead.email || '').trim();
+    if (!recipient) { const error = new Error('RECIPIENT_EMAIL_MISSING'); error.code = 'RECIPIENT_EMAIL_MISSING'; error.retryable = false; throw error; }
+    const [integrationRows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'smtp' LIMIT 1");
+    if (!integrationRows[0]) { const error = new Error('EMAIL_INTEGRATION_NOT_CONFIGURED'); error.code = 'EMAIL_INTEGRATION_NOT_CONFIGURED'; error.retryable = false; throw error; }
+    const secret = decryptSecret(integrationRows[0]);
+    const metadata = JSON.parse(integrationRows[0].configuration_metadata || '{}');
+    const smtp = validateSmtpConfig({ ...metadata, password: secret?.password });
+    const subject = String(config.subject || '').trim();
+    const message = String(config.message || '').trim();
+    if (!subject) { const error = new Error('INVALID_EMAIL_SUBJECT'); error.code = 'INVALID_EMAIL_SUBJECT'; error.retryable = false; throw error; }
+    if (!message) { const error = new Error('INVALID_EMAIL_MESSAGE'); error.code = 'INVALID_EMAIL_MESSAGE'; error.retryable = false; throw error; }
+    const idempotencyKey = `email:${context.idempotencyKey}`;
+    const [existingRows] = await connection.execute('SELECT * FROM communication_messages WHERE idempotency_key = ? FOR UPDATE', [idempotencyKey]);
+    if (existingRows[0]?.status === 'sent') return { recipient, subject, messageId: existingRows[0].provider_message_id, idempotent: true };
+    if (existingRows[0]) await connection.execute("UPDATE communication_messages SET status = 'sending', attempt_count = attempt_count + 1, error_code = NULL, error_message = NULL WHERE id = ?", [existingRows[0].id]);
+    else await connection.execute("INSERT INTO communication_messages (channel, direction, lead_id, automation_id, automation_run_id, automation_step_id, idempotency_key, recipient, subject, body_text, status, provider, attempt_count) VALUES ('email', 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, 'sending', 'smtp', 1)", [context.leadId, context.automationId, context.runId, context.stepId, idempotencyKey, recipient, subject, message]);
+    const result = await sendSmtp(smtp, { to: recipient, subject, text: message, replyTo: config.replyTo || undefined });
+    await connection.execute("UPDATE communication_messages SET status = 'sent', provider_message_id = ?, sent_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE idempotency_key = ?", [result.messageId, idempotencyKey]);
+    await writeHistory(connection, context.leadId, context.ownerUserId, `E-mail enviado: ${subject}`, { actionType, automationId: context.automationId, runId: context.runId, communicationMessageId: idempotencyKey });
+    return { recipient, subject, messageId: result.messageId };
   }
 
   throw new Error(`ACTION_NOT_IMPLEMENTED:${actionType}`);

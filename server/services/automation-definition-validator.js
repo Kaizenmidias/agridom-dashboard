@@ -143,6 +143,7 @@ function validateAutomationDefinition(input, options = {}) {
           'lead.move_pipeline_stage': ['stageId'], 'activity.create': ['title'], 'activity.create_task': ['title'],
           'activity.create_call': ['title'], 'activity.create_follow_up': ['title'], 'activity.complete': ['activityId'],
           'notification.create': ['title', 'message'],
+          'email.send': ['subject', 'message'],
         }[step.config.actionType] || [];
         requiredFields.forEach((field) => {
           if (step.config[field] === undefined || step.config[field] === null || step.config[field] === '') errors.push(error(`${path}.config.${field}`, 'MISSING_ACTION_CONFIG', `Configuracao obrigatoria ausente: ${field}.`));

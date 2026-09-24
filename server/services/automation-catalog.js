@@ -65,7 +65,7 @@ const ACTION_CATALOG = Object.freeze([
   { id: 'activity.complete', name: 'Concluir atividade', category: 'crm', availability: 'available' },
   { id: 'notification.create', name: 'Criar notificacao interna', category: 'crm', availability: 'available' },
   { id: 'wait.period', name: 'Aguardar periodo', category: 'time', availability: 'available' },
-  { id: 'email.send', name: 'Enviar e-mail', category: 'communication', availability: 'requires_integration', requiredIntegration: 'email' },
+  { id: 'email.send', name: 'Enviar e-mail', category: 'communication', availability: 'available', requiredIntegration: 'email' },
   { id: 'whatsapp.send_message', name: 'Enviar mensagem no WhatsApp', category: 'communication', availability: 'requires_integration', requiredIntegration: 'whatsapp' },
   { id: 'whatsapp.send', name: 'Enviar mensagem no WhatsApp', category: 'communication', availability: 'requires_integration', requiredIntegration: 'whatsapp' },
   { id: 'whatsapp.send_template', name: 'Enviar template WhatsApp', category: 'communication', availability: 'requires_integration', requiredIntegration: 'whatsapp' },

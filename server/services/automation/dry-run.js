@@ -1,6 +1,9 @@
 const { getPool } = require('../../config/database');
 const { validateAutomationDefinition } = require('../automation-definition-validator');
 const { evaluateCondition } = require('./condition-evaluator');
+const { resolveConfig } = require('./variable-resolver');
+const { decryptSecret } = require('../integration-crypto');
+const { validateSmtpConfig } = require('../email-provider');
 
 async function dryRunAutomation({ definition, leadId, ownerUserId }) {
   const validation = validateAutomationDefinition(definition, { requireSteps: true });
@@ -13,9 +16,14 @@ async function dryRunAutomation({ definition, leadId, ownerUserId }) {
   const byId = new Map(steps.map((step) => [step.id, step]));
   const connection = await getPool().getConnection();
   try {
+    const [leadRows] = await connection.execute('SELECT id, business_name, email, phone FROM prospects WHERE id = ? AND owner_user_id = ?', [leadId, ownerUserId]);
+    if (!leadRows[0]) throw new Error('LEAD_NOT_FOUND');
+    const [ownerRows] = await connection.execute('SELECT name, email FROM users WHERE id = ?', [ownerUserId]);
+    const lead = leadRows[0];
+    const templateContext = { lead: { name: lead.business_name, first_name: String(lead.business_name || '').split(/\s+/)[0], company: lead.business_name, email: lead.email, phone: lead.phone }, owner: ownerRows[0] || {} };
     const planned = [];
     const visited = new Set();
-    let stepId = steps[0]?.id;
+    let stepId = validation.definition.trigger?.next || steps[0]?.id;
     while (stepId) {
       if (visited.has(stepId)) throw new Error('AUTOMATION_LOOP_DETECTED');
       visited.add(stepId);
@@ -30,7 +38,16 @@ async function dryRunAutomation({ definition, leadId, ownerUserId }) {
         planned.push({ id: step.id, type: step.type, wait: { amount: step.config?.amount ?? step.config?.duration, unit: step.config?.unit || 'minutes' } });
         stepId = step.next || null;
       } else if (step.type === 'action') {
-        planned.push({ id: step.id, type: step.type, actionType: step.config.actionType, wouldExecute: true });
+        if (step.config.actionType === 'email.send') {
+          const resolved = resolveConfig(step.config, templateContext);
+          if (!lead.email) throw new Error('RECIPIENT_EMAIL_MISSING');
+          if (!resolved.subject || !resolved.message) throw new Error('INVALID_EMAIL_TEMPLATE');
+          const [integrationRows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'smtp' LIMIT 1");
+          if (!integrationRows[0]) throw new Error('EMAIL_INTEGRATION_NOT_CONFIGURED');
+          const secret = decryptSecret(integrationRows[0]);
+          validateSmtpConfig({ ...JSON.parse(integrationRows[0].configuration_metadata || '{}'), password: secret?.password });
+          planned.push({ id: step.id, type: step.type, actionType: step.config.actionType, recipient: lead.email, subject: resolved.subject, message: resolved.message, wouldExecute: true, sent: false });
+        } else planned.push({ id: step.id, type: step.type, actionType: step.config.actionType, wouldExecute: true });
         stepId = step.next || null;
       } else if (step.type === 'finish') {
         planned.push({ id: step.id, type: step.type, completed: true });

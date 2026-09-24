@@ -32,6 +32,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { prospectingAPI } from "@/api/prospecting";
+import { emailIntegrationsAPI } from "@/api/email-integrations";
 import type { IntegrationProvider, IntegrationSummary } from "@/types/prospecting";
 
 type IntegrationDraft = {
@@ -50,9 +51,12 @@ type IntegrationDraft = {
   smtpHost: string;
   smtpPort: string;
   smtpSecure: boolean;
+  smtpSecurity: string;
   smtpUser: string;
   smtpPass: string;
-  smtpFrom: string;
+  smtpFromName: string;
+  smtpFromEmail: string;
+  smtpReplyTo: string;
 };
 
 type FieldType = "text" | "password" | "number" | "switch";
@@ -98,10 +102,12 @@ const fieldSets: Record<IntegrationProvider, FieldConfig[]> = {
   smtp: [
     { key: "smtpHost", label: "Servidor SMTP", type: "text", placeholder: "smtp.seudominio.com", span: "full" },
     { key: "smtpPort", label: "Porta", type: "number", placeholder: "587", span: "half", min: 1 },
-    { key: "smtpSecure", label: "SSL/TLS", type: "switch", span: "half" },
+    { key: "smtpSecurity", label: "Segurança (auto, ssl ou starttls)", type: "text", placeholder: "starttls", span: "half" },
     { key: "smtpUser", label: "Usuário", type: "text", placeholder: "noreply@seudominio.com", span: "full" },
     { key: "smtpPass", label: "Senha", type: "password", placeholder: "Senha SMTP", span: "full" },
-    { key: "smtpFrom", label: "Remetente", type: "text", placeholder: "Kaizen <noreply@seudominio.com>", span: "full" },
+    { key: "smtpFromName", label: "Nome do remetente", type: "text", placeholder: "Kaizen CRM", span: "half" },
+    { key: "smtpFromEmail", label: "E-mail do remetente", type: "text", placeholder: "noreply@seudominio.com", span: "half" },
+    { key: "smtpReplyTo", label: "Responder para", type: "text", placeholder: "Opcional", span: "full" },
   ],
 };
 
@@ -144,14 +150,14 @@ const integrationCards: IntegrationCardConfig[] = [
   },
   {
     provider: "smtp",
-    title: "SMTP",
+    title: "E-mail",
     description: "Envio de emails pelo backend.",
     icon: Mail,
     fields: fieldSets.smtp,
     summaryLines: (summary) => [
       `Host: ${String(summary.metadata.host || "Não configurado")}`,
       `Porta: ${String(summary.metadata.port || 587)}`,
-      `Remetente: ${String(summary.metadata.from || "Não configurado")}`,
+      `Remetente: ${String(summary.metadata.fromEmail || summary.metadata.from || "Não configurado")}`,
     ],
   },
 ];
@@ -198,9 +204,12 @@ function buildDraft(summary: IntegrationSummary | null): IntegrationDraft {
     smtpHost: readMetadataValue(summary, "host"),
     smtpPort: readMetadataValue(summary, "port", "587"),
     smtpSecure: Boolean(summary?.secure),
+    smtpSecurity: readMetadataValue(summary, "security", "starttls"),
     smtpUser: readMetadataValue(summary, "user"),
     smtpPass: "",
-    smtpFrom: readMetadataValue(summary, "from"),
+    smtpFromName: readMetadataValue(summary, "fromName", "Kaizen CRM"),
+    smtpFromEmail: readMetadataValue(summary, "fromEmail", readMetadataValue(summary, "from")),
+    smtpReplyTo: readMetadataValue(summary, "replyTo"),
   };
 }
 
@@ -235,10 +244,14 @@ function buildPayload(provider: IntegrationProvider, draft: IntegrationDraft) {
   return {
     host: draft.smtpHost,
     port: Number(draft.smtpPort || 587),
-    secure: draft.smtpSecure,
+    secure: draft.smtpSecurity === "ssl" || draft.smtpSecure,
+    security: draft.smtpSecurity,
     user: draft.smtpUser,
     pass: draft.smtpPass,
-    from: draft.smtpFrom,
+    from: draft.smtpFromEmail,
+    fromName: draft.smtpFromName,
+    fromEmail: draft.smtpFromEmail,
+    replyTo: draft.smtpReplyTo,
   };
 }
 
@@ -248,6 +261,7 @@ export function IntegrationLibrary() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<IntegrationProvider | null>(null);
+  const [testRecipient, setTestRecipient] = useState("");
   const [items, setItems] = useState<IntegrationSummary[]>([]);
   const [activeIntegration, setActiveIntegration] = useState<IntegrationSummary | null>(null);
   const [draft, setDraft] = useState<IntegrationDraft | null>(null);
@@ -299,7 +313,9 @@ export function IntegrationLibrary() {
     try {
       setSaving(true);
       const payload = buildPayload(activeIntegration.provider, draft);
-      const updated = await prospectingAPI.saveIntegrationMetadata(activeIntegration.provider, payload);
+      const updated = activeIntegration.provider === "smtp"
+        ? await emailIntegrationsAPI.save({ host: draft.smtpHost, port: Number(draft.smtpPort || 587), security: draft.smtpSecurity, username: draft.smtpUser, password: draft.smtpPass || undefined, fromName: draft.smtpFromName, fromEmail: draft.smtpFromEmail, replyTo: draft.smtpReplyTo || undefined }).then((result) => ({ provider: "smtp" as const, displayName: "E-mail", description: "Envio de e-mails pelo backend.", status: result.status as IntegrationSummary["status"], configured: result.configured, connected: result.status === "connected", metadata: result.metadata, lastTestedAt: result.lastTestedAt, lastError: result.lastError }))
+        : await prospectingAPI.saveIntegrationMetadata(activeIntegration.provider, payload);
       setItems((current) => current.map((item) => (item.provider === updated.provider ? updated : item)));
       setActiveIntegration(updated);
       setDraft((current) =>
@@ -310,6 +326,10 @@ export function IntegrationLibrary() {
               casaApiKey: current.casaApiKey,
               whatsappApiKey: current.whatsappApiKey,
               smtpPass: current.smtpPass,
+              smtpSecurity: current.smtpSecurity,
+              smtpFromName: current.smtpFromName,
+              smtpFromEmail: current.smtpFromEmail,
+              smtpReplyTo: current.smtpReplyTo,
             }
           : current
       );
@@ -321,7 +341,7 @@ export function IntegrationLibrary() {
       if (testAfterSave) {
         setTesting(updated.provider);
         try {
-          const result = await prospectingAPI.testIntegration(updated.provider);
+          const result = updated.provider === "smtp" ? await emailIntegrationsAPI.testConnection() : await prospectingAPI.testIntegration(updated.provider);
           toast({ title: "Teste concluido", description: result.message });
           await loadIntegrations();
         } catch (error) {
@@ -351,7 +371,7 @@ export function IntegrationLibrary() {
   const handleTest = async (provider: IntegrationProvider) => {
     try {
       setTesting(provider);
-      const result = await prospectingAPI.testIntegration(provider);
+      const result = provider === "smtp" ? await emailIntegrationsAPI.testConnection() : await prospectingAPI.testIntegration(provider);
       toast({ title: "Teste concluido", description: result.message });
       await loadIntegrations();
     } catch (error) {
@@ -363,6 +383,17 @@ export function IntegrationLibrary() {
     } finally {
       setTesting(null);
     }
+  };
+
+  const handleTestSend = async () => {
+    if (!testRecipient.trim()) return;
+    try {
+      setTesting("smtp");
+      const result = await emailIntegrationsAPI.testSend(testRecipient.trim());
+      toast({ title: "E-mail de teste enviado", description: result.message });
+    } catch (error) {
+      toast({ title: "Falha no envio", description: error instanceof Error ? error.message : "Não foi possível enviar o e-mail de teste.", variant: "destructive" });
+    } finally { setTesting(null); }
   };
 
   const itemsByProvider = useMemo(
@@ -544,6 +575,8 @@ export function IntegrationLibrary() {
 
               <Separator />
 
+              {activeIntegration.provider === "smtp" ? <div className="space-y-2"><Label htmlFor="smtp-test-recipient">Enviar e-mail de teste para</Label><div className="flex gap-2"><Input id="smtp-test-recipient" value={testRecipient} onChange={(event) => setTestRecipient(event.target.value)} placeholder="seu-email@exemplo.com" type="email" /><Button variant="outline" onClick={() => void handleTestSend()} disabled={testing === "smtp" || !testRecipient.trim()}>{testing === "smtp" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Enviar teste</Button></div></div> : null}
+
               <DialogFooter className="gap-2">
                 <Button
                   variant="outline"
@@ -567,4 +600,3 @@ export function IntegrationLibrary() {
 }
 
 export default IntegrationLibrary;
-
