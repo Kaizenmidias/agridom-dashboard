@@ -20,6 +20,7 @@ export function WhatsAppIntegrationPanel() {
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savedConfig, setSavedConfig] = useState({ configured: false, apiKeyMasked: "" });
   const [name, setName] = useState("");
   const [autoCreateLeads, setAutoCreateLeads] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -32,6 +33,7 @@ export function WhatsAppIntegrationPanel() {
     try {
       const [saved, listed] = await Promise.all([whatsappAPI.getConfig(), whatsappAPI.listAccounts()]);
       setConfig({ baseUrl: saved.metadata.baseUrl || "", apiKey: "", timeout: String(saved.metadata.timeout || 15000) });
+      setSavedConfig({ configured: saved.configured, apiKeyMasked: saved.metadata.apiKeyMasked || "" });
       setAccounts(listed.accounts);
     } catch (error) { toast({ title: "Falha ao carregar WhatsApp", description: error instanceof Error ? error.message : "Nao foi possivel carregar a integracao.", variant: "destructive" }); }
     finally { setLoading(false); }
@@ -48,9 +50,16 @@ export function WhatsAppIntegrationPanel() {
 
   const save = async () => {
     setSaving(true);
-    try { await whatsappAPI.saveConfig({ baseUrl: config.baseUrl, apiKey: config.apiKey || undefined, timeout: Number(config.timeout) || 15000 }); setConfig((current) => ({ ...current, apiKey: "" })); toast({ title: "Configuração salva", description: "A Evolution API foi configurada com segurança." }); }
-    catch (error) { toast({ title: "Falha ao salvar", description: error instanceof Error ? error.message : "Nao foi possivel salvar.", variant: "destructive" }); }
-    finally { setSaving(false); }
+    try {
+      const saved = await whatsappAPI.saveConfig({ baseUrl: config.baseUrl, apiKey: config.apiKey || undefined, timeout: Number(config.timeout) || 15000 });
+      setConfig((current) => ({ ...current, apiKey: "" }));
+      setSavedConfig({ configured: saved.configured, apiKeyMasked: saved.metadata.apiKeyMasked || "" });
+      toast({ title: "Configuração salva", description: "A Evolution API foi configurada com segurança." });
+    } catch (error) {
+      toast({ title: "Falha ao salvar", description: error instanceof Error ? error.message : "Não foi possível salvar.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
   const test = async () => { try { const result = await whatsappAPI.testConnection(); toast({ title: "Conexao validada", description: result.message }); } catch (error) { toast({ title: "Falha na conexao", description: error instanceof Error ? error.message : "Nao foi possivel testar.", variant: "destructive" }); } };
   const create = async () => { if (!name.trim()) return; setBusyAccount(-1); try { const result = await whatsappAPI.createAccount({ name: name.trim(), autoCreateLeads }); setAccounts((current) => [...current, result.account]); setName(""); setConnectOpen(false); await openQr(result.account); } catch (error) { toast({ title: "Falha ao conectar numero", description: error instanceof Error ? error.message : "Nao foi possivel criar a instancia.", variant: "destructive" }); } finally { setBusyAccount(null); } };
@@ -60,7 +69,7 @@ export function WhatsAppIntegrationPanel() {
 
   return <Card className="rounded-lg border shadow-none lg:col-span-2 xl:col-span-4">
     <CardHeader className="flex flex-row items-start justify-between gap-4"><div className="flex items-start gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500"><MessageCircle className="h-5 w-5" /></div><div><CardTitle>WhatsApp</CardTitle><CardDescription>Conecte numeros pela Evolution API para usar conversas e automacoes.</CardDescription></div></div><Badge className="bg-emerald-100 text-emerald-800">{connected} conectado(s) / {accounts.length}</Badge></CardHeader>
-    <CardContent className="space-y-5"><div className="grid gap-3 md:grid-cols-[1fr_1fr_140px_auto]"><div className="space-y-2"><Label>Base URL</Label><Input value={config.baseUrl} onChange={(event) => setConfig((current) => ({ ...current, baseUrl: event.target.value }))} placeholder="https://evolution.seudominio.com" /></div><div className="space-y-2"><Label>API Key</Label><Input value={config.apiKey} onChange={(event) => setConfig((current) => ({ ...current, apiKey: event.target.value }))} placeholder="Deixe vazio para manter" type="password" /></div><div className="space-y-2"><Label>Timeout (ms)</Label><Input value={config.timeout} onChange={(event) => setConfig((current) => ({ ...current, timeout: event.target.value }))} type="number" min={3000} /></div><div className="flex items-end gap-2"><Button variant="outline" onClick={() => void test()} disabled={!config.baseUrl}><CheckCircle2 className="mr-2 h-4 w-4" />Testar</Button><Button onClick={() => void save()} disabled={saving || !config.baseUrl}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Salvar</Button></div></div>
+    <CardContent className="space-y-5">{savedConfig.configured ? <Alert className="border-emerald-500/30 bg-emerald-500/5"><CheckCircle2 className="h-4 w-4 text-emerald-500" /><AlertTitle>Configuração salva com sucesso</AlertTitle><AlertDescription>A API Key está configurada e protegida no servidor{savedConfig.apiKeyMasked ? ` (${savedConfig.apiKeyMasked})` : ""}. O campo permanece vazio por segurança.</AlertDescription></Alert> : null}<div className="grid gap-3 md:grid-cols-[1fr_1fr_140px_auto]"><div className="space-y-2"><Label>Base URL</Label><Input value={config.baseUrl} onChange={(event) => setConfig((current) => ({ ...current, baseUrl: event.target.value }))} placeholder="https://evolution.seudominio.com" /></div><div className="space-y-2"><Label>API Key</Label><Input value={config.apiKey} onChange={(event) => setConfig((current) => ({ ...current, apiKey: event.target.value }))} placeholder="Deixe vazio para manter" type="password" /></div><div className="space-y-2"><Label>Timeout (ms)</Label><Input value={config.timeout} onChange={(event) => setConfig((current) => ({ ...current, timeout: event.target.value }))} type="number" min={3000} /></div><div className="flex items-end gap-2"><Button variant="outline" onClick={() => void test()} disabled={!config.baseUrl}><CheckCircle2 className="mr-2 h-4 w-4" />Testar</Button><Button onClick={() => void save()} disabled={saving || !config.baseUrl}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Salvar</Button></div></div>
       <div className="flex items-center justify-between border-t pt-4"><div><p className="font-medium">Numeros conectados</p><p className="text-sm text-muted-foreground">Cada conexao possui sua propria instancia e historico.</p></div><Button onClick={() => setConnectOpen(true)}><Plus className="mr-2 h-4 w-4" />Conectar numero</Button></div>
       {loading ? <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 animate-spin" /></div> : accounts.length === 0 ? <Alert><AlertTitle>Nenhum numero conectado</AlertTitle><AlertDescription>Configure a Evolution API e conecte o primeiro numero WhatsApp.</AlertDescription></Alert> : <div className="grid gap-3 md:grid-cols-2">{accounts.map((account) => <div key={account.id} className="flex items-center justify-between gap-3 rounded-md border p-4"><div className="min-w-0"><p className="truncate font-medium">{account.name}</p><p className="text-sm text-muted-foreground">{account.phoneNumber || "Numero ainda nao identificado"}</p><Badge className={statusClass(account.status)}>{statusLabel[account.status] || account.status}</Badge></div><div className="flex shrink-0 gap-1"><Button size="icon" variant="ghost" title="Atualizar status" onClick={() => void refreshAccount(account)}><RefreshCw className="h-4 w-4" /></Button>{account.status !== "connected" ? <Button size="icon" variant="ghost" title="Exibir QR Code" onClick={() => void openQr(account)}><QrCode className="h-4 w-4" /></Button> : <Button size="icon" variant="ghost" title="Desconectar" onClick={() => void disconnect(account)} disabled={busyAccount === account.id}><Power className="h-4 w-4" /></Button>}<Button size="icon" variant="ghost" title="Arquivar" onClick={() => void archive(account)} disabled={busyAccount === account.id}><Trash2 className="h-4 w-4" /></Button></div></div>)}</div>}
     </CardContent>
