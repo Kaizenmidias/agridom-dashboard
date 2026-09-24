@@ -56,6 +56,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { whatsappAPI, type WhatsAppAccount } from "@/api/whatsapp";
 import {
   Dialog,
   DialogContent,
@@ -1226,6 +1227,12 @@ function NodeInspector({
   pipelines: PipelineDefinition[];
   stages: PipelineStage[];
 }) {
+  const [whatsappAccounts, setWhatsappAccounts] = useState<WhatsAppAccount[]>([]);
+  const actionType = String(node.config.actionType || "lead.add_tag");
+  useEffect(() => {
+    if (actionType !== "whatsapp.send") return;
+    void whatsappAPI.listAccounts().then((result) => setWhatsappAccounts(result.accounts.filter((account) => account.status === "connected"))).catch(() => setWhatsappAccounts([]));
+  }, [actionType]);
   if (node.type === "trigger")
     return (
       <div className="space-y-3">
@@ -1355,7 +1362,6 @@ function NodeInspector({
         </FieldLabel>
       </div>
     );
-  const actionType = String(node.config.actionType || "lead.add_tag");
   const selectedAction = ACTION_CATALOG.find((item) => item.id === actionType);
   return (
     <div className="space-y-3">
@@ -1476,7 +1482,7 @@ function NodeInspector({
       ) : null}
       {actionType === "activity.complete" ? <FieldLabel label="ID da atividade"><Input type="number" min="1" value={String(node.config.activityId || "")} onChange={(event) => updateConfig("activityId", Number(event.target.value))} /></FieldLabel> : null}
       {actionType === "email.send" ? <><FieldLabel label="Destinatário"><Input value={String(node.config.recipient || "{{lead.email}}")} onChange={(event) => updateConfig("recipient", event.target.value)} /></FieldLabel><FieldLabel label="Assunto"><Input value={String(node.config.subject || "")} placeholder="Ex.: Olá, {{lead.name}}" onChange={(event) => updateConfig("subject", event.target.value)} /></FieldLabel></> : null}
-      {actionType === "whatsapp.send" ? <><FieldLabel label="Conta WhatsApp"><Input type="number" min="1" value={String(node.config.accountId || "")} placeholder="ID da conta conectada" onChange={(event) => updateConfig("accountId", Number(event.target.value) || "")} /></FieldLabel><FieldLabel label="Destinatário"><Input value={String(node.config.recipient || "{{lead.phone}}")} onChange={(event) => updateConfig("recipient", event.target.value)} /></FieldLabel></> : null}
+      {actionType === "whatsapp.send" ? <><FieldLabel label="Conta WhatsApp"><Select value={String(node.config.accountId || "")} onValueChange={(value) => updateConfig("accountId", Number(value))}><SelectTrigger><SelectValue placeholder={whatsappAccounts.length ? "Selecione a conta" : "Nenhuma conta conectada"} /></SelectTrigger><SelectContent>{whatsappAccounts.map((account) => <SelectItem key={account.id} value={String(account.id)}>{account.name}{account.phoneNumber ? ` - ${account.phoneNumber}` : ""}</SelectItem>)}</SelectContent></Select></FieldLabel><FieldLabel label="Destinatário"><Input value={String(node.config.recipient || "{{lead.phone}}")} onChange={(event) => updateConfig("recipient", event.target.value)} /></FieldLabel></> : null}
       {actionType === "notification.create" ? <><FieldLabel label="Título"><Input value={String(node.config.title || "")} onChange={(event) => updateConfig("title", event.target.value)} /></FieldLabel><FieldLabel label="Mensagem"><Textarea value={String(node.config.message || "")} onChange={(event) => updateConfig("message", event.target.value)} /></FieldLabel></> : null}
       {[
         "email.send",
