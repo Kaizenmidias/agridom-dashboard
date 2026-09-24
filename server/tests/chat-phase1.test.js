@@ -34,5 +34,5 @@ test('CHAT-1 prepara canais futuros sem fingir integrações ativas', () => {
 
 test('CHAT-1 mantém composer textual com Enter e Shift+Enter', () => {
   assert.match(composer, /event\.key === "Enter" && !event\.shiftKey/);
-  assert.match(route, /Apenas mensagens de texto estao disponiveis nesta fase/);
+  assert.match(route, /MESSAGE_TYPE_NOT_SUPPORTED/);
 });
