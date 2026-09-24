@@ -29,10 +29,10 @@ router.get('/config', ...admin, async (_req, res) => {
 router.put('/config', ...admin, async (req, res) => {
   try {
     const baseUrl = validateBaseUrl(req.body?.baseUrl);
-      const connection = await getPool().getConnection();
-      try {
-        const [currentRows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'evolution' LIMIT 1");
-        const current = currentRows[0];
+    const connection = await getPool().getConnection();
+    try {
+      const [currentRows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'evolution' LIMIT 1");
+      const current = currentRows[0];
       const credential = resolveEvolutionCredential(req.body?.apiKey, current);
       if (!credential) return res.status(400).json({ error: 'API Key da Evolution e obrigatoria.' });
       await connection.execute(`INSERT INTO integration_providers (provider, display_name, status, configuration_metadata, secret_ciphertext, secret_iv, secret_auth_tag) VALUES ('evolution', 'WhatsApp / Evolution API', 'configured', ?, ?, ?, ?)
@@ -40,7 +40,11 @@ router.put('/config', ...admin, async (req, res) => {
       const [rows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'evolution' LIMIT 1");
       res.json(publicConfig(rows[0]));
     } finally { connection.release(); }
-  } catch (error) { res.status(400).json({ error: error?.publicMessage || error?.message || 'Nao foi possivel salvar a integracao WhatsApp.' }); }
+  } catch (error) {
+    if (error?.code === 'INTEGRATION_ENCRYPTION_KEY_MISSING') return res.status(500).json({ error: 'Servidor sem INTEGRATION_ENCRYPTION_KEY configurada.' });
+    if (error?.code === 'ERR_OSSL_BAD_DECRYPT') return res.status(500).json({ error: 'A credencial Evolution armazenada nao pode ser descriptografada. Verifique a INTEGRATION_ENCRYPTION_KEY do servidor.' });
+    res.status(400).json({ error: error?.publicMessage || error?.message || 'Nao foi possivel salvar a integracao WhatsApp.' });
+  }
 });
 
 router.post('/config/test-connection', ...admin, async (_req, res) => {

@@ -44,4 +44,5 @@ test('WhatsApp config regression keeps secrets out of public responses and tempo
   assert.doesNotMatch(routeSource, /WA CONFIG DEBUG/);
   assert.doesNotMatch(routeSource, /bodyKeys|apiKeyLength|console\.(log|info).*apiKey/);
   assert.match(routeSource, /credential\.envelope\?\.ciphertext/);
+  assert.match(routeSource, /Servidor sem INTEGRATION_ENCRYPTION_KEY configurada/);
 });
