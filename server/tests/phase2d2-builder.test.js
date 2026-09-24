@@ -70,3 +70,8 @@ test('2E.1.2 auto-draft saves before publish and uses the concurrency lock', () 
   assert.match(repository, /ownedAutomation\(connection, automationId, userId, true\)/);
   assert.match(repository, /status = 'draft'.*LIMIT 1 FOR UPDATE/s);
 });
+
+test('2E.1.2 imports every newly used navigation icon in the Builder', () => {
+  assert.match(builder, /import \{[\s\S]*ChevronLeft,[\s\S]*\} from "lucide-react";/);
+  assert.match(builder, /<ChevronLeft className=/);
+});

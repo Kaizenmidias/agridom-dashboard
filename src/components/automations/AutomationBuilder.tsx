@@ -25,6 +25,7 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  ChevronLeft,
   Clock3,
   Copy,
   GitBranch,
