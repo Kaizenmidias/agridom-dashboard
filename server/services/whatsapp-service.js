@@ -117,7 +117,8 @@ async function processPendingWhatsAppEvents({ batchSize = 25 } = {}) {
 async function sendWhatsAppMessage(connection, { account, leadId, recipient, text, idempotencyKey, automationId = null, runId = null, stepId = null, ownerUserId = null }) {
   const phone = normalizePhone(recipient);
   if (!phone) throw Object.assign(new Error('RECIPIENT_PHONE_MISSING'), { code: 'RECIPIENT_PHONE_MISSING', retryable: false, publicMessage: 'Telefone do destinatario nao informado.' });
-  if (account.status !== 'connected') throw Object.assign(new Error('WHATSAPP_ACCOUNT_NOT_CONNECTED'), { code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED', retryable: false, publicMessage: 'A conta WhatsApp nao esta conectada.' });
+  const accountStatus = account.account_status ?? account.status;
+  if (accountStatus !== 'connected') throw Object.assign(new Error('WHATSAPP_ACCOUNT_NOT_CONNECTED'), { code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED', retryable: false, publicMessage: 'A conta WhatsApp nao esta conectada.' });
   const [existing] = await connection.execute('SELECT * FROM communication_messages WHERE idempotency_key = ? FOR UPDATE', [idempotencyKey]);
   if (existing[0]?.status === 'sent') return { idempotent: true, messageId: existing[0].provider_message_id, conversationId: existing[0].conversation_id };
   const [leadRows] = await connection.execute('SELECT * FROM prospects WHERE id = ? LIMIT 1', [leadId || 0]);
