@@ -49,7 +49,7 @@ const UsuariosPage = () => {
     try {
       await createUser({
         email: newUser.email,
-        password_hash: newUser.password, // Será hasheado no backend
+        password: newUser.password,
         full_name: newUser.full_name || null,
         role: newUser.role || 'user',
         bio: null,

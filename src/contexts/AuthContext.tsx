@@ -72,12 +72,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return
       }
 
-      if (!import.meta.env.DEV) {
-        setUsuarios([])
-        setError(null)
-        return
-      }
-
       const usuariosList = await getUsers()
       setUsuarios(Array.isArray(usuariosList) ? usuariosList : [])
       setError(null)
@@ -251,6 +245,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(result.user)
         setauthProviderUser(result.user)
         localStorage.setItem('user_data', JSON.stringify(result.user))
+        await loadUsuarios()
       }
     } catch (err) {
       console.error('Erro ao recarregar dados do usuário:', err)
