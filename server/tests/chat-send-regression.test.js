@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, '../..');
 const routeSource = fs.readFileSync(path.join(root, 'server/routes/conversations.js'), 'utf8');
 const providerSource = fs.readFileSync(path.join(root, 'server/services/evolution-whatsapp-provider.js'), 'utf8');
 const serviceSource = fs.readFileSync(path.join(root, 'server/services/whatsapp-service.js'), 'utf8');
+const webhookSource = fs.readFileSync(path.join(root, 'server/routes/webhooks.js'), 'utf8');
 
 test('chat send exposes a safe diagnostic code while preserving the retry contract', () => {
   assert.match(routeSource, /responseStatus = error\?\.retryable === false \? 409 : 502/);
@@ -38,6 +39,7 @@ test('chat send keeps the explicit guards for missing conversation, text and con
   assert.match(routeSource, /requestedType === 'text' && \(!text \|\| text\.length > 10000\)/);
   assert.match(routeSource, /ca\.status AS account_status/);
   assert.match(serviceSource, /account\.account_status \?\? account\.status/);
+  assert.match(webhookSource, /sanitizeWebhookData/);
   assert.match(providerSource, /EVOLUTION_AUTH_FAILED/);
   assert.match(providerSource, /EVOLUTION_UNAVAILABLE/);
 });

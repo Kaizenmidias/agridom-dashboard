@@ -7,6 +7,13 @@ const { hasWebhookSecret, readWebhookSecret } = require('../services/whatsapp-we
 
 const router = express.Router();
 const hit = new Map();
+const sanitizeWebhookData = (value, depth = 0) => {
+  if (depth > 8 || value == null) return value;
+  if (typeof value === 'string') return value.length > 2000 ? value.slice(0, 2000) : value;
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeWebhookData(item, depth + 1));
+  if (typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !['base64', 'jpegThumbnail', 'thumbnail'].includes(key)).map(([key, item]) => [key, sanitizeWebhookData(item, depth + 1)]));
+};
 router.post('/evolution', async (req, res) => {
   const ip = req.ip || 'unknown';
   const now = Date.now();
@@ -25,7 +32,7 @@ router.post('/evolution', async (req, res) => {
     const parsed = extractInbound(payload);
     const eventId = parsed.externalMessageId || crypto.createHash('sha256').update(JSON.stringify({ instance, event: payload.event || payload.type || 'unknown', data: payload.data || payload })).digest('hex');
     const eventType = String(payload.event || payload.type || 'unknown').slice(0, 80);
-    const minimalPayload = { event: eventType, instance, data: payload.data || payload };
+    const minimalPayload = { event: eventType, instance, data: sanitizeWebhookData(payload.data || payload) };
     const [result] = await getPool().execute(`INSERT INTO communication_webhook_events (communication_account_id, external_event_id, event_type, payload) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`, [account.id, eventId, eventType, JSON.stringify(minimalPayload)]);
     res.status(202).json({ accepted: true, duplicate: !result.insertId, eventId });
   } catch (error) { res.status(400).json({ error: error?.publicMessage || 'Nao foi possivel aceitar o webhook.' }); }
