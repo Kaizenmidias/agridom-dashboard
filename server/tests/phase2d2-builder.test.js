@@ -120,3 +120,13 @@ test('2E.1.4 removes only the clicked edge and exposes safe deletion', () => {
   assert.match(repositoryService, /mode: 'soft_delete'/);
   assert.match(repositoryService, /DELETE FROM automation_versions/);
 });
+
+test('2F keeps the builder visual hierarchy and real dry-run action', () => {
+  assert.match(builder, /onClick=\{\(\) => void testFlow\(\)\}/);
+  assert.match(builder, />Testar<\/Button>/);
+  assert.match(builder, />Organizar<\/Button>/);
+  assert.match(builder, /w-\[264px\]/);
+  assert.match(builder, /ConfiguraÃ§Ã£o necessÃ¡ria|Configuração necessária/);
+  assert.match(builder, /style: \{ cursor: "pointer" \}/);
+  assert.match(builder, /<MiniMap/);
+});
