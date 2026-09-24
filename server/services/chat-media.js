@@ -66,7 +66,7 @@ function getMediaRange(range, size) {
   const match = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
   if (!match || (!match[1] && !match[2])) return 'invalid';
   let start = match[1] ? Number(match[1]) : Math.max(size - Number(match[2]), 0);
-  let end = match[2] ? Number(match[2]) : size - 1;
+  let end = match[1] && match[2] ? Number(match[2]) : size - 1;
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || start >= size) return 'invalid';
   end = Math.min(end, size - 1);
   return { start, end };

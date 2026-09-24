@@ -44,7 +44,7 @@ function mediaFromMessage(message) {
   const content = unwrapMessage(message);
   const entries = [['imageMessage', 'image'], ['videoMessage', 'video'], ['audioMessage', 'audio'], ['documentMessage', 'document'], ['stickerMessage', 'sticker']];
   const entry = entries.find(([key]) => content?.[key]);
-  if (!entry) return { type: extractText(content) ? 'text' : 'unknown', content: null, caption: extractText(content) };
+  if (!entry) return { type: extractText(content) ? 'text' : 'unknown', content, caption: extractText(content) };
   const media = content[entry[0]] || {};
   return { type: entry[1], content: media, caption: media.caption || null, mimeType: media.mimetype || media.mime_type || null, filename: media.fileName || media.file_name || null, size: Number(media.fileLength || media.file_length || 0) || null, duration: Number(media.seconds || media.duration || 0) || null, width: Number(media.width || 0) || null, height: Number(media.height || 0) || null };
 }
@@ -60,7 +60,7 @@ function extractInbound(payload) {
   const timestamp = Number(data?.messageTimestamp || data?.timestamp || 0);
   const message = unwrapMessage(data?.message || data);
   const media = mediaFromMessage(message);
-  const contextInfo = media.content?.contextInfo || data?.contextInfo || data?.message?.contextInfo || null;
+  const contextInfo = media.content?.contextInfo || Object.values(media.content || {}).find((value) => value && typeof value === 'object' && value.contextInfo)?.contextInfo || data?.contextInfo || data?.message?.contextInfo || null;
   const quoted = contextInfo?.quotedMessage ? { text: extractText(contextInfo.quotedMessage), messageType: mediaFromMessage(contextInfo.quotedMessage).type, externalMessageId: contextInfo.stanzaId || null, participant: contextInfo.participant || contextInfo.remoteJid || null } : null;
   return { remoteJid, externalMessageId, externalSenderId: key.participant || remoteJid, phone: normalizePhone(remoteJid), fromMe, isGroup, isBroadcast, text: media.caption || extractText(message), messageType: media.type, media: { ...media, key: { id: externalMessageId, remoteJid, fromMe, participant: key.participant || null } }, quoted, occurredAt: timestamp > 0 ? new Date(timestamp * 1000) : new Date(), pushName: String(data?.pushName || data?.sender?.pushName || '').trim() || null };
 }

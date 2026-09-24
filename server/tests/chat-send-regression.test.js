@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { EvolutionWhatsAppProvider, providerError } = require('../services/evolution-whatsapp-provider');
 const { sniffMime } = require('../services/chat-media');
+const { extractInbound } = require('../services/whatsapp-service');
+const { getMediaRange, validateMedia, resolveStoragePath } = require('../services/chat-media');
 
 const root = path.resolve(__dirname, '../..');
 const routeSource = fs.readFileSync(path.join(root, 'server/routes/conversations.js'), 'utf8');
@@ -39,6 +41,30 @@ test('chat media validates signatures instead of trusting only the browser MIME'
   assert.equal(sniffMime(Buffer.from('%PDF-1.7')), 'application/pdf');
   assert.equal(sniffMime(Buffer.from([0xff, 0xd8, 0xff, 0xe0])), 'image/jpeg');
   assert.equal(sniffMime(Buffer.from('not-a-known-media')), null);
+});
+
+test('inbound multimedia extraction covers media, caption, quote and unknown messages', () => {
+  const types = [['imageMessage', 'image'], ['audioMessage', 'audio'], ['videoMessage', 'video'], ['documentMessage', 'document'], ['stickerMessage', 'sticker']];
+  for (const [key, expected] of types) {
+    const media = { mimetype: expected === 'image' ? 'image/jpeg' : 'application/octet-stream', caption: expected === 'image' ? 'Legenda' : undefined, fileLength: '12' };
+    const parsed = extractInbound({ data: { key: { id: `${expected}-1`, remoteJid: '5511999999999@s.whatsapp.net', fromMe: false }, message: { [key]: media }, messageTimestamp: 1710000000 } });
+    assert.equal(parsed.messageType, expected);
+    assert.equal(parsed.media.size, 12);
+    if (expected === 'image') assert.equal(parsed.text, 'Legenda');
+  }
+  const quoted = extractInbound({ data: { key: { id: 'text-1', remoteJid: '5511999999999@s.whatsapp.net' }, message: { extendedTextMessage: { text: 'Resposta', contextInfo: { stanzaId: 'quoted-1', participant: '5511888888888@s.whatsapp.net', quotedMessage: { conversation: 'Original' } } } } } });
+  assert.equal(quoted.messageType, 'text');
+  assert.equal(quoted.quoted.externalMessageId, 'quoted-1');
+  assert.equal(quoted.quoted.text, 'Original');
+  assert.equal(extractInbound({ data: { key: { id: 'unknown-1', remoteJid: '5511999999999@s.whatsapp.net' }, message: { pollCreationMessage: { name: 'Pesquisa' } } } }).messageType, 'unknown');
+});
+
+test('chat media protects ranges and generated storage paths', () => {
+  assert.deepEqual(getMediaRange('bytes=10-19', 100), { start: 10, end: 19 });
+  assert.deepEqual(getMediaRange('bytes=-10', 100), { start: 90, end: 99 });
+  assert.equal(getMediaRange('bytes=100-101', 100), 'invalid');
+  assert.throws(() => resolveStoragePath('../secrets.txt'), /Arquivo de midia invalido/);
+  assert.throws(() => validateMedia('image', 'application/pdf', 10), /Formato de arquivo/);
 });
 
 test('chat send keeps the explicit guards for missing conversation, text and connection', () => {
