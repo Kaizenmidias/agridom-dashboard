@@ -24,9 +24,9 @@ import { AutomationRunsPage } from "./pages/commercial/AutomationRunsPage";
 import {
   AgendaPage,
   BroadcastPage,
-  ChatsPage,
   MetricsPage,
 } from "./pages/commercial/CommercialPlaceholders";
+import { ChatsPage } from "./pages/commercial/ChatsPage";
 import { AgentsPage, AssistantsPage, ContentsPage, PromptsPage } from "./pages/ai/AiPlaceholders";
 import { CashFlowPage, RevenuesPage } from "./pages/finance/FinancePlaceholders";
 import { ContractsPage } from "./pages/legal/LegalPlaceholders";
