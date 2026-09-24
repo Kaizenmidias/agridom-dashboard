@@ -104,6 +104,7 @@ export const automationsAPI = {
   pause: (id: number) => request<AutomationSummary>(`/${id}/pause`, { method: "POST" }),
   activate: (id: number) => request<AutomationSummary>(`/${id}/activate`, { method: "POST" }),
   archive: (id: number) => request<AutomationSummary>(`/${id}/archive`, { method: "POST" }),
+  remove: (id: number) => request<{ id: number; status: "deleted" | "archived"; deletion_mode: "hard_delete" | "soft_delete" }>(`/${id}`, { method: "DELETE" }),
   runs: (id: number) => request<{ runs: AutomationRun[] }>(`/${id}/runs`),
   allRuns: (page = 1) => requestAt<{ runs: AutomationRun[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }>("automation-runs", `?page=${page}&page_size=25`),
   getRun: (id: number) => requestAt<AutomationRun & { steps: unknown[]; jobs: unknown[] }>("automation-runs", `/${id}`),

@@ -279,6 +279,33 @@ async function transitionAutomation(userId, automationId, transition) {
   });
 }
 
+async function deleteAutomation(userId, automationId) {
+  return withTransaction(async (connection) => {
+    const automation = await ownedAutomation(connection, automationId, userId, true);
+    if (!automation) throw new AutomationError(404, 'Automacao nao encontrada.');
+
+    const [runRows] = await connection.execute(
+      'SELECT COUNT(*) AS total FROM automation_runs WHERE automation_id = ?',
+      [automationId]
+    );
+    const hasExecutionHistory = Number(runRows[0]?.total || 0) > 0;
+
+    if (hasExecutionHistory) {
+      if (automation.status !== 'archived') {
+        await connection.execute("UPDATE automations SET status = 'archived', updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [userId, automationId]);
+        await writeAudit(connection, automationId, userId, 'automation.deleted', { mode: 'soft_delete', preserved_execution_history: true });
+      }
+      return { ...automation, status: 'archived', deletion_mode: 'soft_delete' };
+    }
+
+    await connection.execute('UPDATE automations SET active_version_id = NULL WHERE id = ?', [automationId]);
+    await connection.execute('DELETE FROM automation_audit_logs WHERE automation_id = ?', [automationId]);
+    await connection.execute('DELETE FROM automation_versions WHERE automation_id = ?', [automationId]);
+    await connection.execute('DELETE FROM automations WHERE id = ? AND owner_user_id = ?', [automationId, userId]);
+    return { id: Number(automationId), status: 'deleted', deletion_mode: 'hard_delete' };
+  });
+}
+
 async function listRuns(userId, automationId) {
   const [rows] = await getPool().execute(
     `SELECT ar.* FROM automation_runs ar
@@ -333,6 +360,7 @@ module.exports = {
   updateDraftVersion,
   publishVersion,
   transitionAutomation,
+  deleteAutomation,
   listRuns,
   listAllRuns,
   getRun,

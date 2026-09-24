@@ -12,6 +12,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Trash2,
   Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -184,6 +185,18 @@ export function AutomationsPage() {
           ? actionError.message
           : "Não foi possível atualizar a automação.",
       );
+    }
+  };
+
+  const removeAutomation = async () => {
+    if (!deleteTarget) return;
+    try {
+      await automationsAPI.remove(deleteTarget.id);
+      setItems((current) => current.filter((entry) => entry.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      toast.success("AutomaÃ§Ã£o excluÃ­da.");
+    } catch {
+      toast.error("NÃ£o foi possÃ­vel excluir a automaÃ§Ã£o.");
     }
   };
 
@@ -366,11 +379,12 @@ export function AutomationsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  title="Arquivar"
-                                  onClick={() => setDeleteTarget(item)}
+                                  title="Excluir automaÃ§Ã£o"
+                                  aria-label="Excluir automaÃ§Ã£o"
+                                  onClick={(event) => { event.stopPropagation(); setDeleteTarget(item); }}
                                   disabled={!isAdmin}
                                 >
-                                  <Archive className="h-4 w-4" />
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                               ) : null}
                             </div>
@@ -447,12 +461,12 @@ export function AutomationsPage() {
           <DialogHeader>
             <DialogTitle>Excluir automação?</DialogTitle>
             <DialogDescription>
-              {deleteTarget?.name || "Esta automação"} será arquivada e removida da lista padrão. O histórico de execuções será preservado.
+              Tem certeza de que deseja excluir “{deleteTarget?.name || "esta automação"}”? Essa ação não pode ser desfeita.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => { if (deleteTarget) void runAction(deleteTarget, "archive"); setDeleteTarget(null); }}>Excluir automação</Button>
+            <Button variant="destructive" onClick={() => void removeAutomation()}>Excluir automação</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

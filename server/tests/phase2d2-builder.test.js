@@ -8,6 +8,7 @@ const { ACTION_CATALOG, ACTION_TYPES, STEP_TYPES } = require('../services/automa
 const builder = fs.readFileSync(path.join(__dirname, '../../src/components/automations/AutomationBuilder.tsx'), 'utf8');
 const repository = fs.readFileSync(path.join(__dirname, '../services/automation-repository.js'), 'utf8');
 const routes = fs.readFileSync(path.join(__dirname, '../routes/automations.js'), 'utf8');
+const repositoryService = fs.readFileSync(path.join(__dirname, '../services/automation-repository.js'), 'utf8');
 
 test('2D.2 accepts terminal finish nodes and unit-based waits', () => {
   assert.ok(STEP_TYPES.includes('finish'));
@@ -80,7 +81,7 @@ test('2E.1.3 persists the trigger connection and rejects disconnected new graphs
   assert.match(builder, /next: trigger \? edges\.find/);
   assert.match(builder, /onEdgesChange=\{handleEdgesChange\}/);
   assert.match(builder, /onReconnect=\{onReconnect\}/);
-  assert.match(builder, /Remover conexão/);
+  assert.match(builder, /onEdgeClick=/);
   assert.match(builder, /Desconectar/);
 
   const disconnected = validateAutomationDefinition({
@@ -106,4 +107,16 @@ test('2E.1.3 archives automations from the default list without deleting history
   assert.match(routes, /\['pause', 'pause'\], \['activate', 'activate'\], \['archive', 'archive'\]/);
   assert.match(routes, /transitionAutomation\(req\.userId, automationId, transition\)/);
   assert.match(routes, /requireCommercialAdmin/);
+});
+
+test('2E.1.4 removes only the clicked edge and exposes safe deletion', () => {
+  assert.match(builder, /onEdgeClick=\{\(_event, edge\) => \{ if \(props\.readOnly\) return; remember\(\); setEdges\(\(current\) => current\.filter\(\(item\) => item\.id !== edge\.id\)\);/);
+  assert.match(builder, /onReconnect=\{onReconnect\}/);
+  assert.match(builder, /handleEdgesChange/);
+  assert.match(builder, /setSelectedEdgeId\(null\)/);
+  assert.match(routes, /automationsRouter\.delete\('\/:id', requireCommercialAdmin/);
+  assert.match(routes, /deleteAutomation\(req\.userId, automationId\)/);
+  assert.match(repositoryService, /SELECT COUNT\(\*\) AS total FROM automation_runs/);
+  assert.match(repositoryService, /mode: 'soft_delete'/);
+  assert.match(repositoryService, /DELETE FROM automation_versions/);
 });

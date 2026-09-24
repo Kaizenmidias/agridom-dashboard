@@ -14,6 +14,7 @@ const {
   updateDraftVersion,
   publishVersion,
   transitionAutomation,
+  deleteAutomation,
   listRuns,
   listAllRuns,
   getRun,
@@ -187,6 +188,16 @@ for (const [path, transition] of [['pause', 'pause'], ['activate', 'activate'], 
     }
   });
 }
+
+automationsRouter.delete('/:id', requireCommercialAdmin, async (req, res) => {
+  const automationId = parseId(req.params.id);
+  if (!automationId) return res.status(400).json({ error: 'ID da automacao invalido.' });
+  try {
+    res.json(await deleteAutomation(req.userId, automationId));
+  } catch (error) {
+    handleError(res, error, 'Nao foi possivel excluir a automacao.');
+  }
+});
 
 automationsRouter.get('/:id/runs', async (req, res) => {
   const automationId = parseId(req.params.id);

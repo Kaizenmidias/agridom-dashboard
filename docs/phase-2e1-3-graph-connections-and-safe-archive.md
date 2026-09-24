@@ -19,9 +19,12 @@ alterado.
 
 ## Exclusao segura de automacoes
 
-`Excluir automacao` usa o status existente `archived`. Nenhuma linha e
-apagada: versoes, auditoria, execucoes e jobs permanecem disponiveis para
-consulta. Automacoes arquivadas deixam de aparecer na listagem padrao.
+`Excluir automacao` usa `DELETE /api/automations/:id` e decide dentro de uma
+transacao. Quando nao existe nenhum run, a automacao e removida fisicamente
+junto com seus logs, versoes e configuracao dependentes, respeitando as FKs.
+Quando existe historico de execucao, o status existente `archived` e usado
+internamente: nenhuma versao, auditoria, execucao ou job e apagado. Em ambos
+os casos a automacao deixa de aparecer na listagem padrao.
 
 O backend continua exigindo propriedade da automacao e permissao comercial de
 administrador para a operacao. O matcher considera apenas automacoes ativas,
