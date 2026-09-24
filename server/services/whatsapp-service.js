@@ -65,6 +65,16 @@ function extractInbound(payload) {
   return { remoteJid, externalMessageId, externalSenderId: key.participant || remoteJid, phone: normalizePhone(remoteJid), fromMe, isGroup, isBroadcast, text: media.caption || extractText(message), messageType: media.type, media: { ...media, key: { id: externalMessageId, remoteJid, fromMe, participant: key.participant || null } }, quoted, occurredAt: timestamp > 0 ? new Date(timestamp * 1000) : new Date(), pushName: String(data?.pushName || data?.sender?.pushName || '').trim() || null };
 }
 
+function extractDeliveryStatus(payload) {
+  const data = payload?.data || payload;
+  const raw = data?.status || data?.update?.status || data?.messageUpdate?.status || data?.ack;
+  const value = String(raw || '').toLowerCase();
+  if (['read', 'seen', 'read_by_recipient'].includes(value) || raw === 4) return 'read';
+  if (['delivered', 'delivery', 'delivered_to_recipient'].includes(value) || raw === 3) return 'delivered';
+  if (['sent', 'server_ack', 'serverack'].includes(value) || raw === 2) return 'sent';
+  return null;
+}
+
 async function loadEvolutionConfig(connection, account) {
   const [rows] = await connection.execute("SELECT * FROM integration_providers WHERE id = ? AND provider = 'evolution' LIMIT 1", [account.integration_provider_id]);
   const row = rows[0];
@@ -120,7 +130,13 @@ async function downloadInboundMedia(connection, account, parsed) {
 async function processWebhookEvent(connection, event) {
   const account = event.communication_account_id ? (await connection.execute('SELECT * FROM communication_accounts WHERE id = ? AND archived_at IS NULL FOR UPDATE', [event.communication_account_id]))[0][0] : null;
   if (!account) throw new Error('WHATSAPP_ACCOUNT_NOT_FOUND');
-  const parsed = extractInbound(parseJson(event.payload));
+  const payload = parseJson(event.payload);
+  const parsed = extractInbound(payload);
+  if (String(event.event_type || '').toLowerCase().includes('messages.update')) {
+    const deliveryStatus = extractDeliveryStatus(payload);
+    if (deliveryStatus && parsed.externalMessageId) await connection.execute('UPDATE communication_messages SET delivery_status = ?, updated_at = CURRENT_TIMESTAMP WHERE communication_account_id = ? AND external_message_id = ?', [deliveryStatus, account.id, parsed.externalMessageId]);
+    return { ignored: true, reason: deliveryStatus ? 'delivery_status' : 'unsupported_status' };
+  }
   if (!parsed.externalMessageId || parsed.isGroup || parsed.isBroadcast || !parsed.phone) return { ignored: true, reason: parsed.isGroup ? 'group' : parsed.isBroadcast ? 'broadcast' : 'missing_sender' };
   const lead = await findOrCreateLead(connection, account, parsed.phone, parsed.pushName);
   const direction = parsed.fromMe ? 'outbound' : 'inbound';
@@ -202,4 +218,4 @@ async function sendWhatsAppMessage(connection, options) { return sendWhatsAppCon
 
 async function sendWhatsAppMedia(connection, options) { return sendWhatsAppContent(connection, options); }
 
-module.exports = { normalizePhone, extractInbound, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };
+module.exports = { normalizePhone, extractInbound, extractDeliveryStatus, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };

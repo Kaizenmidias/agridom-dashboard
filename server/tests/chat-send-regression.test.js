@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { EvolutionWhatsAppProvider, providerError } = require('../services/evolution-whatsapp-provider');
 const { sniffMime } = require('../services/chat-media');
-const { extractInbound } = require('../services/whatsapp-service');
+const { extractInbound, extractDeliveryStatus } = require('../services/whatsapp-service');
 const { getMediaRange, validateMedia, resolveStoragePath } = require('../services/chat-media');
 
 const root = path.resolve(__dirname, '../..');
@@ -65,6 +65,12 @@ test('chat media protects ranges and generated storage paths', () => {
   assert.equal(getMediaRange('bytes=100-101', 100), 'invalid');
   assert.throws(() => resolveStoragePath('../secrets.txt'), /Arquivo de midia invalido/);
   assert.throws(() => validateMedia('image', 'application/pdf', 10), /Formato de arquivo/);
+});
+
+test('Evolution delivery updates map only known provider states', () => {
+  assert.equal(extractDeliveryStatus({ data: { key: { id: 'm1' }, update: { status: 'DELIVERY' } } }), 'delivered');
+  assert.equal(extractDeliveryStatus({ data: { key: { id: 'm1' }, status: 'READ' } }), 'read');
+  assert.equal(extractDeliveryStatus({ data: { key: { id: 'm1' }, status: 'unknown' } }), null);
 });
 
 test('chat send keeps the explicit guards for missing conversation, text and connection', () => {
