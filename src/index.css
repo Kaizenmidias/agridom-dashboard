@@ -187,6 +187,9 @@
 }
 
 @layer utilities {
+  button[aria-label="Adicionar documento"] {
+    display: none;
+  }
   /* Custom scrollbar */
   .custom-scrollbar {
     @apply scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent hover:scrollbar-thumb-primary/30;

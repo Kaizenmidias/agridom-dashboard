@@ -15,6 +15,7 @@ const webhookSource = fs.readFileSync(path.join(root, 'server/routes/webhooks.js
 const chatMessageSource = fs.readFileSync(path.join(root, 'src/components/commercial/ChatMessage.tsx'), 'utf8');
 const chatsPageSource = fs.readFileSync(path.join(root, 'src/pages/commercial/ChatsPage.tsx'), 'utf8');
 const composerSource = fs.readFileSync(path.join(root, 'src/components/commercial/MessageComposer.tsx'), 'utf8');
+const indexCss = fs.readFileSync(path.join(root, 'src/index.css'), 'utf8');
 
 test('chat send exposes a safe diagnostic code while preserving the retry contract', () => {
   assert.match(routeSource, /isForeignKeyError = error\?\.code === 'ER_NO_REFERENCED_ROW_2'/);
@@ -154,4 +155,25 @@ test('CHAT-3A composer inserts Unicode emoji at the current cursor position', ()
   assert.match(composerSource, /setSelectionRange/);
   assert.match(composerSource, /Adicionar emoji/);
   assert.match(composerSource, /emojiGroups/);
+});
+
+test('CHAT-3B expands emoji categories and keeps one visible attachment entry point', () => {
+  for (const category of ['Smileys e pessoas', 'Animais e natureza', 'Comidas e bebidas', 'Atividades', 'Viagens e lugares', 'Objetos', 'Símbolos', 'Bandeiras']) assert.match(composerSource, new RegExp(category));
+  assert.match(composerSource, /chat_recent_emojis/);
+  assert.match(composerSource, /mediaAccept = .*\.pdf/);
+  assert.match(indexCss, /button\[aria-label="Adicionar documento"\][^{]*\{\s*display: none/);
+});
+
+test('CHAT-3B renders inbound stickers through authenticated WebP-capable media', () => {
+  assert.match(serviceSource, /\['stickerMessage', 'sticker'\]/);
+  assert.match(chatMessageSource, /"image", "video", "audio", "document", "sticker"/);
+  assert.match(chatMessageSource, /type === "sticker" \? <img src=\{objectUrl/);
+});
+
+test('CHAT-3B panel edits shared lead budget and labels without parallel storage', () => {
+  assert.match(chatsPageSource, /Valor do orçamento/);
+  assert.match(chatsPageSource, /commercialEntitiesAPI\.setLeadLabels/);
+  assert.match(chatsPageSource, /Responsável pelo atendimento/);
+  assert.match(chatsPageSource, /SharedContentDialog/);
+  assert.doesNotMatch(chatsPageSource, /chat_budget|conversation_budget/);
 });
