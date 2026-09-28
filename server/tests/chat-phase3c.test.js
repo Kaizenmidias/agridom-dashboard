@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { EvolutionWhatsAppProvider } = require('../services/evolution-whatsapp-provider');
-const { extractInbound, extractDeliveryStatus, deliveryUpdates, formatWhatsAppParticipantPhone } = require('../services/whatsapp-service');
+const { extractInbound, extractDeliveryStatus, deliveryUpdates, formatWhatsAppParticipantPhone, participantContractSummary } = require('../services/whatsapp-service');
 
 const root = path.resolve(__dirname, '../..');
 const migration = fs.readFileSync(path.join(root, 'database/migrations/20260928_chat_3c_whatsapp_metadata.sql'), 'utf8');
@@ -90,4 +90,18 @@ test('CHAT-3C participant details remain safe and presentation-ready', () => {
   assert.match(chats, /Buscar participante/);
   assert.match(chats, /profilePictureUrl/);
   assert.doesNotMatch(chats, /@s\.whatsapp\.net/);
+});
+
+test('CHAT-3C preserves explicit PN mappings and does not convert LIDs to phones', () => {
+  const lid = participantContractSummary({ id: 'lid-fixture@lid', admin: 'admin' });
+  assert.equal(lid.identifierType, 'lid');
+  assert.equal(lid.hasPhoneMapping, false);
+  const mapped = participantContractSummary({ id: 'lid-fixture@lid', participantAlt: '5513999999999@s.whatsapp.net', name: 'Contato fixture', imgUrl: 'https://cdn.example/avatar' });
+  assert.equal(mapped.hasPhoneMapping, true);
+  assert.equal(mapped.hasAvatarCandidate, true);
+  const parsed = extractInbound({ data: { key: { id: 'group-fixture', remoteJid: 'group-fixture@g.us', participant: 'lid-fixture@lid', participantAlt: '5513999999999@s.whatsapp.net' }, pushName: 'Contato fixture', message: { conversation: 'Mensagem fixture' } } });
+  assert.equal(parsed.externalSenderId, '5513999999999@s.whatsapp.net');
+  assert.equal(parsed.participantId, 'lid-fixture@lid');
+  assert.equal(parsed.participantAlt, '5513999999999@s.whatsapp.net');
+  assert.match(whatsappService, /enrichGroupParticipantFromMessage/);
 });

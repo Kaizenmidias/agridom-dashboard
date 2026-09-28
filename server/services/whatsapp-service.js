@@ -61,6 +61,8 @@ function extractInbound(payload) {
   const key = data?.key || {};
   const remoteJid = String(key.remoteJid || data?.remoteJid || '');
   const externalMessageId = String(key.id || data?.id || '').trim();
+  const participantId = String(key.participant || data?.participant || '').trim();
+  const participantAlt = String(key.participantAlt || data?.participantAlt || data?.remoteJidAlt || '').trim() || null;
   const isGroup = remoteJid.endsWith('@g.us');
   const isBroadcast = remoteJid.endsWith('@broadcast') || remoteJid === 'status@broadcast';
   const fromMe = Boolean(key.fromMe || data?.fromMe);
@@ -69,7 +71,13 @@ function extractInbound(payload) {
   const media = mediaFromMessage(message);
   const contextInfo = media.content?.contextInfo || Object.values(media.content || {}).find((value) => value && typeof value === 'object' && value.contextInfo)?.contextInfo || data?.contextInfo || data?.message?.contextInfo || null;
   const quoted = contextInfo?.quotedMessage ? { text: extractText(contextInfo.quotedMessage), messageType: mediaFromMessage(contextInfo.quotedMessage).type, externalMessageId: contextInfo.stanzaId || null, participant: contextInfo.participant || contextInfo.remoteJid || null } : null;
-  return { remoteJid, externalMessageId, externalSenderId: key.participant || remoteJid, phone: normalizePhone(remoteJid), fromMe, isGroup, isBroadcast, text: media.caption || extractText(message), messageType: media.type, media: { ...media, key: { id: externalMessageId, remoteJid, fromMe, participant: key.participant || null } }, providerMessage: { key: { id: externalMessageId, remoteJid, fromMe, participant: key.participant || null }, message }, quoted, occurredAt: timestamp > 0 ? new Date(timestamp * 1000) : new Date(), pushName: String(data?.pushName || data?.sender?.pushName || '').trim() || null };
+  const canonicalParticipantId = /@s\.whatsapp\.net$/i.test(String(participantAlt || '')) ? participantAlt : participantId || remoteJid;
+  return { remoteJid, externalMessageId, externalSenderId: canonicalParticipantId, participantId, participantAlt, phone: normalizePhone(remoteJid), fromMe, isGroup, isBroadcast, text: media.caption || extractText(message), messageType: media.type, media: { ...media, key: { id: externalMessageId, remoteJid, fromMe, participant: participantId || null, participantAlt } }, providerMessage: { key: { id: externalMessageId, remoteJid, fromMe, participant: participantId || null, participantAlt }, message }, quoted, occurredAt: timestamp > 0 ? new Date(timestamp * 1000) : new Date(), pushName: String(data?.pushName || data?.sender?.pushName || '').trim() || null };
+}
+
+function participantContractSummary(participant) {
+  const identifier = String(participant?.id || participant?.jid || participant?.participant || '');
+  return { fields: Object.keys(participant || {}).sort(), identifierType: identifier.endsWith('@lid') ? 'lid' : identifier.endsWith('@s.whatsapp.net') ? 'phone_jid' : identifier.includes('@') ? 'other_jid' : 'plain', hasDisplayName: Boolean(participant?.name || participant?.notify || participant?.pushName || participant?.verifiedName), hasPhoneMapping: Boolean(participant?.phoneNumber || participant?.number || participant?.participantAlt || participant?.remoteJidAlt), hasAvatarCandidate: Boolean(participant?.imgUrl || participant?.profilePicUrl || participant?.profilePictureUrl), role: participant?.admin || null };
 }
 
 function extractDeliveryStatus(payload) {
@@ -151,6 +159,15 @@ async function persistMessage(connection, { account, conversation, lead, event, 
   return { duplicate: false, id: Number(result.insertId) };
 }
 
+async function enrichGroupParticipantFromMessage(connection, conversation, parsed) {
+  if (!parsed.isGroup || !parsed.externalSenderId || parsed.externalSenderId === parsed.remoteJid) return;
+  const phoneIdentifier = parsed.participantAlt && /@s\.whatsapp\.net$/i.test(parsed.participantAlt) ? parsed.participantAlt : parsed.externalSenderId;
+  const phone = /@lid$/i.test(phoneIdentifier) ? null : formatWhatsAppParticipantPhone(phoneIdentifier);
+  const name = parsed.pushName || null;
+  await connection.execute(`INSERT INTO conversation_participants (conversation_id, external_participant_id, display_name, phone, participant_role) VALUES (?, ?, ?, ?, 'participant')
+    ON DUPLICATE KEY UPDATE display_name = COALESCE(VALUES(display_name), display_name), phone = COALESCE(VALUES(phone), phone), updated_at = CURRENT_TIMESTAMP`, [conversation.id, parsed.externalSenderId.slice(0, 191), name, phone]);
+}
+
 async function downloadInboundMedia(connection, account, parsed) {
   if (!parsed.media || !['image', 'audio', 'video', 'document', 'sticker'].includes(parsed.messageType)) return { stored: null, status: null };
   const { provider } = await loadEvolutionConfig(connection, account);
@@ -174,6 +191,7 @@ async function processWebhookEvent(connection, event) {
   const lead = parsed.isGroup ? null : await findOrCreateLead(connection, account, parsed.phone, parsed.pushName);
   const direction = parsed.fromMe ? 'outbound' : 'inbound';
   const conversation = await getOrCreateConversation(connection, account, parsed.remoteJid, lead?.id || null, direction, parsed.occurredAt, { isGroup: parsed.isGroup });
+  await enrichGroupParticipantFromMessage(connection, conversation, parsed);
   let media = null;
   let mediaStatus = null;
   if (parsed.messageType !== 'text' && parsed.messageType !== 'unknown') {
@@ -254,4 +272,4 @@ async function sendWhatsAppMessage(connection, options) { return sendWhatsAppCon
 
 async function sendWhatsAppMedia(connection, options) { return sendWhatsAppContent(connection, options); }
 
-module.exports = { normalizePhone, formatWhatsAppParticipantPhone, extractInbound, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };
+module.exports = { normalizePhone, formatWhatsAppParticipantPhone, extractInbound, participantContractSummary, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };

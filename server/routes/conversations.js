@@ -3,7 +3,7 @@ const multer = require('multer');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess } = require('../middleware/commercial-access');
 const { getPool } = require('../config/database');
-const { sendWhatsAppMessage, sendWhatsAppMedia, loadEvolutionConfig, formatWhatsAppParticipantPhone } = require('../services/whatsapp-service');
+const { sendWhatsAppMessage, sendWhatsAppMedia, loadEvolutionConfig, formatWhatsAppParticipantPhone, participantContractSummary } = require('../services/whatsapp-service');
 const { sendFile, LIMITS } = require('../services/chat-media');
 
 const router = express.Router();
@@ -19,11 +19,13 @@ const safeProviderError = (error) => ({ providerStatus: error?.providerStatus ||
 const normalizeParticipants = (value) => {
   const list = Array.isArray(value) ? value : [];
   return list.slice(0, 256).map((participant, index) => {
-    const externalId = String(participant?.id || participant?.jid || participant?.participant || '').trim().slice(0, 191);
+    const externalId = String(participant?.id || participant?.jid || participant?.participant || participant?.remoteJid || '').trim().slice(0, 191);
     const name = String(participant?.name || participant?.notify || participant?.pushName || participant?.verifiedName || '').trim().slice(0, 191) || null;
-    const phone = formatWhatsAppParticipantPhone(externalId);
+    const mappedIdentifier = participant?.phoneNumber || participant?.number || participant?.participantAlt || participant?.remoteJidAlt || null;
+    const phone = mappedIdentifier && !String(mappedIdentifier).endsWith('@lid') ? formatWhatsAppParticipantPhone(mappedIdentifier) : String(externalId).endsWith('@s.whatsapp.net') ? formatWhatsAppParticipantPhone(externalId) : null;
+    const profilePictureUrl = participant?.imgUrl || participant?.profilePicUrl || participant?.profilePictureUrl || null;
     const role = participant?.admin === 'superadmin' ? 'superadmin' : participant?.admin === 'admin' ? 'admin' : 'participant';
-    return { externalId, name, phone, role };
+    return { externalId, name, phone, profilePictureUrl, role };
   }).filter((participant) => participant.externalId);
 };
 
@@ -85,6 +87,7 @@ router.post('/:id/profile/refresh', async (req, res) => {
         console.warn('[WhatsApp] participantes do grupo indisponiveis', { conversationId: Number(conversation.id), operation: 'group_participants', ...safeProviderError(error) });
       }
       const normalizedParticipants = normalizeParticipants(groupParticipants);
+      console.info('[WhatsApp] contrato de participantes do grupo', { conversationId: Number(conversation.id), count: groupParticipants.length, participants: groupParticipants.slice(0, 8).map(participantContractSummary) });
       participantCount = normalizedParticipants.length;
       const avatarCandidates = normalizedParticipants.slice(0, 8);
       const enriched = await Promise.all(avatarCandidates.map(async (participant) => {
