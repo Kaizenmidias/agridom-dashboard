@@ -52,7 +52,7 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', requireCommercialAdmin, async (req, res) => {
-  const name = clean(req.body?.name, 191); const prompt = clean(req.body?.system_prompt); const model = clean(req.body?.model, 120) || 'gpt-4o-mini';
+  const name = clean(req.body?.name, 191); const prompt = clean(req.body?.system_prompt); const model = clean(req.body?.model, 120);
   if (!name || !prompt) return res.status(400).json({ error: 'Nome e instrucoes do agente sao obrigatorios.' });
   try {
     if (!['openai', 'gemini'].includes(clean(req.body?.provider, 80)) || !clean(req.body?.model, 120)) return res.status(400).json({ error: 'Selecione um provedor e modelo validos.' });
@@ -97,6 +97,9 @@ router.post('/:id/status', requireCommercialAdmin, async (req, res) => { const a
 router.delete('/:id', requireCommercialAdmin, async (req, res) => { const agentId = idOf(req.params.id); if (!agentId) return res.status(400).json({ error: 'Agente invalido.' }); try { await query("UPDATE ai_agents SET status = 'archived', archived_at = CURRENT_TIMESTAMP WHERE id = ?", [agentId]); await audit(agentId, req.userId, 'archived'); res.json({ archived: true }); } catch (error) { res.status(500).json({ error: 'Nao foi possivel arquivar o agente.' }); } });
 
 router.get('/:id/usage', async (req, res) => { const agentId = idOf(req.params.id); const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100); try { const rows = await query('SELECT id, provider, model, operation, origin, input_tokens, output_tokens, total_tokens, cost_amount, cost_currency, created_at FROM ai_agent_usage WHERE agent_id = ? ORDER BY id DESC LIMIT ?', [agentId, limit]); res.json({ usage: rows }); } catch (error) { res.status(500).json({ error: 'Nao foi possivel carregar o uso do agente.' }); } });
+
+router.post('/:id/bindings', requireCommercialAdmin, async (req, res) => { const agentId = idOf(req.params.id); const accountId = idOf(req.body?.communication_account_id); if (!agentId || !accountId) return res.status(400).json({ error: 'Agente ou conta invalida.' }); try { const accounts = await query("SELECT id FROM communication_accounts WHERE id = ? AND status = 'connected' AND archived_at IS NULL", [accountId]); if (!accounts[0]) return res.status(400).json({ error: 'A conta precisa estar conectada.' }); const result = await query("INSERT INTO ai_agent_channel_bindings (agent_id, communication_account_id, mode, status) VALUES (?, ?, 'inbound', 'active')", [agentId, accountId]); await audit(agentId, req.userId, 'channel_bound', { communicationAccountId: accountId }); res.status(201).json({ bindingId: result.insertId }); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Este numero ja possui um agente de IA principal vinculado.' }); res.status(500).json({ error: 'Nao foi possivel vincular o canal.' }); } });
+router.delete('/:id/bindings/:bindingId', requireCommercialAdmin, async (req, res) => { const agentId = idOf(req.params.id); const bindingId = idOf(req.params.bindingId); try { await query('DELETE FROM ai_agent_channel_bindings WHERE id = ? AND agent_id = ?', [bindingId, agentId]); await audit(agentId, req.userId, 'channel_unbound', { bindingId }); res.json({ removed: true }); } catch (error) { res.status(500).json({ error: 'Nao foi possivel desvincular o canal.' }); } });
 
 router.post('/:id/test', async (req, res) => {
   const agentId = idOf(req.params.id); if (!agentId) return res.status(400).json({ error: 'Agente invalido.' });
