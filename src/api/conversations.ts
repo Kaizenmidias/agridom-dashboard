@@ -5,7 +5,7 @@ export type ConversationDetail = Conversation & { ai_agent_id?: number | null; l
 export type WhatsAppProfile = { profilePictureUrl: string | null; displayName: string | null; participantCount: number | null; participants?: Array<{ name: string | null; phone?: string | null; profilePictureUrl?: string | null; role: string }>; cached?: boolean; unavailable?: boolean };
 export type ConversationActivity = { id: number; title: string; description?: string | null; type: string; created_at: string; actor_name?: string | null };
 export type SharedConversationItem = Pick<CommunicationMessage, "id" | "direction" | "body_text" | "message_type" | "media_mime_type" | "media_filename" | "media_size_bytes" | "media_duration_seconds" | "media_width" | "media_height" | "created_at"> & { url?: string; domain?: string; excerpt?: string };
-const base = () => import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/api\/?$/, '').replace(/\/+$/, '') : 'http://localhost:3001';
+const base = () => import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/api\/?$/, '').replace(/\/+$/, '');
 export const conversationMediaUrl = (conversationId: number, messageId: number) => `${base()}/api/conversations/${conversationId}/messages/${messageId}/media`;
 class ConversationsApiError extends Error {
   code?: string;

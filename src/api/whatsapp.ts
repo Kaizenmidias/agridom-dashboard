@@ -9,7 +9,7 @@ export type WhatsAppAccount = {
 };
 
 type WhatsAppConfig = { status: string; configured: boolean; metadata: { baseUrl: string; timeout: number; apiKeyMasked?: string }; lastError?: string | null };
-const origin = () => import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/api\/?$/, '').replace(/\/+$/, '') : 'http://localhost:3001';
+const origin = () => import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/api\/?$/, '').replace(/\/+$/, '');
 const request = async <T>(path: string, options: RequestInit = {}) => {
   const response = await fetch(`${origin()}${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...(localStorage.getItem('token') ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {}), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => ({}));

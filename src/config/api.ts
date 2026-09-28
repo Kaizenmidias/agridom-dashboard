@@ -12,7 +12,7 @@ const resolveBackendBaseUrl = () => {
   }
 
   if (import.meta.env.DEV) {
-    return 'http://localhost:3001/api';
+  return '/api';
   }
 
   return `${normalizeBaseUrl(window.location.origin)}/api`;
@@ -32,4 +32,3 @@ export const buildApiUrl = (endpoint: string): string => {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
   return `${API_BASE_URL}/${cleanEndpoint}`;
 };
-

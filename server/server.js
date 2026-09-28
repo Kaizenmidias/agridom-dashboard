@@ -89,12 +89,12 @@ app.get('/api/health', async (req, res) => {
     // Usar testConnection que jÃ¡ estÃ¡ implementada corretamente
     const isConnected = await testConnection();
     if (isConnected) {
-      res.json({ status: 'OK', message: 'ConexÃ£o com banco de dados funcionando' });
+      res.json({ status: 'OK', message: 'Conexão com banco de dados funcionando' });
     } else {
-      res.status(500).json({ status: 'ERROR', message: 'Erro na conexÃ£o com banco de dados' });
+      res.status(500).json({ status: 'ERROR', message: 'Erro na conexão com banco de dados' });
     }
   } catch (error) {
-    res.status(500).json({ status: 'ERROR', message: 'Erro na conexÃ£o com banco de dados' });
+    res.status(500).json({ status: 'ERROR', message: 'Erro na conexão com banco de dados' });
   }
 });
 
