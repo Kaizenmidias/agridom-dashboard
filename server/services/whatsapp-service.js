@@ -66,14 +66,38 @@ function extractInbound(payload) {
 }
 
 function extractDeliveryStatus(payload) {
-  const data = payload?.data || payload;
+  const data = Array.isArray(payload?.data) ? payload.data[0] : payload?.data || payload;
   const raw = data?.status || data?.update?.status || data?.messageUpdate?.status || data?.ack;
   const value = String(raw || '').toLowerCase();
   if (['read', 'seen', 'read_by_recipient'].includes(value) || raw === 4) return 'read';
-  if (['delivered', 'delivery', 'delivered_to_recipient'].includes(value) || raw === 3) return 'delivered';
+  if (['delivered', 'delivery', 'delivery_ack', 'delivered_to_recipient'].includes(value) || raw === 3) return 'delivered';
   if (['sent', 'server_ack', 'serverack'].includes(value) || raw === 2) return 'sent';
   if (['failed', 'error'].includes(value) || raw === -1 || raw === 5) return 'failed';
   return null;
+}
+
+function deliveryUpdates(payload) {
+  const rawItems = Array.isArray(payload?.data) ? payload.data : [payload?.data || payload];
+  return rawItems.map((data) => ({
+    externalMessageId: String(data?.key?.id || data?.keyId || data?.messageId || data?.id || data?.update?.key?.id || '').trim(),
+    status: extractDeliveryStatus({ data }),
+  })).filter((update) => update.externalMessageId && update.status);
+}
+
+function receiptHash(value) { return crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 12); }
+
+async function updateDeliveryReceipt(connection, accountId, update) {
+  const [rows] = await connection.execute('SELECT id, direction, delivery_status FROM communication_messages WHERE communication_account_id = ? AND external_message_id = ? LIMIT 1', [accountId, update.externalMessageId]);
+  const message = rows[0];
+  if (!message || message.direction !== 'outbound') {
+    console.info('[WhatsApp] recibo sem mensagem outbound correspondente', { communicationAccountId: Number(accountId), externalMessageIdHash: receiptHash(update.externalMessageId), status: update.status, matched: false });
+    return false;
+  }
+  const current = String(message.delivery_status || '').toLowerCase();
+  const regresses = (current === 'read' && ['sent', 'delivered'].includes(update.status)) || (current === 'delivered' && update.status === 'sent');
+  if (!regresses) await connection.execute('UPDATE communication_messages SET delivery_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [update.status, message.id]);
+  console.info('[WhatsApp] recibo processado', { communicationAccountId: Number(accountId), messageId: Number(message.id), externalMessageIdHash: receiptHash(update.externalMessageId), previousStatus: current || null, status: regresses ? current : update.status, matched: true });
+  return true;
 }
 
 async function loadEvolutionConfig(connection, account) {
@@ -135,9 +159,9 @@ async function processWebhookEvent(connection, event) {
   const payload = parseJson(event.payload);
   const parsed = extractInbound(payload);
   if (String(event.event_type || '').toLowerCase().includes('messages.update')) {
-    const deliveryStatus = extractDeliveryStatus(payload);
-    if (deliveryStatus && parsed.externalMessageId) await connection.execute('UPDATE communication_messages SET delivery_status = ?, updated_at = CURRENT_TIMESTAMP WHERE communication_account_id = ? AND external_message_id = ?', [deliveryStatus, account.id, parsed.externalMessageId]);
-    return { ignored: true, reason: deliveryStatus ? 'delivery_status' : 'unsupported_status' };
+    const updates = deliveryUpdates(payload);
+    for (const update of updates) await updateDeliveryReceipt(connection, account.id, update);
+    return { ignored: true, reason: updates.length ? 'delivery_status' : 'unsupported_status' };
   }
   if (!parsed.externalMessageId || parsed.isBroadcast || (!parsed.isGroup && !parsed.phone)) return { ignored: true, reason: parsed.isBroadcast ? 'broadcast' : 'missing_sender' };
   const lead = parsed.isGroup ? null : await findOrCreateLead(connection, account, parsed.phone, parsed.pushName);
@@ -223,4 +247,4 @@ async function sendWhatsAppMessage(connection, options) { return sendWhatsAppCon
 
 async function sendWhatsAppMedia(connection, options) { return sendWhatsAppContent(connection, options); }
 
-module.exports = { normalizePhone, extractInbound, extractDeliveryStatus, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };
+module.exports = { normalizePhone, extractInbound, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };

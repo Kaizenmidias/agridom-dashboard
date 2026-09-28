@@ -15,6 +15,16 @@ const PROFILE_TTL_HOURS = 12;
 const validProfilePictureUrl = (value) => {
   try { const url = new URL(String(value || '')); return url.protocol === 'https:' ? url.toString() : null; } catch { return null; }
 };
+const safeProviderError = (error) => ({ providerStatus: error?.providerStatus || null, errorCode: String(error?.code || 'PROFILE_REFRESH_FAILED').replace(/[^A-Z0-9_]/gi, '_').slice(0, 80) });
+const normalizeParticipants = (value) => {
+  const list = Array.isArray(value) ? value : [];
+  return list.slice(0, 256).map((participant, index) => {
+    const externalId = String(participant?.id || participant?.jid || participant?.participant || '').trim().slice(0, 191);
+    const name = String(participant?.name || participant?.notify || participant?.pushName || '').trim().slice(0, 191) || `Participante ${index + 1}`;
+    const role = participant?.admin === 'superadmin' ? 'superadmin' : participant?.admin === 'admin' ? 'admin' : 'participant';
+    return { externalId, name, role };
+  }).filter((participant) => participant.externalId);
+};
 
 router.get('/', async (req, res) => {
   try {
@@ -59,10 +69,22 @@ router.post('/:id/profile/refresh', async (req, res) => {
     let participants = [];
     if (conversation.conversation_type === 'group') {
       const group = await provider.findGroup(conversation.external_instance_id, conversation.external_conversation_id);
-      profilePictureUrl = validProfilePictureUrl(group.profilePictureUrl);
+      try {
+        const picture = await provider.fetchProfilePicture(conversation.external_instance_id, conversation.external_conversation_id);
+        profilePictureUrl = validProfilePictureUrl(picture.profilePictureUrl) || validProfilePictureUrl(group.profilePictureUrl);
+      } catch (error) {
+        console.warn('[WhatsApp] avatar de grupo indisponivel', { conversationId: Number(conversation.id), operation: 'group_profile_picture', ...safeProviderError(error) });
+        profilePictureUrl = validProfilePictureUrl(group.profilePictureUrl);
+      }
       displayName = group.name || displayName;
-      participantCount = group.participants.length;
-      const normalizedParticipants = group.participants.slice(0, 256).map((participant) => ({ externalId: String(participant.id || participant.jid || '').slice(0, 191), name: String(participant.name || participant.notify || '').slice(0, 191) || null, role: participant.admin === 'superadmin' ? 'superadmin' : participant.admin === 'admin' ? 'admin' : 'participant' })).filter((participant) => participant.externalId);
+      let groupParticipants = [];
+      try {
+        groupParticipants = await provider.findGroupParticipants(conversation.external_instance_id, conversation.external_conversation_id);
+      } catch (error) {
+        console.warn('[WhatsApp] participantes do grupo indisponiveis', { conversationId: Number(conversation.id), operation: 'group_participants', ...safeProviderError(error) });
+      }
+      const normalizedParticipants = normalizeParticipants(groupParticipants);
+      participantCount = normalizedParticipants.length;
       participants = normalizedParticipants.map((participant) => ({ name: participant.name || 'Participante', role: participant.role === 'superadmin' ? 'Criador' : participant.role === 'admin' ? 'Administrador' : 'Participante' }));
       await getPool().execute('DELETE FROM conversation_participants WHERE conversation_id = ?', [conversation.id]);
       for (const participant of normalizedParticipants) await getPool().execute('INSERT INTO conversation_participants (conversation_id, external_participant_id, display_name, participant_role) VALUES (?, ?, ?, ?)', [conversation.id, participant.externalId, participant.name, participant.role]);
@@ -73,7 +95,7 @@ router.post('/:id/profile/refresh', async (req, res) => {
     }
     await getPool().execute('UPDATE conversations SET display_name = ?, profile_picture_url = ?, profile_picture_updated_at = UTC_TIMESTAMP(), participant_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [displayName, profilePictureUrl, participantCount, conversation.id]);
     res.json({ profilePictureUrl, displayName, participantCount, participants, cached: false });
-  } catch { res.json({ profilePictureUrl: null, displayName: null, participantCount: null, participants: [], unavailable: true }); }
+  } catch (error) { console.warn('[WhatsApp] atualizacao de perfil indisponivel', { conversationId: Number(req.params.id), operation: 'profile_refresh', ...safeProviderError(error) }); res.json({ profilePictureUrl: null, displayName: null, participantCount: null, participants: [], unavailable: true }); }
 });
 
 router.get('/:id/messages', async (req, res) => {

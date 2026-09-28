@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { EvolutionWhatsAppProvider } = require('../services/evolution-whatsapp-provider');
-const { extractInbound, extractDeliveryStatus } = require('../services/whatsapp-service');
+const { extractInbound, extractDeliveryStatus, deliveryUpdates } = require('../services/whatsapp-service');
 
 const root = path.resolve(__dirname, '../..');
 const migration = fs.readFileSync(path.join(root, 'database/migrations/20260928_chat_3c_whatsapp_metadata.sql'), 'utf8');
@@ -28,13 +28,16 @@ test('CHAT-3C centralizes truthful channel capabilities', () => {
 test('CHAT-3C provider uses official Evolution 2.3.7 profile and group routes', async () => {
   const provider = new EvolutionWhatsAppProvider({ baseUrl: 'https://evolution.example.com', apiKey: 'test-key' });
   const calls = [];
-  provider.request = async (method, requestPath, body) => { calls.push({ method, requestPath, body }); return requestPath.includes('fetchProfilePictureUrl') ? { profilePictureUrl: 'https://cdn.example.com/avatar.jpg' } : { subject: 'Equipe', participants: [{ id: 'masked' }] }; };
+  provider.request = async (method, requestPath, body) => { calls.push({ method, requestPath, body }); return requestPath.includes('fetchProfilePictureUrl') ? { profilePictureUrl: 'https://cdn.example.com/avatar.jpg' } : requestPath.includes('/participants/') ? [{ id: 'masked' }] : { subject: 'Equipe' }; };
   const profile = await provider.fetchProfilePicture('kaizen-main', '5511000000000');
   const group = await provider.findGroup('kaizen-main', '120000000000@g.us');
+  const participants = await provider.findGroupParticipants('kaizen-main', '120000000000@g.us');
   assert.equal(profile.profilePictureUrl, 'https://cdn.example.com/avatar.jpg');
   assert.equal(group.name, 'Equipe');
   assert.deepEqual(calls[0], { method: 'POST', requestPath: '/chat/fetchProfilePictureUrl/kaizen-main', body: { number: '5511000000000' } });
   assert.match(calls[1].requestPath, /^\/group\/findGroupInfos\/kaizen-main\?groupJid=/);
+  assert.match(calls[2].requestPath, /^\/group\/participants\/kaizen-main\?groupJid=/);
+  assert.deepEqual(participants, [{ id: 'masked' }]);
 });
 
 test('CHAT-3C detects groups without deriving a lead phone', () => {
@@ -52,6 +55,9 @@ test('CHAT-3C maps only real receipt states', () => {
   assert.equal(extractDeliveryStatus({ data: { status: 4 } }), 'read');
   assert.equal(extractDeliveryStatus({ data: { status: 5 } }), 'failed');
   assert.equal(extractDeliveryStatus({ data: { status: 'unknown' } }), null);
+  assert.equal(extractDeliveryStatus({ data: { status: 'SERVER_ACK' } }), 'sent');
+  assert.equal(extractDeliveryStatus({ data: { status: 'DELIVERY_ACK' } }), 'delivered');
+  assert.deepEqual(deliveryUpdates({ data: { messageId: 'real-id', status: 'READ' } }), [{ externalMessageId: 'real-id', status: 'read' }]);
   for (const label of ['Enviando', 'Enviado', 'Entregue', 'Lido', 'Falha ao enviar']) assert.match(chatMessage, new RegExp(label));
 });
 
@@ -60,7 +66,7 @@ test('CHAT-3C avatar cache is bounded, lazy and failure-safe', () => {
   assert.match(conversationsRoute, /profile_picture_updated_at < UTC_TIMESTAMP\(\) - INTERVAL/);
   assert.match(conversationsRoute, /profileRefreshes/);
   assert.match(conversationsRoute, /validProfilePictureUrl/);
-  assert.match(chats, /if \(!detail\?\.profile_picture_stale\) return/);
+  assert.match(chats, /refreshProfile\(detail\.id\)/);
   assert.match(chats, /AvatarFallback/);
   assert.doesNotMatch(chats, /apikey|apiKey/);
 });

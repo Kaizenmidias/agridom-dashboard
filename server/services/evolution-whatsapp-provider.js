@@ -107,8 +107,15 @@ class EvolutionWhatsAppProvider {
 
   async findGroup(instanceName, groupJid) {
     const data = await this.request('GET', `/group/findGroupInfos/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`);
-    const participants = Array.isArray(data.participants) ? data.participants : [];
-    return { name: data.subject || data.name || null, profilePictureUrl: data.pictureUrl || data.profilePictureUrl || null, participants };
+    const payload = data?.response || data?.data || data || {};
+    return { name: payload.subject || payload.name || null, profilePictureUrl: payload.pictureUrl || payload.profilePictureUrl || null };
+  }
+
+  async findGroupParticipants(instanceName, groupJid) {
+    const data = await this.request('GET', `/group/participants/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`);
+    const payload = data?.response || data?.data || data;
+    if (Array.isArray(payload)) return payload;
+    return Array.isArray(payload?.participants) ? payload.participants : [];
   }
 
   async logout(instanceName) {
