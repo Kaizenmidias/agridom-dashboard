@@ -100,6 +100,17 @@ class EvolutionWhatsAppProvider {
     return { base64: data.base64 || data.data?.base64 || data.message?.base64 || null, mimeType: data.mimetype || data.mimeType || data.data?.mimetype || data.data?.mimeType || null, filename: data.fileName || data.filename || data.data?.fileName || null, raw: data };
   }
 
+  async fetchProfilePicture(instanceName, number) {
+    const data = await this.request('POST', `/chat/fetchProfilePictureUrl/${encodeURIComponent(instanceName)}`, { number });
+    return { profilePictureUrl: data.profilePictureUrl || data.picture || data.url || null };
+  }
+
+  async findGroup(instanceName, groupJid) {
+    const data = await this.request('GET', `/group/findGroupInfos/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`);
+    const participants = Array.isArray(data.participants) ? data.participants : [];
+    return { name: data.subject || data.name || null, profilePictureUrl: data.pictureUrl || data.profilePictureUrl || null, participants };
+  }
+
   async logout(instanceName) {
     const data = await this.request('DELETE', `/instance/logout/${encodeURIComponent(instanceName)}`);
     return { status: 'disconnected', raw: data };

@@ -72,6 +72,7 @@ function extractDeliveryStatus(payload) {
   if (['read', 'seen', 'read_by_recipient'].includes(value) || raw === 4) return 'read';
   if (['delivered', 'delivery', 'delivered_to_recipient'].includes(value) || raw === 3) return 'delivered';
   if (['sent', 'server_ack', 'serverack'].includes(value) || raw === 2) return 'sent';
+  if (['failed', 'error'].includes(value) || raw === -1 || raw === 5) return 'failed';
   return null;
 }
 
@@ -103,9 +104,10 @@ async function findOrCreateLead(connection, account, phone, pushName) {
   }
 }
 
-async function getOrCreateConversation(connection, account, externalConversationId, leadId, direction, occurredAt) {
-  await connection.execute(`INSERT INTO conversations (channel, communication_account_id, lead_id, external_conversation_id, last_message_at, last_inbound_at, last_outbound_at, unread_count) VALUES ('whatsapp', ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE lead_id = COALESCE(VALUES(lead_id), lead_id), last_message_at = GREATEST(COALESCE(last_message_at, VALUES(last_message_at)), VALUES(last_message_at)), last_inbound_at = IF(VALUES(last_inbound_at) IS NULL, last_inbound_at, VALUES(last_inbound_at)), last_outbound_at = IF(VALUES(last_outbound_at) IS NULL, last_outbound_at, VALUES(last_outbound_at)), unread_count = unread_count + VALUES(unread_count), updated_at = CURRENT_TIMESTAMP`, [account.id, leadId, externalConversationId, occurredAt, direction === 'inbound' ? occurredAt : null, direction === 'outbound' ? occurredAt : null, direction === 'inbound' ? 1 : 0]);
+async function getOrCreateConversation(connection, account, externalConversationId, leadId, direction, occurredAt, metadata = {}) {
+  const conversationType = metadata.isGroup ? 'group' : 'contact';
+  await connection.execute(`INSERT INTO conversations (channel, conversation_type, communication_account_id, lead_id, external_conversation_id, display_name, last_message_at, last_inbound_at, last_outbound_at, unread_count) VALUES ('whatsapp', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE conversation_type = VALUES(conversation_type), lead_id = COALESCE(VALUES(lead_id), lead_id), display_name = COALESCE(display_name, VALUES(display_name)), last_message_at = GREATEST(COALESCE(last_message_at, VALUES(last_message_at)), VALUES(last_message_at)), last_inbound_at = IF(VALUES(last_inbound_at) IS NULL, last_inbound_at, VALUES(last_inbound_at)), last_outbound_at = IF(VALUES(last_outbound_at) IS NULL, last_outbound_at, VALUES(last_outbound_at)), unread_count = unread_count + VALUES(unread_count), updated_at = CURRENT_TIMESTAMP`, [conversationType, account.id, leadId, externalConversationId, metadata.displayName || null, occurredAt, direction === 'inbound' ? occurredAt : null, direction === 'outbound' ? occurredAt : null, direction === 'inbound' ? 1 : 0]);
   const [rows] = await connection.execute('SELECT * FROM conversations WHERE communication_account_id = ? AND external_conversation_id = ? FOR UPDATE', [account.id, externalConversationId]);
   return rows[0];
 }
@@ -114,7 +116,7 @@ async function persistMessage(connection, { account, conversation, lead, event, 
   if (!externalMessageId) return { duplicate: false, id: null };
   const [existing] = await connection.execute('SELECT id FROM communication_messages WHERE communication_account_id = ? AND external_message_id = ? LIMIT 1', [account.id, externalMessageId]);
   if (existing[0]) return { duplicate: true, id: Number(existing[0].id) };
-  const [result] = await connection.execute(`INSERT INTO communication_messages (channel, direction, lead_id, conversation_id, communication_account_id, external_message_id, external_sender_id, recipient, body_text, message_type, delivery_status, metadata, media_storage_path, media_mime_type, media_filename, media_size_bytes, media_duration_seconds, media_width, media_height, quoted_message_id, media_status, status, provider, created_at, sent_at) VALUES ('whatsapp', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', 'evolution', ?, ?)` , [direction, lead?.id || null, conversation.id, account.id, externalMessageId, externalSenderId || null, direction === 'inbound' ? account.phone_number || '' : lead?.phone || '', text || null, messageType || 'text', direction === 'inbound' ? 'received' : 'sent', JSON.stringify(metadata), media?.storagePath || null, media?.mime || null, media?.filename || null, media?.size || null, media?.duration || null, media?.width || null, media?.height || null, quotedMessageId, media ? 'ready' : null, occurredAt, direction === 'outbound' ? occurredAt : null]);
+  const [result] = await connection.execute(`INSERT INTO communication_messages (channel, direction, lead_id, conversation_id, communication_account_id, external_message_id, external_sender_id, sender_name, recipient, body_text, message_type, delivery_status, metadata, media_storage_path, media_mime_type, media_filename, media_size_bytes, media_duration_seconds, media_width, media_height, quoted_message_id, media_status, status, provider, created_at, sent_at) VALUES ('whatsapp', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', 'evolution', ?, ?)` , [direction, lead?.id || null, conversation.id, account.id, externalMessageId, externalSenderId || null, metadata.senderName || null, direction === 'inbound' ? account.phone_number || '' : lead?.phone || '', text || null, messageType || 'text', direction === 'inbound' ? 'received' : 'sent', JSON.stringify(metadata), media?.storagePath || null, media?.mime || null, media?.filename || null, media?.size || null, media?.duration || null, media?.width || null, media?.height || null, quotedMessageId, media ? 'ready' : null, occurredAt, direction === 'outbound' ? occurredAt : null]);
   return { duplicate: false, id: Number(result.insertId) };
 }
 
@@ -137,10 +139,10 @@ async function processWebhookEvent(connection, event) {
     if (deliveryStatus && parsed.externalMessageId) await connection.execute('UPDATE communication_messages SET delivery_status = ?, updated_at = CURRENT_TIMESTAMP WHERE communication_account_id = ? AND external_message_id = ?', [deliveryStatus, account.id, parsed.externalMessageId]);
     return { ignored: true, reason: deliveryStatus ? 'delivery_status' : 'unsupported_status' };
   }
-  if (!parsed.externalMessageId || parsed.isGroup || parsed.isBroadcast || !parsed.phone) return { ignored: true, reason: parsed.isGroup ? 'group' : parsed.isBroadcast ? 'broadcast' : 'missing_sender' };
-  const lead = await findOrCreateLead(connection, account, parsed.phone, parsed.pushName);
+  if (!parsed.externalMessageId || parsed.isBroadcast || (!parsed.isGroup && !parsed.phone)) return { ignored: true, reason: parsed.isBroadcast ? 'broadcast' : 'missing_sender' };
+  const lead = parsed.isGroup ? null : await findOrCreateLead(connection, account, parsed.phone, parsed.pushName);
   const direction = parsed.fromMe ? 'outbound' : 'inbound';
-  const conversation = await getOrCreateConversation(connection, account, parsed.remoteJid, lead?.id || null, direction, parsed.occurredAt);
+  const conversation = await getOrCreateConversation(connection, account, parsed.remoteJid, lead?.id || null, direction, parsed.occurredAt, { isGroup: parsed.isGroup });
   let media = null;
   let mediaStatus = null;
   if (parsed.messageType !== 'text' && parsed.messageType !== 'unknown') {
@@ -148,7 +150,7 @@ async function processWebhookEvent(connection, event) {
     catch (error) { mediaStatus = 'unavailable'; console.error('[WhatsApp] download de midia falhou', { communicationAccountId: Number(account.id), provider: String(account.provider || 'unknown'), operation: 'download_media', messageType: parsed.messageType, providerStatus: error?.providerStatus || null, errorCode: String(error?.code || 'MEDIA_DOWNLOAD_FAILED').replace(/[^A-Z0-9_]/g, '_').slice(0, 80) }); }
   }
   const [quotedRows] = parsed.quoted?.externalMessageId ? await connection.execute('SELECT id FROM communication_messages WHERE communication_account_id = ? AND external_message_id = ? LIMIT 1', [account.id, parsed.quoted.externalMessageId]) : [[]];
-  const message = await persistMessage(connection, { account, conversation, lead, event, direction, text: parsed.text, externalMessageId: parsed.externalMessageId, externalSenderId: parsed.externalSenderId, messageType: parsed.messageType, occurredAt: parsed.occurredAt, media, quotedMessageId: quotedRows[0]?.id || null, metadata: { pushName: parsed.pushName, fromMe: parsed.fromMe, eventType: event.event_type, media: parsed.media ? { key: parsed.media.key, mimeType: parsed.media.mimeType, filename: parsed.media.filename, size: parsed.media.size, duration: parsed.media.duration, width: parsed.media.width, height: parsed.media.height, status: mediaStatus } : null, quoted: parsed.quoted } });
+  const message = await persistMessage(connection, { account, conversation, lead, event, direction, text: parsed.text, externalMessageId: parsed.externalMessageId, externalSenderId: parsed.externalSenderId, messageType: parsed.messageType, occurredAt: parsed.occurredAt, media, quotedMessageId: quotedRows[0]?.id || null, metadata: { pushName: parsed.pushName, senderName: parsed.isGroup ? parsed.pushName : null, fromMe: parsed.fromMe, isGroup: parsed.isGroup, eventType: event.event_type, media: parsed.media ? { key: parsed.media.key, mimeType: parsed.media.mimeType, filename: parsed.media.filename, size: parsed.media.size, duration: parsed.media.duration, width: parsed.media.width, height: parsed.media.height, status: mediaStatus } : null, quoted: parsed.quoted } });
   if (!message.duplicate && lead?.id) await connection.execute("INSERT INTO prospect_contact_history (prospect_id, owner_user_id, channel, message, recipient, delivery_status, metadata) VALUES (?, ?, 'whatsapp', ?, ?, ?, ?)", [lead.id, account.owner_user_id, direction === 'inbound' ? 'Mensagem recebida no WhatsApp' : 'Mensagem enviada no WhatsApp', parsed.phone, direction === 'inbound' ? 'received' : 'sent', JSON.stringify({ conversationId: conversation.id, externalMessageId: parsed.externalMessageId })]);
   if (!message.duplicate) await dispatchDomainEvent({ type: direction === 'inbound' ? 'message.received' : 'message.sent', entityType: 'conversation', entityId: conversation.id, actorUserId: parsed.fromMe ? account.owner_user_id : null, payload: { conversationId: conversation.id, messageId: message.id, leadId: lead?.id || null, channel: 'whatsapp' }, idempotencyKey: `whatsapp-message:${account.id}:${parsed.externalMessageId}` }, { connection });
   return { ignored: false, duplicate: message.duplicate, conversationId: Number(conversation.id), leadId: lead?.id ? Number(lead.id) : null, messageId: message.id };
@@ -172,8 +174,9 @@ async function processPendingWhatsAppEvents({ batchSize = 25 } = {}) {
 }
 
 async function sendWhatsAppContent(connection, { account, leadId, recipient, text = null, messageType = 'text', file = null, mimeType = null, filename = null, caption = null, quotedMessageId = null, idempotencyKey, automationId = null, runId = null, stepId = null, ownerUserId = null }) {
-  const phone = normalizePhone(recipient);
-  if (!phone) throw Object.assign(new Error('RECIPIENT_PHONE_MISSING'), { code: 'RECIPIENT_PHONE_MISSING', retryable: false, publicMessage: 'Telefone do destinatario nao informado.' });
+  const isGroup = String(recipient || '').endsWith('@g.us');
+  const phone = isGroup ? String(recipient) : normalizePhone(recipient);
+  if (!phone) throw Object.assign(new Error('RECIPIENT_PHONE_MISSING'), { code: 'RECIPIENT_PHONE_MISSING', retryable: false, publicMessage: 'Destinatario nao informado.' });
   const accountStatus = account.account_status ?? account.status;
   if (accountStatus !== 'connected') throw Object.assign(new Error('WHATSAPP_ACCOUNT_NOT_CONNECTED'), { code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED', retryable: false, publicMessage: 'A conta WhatsApp nao esta conectada.' });
   if (!['text', 'image', 'audio', 'video', 'document'].includes(messageType)) throw Object.assign(new Error('MEDIA_TYPE_NOT_SUPPORTED'), { code: 'MEDIA_TYPE_NOT_SUPPORTED', retryable: false, publicMessage: 'Este tipo de mensagem nao e suportado para envio.' });
@@ -182,14 +185,15 @@ async function sendWhatsAppContent(connection, { account, leadId, recipient, tex
   if (existing[0]?.status === 'sent') return { idempotent: true, messageId: existing[0].provider_message_id, conversationId: existing[0].conversation_id };
   const [leadRows] = await connection.execute('SELECT * FROM prospects WHERE id = ? LIMIT 1', [leadId || 0]);
   const lead = leadRows[0] || null;
-  const conversation = await getOrCreateConversation(connection, account, `${phone}@s.whatsapp.net`, lead?.id || null, 'outbound', new Date());
+  const remoteJid = isGroup ? phone : `${phone}@s.whatsapp.net`;
+  const conversation = await getOrCreateConversation(connection, account, remoteJid, lead?.id || null, 'outbound', new Date(), { isGroup });
   const { provider } = await loadEvolutionConfig(connection, account);
   let stored = null;
   let result;
   let quoted = null;
   if (quotedMessageId) {
     const [quotedRows] = await connection.execute('SELECT id, external_message_id, conversation_id, direction FROM communication_messages WHERE id = ? AND conversation_id = ? LIMIT 1', [quotedMessageId, conversation.id]);
-    if (quotedRows[0]?.external_message_id) quoted = { key: { id: quotedRows[0].external_message_id, remoteJid: `${phone}@s.whatsapp.net`, fromMe: quotedRows[0].direction === 'outbound' } };
+    if (quotedRows[0]?.external_message_id) quoted = { key: { id: quotedRows[0].external_message_id, remoteJid, fromMe: quotedRows[0].direction === 'outbound' } };
   }
   const resolvedQuotedMessageId = quoted ? Number(quotedMessageId) : null;
   try {

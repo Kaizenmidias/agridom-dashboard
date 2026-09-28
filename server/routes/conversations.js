@@ -3,13 +3,18 @@ const multer = require('multer');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess } = require('../middleware/commercial-access');
 const { getPool } = require('../config/database');
-const { sendWhatsAppMessage, sendWhatsAppMedia } = require('../services/whatsapp-service');
+const { sendWhatsAppMessage, sendWhatsAppMedia, loadEvolutionConfig } = require('../services/whatsapp-service');
 const { sendFile, LIMITS } = require('../services/chat-media');
 
 const router = express.Router();
 router.use(authenticateToken, requireCommercialAccess);
 const parsePage = (value, fallback, max) => Math.min(Math.max(Number(value) || fallback, 1), max);
 const mediaUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: Math.max(...Object.values(LIMITS)) } });
+const profileRefreshes = new Map();
+const PROFILE_TTL_HOURS = 12;
+const validProfilePictureUrl = (value) => {
+  try { const url = new URL(String(value || '')); return url.protocol === 'https:' ? url.toString() : null; } catch { return null; }
+};
 
 router.get('/', async (req, res) => {
   try {
@@ -22,15 +27,53 @@ router.get('/', async (req, res) => {
     if (req.query.assignedUserId) { where.push('c.assigned_user_id = ?'); params.push(Number(req.query.assignedUserId)); }
     if (req.query.handlingMode) { where.push('c.handling_mode = ?'); params.push(String(req.query.handlingMode)); }
     if (req.query.unread === 'true') where.push('c.unread_count > 0');
-    if (req.query.search) { where.push('(p.business_name LIKE ? OR p.phone LIKE ? OR p.normalized_phone LIKE ? OR p.email LIKE ? OR EXISTS (SELECT 1 FROM communication_messages sm WHERE sm.conversation_id = c.id AND sm.body_text LIKE ?))'); const search = `%${String(req.query.search).slice(0, 100)}%`; params.push(search, search, search, search, search); }
-    const [rows] = await getPool().execute(`SELECT c.*, p.business_name AS lead_name, p.phone AS lead_phone, p.email AS lead_email, p.website AS lead_website, p.status AS lead_status, p.origin AS lead_origin, ca.name AS account_name, ca.phone_number AS account_phone, u.name AS assigned_user_name, (SELECT sm.body_text FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_text, (SELECT sm.message_type FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_type, (SELECT sm.direction FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_direction FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id LEFT JOIN prospects p ON p.id = c.lead_id LEFT JOIN users u ON u.id = c.assigned_user_id WHERE ${where.join(' AND ')} ORDER BY c.last_message_at DESC, c.id DESC LIMIT ? OFFSET ?`, [...params, limit, offset]);
+    if (req.query.search) { where.push('(c.display_name LIKE ? OR p.business_name LIKE ? OR p.phone LIKE ? OR p.normalized_phone LIKE ? OR p.email LIKE ? OR EXISTS (SELECT 1 FROM communication_messages sm WHERE sm.conversation_id = c.id AND sm.body_text LIKE ?))'); const search = `%${String(req.query.search).slice(0, 100)}%`; params.push(search, search, search, search, search, search); }
+    const [rows] = await getPool().execute(`SELECT c.*, (c.profile_picture_updated_at IS NULL OR c.profile_picture_updated_at < UTC_TIMESTAMP() - INTERVAL ${PROFILE_TTL_HOURS} HOUR) AS profile_picture_stale, p.business_name AS lead_name, p.phone AS lead_phone, p.email AS lead_email, p.website AS lead_website, p.status AS lead_status, p.origin AS lead_origin, ca.name AS account_name, ca.phone_number AS account_phone, u.name AS assigned_user_name, (SELECT sm.body_text FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_text, (SELECT sm.message_type FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_type, (SELECT sm.direction FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_direction FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id LEFT JOIN prospects p ON p.id = c.lead_id LEFT JOIN users u ON u.id = c.assigned_user_id WHERE ${where.join(' AND ')} ORDER BY c.last_message_at DESC, c.id DESC LIMIT ? OFFSET ?`, [...params, limit, offset]);
     res.json({ conversations: rows.map((row) => ({ ...row, id: Number(row.id), leadId: row.lead_id ? Number(row.lead_id) : null, accountId: Number(row.communication_account_id), unreadCount: Number(row.unread_count) })) , page, limit });
   } catch { res.status(500).json({ error: 'Nao foi possivel carregar as conversas.' }); }
 });
 
 router.get('/:id', async (req, res) => {
-  try { const [rows] = await getPool().execute("SELECT c.*, p.business_name AS lead_name, p.phone AS lead_phone, p.email AS lead_email, p.website AS lead_website, p.city AS lead_city, p.state AS lead_state, p.origin AS lead_origin, p.status AS lead_status, p.category AS lead_category, p.created_at AS lead_created_at, JSON_UNQUOTE(JSON_EXTRACT(p.analysis_report, '$.budget')) AS lead_budget, ca.name AS account_name, ca.phone_number AS account_phone, u.name AS assigned_user_name, u.email AS assigned_user_email FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id LEFT JOIN prospects p ON p.id = c.lead_id LEFT JOIN users u ON u.id = c.assigned_user_id WHERE c.id = ?", [req.params.id]); if (!rows[0]) return res.status(404).json({ error: 'Conversa nao encontrada.' }); const [labels] = rows[0].lead_id ? await getPool().execute('SELECT ll.id, ll.name, ll.color FROM prospect_labels pl JOIN lead_labels ll ON ll.id = pl.label_id WHERE pl.prospect_id = ? ORDER BY ll.name', [rows[0].lead_id]) : [[]]; res.json({ ...rows[0], id: Number(rows[0].id), unreadCount: Number(rows[0].unread_count), lead_labels: labels }); }
+  try { const [rows] = await getPool().execute(`SELECT c.*, (c.profile_picture_updated_at IS NULL OR c.profile_picture_updated_at < UTC_TIMESTAMP() - INTERVAL ${PROFILE_TTL_HOURS} HOUR) AS profile_picture_stale, p.business_name AS lead_name, p.phone AS lead_phone, p.email AS lead_email, p.website AS lead_website, p.city AS lead_city, p.state AS lead_state, p.origin AS lead_origin, p.status AS lead_status, p.category AS lead_category, p.created_at AS lead_created_at, JSON_UNQUOTE(JSON_EXTRACT(p.analysis_report, '$.budget')) AS lead_budget, ca.name AS account_name, ca.phone_number AS account_phone, u.name AS assigned_user_name, u.email AS assigned_user_email FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id LEFT JOIN prospects p ON p.id = c.lead_id LEFT JOIN users u ON u.id = c.assigned_user_id WHERE c.id = ?`, [req.params.id]); if (!rows[0]) return res.status(404).json({ error: 'Conversa nao encontrada.' }); const [labels] = rows[0].lead_id ? await getPool().execute('SELECT ll.id, ll.name, ll.color FROM prospect_labels pl JOIN lead_labels ll ON ll.id = pl.label_id WHERE pl.prospect_id = ? ORDER BY ll.name', [rows[0].lead_id]) : [[]]; res.json({ ...rows[0], id: Number(rows[0].id), unreadCount: Number(rows[0].unread_count), lead_labels: labels }); }
   catch { res.status(500).json({ error: 'Nao foi possivel carregar a conversa.' }); }
+});
+
+router.post('/:id/profile/refresh', async (req, res) => {
+  const rateKey = `${req.userId}:${req.params.id}`;
+  const previous = profileRefreshes.get(rateKey) || 0;
+  if (Date.now() - previous < 10000) return res.status(429).json({ error: 'Aguarde alguns segundos antes de atualizar novamente.' });
+  profileRefreshes.set(rateKey, Date.now());
+  try {
+    const [rows] = await getPool().execute(`SELECT c.*, ca.external_instance_id, ca.integration_provider_id FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id AND ca.archived_at IS NULL WHERE c.id = ? LIMIT 1`, [req.params.id]);
+    const conversation = rows[0];
+    if (!conversation) return res.status(404).json({ error: 'Conversa nao encontrada.' });
+    const fresh = conversation.profile_picture_updated_at && Date.now() - new Date(conversation.profile_picture_updated_at).getTime() < PROFILE_TTL_HOURS * 60 * 60 * 1000;
+    if (fresh && req.body?.force !== true) {
+      const [participantRows] = conversation.conversation_type === 'group' ? await getPool().execute('SELECT display_name, participant_role FROM conversation_participants WHERE conversation_id = ? ORDER BY display_name, id', [conversation.id]) : [[]];
+      return res.json({ profilePictureUrl: conversation.profile_picture_url || null, displayName: conversation.display_name || null, participantCount: conversation.participant_count == null ? null : Number(conversation.participant_count), participants: participantRows.map((participant) => ({ name: participant.display_name || 'Participante', role: participant.participant_role === 'superadmin' ? 'Criador' : participant.participant_role === 'admin' ? 'Administrador' : 'Participante' })), cached: true });
+    }
+    const { provider } = await loadEvolutionConfig(getPool(), conversation);
+    let profilePictureUrl = null;
+    let displayName = conversation.display_name || null;
+    let participantCount = conversation.participant_count == null ? null : Number(conversation.participant_count);
+    let participants = [];
+    if (conversation.conversation_type === 'group') {
+      const group = await provider.findGroup(conversation.external_instance_id, conversation.external_conversation_id);
+      profilePictureUrl = validProfilePictureUrl(group.profilePictureUrl);
+      displayName = group.name || displayName;
+      participantCount = group.participants.length;
+      const normalizedParticipants = group.participants.slice(0, 256).map((participant) => ({ externalId: String(participant.id || participant.jid || '').slice(0, 191), name: String(participant.name || participant.notify || '').slice(0, 191) || null, role: participant.admin === 'superadmin' ? 'superadmin' : participant.admin === 'admin' ? 'admin' : 'participant' })).filter((participant) => participant.externalId);
+      participants = normalizedParticipants.map((participant) => ({ name: participant.name || 'Participante', role: participant.role === 'superadmin' ? 'Criador' : participant.role === 'admin' ? 'Administrador' : 'Participante' }));
+      await getPool().execute('DELETE FROM conversation_participants WHERE conversation_id = ?', [conversation.id]);
+      for (const participant of normalizedParticipants) await getPool().execute('INSERT INTO conversation_participants (conversation_id, external_participant_id, display_name, participant_role) VALUES (?, ?, ?, ?)', [conversation.id, participant.externalId, participant.name, participant.role]);
+    } else {
+      const number = String(conversation.external_conversation_id || '').split('@')[0].split(':')[0];
+      const profile = await provider.fetchProfilePicture(conversation.external_instance_id, number);
+      profilePictureUrl = validProfilePictureUrl(profile.profilePictureUrl);
+    }
+    await getPool().execute('UPDATE conversations SET display_name = ?, profile_picture_url = ?, profile_picture_updated_at = UTC_TIMESTAMP(), participant_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [displayName, profilePictureUrl, participantCount, conversation.id]);
+    res.json({ profilePictureUrl, displayName, participantCount, participants, cached: false });
+  } catch { res.json({ profilePictureUrl: null, displayName: null, participantCount: null, participants: [], unavailable: true }); }
 });
 
 router.get('/:id/messages', async (req, res) => {
