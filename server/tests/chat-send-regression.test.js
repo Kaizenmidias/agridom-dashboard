@@ -12,6 +12,7 @@ const routeSource = fs.readFileSync(path.join(root, 'server/routes/conversations
 const providerSource = fs.readFileSync(path.join(root, 'server/services/evolution-whatsapp-provider.js'), 'utf8');
 const serviceSource = fs.readFileSync(path.join(root, 'server/services/whatsapp-service.js'), 'utf8');
 const webhookSource = fs.readFileSync(path.join(root, 'server/routes/webhooks.js'), 'utf8');
+const chatMessageSource = fs.readFileSync(path.join(root, 'src/components/commercial/ChatMessage.tsx'), 'utf8');
 
 test('chat send exposes a safe diagnostic code while preserving the retry contract', () => {
   assert.match(routeSource, /isForeignKeyError = error\?\.code === 'ER_NO_REFERENCED_ROW_2'/);
@@ -96,4 +97,12 @@ test('chat send keeps the explicit guards for missing conversation, text and con
   assert.match(webhookSource, /sanitizeWebhookData/);
   assert.match(providerSource, /EVOLUTION_AUTH_FAILED/);
   assert.match(providerSource, /EVOLUTION_UNAVAILABLE/);
+});
+
+test('video messages fetch the protected media route with the bearer token and render a video player', () => {
+  assert.match(chatMessageSource, /type === "video" \? <VideoMessage/);
+  assert.match(chatMessageSource, /Authorization: `Bearer \$\{token\}`/);
+  assert.match(chatMessageSource, /URL\.createObjectURL/);
+  assert.match(chatMessageSource, /URL\.revokeObjectURL/);
+  assert.match(chatMessageSource, /<video className=.*controls playsInline/);
 });
