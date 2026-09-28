@@ -6,6 +6,10 @@ const PROVIDER_ERRORS = {
   notConfigured: 'AI_PROVIDER_NOT_CONFIGURED',
   timeout: 'AI_PROVIDER_TIMEOUT',
   rateLimit: 'AI_PROVIDER_RATE_LIMIT',
+  invalidCredential: 'AI_PROVIDER_INVALID_CREDENTIALS',
+  forbidden: 'AI_PROVIDER_FORBIDDEN',
+  unavailable: 'AI_PROVIDER_UNAVAILABLE',
+  invalidResponse: 'AI_PROVIDER_INVALID_RESPONSE',
   failed: 'AI_PROVIDER_FAILED',
 };
 
@@ -20,7 +24,8 @@ function providerError(code, message) {
 }
 
 async function getOpenAiKey() {
-  const rows = await query("SELECT secret_ciphertext, secret_iv, secret_auth_tag FROM integration_providers WHERE provider = 'openai' LIMIT 1");
+  const result = await query("SELECT secret_ciphertext, secret_iv, secret_auth_tag FROM integration_providers WHERE provider = 'openai' LIMIT 1");
+  const rows = result.rows || [];
   if (rows[0]) {
     try {
       const secret = decryptSecret(rows[0]);
@@ -34,7 +39,8 @@ async function getOpenAiKey() {
 }
 
 async function getProviderKey(provider) {
-  const rows = await query('SELECT secret_ciphertext, secret_iv, secret_auth_tag FROM integration_providers WHERE provider = ? LIMIT 1', [provider]);
+  const result = await query('SELECT secret_ciphertext, secret_iv, secret_auth_tag FROM integration_providers WHERE provider = ? LIMIT 1', [provider]);
+  const rows = result.rows || [];
   if (!rows[0]?.secret_ciphertext) return null;
   try { return decryptSecret(rows[0])?.apiKey || null; } catch { return null; }
 }
@@ -56,10 +62,16 @@ async function listModels(provider, { refresh = false } = {}) {
   const apiKey = await getProviderKey(provider);
   if (!apiKey) throw providerError(PROVIDER_ERRORS.notConfigured, 'O provedor de IA nao esta configurado.');
   const url = provider === 'gemini' ? `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}` : 'https://api.openai.com/v1/models';
-  const response = await fetch(url, { headers: provider === 'openai' ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(15000) });
+  let response;
+  try { response = await fetch(url, { headers: provider === 'openai' ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(15000) }); }
+  catch (error) { if (error.name === 'AbortError' || error.code === 'ETIMEDOUT') throw providerError(PROVIDER_ERRORS.timeout, 'O provedor demorou demais para responder.'); throw providerError(PROVIDER_ERRORS.unavailable, 'Nao foi possivel se comunicar com o provedor de IA.'); }
   if (response.status === 429) throw providerError(PROVIDER_ERRORS.rateLimit, 'O provedor de IA atingiu o limite de requisicoes.');
-  if (!response.ok) throw providerError(PROVIDER_ERRORS.failed, 'Credencial invalida ou provedor indisponivel.');
-  const models = normalizeModels(provider, await response.json());
+  if (response.status === 401) throw providerError(PROVIDER_ERRORS.invalidCredential, 'A credencial do provedor nao foi aceita.');
+  if (response.status === 403) throw providerError(PROVIDER_ERRORS.forbidden, 'A credencial nao tem permissao para esta operacao.');
+  if (response.status >= 500) throw providerError(PROVIDER_ERRORS.unavailable, 'O provedor esta indisponivel no momento.');
+  if (!response.ok) throw providerError(PROVIDER_ERRORS.failed, 'Nao foi possivel validar o provedor.');
+  let payload; try { payload = await response.json(); } catch { throw providerError(PROVIDER_ERRORS.invalidResponse, 'O provedor retornou uma resposta inesperada.'); }
+  const models = normalizeModels(provider, payload);
   modelCache.set(provider, { models, expiresAt: Date.now() + CACHE_TTL_MS });
   return models;
 }
