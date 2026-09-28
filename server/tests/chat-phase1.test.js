@@ -54,6 +54,10 @@ test('CHAT-3D opens at the latest message without breaking history pagination', 
   assert.match(page, /scrollRequest\.current = "initial"/);
   assert.match(page, /scrollTop = messagesRef\.current\.scrollHeight - previousHeight/);
   assert.match(page, /scrollRequest\.current = "bottom"/);
+  assert.match(page, /new ResizeObserver/);
+  assert.match(page, /initialBottomAnchor\.current/);
+  assert.match(page, /programmaticScroll\.current/);
+  assert.match(page, /prependingMessages\.current = true/);
 });
 
 test('CHAT-1 mantém composer textual com Enter e Shift+Enter', () => {

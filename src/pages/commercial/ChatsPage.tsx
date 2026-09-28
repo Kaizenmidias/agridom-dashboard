@@ -100,10 +100,13 @@ export function ChatsPage() {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const searchTimer = useRef<number | undefined>(undefined);
   const scrollRequest = useRef<"initial" | "bottom" | null>(null);
+  const initialBottomAnchor = useRef(false);
+  const programmaticScroll = useRef(false);
+  const prependingMessages = useRef(false);
   const newMessageCount = useRef(0);
   const previousLastMessageId = useRef<number | null>(null);
   const isNearBottom = (element: HTMLDivElement) => element.scrollHeight - element.scrollTop - element.clientHeight <= 160;
-  const scrollToBottom = (behavior: ScrollBehavior = "auto") => { const element = messagesRef.current; if (element) element.scrollTo({ top: element.scrollHeight, behavior }); };
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => { const element = messagesRef.current; if (!element) return; programmaticScroll.current = true; element.scrollTo({ top: element.scrollHeight, behavior }); requestAnimationFrame(() => { programmaticScroll.current = false; }); };
 
   const loadConversations = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -122,7 +125,7 @@ export function ChatsPage() {
       const [nextDetail, nextMessages, nextActivities] = await Promise.all([conversationsAPI.detail(id), conversationsAPI.messages(id), conversationsAPI.activities(id)]);
       const latestId = nextMessages.messages.at(-1)?.id || null;
       const wasNearBottom = !silent || !messagesRef.current || isNearBottom(messagesRef.current);
-      if (!silent || previousLastMessageId.current === null) scrollRequest.current = "initial";
+      if (!silent || previousLastMessageId.current === null) { scrollRequest.current = "initial"; initialBottomAnchor.current = true; }
       else if (latestId !== previousLastMessageId.current && wasNearBottom) scrollRequest.current = "bottom";
       else if (latestId !== previousLastMessageId.current) newMessageCount.current += 1;
       previousLastMessageId.current = latestId;
@@ -133,6 +136,15 @@ export function ChatsPage() {
   }, []);
 
   useLayoutEffect(() => { if (!scrollRequest.current || !messages.length) return; const request = scrollRequest.current; scrollRequest.current = null; requestAnimationFrame(() => scrollToBottom(request === "bottom" ? "smooth" : "auto")); }, [messages.length, selectedId]);
+  useEffect(() => {
+    const element = messagesRef.current;
+    if (!element || !selectedId) return;
+    const observer = new ResizeObserver(() => { if (initialBottomAnchor.current && !prependingMessages.current) scrollToBottom(); });
+    observer.observe(element);
+    const handleUserScroll = () => { if (!programmaticScroll.current && element.scrollHeight - element.scrollTop - element.clientHeight > 160) initialBottomAnchor.current = false; };
+    element.addEventListener("scroll", handleUserScroll, { passive: true });
+    return () => { observer.disconnect(); element.removeEventListener("scroll", handleUserScroll); };
+  }, [selectedId, messages.length]);
 
   useEffect(() => { void loadConversations(); }, [loadConversations]);
   useEffect(() => { void Promise.all([commercialEntitiesAPI.getUsers(), commercialEntitiesAPI.getLabels()]).then(([userResult, labelResult]) => { setUsers(userResult.users); setAvailableLabels(labelResult.labels); }).catch(() => { setUsers([]); setAvailableLabels([]); }); }, []);
@@ -159,7 +171,7 @@ export function ChatsPage() {
   const send = async (message: string, quotedMessageId?: number | null) => { if (!detail) return; setSending(true); try { scrollRequest.current = "bottom"; await conversationsAPI.send(detail.id, message, quotedMessageId); await loadSelected(detail.id, true); await loadConversations(true); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível enviar a mensagem."); } finally { setSending(false); } };
   const sendMedia = async (file: File | Blob, type: "image" | "audio" | "video" | "document", caption?: string, filename?: string, quotedMessageId?: number | null) => { if (!detail) return; setSending(true); try { scrollRequest.current = "bottom"; await conversationsAPI.sendMedia(detail.id, file, type, caption, filename, quotedMessageId); await loadSelected(detail.id, true); await loadConversations(true); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível enviar a mídia."); } finally { setSending(false); } };
   const copyMessage = async (message: CommunicationMessage) => { if (message.body_text) await navigator.clipboard?.writeText(message.body_text); };
-  const loadOlderMessages = async () => { if (!detail || loadingOlder || !hasMoreMessages || !messages.length || !messagesRef.current) return; const container = messagesRef.current; const previousHeight = container.scrollHeight; setLoadingOlder(true); try { const result = await conversationsAPI.messages(detail.id, messages[0].id); setMessages((current) => [...result.messages, ...current]); setHasMoreMessages(Boolean(result.hasMore)); requestAnimationFrame(() => { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight - previousHeight; }); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar o histórico."); } finally { setLoadingOlder(false); } };
+  const loadOlderMessages = async () => { if (!detail || loadingOlder || !hasMoreMessages || !messages.length || !messagesRef.current) return; const container = messagesRef.current; const previousHeight = container.scrollHeight; prependingMessages.current = true; initialBottomAnchor.current = false; setLoadingOlder(true); try { const result = await conversationsAPI.messages(detail.id, messages[0].id); setMessages((current) => [...result.messages, ...current]); setHasMoreMessages(Boolean(result.hasMore)); requestAnimationFrame(() => { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight - previousHeight; prependingMessages.current = false; }); } catch (requestError) { prependingMessages.current = false; setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar o histórico."); } finally { setLoadingOlder(false); } };
   const copyPhone = async () => { if (detail?.lead_phone) await navigator.clipboard?.writeText(detail.lead_phone); };
   const runConversationSearch = async () => { if (!detail || conversationSearch.trim().length < 2) return; try { const result = await conversationsAPI.searchMessages(detail.id, conversationSearch.trim()); setSearchResults(result.messages); setSearchIndex(0); setMessages((current) => [...current, ...result.messages.filter((resultMessage) => !current.some((item) => item.id === resultMessage.id))].sort((left, right) => left.id - right.id)); const first = result.messages[0]; if (first) requestAnimationFrame(() => document.getElementById(`message-${first.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível pesquisar nesta conversa."); } };
   const moveSearch = (direction: number) => { if (!searchResults.length) return; const next = (searchIndex + direction + searchResults.length) % searchResults.length; setSearchIndex(next); document.getElementById(`message-${searchResults[next].id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }); };
