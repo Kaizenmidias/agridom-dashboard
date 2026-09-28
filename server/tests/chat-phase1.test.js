@@ -48,6 +48,14 @@ test('CHAT-3D inbox persists pin, archive, manual unread, soft delete and stars'
   assert.doesNotMatch(route, /DELETE FROM conversations/);
 });
 
+test('CHAT-3D opens at the latest message without breaking history pagination', () => {
+  assert.match(page, /useLayoutEffect/);
+  assert.match(page, /scrollHeight - element\.scrollTop - element\.clientHeight <= 160/);
+  assert.match(page, /scrollRequest\.current = "initial"/);
+  assert.match(page, /scrollTop = messagesRef\.current\.scrollHeight - previousHeight/);
+  assert.match(page, /scrollRequest\.current = "bottom"/);
+});
+
 test('CHAT-1 mantém composer textual com Enter e Shift+Enter', () => {
   assert.match(composer, /event\.key === "Enter" && !event\.shiftKey/);
   assert.match(route, /MESSAGE_TYPE_NOT_SUPPORTED/);

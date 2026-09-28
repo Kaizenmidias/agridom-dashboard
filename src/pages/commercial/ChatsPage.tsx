@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Archive, ArrowLeft, ArrowRight, Bot, ChevronDown, ChevronUp, CircleUserRound, Clock3, Copy, Expand, FileText, FileUp, Images, Inbox, Instagram, Link, Linkedin, MailOpen, MessageCircle, MoreHorizontal, Pencil, Pin, RefreshCw, Search, Trash2, UserRound, UserRoundCheck, X } from "lucide-react";
 import { conversationMediaUrl, conversationsAPI, type CommunicationMessage, type Conversation, type ConversationActivity, type ConversationDetail, type ConversationLabel, type SharedConversationItem } from "@/api/conversations";
@@ -99,6 +99,11 @@ export function ChatsPage() {
   const [participants, setParticipants] = useState<Array<{ name: string | null; phone?: string | null; profilePictureUrl?: string | null; role: string }>>([]);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const searchTimer = useRef<number | undefined>(undefined);
+  const scrollRequest = useRef<"initial" | "bottom" | null>(null);
+  const newMessageCount = useRef(0);
+  const previousLastMessageId = useRef<number | null>(null);
+  const isNearBottom = (element: HTMLDivElement) => element.scrollHeight - element.scrollTop - element.clientHeight <= 160;
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => { const element = messagesRef.current; if (element) element.scrollTo({ top: element.scrollHeight, behavior }); };
 
   const loadConversations = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -115,11 +120,19 @@ export function ChatsPage() {
     if (!silent) setLoadingMessages(true);
     try {
       const [nextDetail, nextMessages, nextActivities] = await Promise.all([conversationsAPI.detail(id), conversationsAPI.messages(id), conversationsAPI.activities(id)]);
+      const latestId = nextMessages.messages.at(-1)?.id || null;
+      const wasNearBottom = !silent || !messagesRef.current || isNearBottom(messagesRef.current);
+      if (!silent || previousLastMessageId.current === null) scrollRequest.current = "initial";
+      else if (latestId !== previousLastMessageId.current && wasNearBottom) scrollRequest.current = "bottom";
+      else if (latestId !== previousLastMessageId.current) newMessageCount.current += 1;
+      previousLastMessageId.current = latestId;
       setDetail(nextDetail); setMessages(nextMessages.messages); setHasMoreMessages(Boolean(nextMessages.hasMore)); setActivities(nextActivities.activities);
       if (nextDetail.unread_count > 0) { await conversationsAPI.markRead(id); setConversations((current) => current.map((item) => item.id === id ? { ...item, unread_count: 0 } : item)); }
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar a conversa."); }
     finally { if (!silent) setLoadingMessages(false); }
   }, []);
+
+  useLayoutEffect(() => { if (!scrollRequest.current || !messages.length) return; const request = scrollRequest.current; scrollRequest.current = null; requestAnimationFrame(() => scrollToBottom(request === "bottom" ? "smooth" : "auto")); }, [messages.length, selectedId]);
 
   useEffect(() => { void loadConversations(); }, [loadConversations]);
   useEffect(() => { void Promise.all([commercialEntitiesAPI.getUsers(), commercialEntitiesAPI.getLabels()]).then(([userResult, labelResult]) => { setUsers(userResult.users); setAvailableLabels(labelResult.labels); }).catch(() => { setUsers([]); setAvailableLabels([]); }); }, []);
@@ -143,8 +156,8 @@ export function ChatsPage() {
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível alterar o atendimento."); }
   };
   const assign = async (value: string) => { if (!detail) return; try { await conversationsAPI.assign(detail.id, value === "unassigned" ? null : Number(value)); await loadSelected(detail.id, true); await loadConversations(true); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível atribuir a conversa."); } };
-  const send = async (message: string, quotedMessageId?: number | null) => { if (!detail) return; setSending(true); try { await conversationsAPI.send(detail.id, message, quotedMessageId); await loadSelected(detail.id, true); await loadConversations(true); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível enviar a mensagem."); } finally { setSending(false); } };
-  const sendMedia = async (file: File | Blob, type: "image" | "audio" | "video" | "document", caption?: string, filename?: string, quotedMessageId?: number | null) => { if (!detail) return; setSending(true); try { await conversationsAPI.sendMedia(detail.id, file, type, caption, filename, quotedMessageId); await loadSelected(detail.id, true); await loadConversations(true); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível enviar a mídia."); } finally { setSending(false); } };
+  const send = async (message: string, quotedMessageId?: number | null) => { if (!detail) return; setSending(true); try { scrollRequest.current = "bottom"; await conversationsAPI.send(detail.id, message, quotedMessageId); await loadSelected(detail.id, true); await loadConversations(true); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível enviar a mensagem."); } finally { setSending(false); } };
+  const sendMedia = async (file: File | Blob, type: "image" | "audio" | "video" | "document", caption?: string, filename?: string, quotedMessageId?: number | null) => { if (!detail) return; setSending(true); try { scrollRequest.current = "bottom"; await conversationsAPI.sendMedia(detail.id, file, type, caption, filename, quotedMessageId); await loadSelected(detail.id, true); await loadConversations(true); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível enviar a mídia."); } finally { setSending(false); } };
   const copyMessage = async (message: CommunicationMessage) => { if (message.body_text) await navigator.clipboard?.writeText(message.body_text); };
   const loadOlderMessages = async () => { if (!detail || loadingOlder || !hasMoreMessages || !messages.length || !messagesRef.current) return; const container = messagesRef.current; const previousHeight = container.scrollHeight; setLoadingOlder(true); try { const result = await conversationsAPI.messages(detail.id, messages[0].id); setMessages((current) => [...result.messages, ...current]); setHasMoreMessages(Boolean(result.hasMore)); requestAnimationFrame(() => { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight - previousHeight; }); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar o histórico."); } finally { setLoadingOlder(false); } };
   const copyPhone = async () => { if (detail?.lead_phone) await navigator.clipboard?.writeText(detail.lead_phone); };
