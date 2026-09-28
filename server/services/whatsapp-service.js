@@ -62,7 +62,7 @@ function extractInbound(payload) {
   const media = mediaFromMessage(message);
   const contextInfo = media.content?.contextInfo || Object.values(media.content || {}).find((value) => value && typeof value === 'object' && value.contextInfo)?.contextInfo || data?.contextInfo || data?.message?.contextInfo || null;
   const quoted = contextInfo?.quotedMessage ? { text: extractText(contextInfo.quotedMessage), messageType: mediaFromMessage(contextInfo.quotedMessage).type, externalMessageId: contextInfo.stanzaId || null, participant: contextInfo.participant || contextInfo.remoteJid || null } : null;
-  return { remoteJid, externalMessageId, externalSenderId: key.participant || remoteJid, phone: normalizePhone(remoteJid), fromMe, isGroup, isBroadcast, text: media.caption || extractText(message), messageType: media.type, media: { ...media, key: { id: externalMessageId, remoteJid, fromMe, participant: key.participant || null } }, quoted, occurredAt: timestamp > 0 ? new Date(timestamp * 1000) : new Date(), pushName: String(data?.pushName || data?.sender?.pushName || '').trim() || null };
+  return { remoteJid, externalMessageId, externalSenderId: key.participant || remoteJid, phone: normalizePhone(remoteJid), fromMe, isGroup, isBroadcast, text: media.caption || extractText(message), messageType: media.type, media: { ...media, key: { id: externalMessageId, remoteJid, fromMe, participant: key.participant || null } }, providerMessage: { key: { id: externalMessageId, remoteJid, fromMe, participant: key.participant || null }, message }, quoted, occurredAt: timestamp > 0 ? new Date(timestamp * 1000) : new Date(), pushName: String(data?.pushName || data?.sender?.pushName || '').trim() || null };
 }
 
 function extractDeliveryStatus(payload) {
@@ -121,7 +121,7 @@ async function persistMessage(connection, { account, conversation, lead, event, 
 async function downloadInboundMedia(connection, account, parsed) {
   if (!parsed.media || !['image', 'audio', 'video', 'document', 'sticker'].includes(parsed.messageType)) return { stored: null, status: null };
   const { provider } = await loadEvolutionConfig(connection, account);
-  const downloaded = await provider.downloadMedia(account.external_instance_id, { key: parsed.media.key }, { convertToMp4: false });
+  const downloaded = await provider.downloadMedia(account.external_instance_id, parsed.providerMessage || { key: parsed.media.key }, { convertToMp4: false });
   if (!downloaded.base64) throw providerError('A Evolution nao retornou a midia.', 'MEDIA_DOWNLOAD_EMPTY');
   const stored = await storeBase64(downloaded.base64, { type: parsed.messageType, mime: downloaded.mimeType || parsed.media.mimeType, filename: downloaded.filename || parsed.media.filename || undefined });
   return { stored: { ...stored, duration: parsed.media.duration, width: parsed.media.width, height: parsed.media.height }, status: 'ready' };
