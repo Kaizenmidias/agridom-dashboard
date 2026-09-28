@@ -22,7 +22,8 @@ test('CHAT-1 protege a devolução para IA quando não há agente configurado', 
   assert.match(route, /Nenhum agente de IA configurado para esta conversa/);
   assert.match(route, /conversation\.ai_agent_id/);
   assert.match(page, /Atendimento humano/);
-  assert.match(page, /Atendimento pausado/);
+  assert.match(page, /Nenhum agente de IA configurado/);
+  assert.doesNotMatch(page, /Pausar atendimento/);
 });
 
 test('CHAT-1 prepara canais futuros sem fingir integrações ativas', () => {
