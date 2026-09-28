@@ -102,11 +102,26 @@ test('chat send keeps the explicit guards for missing conversation, text and con
 });
 
 test('video messages fetch the protected media route with the bearer token and render a video player', () => {
-  assert.match(chatMessageSource, /type === "video" \? <VideoMessage/);
+  assert.match(chatMessageSource, /type === "video" \? <video/);
   assert.match(chatMessageSource, /Authorization: `Bearer \$\{token\}`/);
   assert.match(chatMessageSource, /URL\.createObjectURL/);
   assert.match(chatMessageSource, /URL\.revokeObjectURL/);
   assert.match(chatMessageSource, /<video className=.*controls playsInline/);
+});
+
+test('chat media types use one authenticated blob URL without JWT query parameters', () => {
+  assert.match(chatMessageSource, /useAuthenticatedMediaUrl/);
+  assert.match(chatMessageSource, /\["image", "video", "audio", "document", "sticker"\]/);
+  assert.match(chatMessageSource, /download=\{message\.media_filename/);
+  assert.doesNotMatch(chatMessageSource, /[?&](?:token|jwt)=/i);
+  assert.match(chatMessageSource, /useAuthenticatedMediaUrl\(url, protectedMedia/);
+  assert.match(chatMessageSource, /src=\{objectUrl \|\| undefined\}/);
+});
+
+test('CHAT-3A resolves every profile icon used after removing paused handling', () => {
+  assert.match(chatsPageSource, /import \{[^\n]*\bUserRound\b[^\n]*\} from "lucide-react"/);
+  assert.doesNotMatch(chatsPageSource, /<Pause\b/);
+  assert.match(chatsPageSource, /<UserRound className=/);
 });
 
 test('CHAT-3 searches messages inside one authenticated conversation without loading all history', () => {
