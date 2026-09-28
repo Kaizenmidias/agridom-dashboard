@@ -38,6 +38,24 @@ router.get('/:id/messages', async (req, res) => {
   catch { res.status(500).json({ error: 'Nao foi possivel carregar as mensagens.' }); }
 });
 
+router.get('/:id/messages/search', async (req, res) => {
+  const term = String(req.query.q || '').trim().slice(0, 100);
+  const limit = parsePage(req.query.limit, 20, 50);
+  const beforeId = req.query.beforeId ? Number(req.query.beforeId) : null;
+  if (term.length < 2) return res.status(400).json({ error: 'Informe ao menos dois caracteres para pesquisar.' });
+  try {
+    const like = `%${term}%`;
+    const params = [req.params.id, like];
+    const before = beforeId ? ' AND id < ?' : '';
+    if (beforeId) params.push(beforeId);
+    params.push(limit + 1);
+    const [rows] = await getPool().execute(`SELECT * FROM communication_messages WHERE conversation_id = ? AND body_text LIKE ?${before} ORDER BY id DESC LIMIT ?`, params);
+    const [countRows] = await getPool().execute('SELECT COUNT(*) AS total FROM communication_messages WHERE conversation_id = ? AND body_text LIKE ?', [req.params.id, like]);
+    const hasMore = rows.length > limit;
+    res.json({ messages: rows.slice(0, limit), total: Number(countRows[0]?.total || 0), hasMore });
+  } catch { res.status(500).json({ error: 'Nao foi possivel pesquisar nesta conversa.' }); }
+});
+
 router.get('/:id/messages/:messageId/media', async (req, res) => {
   try {
     const [rows] = await getPool().execute('SELECT cm.* FROM communication_messages cm JOIN conversations c ON c.id = cm.conversation_id WHERE cm.id = ? AND cm.conversation_id = ? LIMIT 1', [req.params.messageId, req.params.id]);

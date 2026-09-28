@@ -14,6 +14,7 @@ export const conversationsAPI = {
   list: (params: { search?: string; filter?: string; assignedUserId?: number } = {}) => { const query = new URLSearchParams({ channel: 'whatsapp' }); if (params.search) query.set('search', params.search); if (params.filter === 'unread') query.set('unread', 'true'); if (params.filter === 'ai' || params.filter === 'human') query.set('handlingMode', params.filter); if (params.assignedUserId) query.set('assignedUserId', String(params.assignedUserId)); return request<{ conversations: Conversation[] }>(`/api/conversations?${query.toString()}`); },
   detail: (id: number) => request<ConversationDetail>(`/api/conversations/${id}`),
   messages: (id: number, beforeId?: number) => request<{ messages: CommunicationMessage[]; hasMore?: boolean }>(`/api/conversations/${id}/messages${beforeId ? `?beforeId=${beforeId}` : ""}`),
+  searchMessages: (id: number, term: string, beforeId?: number) => request<{ messages: CommunicationMessage[]; total: number; hasMore: boolean }>(`/api/conversations/${id}/messages/search?q=${encodeURIComponent(term)}${beforeId ? `&beforeId=${beforeId}` : ""}`),
   activities: (id: number) => request<{ activities: ConversationActivity[] }>(`/api/conversations/${id}/activities`),
   markRead: (id: number) => request<{ success: boolean }>(`/api/conversations/${id}/read`, { method: 'PATCH' }),
   setHandling: (id: number, handlingMode: string) => request<{ success: boolean; handling_mode: string }>(`/api/conversations/${id}/handling`, { method: 'PATCH', body: JSON.stringify({ handling_mode: handlingMode }) }),

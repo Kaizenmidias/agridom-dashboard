@@ -106,3 +106,10 @@ test('video messages fetch the protected media route with the bearer token and r
   assert.match(chatMessageSource, /URL\.revokeObjectURL/);
   assert.match(chatMessageSource, /<video className=.*controls playsInline/);
 });
+
+test('CHAT-3 searches messages inside one authenticated conversation without loading all history', () => {
+  assert.match(routeSource, /router\.get\('\/:id\/messages\/search'/);
+  assert.match(routeSource, /conversation_id = \? AND body_text LIKE \?/);
+  assert.match(routeSource, /LIMIT \?/);
+  assert.match(routeSource, /total: Number\(countRows\[0\]\?\.total/);
+});
