@@ -158,7 +158,7 @@ test('CHAT-3A composer inserts Unicode emoji at the current cursor position', ()
 });
 
 test('CHAT-3B expands emoji categories and keeps one visible attachment entry point', () => {
-  for (const category of ['Smileys e pessoas', 'Animais e natureza', 'Comidas e bebidas', 'Atividades', 'Viagens e lugares', 'Objetos', 'Símbolos', 'Bandeiras']) assert.match(composerSource, new RegExp(category));
+  for (const category of ['Recentes', 'Smileys e pessoas', 'Animais e natureza', 'Comidas e bebidas', 'Atividades', 'Viagens e lugares', 'Objetos', 'Símbolos', 'Bandeiras']) assert.match(composerSource, new RegExp(category));
   assert.match(composerSource, /chat_recent_emojis/);
   assert.match(composerSource, /mediaAccept = .*\.pdf/);
   assert.match(indexCss, /button\[aria-label="Adicionar documento"\][^{]*\{\s*display: none/);
