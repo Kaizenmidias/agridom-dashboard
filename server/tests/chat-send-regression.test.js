@@ -14,7 +14,8 @@ const serviceSource = fs.readFileSync(path.join(root, 'server/services/whatsapp-
 const webhookSource = fs.readFileSync(path.join(root, 'server/routes/webhooks.js'), 'utf8');
 
 test('chat send exposes a safe diagnostic code while preserving the retry contract', () => {
-  assert.match(routeSource, /responseStatus = error\?\.retryable === false \? 409 : 502/);
+  assert.match(routeSource, /isForeignKeyError = error\?\.code === 'ER_NO_REFERENCED_ROW_2'/);
+  assert.match(routeSource, /responseStatus = isForeignKeyError \? 500 : error\?\.retryable === false \? 409 : 502/);
   assert.match(routeSource, /res\.status\(responseStatus\)\.json\(\{ error: error\?\.publicMessage .* code: errorCode \}\)/);
   assert.match(routeSource, /conversationId: Number\(conversation\.id\)/);
   assert.match(routeSource, /communicationAccountId: Number\(conversation\.communication_account_id\)/);
@@ -35,6 +36,20 @@ test('Evolution provider sends the v2 text payload and never exposes credentials
   assert.equal(error.code, 'EVOLUTION_AUTH_FAILED');
   assert.equal(error.providerStatus, 401);
   assert.doesNotMatch(error.providerDetail, /secret-key/);
+  assert.equal(error.providerMessage, 'REDACTED rejected');
+});
+
+test('Evolution provider builds the v2 media payload without a data URL prefix', async () => {
+  const provider = new EvolutionWhatsAppProvider({ baseUrl: 'https://evolution.example.com', apiKey: 'secret-key' });
+  let captured;
+  provider.request = async (method, requestPath, body) => { captured = { method, requestPath, body }; return { key: { id: 'image-1' } }; };
+  await provider.sendMedia('kaizen-main', { number: '5513999998888', mediaType: 'image', mimeType: 'image/jpeg', media: 'aGVsbG8=', filename: 'foto.jpg', caption: 'Legenda' });
+  assert.deepEqual(captured, { method: 'POST', requestPath: '/message/sendMedia/kaizen-main', body: { number: '5513999998888', mediatype: 'image', mimetype: 'image/jpeg', media: 'aGVsbG8=', fileName: 'foto.jpg', caption: 'Legenda', quoted: undefined } });
+});
+
+test('outbound replies only persist a quoted foreign key when the message belongs to the conversation', () => {
+  assert.match(serviceSource, /const resolvedQuotedMessageId = quoted \? Number\(quotedMessageId\) : null/);
+  assert.match(serviceSource, /quotedMessageId: resolvedQuotedMessageId/);
 });
 
 test('chat media validates signatures instead of trusting only the browser MIME', () => {

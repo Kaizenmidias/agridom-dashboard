@@ -2,6 +2,7 @@ const axios = require('axios');
 const { WEBHOOK_SECRET_HEADER } = require('./whatsapp-webhook-auth');
 
 const clean = (value, fallback = 'EVOLUTION_ERROR') => String(value || fallback).replace(/[\r\n]+/g, ' ').replace(/[^a-zA-Z0-9_ .:@/-]/g, '').slice(0, 300);
+const safeProviderMessage = (value) => clean(String(value || '').replace(/[A-Za-z0-9+/]{80,}={0,2}/g, '[redacted]').replace(/\b\d{7,}\b/g, '[redacted]').replace(/(?:secret|api[_ -]?key|authorization|token)[^ ]*/gi, '[REDACTED]'), '');
 
 function providerError(message, code, retryable = false, cause) {
   const error = new Error(message);
@@ -11,6 +12,10 @@ function providerError(message, code, retryable = false, cause) {
   error.providerStatus = Number.isInteger(cause?.status) ? cause.status : Number.isInteger(cause?.response?.status) ? cause.response.status : null;
   // Provider responses can echo credentials or message content; keep diagnostics code-only.
   error.providerDetail = clean(cause?.code || code, code);
+  const data = cause?.response?.data;
+  error.providerErrorCode = clean(data?.code || data?.errorCode || '', '');
+  error.providerErrorType = clean(data?.type || data?.error || '', '');
+  error.providerMessage = safeProviderMessage(data?.message || data?.error?.message || '');
   return error;
 }
 

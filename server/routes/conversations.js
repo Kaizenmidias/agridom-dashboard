@@ -101,17 +101,23 @@ async function handleMessageSend(req, res, requestedType, text) {
     try { await connection.beginTransaction(); const options = { account: conversation, leadId: conversation.lead_id, recipient: conversation.external_conversation_id, text, idempotencyKey: `manual:conversation:${conversation.id}:${req.get('Idempotency-Key') || `${Date.now()}:${req.userId}`}`, ownerUserId: req.userId, quotedMessageId: req.body?.quotedMessageId ? Number(req.body.quotedMessageId) : null }; const result = requestedType === 'text' ? await sendWhatsAppMessage(connection, options) : await sendWhatsAppMedia(connection, { ...options, messageType: requestedType, file: req.file, mimeType: req.file?.mimetype, filename: req.file?.originalname, caption: String(req.body?.caption || '').trim() || null }); await connection.commit(); res.status(201).json(result); }
     catch (error) {
       await connection.rollback();
-      const responseStatus = error?.retryable === false ? 409 : 502;
+      const isForeignKeyError = error?.code === 'ER_NO_REFERENCED_ROW_2' || error?.errno === 1452;
+      const responseStatus = isForeignKeyError ? 500 : error?.retryable === false ? 409 : 502;
       const errorCode = String(error?.code || 'WHATSAPP_SEND_FAILED').replace(/[^A-Z0-9_]/g, '_').slice(0, 80);
       console.error('[WhatsApp] envio de mensagem falhou', {
         conversationId: Number(conversation.id),
         communicationAccountId: Number(conversation.communication_account_id),
         provider: String(conversation.account_provider || 'unknown'),
             operation: requestedType === 'text' ? 'send_text' : 'send_media',
-            messageType: requestedType,
-            direction: 'outbound',
+        messageType: requestedType,
+        direction: 'outbound',
+        context: isForeignKeyError ? 'communication_messages' : 'message_send',
+        databaseError: isForeignKeyError ? 'foreign_key_reference' : null,
         httpStatus: responseStatus,
         providerStatus: error?.providerStatus || null,
+        providerErrorCode: error?.providerErrorCode || null,
+        providerErrorType: error?.providerErrorType || null,
+        providerMessage: error?.providerMessage || null,
         errorCode
       });
       res.status(responseStatus).json({ error: error?.publicMessage || 'Nao foi possivel enviar a mensagem.', code: errorCode });
