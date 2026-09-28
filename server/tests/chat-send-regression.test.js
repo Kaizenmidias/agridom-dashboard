@@ -13,6 +13,8 @@ const providerSource = fs.readFileSync(path.join(root, 'server/services/evolutio
 const serviceSource = fs.readFileSync(path.join(root, 'server/services/whatsapp-service.js'), 'utf8');
 const webhookSource = fs.readFileSync(path.join(root, 'server/routes/webhooks.js'), 'utf8');
 const chatMessageSource = fs.readFileSync(path.join(root, 'src/components/commercial/ChatMessage.tsx'), 'utf8');
+const chatsPageSource = fs.readFileSync(path.join(root, 'src/pages/commercial/ChatsPage.tsx'), 'utf8');
+const composerSource = fs.readFileSync(path.join(root, 'src/components/commercial/MessageComposer.tsx'), 'utf8');
 
 test('chat send exposes a safe diagnostic code while preserving the retry contract', () => {
   assert.match(routeSource, /isForeignKeyError = error\?\.code === 'ER_NO_REFERENCED_ROW_2'/);
@@ -112,4 +114,21 @@ test('CHAT-3 searches messages inside one authenticated conversation without loa
   assert.match(routeSource, /conversation_id = \? AND body_text LIKE \?/);
   assert.match(routeSource, /LIMIT \?/);
   assert.match(routeSource, /total: Number\(countRows\[0\]\?\.total/);
+});
+
+test('CHAT-3A supports safe drag, drop, paste, date separators and sequential uploads', () => {
+  assert.match(chatsPageSource, /onDragEnter=/);
+  assert.match(chatsPageSource, /onDrop=/);
+  assert.match(chatsPageSource, /onPaste=/);
+  assert.match(chatsPageSource, /for \(const file of pendingFiles\)/);
+  assert.match(chatsPageSource, /dayLabel\(message\.created_at\)/);
+  assert.match(chatsPageSource, /Nenhum agente de IA configurado/);
+  assert.doesNotMatch(chatsPageSource, /Pausar atendimento/);
+});
+
+test('CHAT-3A composer inserts Unicode emoji at the current cursor position', () => {
+  assert.match(composerSource, /selectionStart/);
+  assert.match(composerSource, /setSelectionRange/);
+  assert.match(composerSource, /Adicionar emoji/);
+  assert.match(composerSource, /emojiGroups/);
 });
