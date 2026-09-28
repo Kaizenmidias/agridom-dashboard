@@ -33,6 +33,16 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { prospectingAPI } from "@/api/prospecting";
 import { emailIntegrationsAPI } from "@/api/email-integrations";
+
+function AiProvidersPanel() {
+  const { toast } = useToast();
+  const [providers, setProviders] = useState<{ provider: string; displayName: string; configured: boolean; lastTestedAt: string | null; lastTestStatus: string | null; compatibleModels?: number }[]>([]);
+  const [keys, setKeys] = useState<Record<string, string>>({});
+  const load = async () => { const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3001"}/api/ai/providers`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); const data = await response.json(); if (response.ok) setProviders(data.providers); };
+  useEffect(() => { void load(); }, []);
+  const action = async (provider: string, type: "save" | "test") => { const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3001"}/api/ai/providers/${provider}/${type === "test" ? "test" : ""}`.replace(/\/$/, ""), { method: type === "test" ? "POST" : "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` }, ...(type === "save" ? { body: JSON.stringify({ apiKey: keys[provider] || "" }) } : {}) }); const data = await response.json(); if (!response.ok) toast({ title: "Operacao nao concluida", description: data.error, variant: "destructive" }); else { toast({ title: type === "test" ? "Conexao realizada com sucesso" : "Credencial salva", description: type === "test" ? `${data.compatibleModels || 0} modelos compativeis encontrados.` : "A API Key foi protegida no servidor." }); setKeys((current) => ({ ...current, [provider]: "" })); await load(); } };
+  return <section className="space-y-4"><div><h2 className="text-xl font-semibold">Inteligencia Artificial</h2><p className="text-sm text-muted-foreground">Credenciais protegidas dos provedores usados pelos agentes.</p></div><div className="grid gap-4 md:grid-cols-2">{providers.map((provider) => <Card key={provider.provider}><CardHeader><CardTitle>{provider.displayName}</CardTitle><CardDescription>{provider.configured ? "API Key configurada e protegida no servidor." : "Nao configurada"}</CardDescription></CardHeader><CardContent className="space-y-3"><Input type="password" placeholder={provider.configured ? "Deixe vazio para manter a chave atual" : "Cole a API Key"} value={keys[provider.provider] || ""} onChange={(event) => setKeys({ ...keys, [provider.provider]: event.target.value })} /><div className="flex gap-2"><Button variant="outline" disabled={!keys[provider.provider]} onClick={() => void action(provider.provider, "save")}>Salvar</Button><Button variant="outline" onClick={() => void action(provider.provider, "test")}>Testar</Button></div><p className="text-xs text-muted-foreground">Ultimo teste: {provider.lastTestedAt ? new Date(provider.lastTestedAt).toLocaleString("pt-BR") : "Nunca"}</p></CardContent></Card>)}</div></section>;
+}
 import { WhatsAppIntegrationPanel } from "@/components/integrations/WhatsAppIntegrationPanel";
 import type { IntegrationProvider, IntegrationSummary } from "@/types/prospecting";
 
@@ -488,6 +498,8 @@ export function IntegrationLibrary() {
           Os dados informados nos modais s?o gravados no banco MySQL e também aplicados ao runtime do servidor para manter os testes e os m?dulos ativos.
         </AlertDescription>
       </Alert>
+
+      <AiProvidersPanel />
 
       {loadError ? (
         <Alert variant="destructive">

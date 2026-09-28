@@ -2,7 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess, requireCommercialAdmin } = require('../middleware/commercial-access');
 const { query } = require('../config/database');
-const { runOpenAi } = require('../services/ai-provider');
+const { runProvider, listModels } = require('../services/ai-provider');
 
 const router = express.Router();
 router.use(authenticateToken, requireCommercialAccess);
@@ -55,6 +55,9 @@ router.post('/', requireCommercialAdmin, async (req, res) => {
   const name = clean(req.body?.name, 191); const prompt = clean(req.body?.system_prompt); const model = clean(req.body?.model, 120) || 'gpt-4o-mini';
   if (!name || !prompt) return res.status(400).json({ error: 'Nome e instrucoes do agente sao obrigatorios.' });
   try {
+    if (!['openai', 'gemini'].includes(clean(req.body?.provider, 80)) || !clean(req.body?.model, 120)) return res.status(400).json({ error: 'Selecione um provedor e modelo validos.' });
+    const availableModels = await listModels(clean(req.body.provider, 80));
+    if (!availableModels.some((availableModel) => availableModel.id === model)) return res.status(400).json({ error: 'O modelo selecionado nao esta disponivel no provedor.' });
     const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'agente'}-${Date.now()}`;
     const result = await query(`INSERT INTO ai_agents (name, slug, description, role, system_prompt, provider, model, model_config, status, monthly_token_limit, token_limit_policy, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`, [name, slug, clean(req.body?.description, 1000) || null, clean(req.body?.role, 191) || null, prompt, clean(req.body?.provider, 80) || 'openai', model, JSON.stringify(jsonObject(req.body?.model_config)), req.body?.monthly_token_limit || null, req.body?.token_limit_policy === 'block' ? 'block' : 'warn', req.userId]);
@@ -102,7 +105,10 @@ router.post('/:id/test', async (req, res) => {
     const messages = Array.isArray(req.body?.messages) ? req.body.messages.filter((message) => ['user', 'assistant'].includes(message?.role)).slice(-20).map((message) => ({ role: message.role, content: clean(message.content, 10000) })) : [];
     const monthly = await query("SELECT COALESCE(SUM(total_tokens), 0) AS total FROM ai_agent_usage WHERE agent_id = ? AND created_at >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')", [agentId]);
     if (agent.token_limit_policy === 'block' && agent.monthly_token_limit && Number(monthly[0].total) >= Number(agent.monthly_token_limit)) return res.status(429).json({ error: 'Limite mensal de tokens atingido.', code: 'AI_TOKEN_LIMIT' });
-    const result = await runOpenAi({ provider: agent.provider, model: agent.model, systemPrompt: agent.system_prompt, messages, modelConfig: agent.model_config });
+    if (!['openai', 'gemini'].includes(agent.provider) || !agent.model) return res.status(409).json({ error: 'Selecione um provedor e modelo validos antes de testar.', code: 'AI_MODEL_INVALID' });
+    const models = await listModels(agent.provider);
+    if (!models.some((model) => model.id === agent.model)) return res.status(409).json({ error: 'O modelo deste agente nao esta mais disponivel no provedor.', code: 'AI_MODEL_UNAVAILABLE' });
+    const result = await runProvider({ provider: agent.provider, model: agent.model, systemPrompt: agent.system_prompt, messages, modelConfig: agent.model_config });
     await query(`INSERT INTO ai_agent_usage (agent_id, provider, model, operation, origin, input_tokens, output_tokens, total_tokens, cost_amount, cost_currency, user_id) VALUES (?, ?, ?, 'playground', 'playground', ?, ?, ?, ?, ?, ?)`, [agentId, agent.provider, agent.model, result.inputTokens, result.outputTokens, result.totalTokens, result.costAmount, result.costAmount === null ? null : 'USD', req.userId]);
     await audit(agentId, req.userId, 'playground_test');
     res.json({ reply: result.content, usage: result });

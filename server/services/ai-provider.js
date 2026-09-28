@@ -1,5 +1,6 @@
 const { decryptSecret } = require('./integration-crypto');
 const { query } = require('../config/database');
+const { encryptSecret } = require('./integration-crypto');
 
 const PROVIDER_ERRORS = {
   notConfigured: 'AI_PROVIDER_NOT_CONFIGURED',
@@ -7,6 +8,10 @@ const PROVIDER_ERRORS = {
   rateLimit: 'AI_PROVIDER_RATE_LIMIT',
   failed: 'AI_PROVIDER_FAILED',
 };
+
+const modelCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const SUPPORTED_PROVIDERS = ['openai', 'gemini'];
 
 function providerError(code, message) {
   const error = new Error(message);
@@ -27,6 +32,46 @@ async function getOpenAiKey() {
   if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
   throw providerError(PROVIDER_ERRORS.notConfigured, 'A credencial da IA nao esta configurada.');
 }
+
+async function getProviderKey(provider) {
+  const rows = await query('SELECT secret_ciphertext, secret_iv, secret_auth_tag FROM integration_providers WHERE provider = ? LIMIT 1', [provider]);
+  if (!rows[0]?.secret_ciphertext) return null;
+  try { return decryptSecret(rows[0])?.apiKey || null; } catch { return null; }
+}
+
+function normalizeModels(provider, data) {
+  const source = provider === 'gemini' ? (data.models || []) : (data.data || []);
+  return source.map((model) => {
+    const id = String(model.name || model.id || '').replace(/^models\//, '');
+    const methods = model.supportedGenerationMethods || [];
+    const compatible = provider === 'gemini' ? methods.includes('generateContent') : !/(embedding|moderation|transcri|tts|image|search|dall|whisper)/i.test(id);
+    return { id, name: String(model.displayName || model.name || model.id || id), provider, compatible, capabilities: methods, metadata: { description: model.description || null, contextWindow: model.inputTokenLimit || null } };
+  }).filter((model) => model.id && model.compatible);
+}
+
+async function listModels(provider, { refresh = false } = {}) {
+  if (!SUPPORTED_PROVIDERS.includes(provider)) throw providerError(PROVIDER_ERRORS.failed, 'Provedor de IA nao suportado.');
+  const cached = modelCache.get(provider);
+  if (!refresh && cached && cached.expiresAt > Date.now()) return cached.models;
+  const apiKey = await getProviderKey(provider);
+  if (!apiKey) throw providerError(PROVIDER_ERRORS.notConfigured, 'O provedor de IA nao esta configurado.');
+  const url = provider === 'gemini' ? `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}` : 'https://api.openai.com/v1/models';
+  const response = await fetch(url, { headers: provider === 'openai' ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(15000) });
+  if (response.status === 429) throw providerError(PROVIDER_ERRORS.rateLimit, 'O provedor de IA atingiu o limite de requisicoes.');
+  if (!response.ok) throw providerError(PROVIDER_ERRORS.failed, 'Credencial invalida ou provedor indisponivel.');
+  const models = normalizeModels(provider, await response.json());
+  modelCache.set(provider, { models, expiresAt: Date.now() + CACHE_TTL_MS });
+  return models;
+}
+
+function invalidateModelCache(provider) { if (provider) modelCache.delete(provider); else modelCache.clear(); }
+async function testProvider(provider) { const models = await listModels(provider, { refresh: true }); return { success: true, provider, compatibleModels: models.length }; }
+async function runGemini({ model, systemPrompt, messages, modelConfig = {} }) {
+  const apiKey = await getProviderKey('gemini'); if (!apiKey) throw providerError(PROVIDER_ERRORS.notConfigured, 'O provedor de IA nao esta configurado.');
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(30000), body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents: messages.map((message) => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text: message.content }] })), ...(Number.isFinite(Number(modelConfig.temperature)) ? { generationConfig: { temperature: Number(modelConfig.temperature) } } : {}) }) });
+  if (response.status === 429) throw providerError(PROVIDER_ERRORS.rateLimit, 'O provedor de IA atingiu o limite de requisicoes.'); if (!response.ok) throw providerError(PROVIDER_ERRORS.failed, 'O provedor de IA nao respondeu corretamente.'); const data = await response.json(); const content = data.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || ''; const usage = data.usageMetadata || {}; return { content, inputTokens: Number(usage.promptTokenCount || 0), outputTokens: Number(usage.candidatesTokenCount || 0), totalTokens: Number(usage.totalTokenCount || 0), costAmount: calculateCost(modelConfig, Number(usage.promptTokenCount || 0), Number(usage.candidatesTokenCount || 0)) };
+}
+async function runProvider({ provider, ...options }) { if (provider === 'openai') return runOpenAi(options); if (provider === 'gemini') return runGemini(options); throw providerError(PROVIDER_ERRORS.failed, 'Provedor de IA nao suportado.'); }
 
 function calculateCost(modelConfig, inputTokens, outputTokens) {
   const input = Number(modelConfig?.inputPriceUsdPer1k);
@@ -70,4 +115,4 @@ async function runOpenAi({ model, systemPrompt, messages, modelConfig = {}, time
   }
 }
 
-module.exports = { PROVIDER_ERRORS, calculateCost, runOpenAi };
+module.exports = { PROVIDER_ERRORS, SUPPORTED_PROVIDERS, calculateCost, runOpenAi, runGemini, runProvider, listModels, testProvider, invalidateModelCache, getProviderKey, encryptSecret };
