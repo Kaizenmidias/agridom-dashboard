@@ -18,6 +18,7 @@ import {
   MessageSquareText,
   PanelTop,
   Plug,
+  Smartphone,
   ReceiptText,
   Search,
   Send,
@@ -45,6 +46,7 @@ export const navigationItems: NavigationItem[] = [
     icon: TrendingUp,
     children: [
       { label: "Chats", icon: MessagesSquare, path: "/comercial/chats", requiredPermissions: ["can_access_crm"] },
+      { label: "Números conectados", icon: Smartphone, path: "/comercial/numeros-conectados", requiredPermissions: ["can_access_crm"] },
       { label: "Leads", icon: Users, path: "/comercial/leads", requiredPermissions: ["can_access_crm"] },
       { label: "Pipeline", icon: PanelTop, path: "/comercial/pipeline", legacyPaths: ["/comercial/kanban"], requiredPermissions: ["can_access_crm"] },
       { label: "Prospecção", icon: Search, path: "/comercial/prospeccao", legacyPaths: ["/prospeccao"], requiredPermissions: ["can_access_crm"] },

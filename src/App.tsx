@@ -27,6 +27,7 @@ import {
   MetricsPage,
 } from "./pages/commercial/CommercialPlaceholders";
 import { ChatsPage } from "./pages/commercial/ChatsPage";
+import { ConnectedNumbersPage } from "./pages/commercial/ConnectedNumbersPage";
 import { AgentsPage, AssistantsPage, ContentsPage, PromptsPage } from "./pages/ai/AiPlaceholders";
 import { CashFlowPage, RevenuesPage } from "./pages/finance/FinancePlaceholders";
 import { ContractsPage } from "./pages/legal/LegalPlaceholders";
@@ -58,6 +59,7 @@ const routes = [
   { path: "/despesas", element: <DespesasPage />, protected: true, restrictedForRicardo: true },
   { path: "/crm", element: <CRMPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/chats", element: <ChatsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/numeros-conectados", element: <ConnectedNumbersPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/leads", element: <LeadsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/leads/:leadSlug", element: <LeadDetailPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/pipeline", element: <PipelinePage />, protected: true, restrictedForRicardo: false },
