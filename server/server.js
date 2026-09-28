@@ -109,9 +109,9 @@ module.exports = app;
 if (require.main === module) {
   // Iniciar servidor apenas no ambiente Node tradicional.
   const server = app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
-    console.log(`API disponÃ­vel em ${process.env.NODE_ENV === 'production' ? process.env.BACKEND_URL : `http://localhost:${PORT}`}/api`);
-    console.log(`ðŸŒ Ambiente: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`[API] Servidor rodando na porta ${PORT}`);
+    console.log(`[API] API disponível em ${process.env.NODE_ENV === 'production' ? process.env.BACKEND_URL : `http://localhost:${PORT}`}/api`);
+    console.log(`[API] Ambiente: ${process.env.NODE_ENV || 'development'}`);
   });
 
   // Configurar timeout para produÃ§Ã£o
@@ -121,7 +121,7 @@ if (require.main === module) {
 
   // Graceful shutdown
   process.on('SIGINT', async () => {
-    console.log('\nðŸ”„ Encerrando servidor...');
+    console.log('\n[API] Encerrando servidor...');
     await closeConnection();
     process.exit(0);
   });

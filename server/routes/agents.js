@@ -16,16 +16,17 @@ async function audit(agentId, actorUserId, action, metadata = {}) {
 }
 
 async function getAgent(agentId, includePrompt = true) {
-  const rows = await query(`SELECT a.*, COALESCE(SUM(u.total_tokens), 0) AS total_tokens, COUNT(DISTINCT u.id) AS usage_count
+  const result = await query(`SELECT a.*, COALESCE(SUM(u.total_tokens), 0) AS total_tokens, COUNT(DISTINCT u.id) AS usage_count
     FROM ai_agents a LEFT JOIN ai_agent_usage u ON u.agent_id = a.id
     WHERE a.id = ? GROUP BY a.id`, [agentId]);
+  const rows = result.rows || [];
   if (!rows[0]) return null;
   const agent = { ...rows[0], model_config: rows[0].model_config ? JSON.parse(rows[0].model_config) : {}, total_tokens: Number(rows[0].total_tokens), usage_count: Number(rows[0].usage_count) };
   if (!includePrompt) delete agent.system_prompt;
-  const permissions = await query('SELECT permission_key, enabled FROM ai_agent_permissions WHERE agent_id = ? ORDER BY permission_key', [agentId]);
-  const bindings = await query(`SELECT b.id, b.mode, b.status, b.communication_account_id, c.display_name, c.phone_number, c.status AS account_status
+  const permissionsResult = await query('SELECT permission_key, enabled FROM ai_agent_permissions WHERE agent_id = ? ORDER BY permission_key', [agentId]);
+  const bindingsResult = await query(`SELECT b.id, b.mode, b.status, b.communication_account_id, c.display_name, c.phone_number, c.status AS account_status
     FROM ai_agent_channel_bindings b JOIN communication_accounts c ON c.id = b.communication_account_id WHERE b.agent_id = ? ORDER BY b.id`, [agentId]);
-  return { ...agent, permissions, bindings };
+  return { ...agent, permissions: permissionsResult.rows || [], bindings: bindingsResult.rows || [] };
 }
 
 router.get('/', async (req, res) => {
@@ -36,11 +37,11 @@ router.get('/', async (req, res) => {
     let where = 'WHERE 1=1';
     if (search) { where += ' AND (a.name LIKE ? OR a.slug LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
     if (['draft', 'active', 'inactive', 'archived'].includes(status)) { where += ' AND a.status = ?'; params.push(status); }
-    const rows = await query(`SELECT a.id, a.name, a.slug, a.description, a.role, a.provider, a.model, a.status, a.monthly_token_limit, a.token_limit_policy, a.created_at, a.updated_at,
+    const result = await query(`SELECT a.id, a.name, a.slug, a.description, a.role, a.provider, a.model, a.status, a.monthly_token_limit, a.token_limit_policy, a.created_at, a.updated_at,
       COALESCE(SUM(CASE WHEN u.created_at >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01') THEN u.total_tokens ELSE 0 END), 0) AS monthly_tokens,
       COUNT(DISTINCT b.id) AS binding_count
       FROM ai_agents a LEFT JOIN ai_agent_usage u ON u.agent_id = a.id LEFT JOIN ai_agent_channel_bindings b ON b.agent_id = a.id ${where} GROUP BY a.id ORDER BY a.updated_at DESC`, params);
-    res.json({ agents: rows.map((row) => ({ ...row, monthly_tokens: Number(row.monthly_tokens), binding_count: Number(row.binding_count) })) });
+    res.json({ agents: (result.rows || []).map((row) => ({ ...row, monthly_tokens: Number(row.monthly_tokens), binding_count: Number(row.binding_count) })) });
   } catch (error) { console.error('Erro ao listar agentes:', error); res.status(500).json({ error: 'Nao foi possivel listar os agentes.' }); }
 });
 
@@ -96,9 +97,9 @@ router.post('/:id/duplicate', requireCommercialAdmin, async (req, res) => {
 router.post('/:id/status', requireCommercialAdmin, async (req, res) => { const agentId = idOf(req.params.id); const status = clean(req.body?.status, 20); if (!agentId || !['draft', 'active', 'inactive', 'archived'].includes(status)) return res.status(400).json({ error: 'Status invalido.' }); try { await query('UPDATE ai_agents SET status = ?, archived_at = ? WHERE id = ?', [status, status === 'archived' ? new Date() : null, agentId]); await audit(agentId, req.userId, `status_${status}`); res.json({ agent: await getAgent(agentId) }); } catch (error) { res.status(500).json({ error: 'Nao foi possivel alterar o status.' }); } });
 router.delete('/:id', requireCommercialAdmin, async (req, res) => { const agentId = idOf(req.params.id); if (!agentId) return res.status(400).json({ error: 'Agente invalido.' }); try { await query("UPDATE ai_agents SET status = 'archived', archived_at = CURRENT_TIMESTAMP WHERE id = ?", [agentId]); await audit(agentId, req.userId, 'archived'); res.json({ archived: true }); } catch (error) { res.status(500).json({ error: 'Nao foi possivel arquivar o agente.' }); } });
 
-router.get('/:id/usage', async (req, res) => { const agentId = idOf(req.params.id); const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100); try { const rows = await query('SELECT id, provider, model, operation, origin, input_tokens, output_tokens, total_tokens, cost_amount, cost_currency, created_at FROM ai_agent_usage WHERE agent_id = ? ORDER BY id DESC LIMIT ?', [agentId, limit]); res.json({ usage: rows }); } catch (error) { res.status(500).json({ error: 'Nao foi possivel carregar o uso do agente.' }); } });
+router.get('/:id/usage', async (req, res) => { const agentId = idOf(req.params.id); const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100); try { const result = await query('SELECT id, provider, model, operation, origin, input_tokens, output_tokens, total_tokens, cost_amount, cost_currency, created_at FROM ai_agent_usage WHERE agent_id = ? ORDER BY id DESC LIMIT ?', [agentId, limit]); res.json({ usage: result.rows || [] }); } catch (error) { res.status(500).json({ error: 'Nao foi possivel carregar o uso do agente.' }); } });
 
-router.post('/:id/bindings', requireCommercialAdmin, async (req, res) => { const agentId = idOf(req.params.id); const accountId = idOf(req.body?.communication_account_id); if (!agentId || !accountId) return res.status(400).json({ error: 'Agente ou conta invalida.' }); try { const accounts = await query("SELECT id FROM communication_accounts WHERE id = ? AND status = 'connected' AND archived_at IS NULL", [accountId]); if (!accounts[0]) return res.status(400).json({ error: 'A conta precisa estar conectada.' }); const result = await query("INSERT INTO ai_agent_channel_bindings (agent_id, communication_account_id, mode, status) VALUES (?, ?, 'inbound', 'active')", [agentId, accountId]); await audit(agentId, req.userId, 'channel_bound', { communicationAccountId: accountId }); res.status(201).json({ bindingId: result.insertId }); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Este numero ja possui um agente de IA principal vinculado.' }); res.status(500).json({ error: 'Nao foi possivel vincular o canal.' }); } });
+router.post('/:id/bindings', requireCommercialAdmin, async (req, res) => { const agentId = idOf(req.params.id); const accountId = idOf(req.body?.communication_account_id); if (!agentId || !accountId) return res.status(400).json({ error: 'Agente ou conta invalida.' }); try { const accountsResult = await query("SELECT id FROM communication_accounts WHERE id = ? AND status = 'connected' AND archived_at IS NULL", [accountId]); if (!(accountsResult.rows || [])[0]) return res.status(400).json({ error: 'A conta precisa estar conectada.' }); const result = await query("INSERT INTO ai_agent_channel_bindings (agent_id, communication_account_id, mode, status) VALUES (?, ?, 'inbound', 'active')", [agentId, accountId]); await audit(agentId, req.userId, 'channel_bound', { communicationAccountId: accountId }); res.status(201).json({ bindingId: result.insertId }); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Este numero ja possui um agente de IA principal vinculado.' }); res.status(500).json({ error: 'Nao foi possivel vincular o canal.' }); } });
 router.delete('/:id/bindings/:bindingId', requireCommercialAdmin, async (req, res) => { const agentId = idOf(req.params.id); const bindingId = idOf(req.params.bindingId); try { await query('DELETE FROM ai_agent_channel_bindings WHERE id = ? AND agent_id = ?', [bindingId, agentId]); await audit(agentId, req.userId, 'channel_unbound', { bindingId }); res.json({ removed: true }); } catch (error) { res.status(500).json({ error: 'Nao foi possivel desvincular o canal.' }); } });
 
 router.post('/:id/test', async (req, res) => {
@@ -106,8 +107,8 @@ router.post('/:id/test', async (req, res) => {
   try {
     const agent = await getAgent(agentId); if (!agent) return res.status(404).json({ error: 'Agente nao encontrado.' });
     const messages = Array.isArray(req.body?.messages) ? req.body.messages.filter((message) => ['user', 'assistant'].includes(message?.role)).slice(-20).map((message) => ({ role: message.role, content: clean(message.content, 10000) })) : [];
-    const monthly = await query("SELECT COALESCE(SUM(total_tokens), 0) AS total FROM ai_agent_usage WHERE agent_id = ? AND created_at >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')", [agentId]);
-    if (agent.token_limit_policy === 'block' && agent.monthly_token_limit && Number(monthly[0].total) >= Number(agent.monthly_token_limit)) return res.status(429).json({ error: 'Limite mensal de tokens atingido.', code: 'AI_TOKEN_LIMIT' });
+    const monthlyResult = await query("SELECT COALESCE(SUM(total_tokens), 0) AS total FROM ai_agent_usage WHERE agent_id = ? AND created_at >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')", [agentId]);
+    if (agent.token_limit_policy === 'block' && agent.monthly_token_limit && Number((monthlyResult.rows || [])[0]?.total || 0) >= Number(agent.monthly_token_limit)) return res.status(429).json({ error: 'Limite mensal de tokens atingido.', code: 'AI_TOKEN_LIMIT' });
     if (!['openai', 'gemini'].includes(agent.provider) || !agent.model) return res.status(409).json({ error: 'Selecione um provedor e modelo validos antes de testar.', code: 'AI_MODEL_INVALID' });
     const models = await listModels(agent.provider);
     if (!models.some((model) => model.id === agent.model)) return res.status(409).json({ error: 'O modelo deste agente nao esta mais disponivel no provedor.', code: 'AI_MODEL_UNAVAILABLE' });

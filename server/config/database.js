@@ -123,7 +123,7 @@ async function closeConnection() {
   if (pool) {
     await pool.end();
     pool = null;
-    console.log('Conexao MySQL fechada');
+    console.log('[MySQL] Conexão fechada');
   }
 }
 
