@@ -3,7 +3,7 @@ const multer = require('multer');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess } = require('../middleware/commercial-access');
 const { getPool } = require('../config/database');
-const { sendWhatsAppMessage, sendWhatsAppMedia, loadEvolutionConfig } = require('../services/whatsapp-service');
+const { sendWhatsAppMessage, sendWhatsAppMedia, loadEvolutionConfig, formatWhatsAppParticipantPhone } = require('../services/whatsapp-service');
 const { sendFile, LIMITS } = require('../services/chat-media');
 
 const router = express.Router();
@@ -20,9 +20,10 @@ const normalizeParticipants = (value) => {
   const list = Array.isArray(value) ? value : [];
   return list.slice(0, 256).map((participant, index) => {
     const externalId = String(participant?.id || participant?.jid || participant?.participant || '').trim().slice(0, 191);
-    const name = String(participant?.name || participant?.notify || participant?.pushName || '').trim().slice(0, 191) || `Participante ${index + 1}`;
+    const name = String(participant?.name || participant?.notify || participant?.pushName || participant?.verifiedName || '').trim().slice(0, 191) || null;
+    const phone = formatWhatsAppParticipantPhone(externalId);
     const role = participant?.admin === 'superadmin' ? 'superadmin' : participant?.admin === 'admin' ? 'admin' : 'participant';
-    return { externalId, name, role };
+    return { externalId, name, phone, role };
   }).filter((participant) => participant.externalId);
 };
 
@@ -59,8 +60,8 @@ router.post('/:id/profile/refresh', async (req, res) => {
     if (!conversation) return res.status(404).json({ error: 'Conversa nao encontrada.' });
     const fresh = conversation.profile_picture_updated_at && Date.now() - new Date(conversation.profile_picture_updated_at).getTime() < PROFILE_TTL_HOURS * 60 * 60 * 1000;
     if (fresh && req.body?.force !== true) {
-      const [participantRows] = conversation.conversation_type === 'group' ? await getPool().execute('SELECT display_name, participant_role FROM conversation_participants WHERE conversation_id = ? ORDER BY display_name, id', [conversation.id]) : [[]];
-      return res.json({ profilePictureUrl: conversation.profile_picture_url || null, displayName: conversation.display_name || null, participantCount: conversation.participant_count == null ? null : Number(conversation.participant_count), participants: participantRows.map((participant) => ({ name: participant.display_name || 'Participante', role: participant.participant_role === 'superadmin' ? 'Criador' : participant.participant_role === 'admin' ? 'Administrador' : 'Participante' })), cached: true });
+      const [participantRows] = conversation.conversation_type === 'group' ? await getPool().execute('SELECT display_name, phone, profile_picture_url, participant_role FROM conversation_participants WHERE conversation_id = ? ORDER BY display_name, id', [conversation.id]) : [[]];
+      return res.json({ profilePictureUrl: conversation.profile_picture_url || null, displayName: conversation.display_name || null, participantCount: conversation.participant_count == null ? null : Number(conversation.participant_count), participants: participantRows.map((participant) => ({ name: participant.display_name, phone: participant.phone, profilePictureUrl: validProfilePictureUrl(participant.profile_picture_url), role: participant.participant_role === 'superadmin' ? 'Criador' : participant.participant_role === 'admin' ? 'Administrador' : 'Participante' })), cached: true });
     }
     const { provider } = await loadEvolutionConfig(getPool(), conversation);
     let profilePictureUrl = null;
@@ -85,9 +86,16 @@ router.post('/:id/profile/refresh', async (req, res) => {
       }
       const normalizedParticipants = normalizeParticipants(groupParticipants);
       participantCount = normalizedParticipants.length;
-      participants = normalizedParticipants.map((participant) => ({ name: participant.name || 'Participante', role: participant.role === 'superadmin' ? 'Criador' : participant.role === 'admin' ? 'Administrador' : 'Participante' }));
+      const avatarCandidates = normalizedParticipants.slice(0, 8);
+      const enriched = await Promise.all(avatarCandidates.map(async (participant) => {
+        try { const picture = await provider.fetchProfilePicture(conversation.external_instance_id, participant.externalId); return { ...participant, profilePictureUrl: validProfilePictureUrl(picture.profilePictureUrl), profilePictureUpdatedAt: new Date() }; }
+        catch (error) { console.info('[WhatsApp] avatar de participante indisponivel', { conversationId: Number(conversation.id), operation: 'participant_profile_picture', ...safeProviderError(error) }); return participant; }
+      }));
+      const enrichedById = new Map(enriched.map((participant) => [participant.externalId, participant]));
+      const storedParticipants = normalizedParticipants.map((participant) => ({ ...participant, ...(enrichedById.get(participant.externalId) || {}) }));
+      participants = storedParticipants.map((participant) => ({ name: participant.name, phone: participant.phone, profilePictureUrl: participant.profilePictureUrl || null, role: participant.role === 'superadmin' ? 'Criador' : participant.role === 'admin' ? 'Administrador' : 'Participante' }));
       await getPool().execute('DELETE FROM conversation_participants WHERE conversation_id = ?', [conversation.id]);
-      for (const participant of normalizedParticipants) await getPool().execute('INSERT INTO conversation_participants (conversation_id, external_participant_id, display_name, participant_role) VALUES (?, ?, ?, ?)', [conversation.id, participant.externalId, participant.name, participant.role]);
+      for (const participant of storedParticipants) await getPool().execute('INSERT INTO conversation_participants (conversation_id, external_participant_id, display_name, phone, profile_picture_url, profile_picture_updated_at, participant_role) VALUES (?, ?, ?, ?, ?, ?, ?)', [conversation.id, participant.externalId, participant.name, participant.phone, participant.profilePictureUrl || null, participant.profilePictureUpdatedAt || null, participant.role]);
     } else {
       const number = String(conversation.external_conversation_id || '').split('@')[0].split(':')[0];
       const profile = await provider.fetchProfilePicture(conversation.external_instance_id, number);

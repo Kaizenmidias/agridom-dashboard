@@ -3,10 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { EvolutionWhatsAppProvider } = require('../services/evolution-whatsapp-provider');
-const { extractInbound, extractDeliveryStatus, deliveryUpdates } = require('../services/whatsapp-service');
+const { extractInbound, extractDeliveryStatus, deliveryUpdates, formatWhatsAppParticipantPhone } = require('../services/whatsapp-service');
 
 const root = path.resolve(__dirname, '../..');
 const migration = fs.readFileSync(path.join(root, 'database/migrations/20260928_chat_3c_whatsapp_metadata.sql'), 'utf8');
+const participantMigration = fs.readFileSync(path.join(root, 'database/migrations/20260928_chat_3c_participant_details.sql'), 'utf8');
 const capabilities = fs.readFileSync(path.join(root, 'src/lib/channel-capabilities.ts'), 'utf8');
 const chats = fs.readFileSync(path.join(root, 'src/pages/commercial/ChatsPage.tsx'), 'utf8');
 const chatMessage = fs.readFileSync(path.join(root, 'src/components/commercial/ChatMessage.tsx'), 'utf8');
@@ -78,4 +79,15 @@ test('CHAT-3C migration is additive and MySQL-compatible', () => {
   assert.match(migration, /information_schema\.COLUMNS/);
   assert.doesNotMatch(migration, /ADD COLUMN IF NOT EXISTS/i);
   assert.doesNotMatch(migration, /DROP TABLE|TRUNCATE|DELETE FROM/i);
+});
+
+test('CHAT-3C participant details remain safe and presentation-ready', () => {
+  assert.equal(formatWhatsAppParticipantPhone('5513999999999@s.whatsapp.net'), '+55 13 99999-9999');
+  assert.equal(formatWhatsAppParticipantPhone('447911123456@s.whatsapp.net'), '+447911123456');
+  assert.match(participantMigration, /ADD COLUMN phone/);
+  assert.match(participantMigration, /ADD COLUMN profile_picture_url/);
+  assert.match(conversationsRoute, /fetchProfilePicture\(conversation\.external_instance_id, participant\.externalId\)/);
+  assert.match(chats, /Buscar participante/);
+  assert.match(chats, /profilePictureUrl/);
+  assert.doesNotMatch(chats, /@s\.whatsapp\.net/);
 });

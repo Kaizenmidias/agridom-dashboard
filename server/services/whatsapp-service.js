@@ -18,6 +18,13 @@ function normalizePhone(value) {
   return raw;
 }
 
+function formatWhatsAppParticipantPhone(value) {
+  const digits = String(value || '').replace(/@s\.whatsapp\.net$|@c\.us$|@lid$/i, '').replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) return `+${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.length === 13 ? digits.slice(4, 9) : digits.slice(4, 8)}-${digits.length === 13 ? digits.slice(9) : digits.slice(8)}`;
+  return `+${digits}`;
+}
+
 function phoneCandidates(normalized) {
   if (!normalized) return [];
   const candidates = [normalized];
@@ -247,4 +254,4 @@ async function sendWhatsAppMessage(connection, options) { return sendWhatsAppCon
 
 async function sendWhatsAppMedia(connection, options) { return sendWhatsAppContent(connection, options); }
 
-module.exports = { normalizePhone, extractInbound, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };
+module.exports = { normalizePhone, formatWhatsAppParticipantPhone, extractInbound, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };
