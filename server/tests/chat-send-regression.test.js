@@ -131,6 +131,14 @@ test('CHAT-3 searches messages inside one authenticated conversation without loa
   assert.match(routeSource, /total: Number\(countRows\[0\]\?\.total/);
 });
 
+test('CHAT-3B reuses lead budget, normalized labels and paginated shared content', () => {
+  assert.match(routeSource, /JSON_EXTRACT\(p\.analysis_report, '\$\.budget'\)/);
+  assert.match(routeSource, /prospect_labels pl JOIN lead_labels ll/);
+  assert.match(routeSource, /router\.get\('\/:id\/shared'/);
+  assert.match(routeSource, /\['media', 'documents', 'links'\]/);
+  assert.doesNotMatch(routeSource, /media_storage_path[^\n]*shared/);
+});
+
 test('CHAT-3A supports safe drag, drop, paste, date separators and sequential uploads', () => {
   assert.match(chatsPageSource, /onDragEnter=/);
   assert.match(chatsPageSource, /onDrop=/);

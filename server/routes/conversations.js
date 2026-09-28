@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  try { const [rows] = await getPool().execute('SELECT c.*, p.business_name AS lead_name, p.phone AS lead_phone, p.email AS lead_email, p.website AS lead_website, p.city AS lead_city, p.state AS lead_state, p.origin AS lead_origin, p.status AS lead_status, p.category AS lead_category, p.created_at AS lead_created_at, ca.name AS account_name, ca.phone_number AS account_phone, u.name AS assigned_user_name, u.email AS assigned_user_email FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id LEFT JOIN prospects p ON p.id = c.lead_id LEFT JOIN users u ON u.id = c.assigned_user_id WHERE c.id = ?', [req.params.id]); if (!rows[0]) return res.status(404).json({ error: 'Conversa nao encontrada.' }); res.json({ ...rows[0], id: Number(rows[0].id), unreadCount: Number(rows[0].unread_count) }); }
+  try { const [rows] = await getPool().execute("SELECT c.*, p.business_name AS lead_name, p.phone AS lead_phone, p.email AS lead_email, p.website AS lead_website, p.city AS lead_city, p.state AS lead_state, p.origin AS lead_origin, p.status AS lead_status, p.category AS lead_category, p.created_at AS lead_created_at, JSON_UNQUOTE(JSON_EXTRACT(p.analysis_report, '$.budget')) AS lead_budget, ca.name AS account_name, ca.phone_number AS account_phone, u.name AS assigned_user_name, u.email AS assigned_user_email FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id LEFT JOIN prospects p ON p.id = c.lead_id LEFT JOIN users u ON u.id = c.assigned_user_id WHERE c.id = ?", [req.params.id]); if (!rows[0]) return res.status(404).json({ error: 'Conversa nao encontrada.' }); const [labels] = rows[0].lead_id ? await getPool().execute('SELECT ll.id, ll.name, ll.color FROM prospect_labels pl JOIN lead_labels ll ON ll.id = pl.label_id WHERE pl.prospect_id = ? ORDER BY ll.name', [rows[0].lead_id]) : [[]]; res.json({ ...rows[0], id: Number(rows[0].id), unreadCount: Number(rows[0].unread_count), lead_labels: labels }); }
   catch { res.status(500).json({ error: 'Nao foi possivel carregar a conversa.' }); }
 });
 
@@ -54,6 +54,29 @@ router.get('/:id/messages/search', async (req, res) => {
     const hasMore = rows.length > limit;
     res.json({ messages: rows.slice(0, limit), total: Number(countRows[0]?.total || 0), hasMore });
   } catch { res.status(500).json({ error: 'Nao foi possivel pesquisar nesta conversa.' }); }
+});
+
+router.get('/:id/shared', async (req, res) => {
+  const type = String(req.query.type || 'media');
+  const limit = parsePage(req.query.limit, 24, 50);
+  const beforeId = req.query.beforeId ? Number(req.query.beforeId) : null;
+  if (!['media', 'documents', 'links'].includes(type)) return res.status(400).json({ error: 'Tipo de conteudo compartilhado invalido.' });
+  try {
+    const [conversations] = await getPool().execute('SELECT id FROM conversations WHERE id = ? LIMIT 1', [req.params.id]);
+    if (!conversations[0]) return res.status(404).json({ error: 'Conversa nao encontrada.' });
+    const params = [req.params.id];
+    const before = beforeId ? ' AND id < ?' : '';
+    if (beforeId) params.push(beforeId);
+    params.push(limit + 1);
+    if (type === 'links') {
+      const [rows] = await getPool().execute(`SELECT id, body_text, direction, created_at FROM communication_messages WHERE conversation_id = ? AND body_text REGEXP 'https?://'${before} ORDER BY id DESC LIMIT ?`, params);
+      const items = rows.slice(0, limit).flatMap((row) => (String(row.body_text || '').match(/https?:\/\/[^\s<>"']+/gi) || []).slice(0, 10).map((url) => { try { const parsed = new URL(url); return { id: Number(row.id), url: parsed.toString(), domain: parsed.hostname, excerpt: String(row.body_text).slice(0, 240), direction: row.direction, created_at: row.created_at }; } catch { return null; } }).filter(Boolean));
+      return res.json({ items, hasMore: rows.length > limit });
+    }
+    const messageTypes = type === 'media' ? ['image', 'video'] : ['document'];
+    const [rows] = await getPool().execute(`SELECT id, direction, body_text, message_type, media_mime_type, media_filename, media_size_bytes, media_duration_seconds, media_width, media_height, created_at FROM communication_messages WHERE conversation_id = ? AND message_type IN (${messageTypes.map(() => '?').join(',')})${before} ORDER BY id DESC LIMIT ?`, [req.params.id, ...messageTypes, ...(beforeId ? [beforeId] : []), limit + 1]);
+    res.json({ items: rows.slice(0, limit), hasMore: rows.length > limit });
+  } catch { res.status(500).json({ error: 'Nao foi possivel carregar os conteudos compartilhados.' }); }
 });
 
 router.get('/:id/messages/:messageId/media', async (req, res) => {
