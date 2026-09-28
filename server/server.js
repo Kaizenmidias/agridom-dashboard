@@ -58,6 +58,7 @@ const integrationsRouter = require('./routes/integrations');
 const whatsappRouter = require('./routes/whatsapp');
 const webhookRouter = require('./routes/webhooks');
 const conversationsRouter = require('./routes/conversations');
+const agentsRouter = require('./routes/agents');
 
 
 app.locals.query = query;
@@ -77,6 +78,7 @@ app.use('/api/integrations', integrationsRouter);
 app.use('/api/integrations/whatsapp', whatsappRouter);
 app.use('/api/webhooks', webhookRouter);
 app.use('/api/conversations', conversationsRouter);
+app.use('/api/agents', agentsRouter);
 
 
 // Rota de teste
