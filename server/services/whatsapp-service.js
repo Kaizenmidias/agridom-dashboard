@@ -191,6 +191,7 @@ async function processWebhookEvent(connection, event) {
   const lead = parsed.isGroup ? null : await findOrCreateLead(connection, account, parsed.phone, parsed.pushName);
   const direction = parsed.fromMe ? 'outbound' : 'inbound';
   const conversation = await getOrCreateConversation(connection, account, parsed.remoteJid, lead?.id || null, direction, parsed.occurredAt, { isGroup: parsed.isGroup });
+  if (direction === 'inbound') await connection.execute('UPDATE conversations SET archived_at = NULL, hidden_at = NULL WHERE id = ?', [conversation.id]);
   await enrichGroupParticipantFromMessage(connection, conversation, parsed);
   let media = null;
   let mediaStatus = null;

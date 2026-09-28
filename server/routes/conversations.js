@@ -35,13 +35,14 @@ router.get('/', async (req, res) => {
     const limit = parsePage(req.query.limit, 30, 100);
     const offset = (page - 1) * limit;
     const params = [];
-    const where = ['c.channel = ?']; params.push(String(req.query.channel || 'whatsapp'));
+    const where = ['c.channel = ?', 'c.hidden_at IS NULL']; params.push(String(req.query.channel || 'whatsapp'));
+    if (req.query.archived === 'true') where.push('c.archived_at IS NOT NULL'); else where.push('c.archived_at IS NULL');
     if (req.query.status) { where.push('c.status = ?'); params.push(String(req.query.status)); }
     if (req.query.assignedUserId) { where.push('c.assigned_user_id = ?'); params.push(Number(req.query.assignedUserId)); }
     if (req.query.handlingMode) { where.push('c.handling_mode = ?'); params.push(String(req.query.handlingMode)); }
     if (req.query.unread === 'true') where.push('c.unread_count > 0');
     if (req.query.search) { where.push('(c.display_name LIKE ? OR p.business_name LIKE ? OR p.phone LIKE ? OR p.normalized_phone LIKE ? OR p.email LIKE ? OR EXISTS (SELECT 1 FROM communication_messages sm WHERE sm.conversation_id = c.id AND sm.body_text LIKE ?))'); const search = `%${String(req.query.search).slice(0, 100)}%`; params.push(search, search, search, search, search, search); }
-    const [rows] = await getPool().execute(`SELECT c.*, (c.profile_picture_updated_at IS NULL OR c.profile_picture_updated_at < UTC_TIMESTAMP() - INTERVAL ${PROFILE_TTL_HOURS} HOUR) AS profile_picture_stale, p.business_name AS lead_name, p.phone AS lead_phone, p.email AS lead_email, p.website AS lead_website, p.status AS lead_status, p.origin AS lead_origin, ca.name AS account_name, ca.phone_number AS account_phone, u.name AS assigned_user_name, (SELECT sm.body_text FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_text, (SELECT sm.message_type FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_type, (SELECT sm.direction FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_direction FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id LEFT JOIN prospects p ON p.id = c.lead_id LEFT JOIN users u ON u.id = c.assigned_user_id WHERE ${where.join(' AND ')} ORDER BY c.last_message_at DESC, c.id DESC LIMIT ? OFFSET ?`, [...params, limit, offset]);
+    const [rows] = await getPool().execute(`SELECT c.*, (c.profile_picture_updated_at IS NULL OR c.profile_picture_updated_at < UTC_TIMESTAMP() - INTERVAL ${PROFILE_TTL_HOURS} HOUR) AS profile_picture_stale, p.business_name AS lead_name, p.phone AS lead_phone, p.email AS lead_email, p.website AS lead_website, p.status AS lead_status, p.origin AS lead_origin, ca.name AS account_name, ca.phone_number AS account_phone, u.name AS assigned_user_name, (SELECT sm.body_text FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_text, (SELECT sm.message_type FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_type, (SELECT sm.direction FROM communication_messages sm WHERE sm.conversation_id = c.id ORDER BY sm.created_at DESC, sm.id DESC LIMIT 1) AS last_message_direction FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id LEFT JOIN prospects p ON p.id = c.lead_id LEFT JOIN users u ON u.id = c.assigned_user_id WHERE ${where.join(' AND ')} ORDER BY c.pinned_at IS NULL, c.last_message_at DESC, c.id DESC LIMIT ? OFFSET ?`, [...params, limit, offset]);
     res.json({ conversations: rows.map((row) => ({ ...row, id: Number(row.id), leadId: row.lead_id ? Number(row.lead_id) : null, accountId: Number(row.communication_account_id), unreadCount: Number(row.unread_count) })) , page, limit });
   } catch { res.status(500).json({ error: 'Nao foi possivel carregar as conversas.' }); }
 });
@@ -165,8 +166,32 @@ router.get('/:id/messages/:messageId/media', async (req, res) => {
 });
 
 router.patch('/:id/read', async (req, res) => {
-  try { const [result] = await getPool().execute('UPDATE conversations SET unread_count = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.id]); if (!result.affectedRows) return res.status(404).json({ error: 'Conversa nao encontrada.' }); res.json({ success: true }); }
+  try { const [result] = await getPool().execute('UPDATE conversations SET unread_count = 0, manual_unread = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.id]); if (!result.affectedRows) return res.status(404).json({ error: 'Conversa nao encontrada.' }); res.json({ success: true }); }
   catch { res.status(500).json({ error: 'Nao foi possivel marcar a conversa como lida.' }); }
+});
+
+router.patch('/:id/unread', async (req, res) => {
+  try { const [result] = await getPool().execute('UPDATE conversations SET unread_count = GREATEST(unread_count, 1), manual_unread = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND hidden_at IS NULL', [req.params.id]); if (!result.affectedRows) return res.status(404).json({ error: 'Conversa nao encontrada.' }); res.json({ success: true }); } catch { res.status(500).json({ error: 'Nao foi possivel marcar a conversa como nao lida.' }); }
+});
+
+router.patch('/:id/pin', async (req, res) => {
+  try { const pinned = req.body?.pinned !== false; const [result] = await getPool().execute('UPDATE conversations SET pinned_at = IF(?, COALESCE(pinned_at, UTC_TIMESTAMP()), NULL), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND hidden_at IS NULL', [pinned, req.params.id]); if (!result.affectedRows) return res.status(404).json({ error: 'Conversa nao encontrada.' }); res.json({ success: true, pinned }); } catch { res.status(500).json({ error: 'Nao foi possivel fixar a conversa.' }); }
+});
+
+router.patch('/:id/archive', async (req, res) => {
+  try { const archived = req.body?.archived !== false; const [result] = await getPool().execute('UPDATE conversations SET archived_at = IF(?, COALESCE(archived_at, UTC_TIMESTAMP()), NULL), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND hidden_at IS NULL', [archived, req.params.id]); if (!result.affectedRows) return res.status(404).json({ error: 'Conversa nao encontrada.' }); res.json({ success: true, archived }); } catch { res.status(500).json({ error: 'Nao foi possivel arquivar a conversa.' }); }
+});
+
+router.delete('/:id', async (req, res) => {
+  try { const [result] = await getPool().execute('UPDATE conversations SET hidden_at = COALESCE(hidden_at, UTC_TIMESTAMP()), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND hidden_at IS NULL', [req.params.id]); if (!result.affectedRows) return res.status(404).json({ error: 'Conversa nao encontrada.' }); res.json({ success: true, deletionMode: 'soft_delete' }); } catch { res.status(500).json({ error: 'Nao foi possivel ocultar a conversa.' }); }
+});
+
+router.patch('/:id/messages/:messageId/star', async (req, res) => {
+  try { const starred = req.body?.starred !== false; const [result] = await getPool().execute('UPDATE communication_messages SET starred_at = IF(?, COALESCE(starred_at, UTC_TIMESTAMP()), NULL), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND conversation_id = ?', [starred, req.params.messageId, req.params.id]); if (!result.affectedRows) return res.status(404).json({ error: 'Mensagem nao encontrada nesta conversa.' }); res.json({ success: true, starred }); } catch { res.status(500).json({ error: 'Nao foi possivel atualizar o favorito.' }); }
+});
+
+router.get('/:id/favorites', async (req, res) => {
+  try { const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100); const beforeId = req.query.beforeId ? Number(req.query.beforeId) : null; const params = [req.params.id]; const before = beforeId ? ' AND cm.id < ?' : ''; if (beforeId) params.push(beforeId); params.push(limit + 1); const [rows] = await getPool().execute(`SELECT cm.id, cm.direction, cm.sender_name, cm.body_text, cm.message_type, cm.media_filename, cm.created_at, cm.starred_at FROM communication_messages cm WHERE cm.conversation_id = ? AND cm.starred_at IS NOT NULL${before} ORDER BY cm.id DESC LIMIT ?`, params); res.json({ messages: rows.slice(0, limit), hasMore: rows.length > limit }); } catch { res.status(500).json({ error: 'Nao foi possivel carregar os favoritos.' }); }
 });
 
 router.patch('/:id/handling', async (req, res) => {

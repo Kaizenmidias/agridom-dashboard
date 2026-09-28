@@ -33,6 +33,21 @@ test('CHAT-1 prepara canais futuros sem fingir integrações ativas', () => {
   assert.match(page, /ChannelBadge/);
 });
 
+test('CHAT-3D inbox persists pin, archive, manual unread, soft delete and stars', () => {
+  const route = fs.readFileSync(path.resolve(__dirname, '../routes/conversations.js'), 'utf8');
+  const migration = fs.readFileSync(path.resolve(__dirname, '../../database/migrations/20260929_chat_3d_inbox.sql'), 'utf8');
+  assert.match(route, /router\.patch\('\/:id\/pin'/);
+  assert.match(route, /router\.patch\('\/:id\/archive'/);
+  assert.match(route, /router\.patch\('\/:id\/unread'/);
+  assert.match(route, /router\.patch\('\/:id\/messages\/:messageId\/star'/);
+  assert.match(route, /deletionMode: 'soft_delete'/);
+  assert.match(route, /c\.pinned_at IS NULL/);
+  assert.match(migration, /pinned_at/);
+  assert.match(migration, /manual_unread/);
+  assert.match(migration, /starred_at/);
+  assert.doesNotMatch(route, /DELETE FROM conversations/);
+});
+
 test('CHAT-1 mantém composer textual com Enter e Shift+Enter', () => {
   assert.match(composer, /event\.key === "Enter" && !event\.shiftKey/);
   assert.match(route, /MESSAGE_TYPE_NOT_SUPPORTED/);

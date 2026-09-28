@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ChannelCapability } from "@/lib/channel-capabilities";
 
-type Props = { message: CommunicationMessage; conversationId: number; isGroup?: boolean; capabilities: ChannelCapability; quoted?: CommunicationMessage | null; onReply: (message: CommunicationMessage) => void; onCopy: (message: CommunicationMessage) => void; onOpenMedia: (url: string) => void };
+type Props = { message: CommunicationMessage; conversationId: number; isGroup?: boolean; capabilities: ChannelCapability; quoted?: CommunicationMessage | null; onReply: (message: CommunicationMessage) => void; onCopy: (message: CommunicationMessage) => void; onToggleStar?: (message: CommunicationMessage) => void; onOpenMedia: (url: string) => void };
 const labels: Record<string, string> = { image: "Foto", audio: "Áudio", video: "Vídeo", document: "Documento", sticker: "Sticker", unknown: "Tipo de mensagem ainda não suportado." };
 function mediaUrl(conversationId: number, messageId: number) { return conversationMediaUrl(conversationId, messageId); }
 function formatBytes(value?: number | null) { if (!value) return ""; if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`; return `${(value / 1024 / 1024).toFixed(1)} MB`; }
 function formatDuration(value?: number | null) { if (!value) return ""; return `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, "0")}`; }
 export function useAuthenticatedMediaUrl(url: string, enabled: boolean, mimeType?: string | null) { const [objectUrl, setObjectUrl] = useState<string | null>(null); const [failed, setFailed] = useState(false); useEffect(() => { if (!enabled) return; let active = true; const controller = new AbortController(); const token = localStorage.getItem("token"); setFailed(false); fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: controller.signal }).then((response) => { if (!response.ok) throw new Error(`HTTP_${response.status}`); return response.blob(); }).then((blob) => { if (!active) return; setObjectUrl(URL.createObjectURL(new Blob([blob], { type: mimeType || blob.type || "application/octet-stream" }))); }).catch(() => { if (active) setFailed(true); }); return () => { active = false; controller.abort(); setObjectUrl((current) => { if (current) URL.revokeObjectURL(current); return null; }); }; }, [enabled, mimeType, url]); return { objectUrl, failed }; }
 
-export function ChatMessage({ message, conversationId, isGroup, capabilities, quoted, onReply, onCopy, onOpenMedia }: Props) {
+export function ChatMessage({ message, conversationId, isGroup, capabilities, quoted, onReply, onCopy, onToggleStar, onOpenMedia }: Props) {
   const outbound = message.direction === "outbound";
   const type = message.message_type || "unknown";
   const url = mediaUrl(conversationId, message.id);
