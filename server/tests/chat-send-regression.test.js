@@ -140,6 +140,17 @@ test('CHAT-3B reuses lead budget, normalized labels and paginated shared content
   assert.doesNotMatch(routeSource, /media_storage_path[^\n]*shared/);
 });
 
+test('CHAT-3B shared media opens an authenticated keyboard-accessible lightbox', () => {
+  assert.match(chatsPageSource, /function SharedMediaViewer/);
+  assert.match(chatsPageSource, /useAuthenticatedMediaUrl\(conversationMediaUrl\(conversationId, item\.id\), !cachedUrl/);
+  assert.match(chatsPageSource, /event\.key === "Escape"/);
+  assert.match(chatsPageSource, /event\.key === "ArrowLeft"/);
+  assert.match(chatsPageSource, /event\.key === "ArrowRight"/);
+  assert.match(chatsPageSource, /disabled=\{index === 0\}/);
+  assert.match(chatsPageSource, /disabled=\{index === total - 1\}/);
+  assert.doesNotMatch(chatsPageSource, /[?&](?:token|jwt)=/i);
+});
+
 test('CHAT-3A supports safe drag, drop, paste, date separators and sequential uploads', () => {
   assert.match(chatsPageSource, /onDragEnter=/);
   assert.match(chatsPageSource, /onDrop=/);
