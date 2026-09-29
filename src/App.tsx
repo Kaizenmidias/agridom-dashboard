@@ -23,9 +23,9 @@ import { DomainEventsPage } from "./pages/commercial/DomainEventsPage";
 import { AutomationRunsPage } from "./pages/commercial/AutomationRunsPage";
 import {
   AgendaPage,
-  BroadcastPage,
   MetricsPage,
 } from "./pages/commercial/CommercialPlaceholders";
+import { BroadcastPage, NewBroadcastPage, BroadcastDetailPage } from "./pages/commercial/BroadcastPage";
 import { ChatsPage } from "./pages/commercial/ChatsPage";
 import { ConnectedNumbersPage } from "./pages/commercial/ConnectedNumbersPage";
 import { AgentDetailPage } from "./pages/ai/AgentDetailPage";
@@ -68,6 +68,9 @@ const routes = [
   { path: "/comercial/prospeccao", element: <ProspectingPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/metricas", element: <MetricsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/disparar", element: <BroadcastPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/disparar/novo", element: <NewBroadcastPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/disparar/:id/editar", element: <NewBroadcastPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/disparar/:id", element: <BroadcastDetailPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/automacoes", element: <AutomationsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/automacoes/eventos", element: <DomainEventsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/automacoes/runs", element: <AutomationRunsPage />, protected: true, restrictedForRicardo: false },
