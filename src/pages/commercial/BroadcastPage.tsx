@@ -9,12 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { broadcastAPI, type Campaign } from "@/api/broadcast-campaigns";
-import { buildApiUrl } from "@/config/api";
+import { whatsappAPI } from "@/api/whatsapp";
 
 const labels: Record<string, string> = { draft: "Rascunho", scheduled: "Agendado", running: "Em andamento", paused: "Pausado", completed: "Concluído", cancelled: "Cancelado", failed: "Falhou" };
 const statusClass: Record<string, string> = { draft: "bg-muted", scheduled: "bg-blue-500/15 text-blue-700", running: "bg-primary/20 text-foreground", paused: "bg-amber-500/15 text-amber-700", completed: "bg-emerald-500/15 text-emerald-700", cancelled: "bg-muted text-muted-foreground", failed: "bg-destructive/15 text-destructive" };
 const money = (value?: number | null) => Number(value || 0).toLocaleString("pt-BR");
-const api = async <T,>(path: string) => { const r = await fetch(buildApiUrl(path), { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); if (!r.ok) throw new Error("Não foi possível carregar os números WhatsApp."); return r.json() as Promise<T>; };
 
 function StatusBadge({ status }: { status: string }) { return <Badge className={`border-0 ${statusClass[status] || ""}`}>{labels[status] || status}</Badge>; }
 
@@ -32,7 +31,7 @@ function Stepper({ step }: { step: number }) { return <div className="flex items
 
 export function NewBroadcastPage() {
   const { id } = useParams(); const navigate = useNavigate(); const editing = Boolean(id); const [step, setStep] = useState(1); const [campaignId, setCampaignId] = useState<number | null>(id ? Number(id) : null); const [name, setName] = useState(""); const [accountId, setAccountId] = useState(""); const [scheduled, setScheduled] = useState(""); const [text, setText] = useState(""); const [accounts, setAccounts] = useState<Array<{ id: number; name: string; phone_number?: string; status: string }>>([]); const [audience, setAudience] = useState<any>(null); const [filters, setFilters] = useState({ search: "" }); const [saving, setSaving] = useState(false);
-  useEffect(() => { void api<{ accounts: typeof accounts }>("whatsapp/accounts").then((data) => setAccounts(data.accounts || [])).catch((e) => toast.error(e.message)); if (id) void broadcastAPI.get(Number(id)).then(({ campaign }) => { setName(campaign.name); setText(campaign.text_content || ""); }).catch((e) => toast.error(e.message)); }, [id]);
+  useEffect(() => { void whatsappAPI.listAccounts().then((data) => setAccounts(data.accounts.filter((account) => account.status === "connected").map((account) => ({ id: account.id, name: account.displayName || account.name, phone_number: account.phoneNumber || undefined, status: account.status })))).catch((e) => toast.error(e instanceof Error ? e.message : "Não foi possível carregar os números WhatsApp.")); if (id) void broadcastAPI.get(Number(id)).then(({ campaign }) => { setName(campaign.name); setText(campaign.text_content || ""); }).catch((e) => toast.error(e.message)); }, [id]);
   const ensureCampaign = async () => { if (!name.trim()) throw new Error("Informe o nome do disparo."); if (!campaignId) { const result = await broadcastAPI.create({ name, communication_account_id: accountId ? Number(accountId) : null }); setCampaignId(result.campaign.id); return result.campaign.id; } await broadcastAPI.update(campaignId, { name, communication_account_id: accountId ? Number(accountId) : null, scheduled_at: scheduled ? new Date(scheduled).toISOString().slice(0, 19).replace("T", " ") : null }); return campaignId; };
   const next = async () => { setSaving(true); try { const current = await ensureCampaign(); if (step === 2 && audience) { await broadcastAPI.addAudience(current, filters); toast.success("Público adicionado ao disparo."); } if (step === 3) await broadcastAPI.content(current, text); setStep(Math.min(4, step + 1)); } catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível salvar o rascunho."); } finally { setSaving(false); } };
   const loadAudience = async () => { try { setAudience(await broadcastAPI.audience(filters)); } catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível consultar o público."); } };
