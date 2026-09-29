@@ -21,12 +21,22 @@ function normalizePhone(value) {
   return raw.length >= 7 && raw.length <= 15 && !raw.startsWith('0') ? raw : null;
 }
 
+function classifyWhatsAppIdentifier(value) {
+  const identifier = String(value || '').trim();
+  if (/@g\.us$/i.test(identifier)) return 'group_jid';
+  if (/@lid$/i.test(identifier)) return 'lid_jid';
+  if (/@(?:s\.whatsapp\.net|c\.us)$/i.test(identifier)) return 'phone_jid';
+  if (/^\+?[\d\s().-]+$/.test(identifier) && /\d/.test(identifier)) return 'raw_phone';
+  return 'unknown';
+}
+
 function resolveWhatsAppDestination({ recipient, lead = null }) {
   const rawRecipient = String(recipient || '').trim();
-  if (/@g\.us$/i.test(rawRecipient)) return rawRecipient;
+  const identifierType = classifyWhatsAppIdentifier(rawRecipient);
+  if (identifierType === 'group_jid') return rawRecipient;
   const direct = normalizePhone(rawRecipient);
   if (direct) return direct;
-  if (/@lid$/i.test(rawRecipient)) {
+  if (identifierType === 'lid_jid') {
     const fromLead = normalizePhone(lead?.normalized_phone || lead?.phone);
     if (fromLead) return fromLead;
   }
@@ -307,4 +317,4 @@ async function sendWhatsAppMessage(connection, options) { return sendWhatsAppCon
 
 async function sendWhatsAppMedia(connection, options) { return sendWhatsAppContent(connection, options); }
 
-module.exports = { normalizePhone, resolveWhatsAppDestination, formatWhatsAppParticipantPhone, extractInbound, participantContractSummary, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };
+module.exports = { normalizePhone, classifyWhatsAppIdentifier, resolveWhatsAppDestination, formatWhatsAppParticipantPhone, extractInbound, participantContractSummary, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };

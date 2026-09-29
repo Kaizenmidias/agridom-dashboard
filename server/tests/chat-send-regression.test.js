@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { EvolutionWhatsAppProvider, providerError } = require('../services/evolution-whatsapp-provider');
 const { sniffMime } = require('../services/chat-media');
-const { extractInbound, extractDeliveryStatus, normalizePhone, resolveWhatsAppDestination } = require('../services/whatsapp-service');
+const { extractInbound, extractDeliveryStatus, normalizePhone, classifyWhatsAppIdentifier, resolveWhatsAppDestination } = require('../services/whatsapp-service');
 const { getMediaRange, validateMedia, resolveStoragePath } = require('../services/chat-media');
 
 const root = path.resolve(__dirname, '../..');
@@ -80,6 +80,28 @@ test('WhatsApp destination resolution accepts phones and never treats a LID as a
   assert.equal(resolveWhatsAppDestination({ recipient: '12345678901234567890@lid', lead: { phone: '11999999999' } }), '5511999999999');
   assert.throws(() => resolveWhatsAppDestination({ recipient: '12345678901234567890@lid' }), /WHATSAPP_DESTINATION_UNRESOLVED/);
   assert.throws(() => resolveWhatsAppDestination({ recipient: '' }), /WHATSAPP_DESTINATION_UNRESOLVED/);
+});
+
+test('group destinations preserve the complete group JID without requiring a lead', async () => {
+  const groupJid = '12345678901234567890@g.us';
+  assert.equal(classifyWhatsAppIdentifier(groupJid), 'group_jid');
+  assert.equal(resolveWhatsAppDestination({ recipient: groupJid }), groupJid);
+  const provider = new EvolutionWhatsAppProvider({ baseUrl: 'https://evolution.example.com', apiKey: 'test-key' });
+  let captured;
+  provider.request = async (method, requestPath, body) => { captured = { method, requestPath, body }; return { key: { id: 'group-message-1' } }; };
+  await provider.sendText('kaizen-main', groupJid, 'Ola grupo');
+  assert.equal(captured.body.number, groupJid);
+});
+
+test('group media and audio requests keep the group JID', async () => {
+  const groupJid = '12345678901234567890@g.us';
+  const provider = new EvolutionWhatsAppProvider({ baseUrl: 'https://evolution.example.com', apiKey: 'test-key' });
+  const calls = [];
+  provider.request = async (method, requestPath, body) => { calls.push({ method, requestPath, body }); return { key: { id: 'group-media-1' } }; };
+  await provider.sendMedia('kaizen-main', { number: groupJid, mediaType: 'image', mimeType: 'image/jpeg', media: 'aGVsbG8=' });
+  await provider.sendAudio('kaizen-main', { number: groupJid, audio: 'aGVsbG8=' });
+  assert.equal(calls[0].body.number, groupJid);
+  assert.equal(calls[1].body.number, groupJid);
 });
 
 test('inbound extraction prefers a verified alternate phone JID over a LID', () => {
