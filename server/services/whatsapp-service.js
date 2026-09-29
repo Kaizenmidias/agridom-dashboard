@@ -163,9 +163,13 @@ async function loadEvolutionConfig(connection, account) {
   const [rows] = await connection.execute("SELECT * FROM integration_providers WHERE id = ? AND provider = 'evolution' LIMIT 1", [account.integration_provider_id]);
   const row = rows[0];
   if (!row) throw providerError('Integracao Evolution nao configurada.', 'WHATSAPP_NOT_CONFIGURED');
-  const secret = decryptSecret(row);
+  let secret;
+  try { secret = decryptSecret(row); }
+  catch (error) { throw Object.assign(error, { stage: 'decrypt', code: error?.code || 'EVOLUTION_CREDENTIAL_DECRYPT_FAILED', publicMessage: 'Nao foi possivel carregar as credenciais da Evolution.' }); }
   const metadata = parseJson(row.configuration_metadata);
-  return { provider: new EvolutionWhatsAppProvider({ baseUrl: metadata.baseUrl, apiKey: secret?.apiKey, timeout: metadata.timeout }), row, metadata };
+  try {
+    return { provider: new EvolutionWhatsAppProvider({ baseUrl: metadata.baseUrl, apiKey: secret?.apiKey, timeout: metadata.timeout }), row, metadata };
+  } catch (error) { throw Object.assign(error, { stage: 'configuration' }); }
 }
 
 async function findOrCreateLead(connection, account, phone, pushName) {
@@ -277,7 +281,9 @@ async function sendWhatsAppContent(connection, { account, leadId, recipient, tex
   if (existing[0]?.status === 'sent') return { idempotent: true, communicationMessageId: Number(existing[0].id), providerMessageId: existing[0].provider_message_id, messageId: existing[0].provider_message_id, conversationId: existing[0].conversation_id };
   const [leadRows] = await connection.execute('SELECT * FROM prospects WHERE id = ? LIMIT 1', [leadId || 0]);
   const lead = leadRows[0] || null;
-  const phone = resolveWhatsAppDestination({ recipient, lead });
+  let phone;
+  try { phone = resolveWhatsAppDestination({ recipient, lead }); }
+  catch (error) { throw Object.assign(error, { stage: 'destination' }); }
   const remoteJid = isGroup ? phone : `${phone}@s.whatsapp.net`;
   const conversation = await getOrCreateConversation(connection, account, remoteJid, lead?.id || null, 'outbound', new Date(), { isGroup });
   const { provider } = await loadEvolutionConfig(connection, account);
@@ -300,14 +306,14 @@ async function sendWhatsAppContent(connection, { account, leadId, recipient, tex
     }
   } catch (error) {
     if (stored?.storagePath) await removeMedia(stored.storagePath).catch(() => {});
-    throw error;
+    throw Object.assign(error, { stage: 'provider' });
   }
   try {
     await connection.execute(`INSERT INTO communication_messages (channel, direction, lead_id, automation_id, automation_run_id, automation_step_id, conversation_id, communication_account_id, idempotency_key, external_message_id, recipient, body_text, message_type, delivery_status, metadata, media_storage_path, media_mime_type, media_filename, media_size_bytes, quoted_message_id, media_status, status, provider, provider_message_id, sent_at) VALUES ('whatsapp', 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, ?, 'sent', 'evolution', ?, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE status = 'sent', external_message_id = VALUES(external_message_id), provider_message_id = VALUES(provider_message_id), sent_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP`, [lead?.id || null, automationId, runId, stepId, conversation.id, account.id, idempotencyKey, result.externalMessageId, phone, messageType === 'text' ? text : caption || null, messageType, JSON.stringify({ quotedMessageId: resolvedQuotedMessageId }), stored?.storagePath || null, stored?.mime || null, stored?.filename || null, stored?.size || null, resolvedQuotedMessageId, stored ? 'ready' : null, result.externalMessageId]);
     await connection.execute('UPDATE conversations SET last_message_at = UTC_TIMESTAMP(), last_outbound_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE id = ?', [conversation.id]);
   } catch (error) {
     if (stored?.storagePath) await removeMedia(stored.storagePath).catch(() => {});
-    throw error;
+    throw Object.assign(error, { stage: 'persistence' });
   }
   const [messageRows] = await connection.execute('SELECT id, provider_message_id FROM communication_messages WHERE idempotency_key = ? LIMIT 1', [idempotencyKey]);
   return { ...result, communicationMessageId: Number(messageRows[0]?.id || 0) || null, providerMessageId: messageRows[0]?.provider_message_id || result.externalMessageId || null, conversationId: Number(conversation.id), recipient: phone };

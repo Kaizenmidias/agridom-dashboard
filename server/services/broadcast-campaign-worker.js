@@ -22,6 +22,15 @@ const safeError = (error) =>
   )
     .replace(/[^A-Z0-9_.:-]/gi, "_")
     .slice(0, 500);
+const safeWorkerError = (error) => ({
+  name: String(error?.name || "Error").slice(0, 80),
+  code: String(error?.code || "BROADCAST_JOB_FAILED").replace(/[^A-Z0-9_.:-]/gi, "_").slice(0, 100),
+  stage: String(error?.stage || "unknown").replace(/[^A-Z0-9_.:-]/gi, "_").slice(0, 80),
+  message: safeError(error),
+  providerStatus: Number.isInteger(error?.providerStatus) ? error.providerStatus : null,
+  providerOperation: error?.operation || null,
+  providerMessage: error?.providerMessage || null,
+});
 const workerId = (value) =>
   String(
     value ||
@@ -451,6 +460,9 @@ async function processBroadcastJob(
         provider_operation: error?.operation || null,
         provider_message: error?.providerMessage || null,
         error_code: error?.code || null,
+        error_name: safeWorkerError(error).name,
+        error_stage: safeWorkerError(error).stage,
+        error_message: safeWorkerError(error).message,
         operation:
           current.content_type === "text"
             ? "sendText"
@@ -526,6 +538,7 @@ module.exports = {
   resolveCampaignTemplate,
   classifyBroadcastError,
   broadcastErrorMessage,
+  safeWorkerError,
   workerId,
   materializeCampaign,
   claimNextBroadcastJob,
