@@ -62,7 +62,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
 import { useLeads } from "@/hooks/leads/useLeads";
-import { addLeadToPipeline as persistLeadToPipeline, createLead, updateLead } from "@/services/leads/lead-service";
+import { addLeadToPipeline as persistLeadToPipeline, createLead, deleteLead, updateLead } from "@/services/leads/lead-service";
 import { commercialEntitiesAPI, type UserOption } from "@/services/commercial-entities";
 import type { Lead, LeadFilters, LeadFolder, LeadLabel, LeadSource, LeadStatus } from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
@@ -217,7 +217,7 @@ function leadToForm(lead: Lead) {
   };
 }
 
-function folderMatchesLead(folderId: string, lead: Lead) {
+function folderMatchesLead(folderId: string, lead: Lead, customFolders: LeadFolder[] = []) {
   if (folderId === "todos-os-leads") return true;
   if (folderId === "novos") return lead.status === "novo";
   if (folderId === "qualificados") return lead.status === "qualificado" || (lead.score || 0) >= 70;
@@ -225,7 +225,8 @@ function folderMatchesLead(folderId: string, lead: Lead) {
   if (folderId === "follow-up") return lead.status === "em_contato";
   if (folderId === "convertidos") return lead.status === "convertido";
   if (folderId === "arquivados") return lead.status === "arquivado";
-  return lead.folderId === folderId;
+  const custom = customFolders.find((folder) => folder.id === folderId);
+  return Boolean(custom?.prospectIds?.includes(String(lead.id)) || lead.folderId === folderId);
 }
 
 function buildFolders(leads: Lead[], customFolders: LeadFolder[]) {
@@ -242,7 +243,7 @@ function buildFolders(leads: Lead[], customFolders: LeadFolder[]) {
 
   return [...systemFolders, ...customFolders].map((folder) => ({
     ...folder,
-    leadCount: leads.filter((lead) => folderMatchesLead(folder.id, lead)).length,
+    leadCount: leads.filter((lead) => folderMatchesLead(folder.id, lead, customFolders)).length,
   }));
 }
 
@@ -296,6 +297,9 @@ export default function LeadsPage() {
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
+  const [folderTargetIds, setFolderTargetIds] = useState<string[]>([]);
+  const [folderTarget, setFolderTarget] = useState("");
+  const [folderMemberDialogOpen, setFolderMemberDialogOpen] = useState(false);
   const [customFolders, setCustomFolders] = useState<LeadFolder[]>([]);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderDescription, setNewFolderDescription] = useState("");
@@ -311,7 +315,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     void commercialEntitiesAPI.getUsers().then(({ users }) => setUserOptions(users)).catch(() => setUserOptions([]));
-    void leadFoldersAPI.list().then(({ folders }) => setCustomFolders(folders.map((folder) => ({ id: String(folder.id), name: folder.name, description: folder.description || null, icon: folder.icon || 'folder', isSystem: false, leadCount: folder.total, createdAt: new Date().toISOString() })))).catch(() => setCustomFolders([]));
+    void leadFoldersAPI.list().then(({ folders }) => setCustomFolders(folders.map((folder) => ({ id: String(folder.id), name: folder.name, description: folder.description || null, icon: folder.icon || 'folder', isSystem: false, leadCount: folder.total, prospectIds: (folder.prospect_ids || []).map(String), createdAt: new Date().toISOString() })))).catch(() => setCustomFolders([]));
   }, []);
 
   const allLeads = useMemo(() => {
@@ -380,7 +384,7 @@ export default function LeadsPage() {
         (filters.scoreRange === "high" && score >= 70);
 
       return (
-        folderMatchesLead(filters.folderId, lead) &&
+        folderMatchesLead(filters.folderId, lead, customFolders) &&
         textMatches &&
         fieldMatches &&
         scoreMatches &&
@@ -390,7 +394,7 @@ export default function LeadsPage() {
         (filters.assignedTo === "all" || lead.assignedTo === filters.assignedTo)
       );
     });
-  }, [allLeads, filters, query]);
+  }, [allLeads, customFolders, filters, query]);
 
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / itemsPerPage));
   const paginatedLeads = filteredLeads.slice((page - 1) * itemsPerPage, page * itemsPerPage);
@@ -431,6 +435,25 @@ export default function LeadsPage() {
     setNewFolderDescription("");
     setNewFolderIcon("folder");
     setFolderDialogOpen(false);
+  };
+
+  const openFolderMemberDialog = (ids: string[]) => { setFolderTargetIds(ids); setFolderTarget(""); setFolderMemberDialogOpen(true); };
+  const handleAddToFolder = async () => {
+    const folder = customFolders.find((item) => item.id === folderTarget);
+    if (!folder) return;
+    try {
+      await leadFoldersAPI.addMembers(Number(folder.id), folderTargetIds);
+      const { folders: refreshed } = await leadFoldersAPI.list();
+      setCustomFolders(refreshed.map((item) => ({ id: String(item.id), name: item.name, description: item.description || null, icon: item.icon || 'folder', isSystem: false, leadCount: item.total, prospectIds: (item.prospect_ids || []).map(String), createdAt: new Date().toISOString() })));
+      setFolderMemberDialogOpen(false); setSelectedIds([]); toast.success("Lead(s) adicionados à pasta.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível adicionar à pasta."); }
+  };
+
+  const handleDeleteLead = async () => {
+    if (!leadToDelete) return;
+    try { await deleteLead(leadToDelete.id); setSessionLeads((current) => current.filter((item) => item.id !== leadToDelete.id)); setSelectedIds((current) => current.filter((id) => id !== leadToDelete.id)); await reload(); toast.success("Lead excluído."); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível excluir o lead."); }
+    finally { setLeadToDelete(null); }
   };
 
   const handleLeadFormChange = (key: keyof typeof emptyLeadForm, value: string) => {
@@ -841,7 +864,7 @@ export default function LeadsPage() {
                                   <DropdownMenuItem onClick={() => openEditLeadDialog(lead)}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
                                   {whatsappUrl ? <DropdownMenuItem asChild><a href={whatsappUrl} target="_blank" rel="noreferrer">Abrir WhatsApp</a></DropdownMenuItem> : null}
                                   {email ? <DropdownMenuItem asChild><a href={`mailto:${email}`}>Enviar e-mail</a></DropdownMenuItem> : null}
-                                  <DropdownMenuItem>Mover para pasta</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openFolderMemberDialog([lead.id])}>Mover para pasta</DropdownMenuItem>
                                   <DropdownMenuItem>Alterar status</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => addLeadToKanban(lead)}>Adicionar ao Kanban</DropdownMenuItem>
                                   <DropdownMenuItem>Criar tarefa</DropdownMenuItem>
@@ -1090,6 +1113,17 @@ export default function LeadsPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={folderMemberDialogOpen} onOpenChange={setFolderMemberDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Adicionar lead à pasta</DialogTitle><DialogDescription>Escolha uma pasta manual para salvar a associação.</DialogDescription></DialogHeader>
+          <Select value={folderTarget} onValueChange={setFolderTarget}>
+            <SelectTrigger><SelectValue placeholder="Selecione uma pasta" /></SelectTrigger>
+            <SelectContent>{customFolders.map((folder) => <SelectItem value={folder.id} key={folder.id}>{folder.name}</SelectItem>)}</SelectContent>
+          </Select>
+          <DialogFooter><Button variant="outline" onClick={() => setFolderMemberDialogOpen(false)}>Cancelar</Button><Button disabled={!folderTarget} onClick={() => void handleAddToFolder()}>Adicionar</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={Boolean(leadToDelete)} onOpenChange={(open) => !open && setLeadToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1100,7 +1134,7 @@ export default function LeadsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => setLeadToDelete(null)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirmar</AlertDialogAction>
+            <AlertDialogAction onClick={() => void handleDeleteLead()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirmar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -116,3 +116,9 @@ export async function addLeadToPipeline(id: string) {
   if (!response.ok) throw new Error(payload?.error || "Não foi possível adicionar ao Kanban.");
   return prospectToLead(payload as Prospect);
 }
+
+export async function deleteLead(id: string) {
+  const response = await fetch(buildApiUrl(`prospection/prospects/${id}`), { method: "DELETE", headers: getHeaders() });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error || "NÃ£o foi possÃ­vel excluir o lead.");
+}

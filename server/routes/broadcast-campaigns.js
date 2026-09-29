@@ -66,6 +66,16 @@ router.post('/', async (req, res) => {
   } catch (error) { errorResponse(res, error); }
 });
 
+router.delete('/:id', async (req, res) => {
+  try {
+    const campaign = await campaignForUser(req.params.id, req.userId);
+    if (campaign.status !== 'draft') throw new campaigns.BroadcastCampaignError(409, 'ONLY_DRAFT_CAMPAIGNS_CAN_BE_DELETED');
+    const result = await query("DELETE FROM broadcast_campaigns WHERE id = ? AND created_by_user_id = ? AND status = 'draft'", [campaign.id, req.userId]);
+    if (!result.affectedRows) throw new campaigns.BroadcastCampaignError(404, 'CAMPAIGN_NOT_FOUND');
+    res.json({ success: true, id: campaign.id });
+  } catch (error) { errorResponse(res, error); }
+});
+
 router.get('/audience/preview', async (req, res) => {
   try {
     const params = [req.userId]; const conditions = ['p.owner_user_id = ?']; const q = String(req.query.search || '').trim().slice(0, 100);

@@ -18,10 +18,11 @@ router.use(requireCommercialAccess);
 router.get('/folders', async (req, res) => {
   try {
     const result = await getQuery(req)(`SELECT f.id, f.name, f.description, f.icon, COUNT(m.prospect_id) AS total,
+      GROUP_CONCAT(DISTINCT m.prospect_id ORDER BY m.prospect_id) AS prospect_ids,
       SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone
       FROM lead_folders f LEFT JOIN lead_folder_members m ON m.folder_id = f.id
       LEFT JOIN prospects p ON p.id = m.prospect_id WHERE f.owner_user_id = ? GROUP BY f.id ORDER BY f.name`, [req.userId]);
-    res.json({ folders: (result.rows || []).map((row) => ({ ...row, id: Number(row.id), total: Number(row.total || 0), with_phone: Number(row.with_phone || 0) })) });
+    res.json({ folders: (result.rows || []).map((row) => ({ ...row, id: Number(row.id), total: Number(row.total || 0), with_phone: Number(row.with_phone || 0), prospect_ids: row.prospect_ids ? String(row.prospect_ids).split(',').map(Number) : [] })) });
   } catch (error) { console.error('[Prospection] folders list failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel carregar as pastas.' }); }
 });
 
@@ -32,6 +33,33 @@ router.post('/folders', async (req, res) => {
     const result = await getQuery(req)('INSERT INTO lead_folders (owner_user_id, name, description, icon) VALUES (?, ?, ?, ?)', [req.userId, name, normalizeText(req.body?.description) || null, normalizeText(req.body?.icon) || 'folder']);
     res.status(201).json({ folder: { id: Number(result.insertId), name, description: normalizeText(req.body?.description) || null, icon: normalizeText(req.body?.icon) || 'folder', total: 0, with_phone: 0 } });
   } catch (error) { if (error?.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Já existe uma pasta com este nome.' }); console.error('[Prospection] folder create failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel criar a pasta.' }); }
+});
+
+router.post('/folders/:id/members', async (req, res) => {
+  try {
+    const folderId = parseId(req.params.id);
+    const values = Array.isArray(req.body?.prospect_ids) ? req.body.prospect_ids : [req.body?.prospect_id];
+    const ids = [...new Set(values.map(parseId).filter(Boolean))];
+    if (!folderId || !ids.length) return res.status(400).json({ error: 'Informe uma pasta e ao menos um lead.' });
+    const query = getQuery(req);
+    const folder = await query('SELECT id FROM lead_folders WHERE id = ? AND owner_user_id = ?', [folderId, req.userId]);
+    if (!folder.rows?.length) return res.status(404).json({ error: 'Pasta nao encontrada.' });
+    const owned = await query(`SELECT id FROM prospects WHERE owner_user_id = ? AND id IN (${ids.map(() => '?').join(',')})`, [req.userId, ...ids]);
+    const ownedIds = (owned.rows || []).map((row) => Number(row.id));
+    for (const prospectId of ownedIds) await query('INSERT IGNORE INTO lead_folder_members (folder_id, prospect_id) VALUES (?, ?)', [folderId, prospectId]);
+    res.status(201).json({ folder_id: folderId, added: ownedIds.length, missing: ids.length - ownedIds.length });
+  } catch (error) { console.error('[Prospection] folder members add failed', error); res.status(500).json({ error: 'Nao foi possivel adicionar leads a pasta.' }); }
+});
+
+router.delete('/folders/:id/members/:prospectId', async (req, res) => {
+  try {
+    const folderId = parseId(req.params.id); const prospectId = parseId(req.params.prospectId);
+    if (!folderId || !prospectId) return res.status(400).json({ error: 'Identificadores invalidos.' });
+    const result = await getQuery(req)(`DELETE m FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id
+      JOIN prospects p ON p.id = m.prospect_id WHERE m.folder_id = ? AND m.prospect_id = ? AND f.owner_user_id = ? AND p.owner_user_id = ?`, [folderId, prospectId, req.userId, req.userId]);
+    if (!result.affectedRows) return res.status(404).json({ error: 'Membro nao encontrado.' });
+    res.json({ success: true });
+  } catch (error) { console.error('[Prospection] folder member remove failed', error); res.status(500).json({ error: 'Nao foi possivel remover o lead da pasta.' }); }
 });
 
 const defaultSettings = {

@@ -100,6 +100,7 @@ export interface LeadFolder {
   isSystem: boolean;
   leadCount?: number;
   createdAt: string;
+  prospectIds?: string[];
 }
 
 export type LeadFilters = {

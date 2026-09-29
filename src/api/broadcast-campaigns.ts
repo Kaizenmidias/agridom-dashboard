@@ -18,6 +18,7 @@ export const broadcastAPI = {
   folders: () => request<{ manual_folders: Array<{ id: number; name: string; total: number; with_phone: number }> }>("/audience/folders"),
   addAudience: (id: number, filters: Record<string, string>) => request<{ added: number; duplicates: number; missing_phone: number }>(`/${id}/recipients`, { method: "POST", body: JSON.stringify({ filters }) }),
   addFolder: (id: number, folder_id: number) => request<{ added: number; missing_phone: number }>(`/${id}/recipients/folder`, { method: "POST", body: JSON.stringify({ folder_id }) }),
+  remove: (id: number) => request<{ success: boolean }>(`/${id}`, { method: "DELETE" }),
   recipients: (id: number, status = "") => request<{ recipients: Array<Record<string, unknown>> }>(`/${id}/recipients?${new URLSearchParams(status ? { status } : {})}`),
   removeRecipient: (id: number, recipientId: number) => request(`/${id}/recipients/${recipientId}`, { method: "DELETE" }),
   review: (id: number) => request<Record<string, any>>(`/${id}/review`),
