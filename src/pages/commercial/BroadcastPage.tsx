@@ -932,6 +932,14 @@ function ReviewStep({
           <p className="whitespace-pre-wrap text-sm">
             {review.content?.text_content || "-"}
           </p>
+          {review.content?.content_type &&
+          review.content.content_type !== "text" ? (
+            <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <FileText className="h-4 w-4 text-primary" />
+              {review.content.original_filename || "Anexo"} ·{" "}
+              {review.content.content_type}
+            </p>
+          ) : null}
         </div>
         <div className="space-y-2">
           {[
