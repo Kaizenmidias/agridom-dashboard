@@ -16,6 +16,17 @@ const validProfilePictureUrl = (value) => {
   try { const url = new URL(String(value || '')); return url.protocol === 'https:' ? url.toString() : null; } catch { return null; }
 };
 const safeProviderError = (error) => ({ providerStatus: error?.providerStatus || null, errorCode: String(error?.code || 'PROFILE_REFRESH_FAILED').replace(/[^A-Z0-9_]/gi, '_').slice(0, 80) });
+const safeDatabaseError = (error) => {
+  const sqlMessage = String(error?.sqlMessage || '');
+  return {
+    errorCode: String(error?.code || 'DATABASE_ERROR').replace(/[^A-Z0-9_]/gi, '_').slice(0, 80),
+    errno: Number.isInteger(error?.errno) ? error.errno : null,
+    sqlState: /^[0-9A-Z]{5}$/.test(String(error?.sqlState || '')) ? error.sqlState : null,
+    constraint: sqlMessage.match(/CONSTRAINT `([^`]+)`/i)?.[1] || null,
+    column: sqlMessage.match(/FOREIGN KEY \(`([^`]+)`\)/i)?.[1] || null,
+    referencedTable: sqlMessage.match(/REFERENCES `([^`]+)`/i)?.[1] || null
+  };
+};
 const normalizeParticipants = (value) => {
   const list = Array.isArray(value) ? value : [];
   return list.slice(0, 256).map((participant, index) => {
@@ -112,7 +123,7 @@ router.post('/:id/profile/refresh', async (req, res) => {
 
 router.get('/:id/messages', async (req, res) => {
   try { const limit = parsePage(req.query.limit, 40, 100); const beforeId = req.query.beforeId ? Number(req.query.beforeId) : null; const params = [req.params.id]; const before = beforeId ? ' AND id < ?' : ''; if (beforeId) params.push(beforeId); params.push(limit + 1); const [rows] = await getPool().execute(`SELECT * FROM communication_messages WHERE conversation_id = ?${before} ORDER BY created_at DESC, id DESC LIMIT ?`, params); const hasMore = rows.length > limit; res.json({ messages: rows.slice(0, limit).reverse(), hasMore }); }
-  catch { res.status(500).json({ error: 'Nao foi possivel carregar as mensagens.' }); }
+  catch (error) { console.error('[WhatsApp] carregamento de mensagens falhou', { conversationId: Number(req.params.id) || null, beforeId: req.query.beforeId ? Number(req.query.beforeId) || null : null, limit: parsePage(req.query.limit, 40, 100), ...safeDatabaseError(error) }); res.status(500).json({ error: 'Nao foi possivel carregar as mensagens.' }); }
 });
 
 router.get('/:id/messages/search', async (req, res) => {
@@ -237,10 +248,10 @@ router.post('/:id/messages', parseMessageUpload, async (req, res) => {
 
 async function handleMessageSend(req, res, requestedType, text) {
   try {
-    const [rows] = await getPool().execute('SELECT c.*, ca.provider AS account_provider, ca.name AS account_name, ca.external_instance_id, ca.phone_number, ca.status AS account_status, ca.integration_provider_id, ca.owner_user_id, ca.archived_at FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id WHERE c.id = ? AND ca.archived_at IS NULL LIMIT 1', [req.params.id]);
+    const [rows] = await getPool().execute('SELECT c.*, ca.id AS loaded_account_id, ca.provider AS account_provider, ca.name AS account_name, ca.external_instance_id, ca.phone_number, ca.status AS account_status, ca.integration_provider_id, ca.owner_user_id, ca.archived_at FROM conversations c JOIN communication_accounts ca ON ca.id = c.communication_account_id WHERE c.id = ? AND ca.archived_at IS NULL LIMIT 1', [req.params.id]);
     const conversation = rows[0]; if (!conversation) return res.status(404).json({ error: 'Conversa nao encontrada.' });
     const connection = await getPool().getConnection();
-    try { await connection.beginTransaction(); const options = { account: conversation, leadId: conversation.lead_id, recipient: conversation.external_conversation_id, text, idempotencyKey: `manual:conversation:${conversation.id}:${req.get('Idempotency-Key') || `${Date.now()}:${req.userId}`}`, ownerUserId: req.userId, quotedMessageId: req.body?.quotedMessageId ? Number(req.body.quotedMessageId) : null }; const result = requestedType === 'text' ? await sendWhatsAppMessage(connection, options) : await sendWhatsAppMedia(connection, { ...options, messageType: requestedType, file: req.file, mimeType: req.file?.mimetype, filename: req.file?.originalname, caption: String(req.body?.caption || '').trim() || null }); await connection.commit(); res.status(201).json(result); }
+    try { await connection.beginTransaction(); const account = { ...conversation, id: Number(conversation.loaded_account_id) }; const options = { account, leadId: conversation.lead_id, recipient: conversation.external_conversation_id, text, idempotencyKey: `manual:conversation:${conversation.id}:${req.get('Idempotency-Key') || `${Date.now()}:${req.userId}`}`, ownerUserId: req.userId, quotedMessageId: req.body?.quotedMessageId ? Number(req.body.quotedMessageId) : null }; const result = requestedType === 'text' ? await sendWhatsAppMessage(connection, options) : await sendWhatsAppMedia(connection, { ...options, messageType: requestedType, file: req.file, mimeType: req.file?.mimetype, filename: req.file?.originalname, caption: String(req.body?.caption || '').trim() || null }); await connection.commit(); res.status(201).json(result); }
     catch (error) {
       await connection.rollback();
       const isForeignKeyError = error?.code === 'ER_NO_REFERENCED_ROW_2' || error?.errno === 1452;
@@ -260,7 +271,10 @@ async function handleMessageSend(req, res, requestedType, text) {
         providerErrorCode: error?.providerErrorCode || null,
         providerErrorType: error?.providerErrorType || null,
         providerMessage: error?.providerMessage || null,
-        errorCode
+        errorCode,
+        ...safeDatabaseError(error),
+        leadId: conversation.lead_id ? Number(conversation.lead_id) : null,
+        quotedMessageId: req.body?.quotedMessageId ? Number(req.body.quotedMessageId) || null : null
       });
       res.status(responseStatus).json({ error: error?.publicMessage || 'Nao foi possivel enviar a mensagem.', code: errorCode });
     }
