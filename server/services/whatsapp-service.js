@@ -11,11 +11,30 @@ const parseJson = (value, fallback = {}) => {
 };
 
 function normalizePhone(value) {
-  const raw = String(value || '').trim().replace(/@s\.whatsapp\.net$/i, '').replace(/\D/g, '');
+  const input = String(value || '').trim();
+  if (/@lid$/i.test(input) || (input.includes('@') && !/@(?:s\.whatsapp\.net|c\.us)$/i.test(input))) return null;
+  const raw = input.replace(/@s\.whatsapp\.net$|@c\.us$/i, '').replace(/\D/g, '');
   if (!raw) return null;
+  if (input.startsWith('+') && !raw.startsWith('55')) return raw.length >= 7 && raw.length <= 15 ? raw : null;
   if (raw.startsWith('55') && (raw.length === 12 || raw.length === 13)) return raw;
   if ((raw.length === 10 || raw.length === 11) && !raw.startsWith('0')) return `55${raw}`;
-  return raw;
+  return raw.length >= 7 && raw.length <= 15 && !raw.startsWith('0') ? raw : null;
+}
+
+function resolveWhatsAppDestination({ recipient, lead = null }) {
+  const rawRecipient = String(recipient || '').trim();
+  if (/@g\.us$/i.test(rawRecipient)) return rawRecipient;
+  const direct = normalizePhone(rawRecipient);
+  if (direct) return direct;
+  if (/@lid$/i.test(rawRecipient)) {
+    const fromLead = normalizePhone(lead?.normalized_phone || lead?.phone);
+    if (fromLead) return fromLead;
+  }
+  const error = new Error('WHATSAPP_DESTINATION_UNRESOLVED');
+  error.code = 'WHATSAPP_DESTINATION_UNRESOLVED';
+  error.retryable = false;
+  error.publicMessage = 'Nao foi possivel identificar o numero do WhatsApp deste contato.';
+  throw error;
 }
 
 function formatWhatsAppParticipantPhone(value) {
@@ -62,7 +81,7 @@ function extractInbound(payload) {
   const remoteJid = String(key.remoteJid || data?.remoteJid || '');
   const externalMessageId = String(key.id || data?.id || '').trim();
   const participantId = String(key.participant || data?.participant || '').trim();
-  const participantAlt = String(key.participantAlt || data?.participantAlt || data?.remoteJidAlt || '').trim() || null;
+  const participantAlt = String(key.participantAlt || key.remoteJidAlt || data?.participantAlt || data?.remoteJidAlt || '').trim() || null;
   const isGroup = remoteJid.endsWith('@g.us');
   const isBroadcast = remoteJid.endsWith('@broadcast') || remoteJid === 'status@broadcast';
   const fromMe = Boolean(key.fromMe || data?.fromMe);
@@ -72,7 +91,7 @@ function extractInbound(payload) {
   const contextInfo = media.content?.contextInfo || Object.values(media.content || {}).find((value) => value && typeof value === 'object' && value.contextInfo)?.contextInfo || data?.contextInfo || data?.message?.contextInfo || null;
   const quoted = contextInfo?.quotedMessage ? { text: extractText(contextInfo.quotedMessage), messageType: mediaFromMessage(contextInfo.quotedMessage).type, externalMessageId: contextInfo.stanzaId || null, participant: contextInfo.participant || contextInfo.remoteJid || null } : null;
   const canonicalParticipantId = /@s\.whatsapp\.net$/i.test(String(participantAlt || '')) ? participantAlt : participantId || remoteJid;
-  return { remoteJid, externalMessageId, externalSenderId: canonicalParticipantId, participantId, participantAlt, phone: normalizePhone(remoteJid), fromMe, isGroup, isBroadcast, text: media.caption || extractText(message), messageType: media.type, media: { ...media, key: { id: externalMessageId, remoteJid, fromMe, participant: participantId || null, participantAlt } }, providerMessage: { key: { id: externalMessageId, remoteJid, fromMe, participant: participantId || null, participantAlt }, message }, quoted, occurredAt: timestamp > 0 ? new Date(timestamp * 1000) : new Date(), pushName: String(data?.pushName || data?.sender?.pushName || '').trim() || null };
+  return { remoteJid, externalMessageId, externalSenderId: canonicalParticipantId, participantId, participantAlt, phone: normalizePhone(participantAlt) || normalizePhone(remoteJid), fromMe, isGroup, isBroadcast, text: media.caption || extractText(message), messageType: media.type, media: { ...media, key: { id: externalMessageId, remoteJid, fromMe, participant: participantId || null, participantAlt } }, providerMessage: { key: { id: externalMessageId, remoteJid, fromMe, participant: participantId || null, participantAlt }, message }, quoted, occurredAt: timestamp > 0 ? new Date(timestamp * 1000) : new Date(), pushName: String(data?.pushName || data?.sender?.pushName || '').trim() || null };
 }
 
 function participantContractSummary(participant) {
@@ -215,7 +234,7 @@ async function processWebhookEvent(connection, event) {
     catch (error) { mediaStatus = 'unavailable'; console.error('[WhatsApp] download de midia falhou', { communicationAccountId: Number(account.id), provider: String(account.provider || 'unknown'), operation: 'download_media', messageType: parsed.messageType, providerStatus: error?.providerStatus || null, errorCode: String(error?.code || 'MEDIA_DOWNLOAD_FAILED').replace(/[^A-Z0-9_]/g, '_').slice(0, 80) }); }
   }
   const [quotedRows] = parsed.quoted?.externalMessageId ? await connection.execute('SELECT id FROM communication_messages WHERE communication_account_id = ? AND external_message_id = ? LIMIT 1', [account.id, parsed.quoted.externalMessageId]) : [[]];
-  const message = await persistMessage(connection, { account, conversation, lead, event, direction, text: parsed.text, externalMessageId: parsed.externalMessageId, externalSenderId: parsed.externalSenderId, messageType: parsed.messageType, occurredAt: parsed.occurredAt, media, quotedMessageId: quotedRows[0]?.id || null, metadata: { pushName: parsed.pushName, senderName: parsed.isGroup ? parsed.pushName : null, fromMe: parsed.fromMe, isGroup: parsed.isGroup, eventType: event.event_type, media: parsed.media ? { key: parsed.media.key, mimeType: parsed.media.mimeType, filename: parsed.media.filename, size: parsed.media.size, duration: parsed.media.duration, width: parsed.media.width, height: parsed.media.height, status: mediaStatus } : null, quoted: parsed.quoted } });
+  const message = await persistMessage(connection, { account, conversation, lead, event, direction, text: parsed.text, externalMessageId: parsed.externalMessageId, externalSenderId: parsed.externalSenderId, messageType: parsed.messageType, occurredAt: parsed.occurredAt, media, quotedMessageId: quotedRows[0]?.id || null, metadata: { pushName: parsed.pushName, senderName: parsed.isGroup ? parsed.pushName : null, fromMe: parsed.fromMe, isGroup: parsed.isGroup, eventType: event.event_type, identity: { remoteJid: parsed.remoteJid, participantId: parsed.participantId, participantAlt: parsed.participantAlt, phoneResolved: Boolean(parsed.phone) }, media: parsed.media ? { key: parsed.media.key, mimeType: parsed.media.mimeType, filename: parsed.media.filename, size: parsed.media.size, duration: parsed.media.duration, width: parsed.media.width, height: parsed.media.height, status: mediaStatus } : null, quoted: parsed.quoted } });
   if (!message.duplicate && lead?.id) await connection.execute("INSERT INTO prospect_contact_history (prospect_id, owner_user_id, channel, message, recipient, delivery_status, metadata) VALUES (?, ?, 'whatsapp', ?, ?, ?, ?)", [lead.id, account.owner_user_id, direction === 'inbound' ? 'Mensagem recebida no WhatsApp' : 'Mensagem enviada no WhatsApp', parsed.phone, direction === 'inbound' ? 'received' : 'sent', JSON.stringify({ conversationId: conversation.id, externalMessageId: parsed.externalMessageId })]);
   if (!message.duplicate) await dispatchDomainEvent({ type: direction === 'inbound' ? 'message.received' : 'message.sent', entityType: 'conversation', entityId: conversation.id, actorUserId: parsed.fromMe ? account.owner_user_id : null, payload: { conversationId: conversation.id, messageId: message.id, leadId: lead?.id || null, channel: 'whatsapp' }, idempotencyKey: `whatsapp-message:${account.id}:${parsed.externalMessageId}` }, { connection });
   return { ignored: false, duplicate: message.duplicate, conversationId: Number(conversation.id), leadId: lead?.id ? Number(lead.id) : null, messageId: message.id };
@@ -240,8 +259,6 @@ async function processPendingWhatsAppEvents({ batchSize = 25 } = {}) {
 
 async function sendWhatsAppContent(connection, { account, leadId, recipient, text = null, messageType = 'text', file = null, mimeType = null, filename = null, caption = null, quotedMessageId = null, idempotencyKey, automationId = null, runId = null, stepId = null, ownerUserId = null }) {
   const isGroup = String(recipient || '').endsWith('@g.us');
-  const phone = isGroup ? String(recipient) : normalizePhone(recipient);
-  if (!phone) throw Object.assign(new Error('RECIPIENT_PHONE_MISSING'), { code: 'RECIPIENT_PHONE_MISSING', retryable: false, publicMessage: 'Destinatario nao informado.' });
   const accountStatus = account.account_status ?? account.status;
   if (accountStatus !== 'connected') throw Object.assign(new Error('WHATSAPP_ACCOUNT_NOT_CONNECTED'), { code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED', retryable: false, publicMessage: 'A conta WhatsApp nao esta conectada.' });
   if (!['text', 'image', 'audio', 'video', 'document'].includes(messageType)) throw Object.assign(new Error('MEDIA_TYPE_NOT_SUPPORTED'), { code: 'MEDIA_TYPE_NOT_SUPPORTED', retryable: false, publicMessage: 'Este tipo de mensagem nao e suportado para envio.' });
@@ -250,6 +267,7 @@ async function sendWhatsAppContent(connection, { account, leadId, recipient, tex
   if (existing[0]?.status === 'sent') return { idempotent: true, communicationMessageId: Number(existing[0].id), providerMessageId: existing[0].provider_message_id, messageId: existing[0].provider_message_id, conversationId: existing[0].conversation_id };
   const [leadRows] = await connection.execute('SELECT * FROM prospects WHERE id = ? LIMIT 1', [leadId || 0]);
   const lead = leadRows[0] || null;
+  const phone = resolveWhatsAppDestination({ recipient, lead });
   const remoteJid = isGroup ? phone : `${phone}@s.whatsapp.net`;
   const conversation = await getOrCreateConversation(connection, account, remoteJid, lead?.id || null, 'outbound', new Date(), { isGroup });
   const { provider } = await loadEvolutionConfig(connection, account);
@@ -289,4 +307,4 @@ async function sendWhatsAppMessage(connection, options) { return sendWhatsAppCon
 
 async function sendWhatsAppMedia(connection, options) { return sendWhatsAppContent(connection, options); }
 
-module.exports = { normalizePhone, formatWhatsAppParticipantPhone, extractInbound, participantContractSummary, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };
+module.exports = { normalizePhone, resolveWhatsAppDestination, formatWhatsAppParticipantPhone, extractInbound, participantContractSummary, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };

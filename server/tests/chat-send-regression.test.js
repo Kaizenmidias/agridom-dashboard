@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { EvolutionWhatsAppProvider, providerError } = require('../services/evolution-whatsapp-provider');
 const { sniffMime } = require('../services/chat-media');
-const { extractInbound, extractDeliveryStatus } = require('../services/whatsapp-service');
+const { extractInbound, extractDeliveryStatus, normalizePhone, resolveWhatsAppDestination } = require('../services/whatsapp-service');
 const { getMediaRange, validateMedia, resolveStoragePath } = require('../services/chat-media');
 
 const root = path.resolve(__dirname, '../..');
@@ -69,6 +69,23 @@ test('Evolution provider builds the v2 media payload without a data URL prefix',
   provider.request = async (method, requestPath, body) => { captured = { method, requestPath, body }; return { key: { id: 'image-1' } }; };
   await provider.sendMedia('kaizen-main', { number: '5513999998888', mediaType: 'image', mimeType: 'image/jpeg', media: 'aGVsbG8=', filename: 'foto.jpg', caption: 'Legenda' });
   assert.deepEqual(captured, { method: 'POST', requestPath: '/message/sendMedia/kaizen-main', body: { number: '5513999998888', mediatype: 'image', mimetype: 'image/jpeg', media: 'aGVsbG8=', fileName: 'foto.jpg', caption: 'Legenda', quoted: undefined } });
+});
+
+test('WhatsApp destination resolution accepts phones and never treats a LID as a phone', () => {
+  assert.equal(normalizePhone('5511999999999'), '5511999999999');
+  assert.equal(normalizePhone('5511999999999@s.whatsapp.net'), '5511999999999');
+  assert.equal(normalizePhone('(11) 99999-9999'), '5511999999999');
+  assert.equal(normalizePhone('+14155552671'), '14155552671');
+  assert.equal(normalizePhone('12345678901234567890@lid'), null);
+  assert.equal(resolveWhatsAppDestination({ recipient: '12345678901234567890@lid', lead: { phone: '11999999999' } }), '5511999999999');
+  assert.throws(() => resolveWhatsAppDestination({ recipient: '12345678901234567890@lid' }), /WHATSAPP_DESTINATION_UNRESOLVED/);
+  assert.throws(() => resolveWhatsAppDestination({ recipient: '' }), /WHATSAPP_DESTINATION_UNRESOLVED/);
+});
+
+test('inbound extraction prefers a verified alternate phone JID over a LID', () => {
+  const parsed = extractInbound({ data: { key: { id: 'lid-message', remoteJid: '12345678901234567890@lid', remoteJidAlt: '5511999999999@s.whatsapp.net', fromMe: false }, message: { conversation: 'Ola' } } });
+  assert.equal(parsed.phone, '5511999999999');
+  assert.equal(parsed.participantAlt, '5511999999999@s.whatsapp.net');
 });
 
 test('outbound replies only persist a quoted foreign key when the message belongs to the conversation', () => {
