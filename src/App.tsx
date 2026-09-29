@@ -29,7 +29,7 @@ import {
 import { ChatsPage } from "./pages/commercial/ChatsPage";
 import { ConnectedNumbersPage } from "./pages/commercial/ConnectedNumbersPage";
 import { AgentDetailPage } from "./pages/ai/AgentDetailPage";
-import { AssistantsPage, ContentsPage, PromptsPage } from "./pages/ai/AiPlaceholders";
+import { AssistantsPage, ContentsPage, NewAgentPage, PromptsPage } from "./pages/ai/AiPlaceholders";
 import { AgentsManagementPage as AgentsPage } from "./pages/ai/AgentsManagementPage";
 import { CashFlowPage, RevenuesPage } from "./pages/finance/FinancePlaceholders";
 import { ContractsPage } from "./pages/legal/LegalPlaceholders";
@@ -84,6 +84,7 @@ const routes = [
   { path: "/ia/conteudos", element: <ContentsPage />, protected: true, restrictedForRicardo: false },
   { path: "/ia/prompts", element: <PromptsPage />, protected: true, restrictedForRicardo: false },
   { path: "/ia/agentes", element: <AgentsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/ia/agentes/novo", element: <NewAgentPage />, protected: true, restrictedForRicardo: false },
   { path: "/ia/agentes/:id", element: <AgentDetailPage />, protected: true, restrictedForRicardo: false },
   { path: "/financeiro/projetos", element: <Navigate to="/projetos" replace />, protected: true, restrictedForRicardo: true },
   { path: "/financeiro/receitas", element: <RevenuesPage />, protected: true, restrictedForRicardo: true },

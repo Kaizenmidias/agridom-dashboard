@@ -281,3 +281,4 @@
 .dark .border-gray-300 {
   border-color: hsl(var(--border)) !important;
 }
+@media (min-width: 1024px) { [data-details-open="false"] > aside:last-child { display: none; } }
