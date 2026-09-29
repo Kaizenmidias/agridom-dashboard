@@ -9,6 +9,7 @@ import {
   Filter,
   FileText,
   Image,
+  Mic,
   Paperclip,
   Pause,
   Play,
@@ -386,6 +387,96 @@ function Stepper({ step }: { step: number }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function WhatsAppMessagePreview({
+  text,
+  attachment,
+  attachmentUrl,
+}: {
+  text: string;
+  attachment: File | null;
+  attachmentUrl: string | null;
+}) {
+  const resolvedText = text.replace(/\{\{(nome|primeiro_nome)\}\}/g, "[Nome]");
+  const type = attachment?.type || "";
+  const time = new Date().toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return (
+    <div className="overflow-hidden rounded-lg border bg-[#efe7d8] shadow-sm">
+      <div className="flex items-center gap-3 border-b border-black/5 bg-[#f7f3ed] px-4 py-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#d7e4d1] text-sm font-semibold text-[#3d6042]">
+          C
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-[#243326]">Contato</p>
+          <p className="text-[11px] text-[#718071]">prévia da mensagem</p>
+        </div>
+      </div>
+      <div
+        className="relative flex min-h-[380px] items-end justify-end overflow-hidden p-4 sm:min-h-[420px]"
+        style={{
+          backgroundImage:
+            "radial-gradient(rgba(116, 102, 78, .10) 1px, transparent 1px)",
+          backgroundSize: "18px 18px",
+        }}
+      >
+        <div className="relative w-fit max-w-[min(90%,420px)] rounded-[10px] rounded-tr-[3px] bg-[#d9fdd3] p-1.5 text-[13px] text-[#1f2d22] shadow-sm">
+          {attachment && type.startsWith("image/") && attachmentUrl ? (
+            <img
+              src={attachmentUrl}
+              alt="Imagem da mensagem"
+              className="block max-h-[360px] max-w-full rounded-[7px] object-contain"
+            />
+          ) : null}
+          {attachment && type.startsWith("video/") && attachmentUrl ? (
+            <video
+              src={attachmentUrl}
+              controls
+              playsInline
+              className="block max-h-[360px] max-w-full rounded-[7px] object-contain"
+            />
+          ) : null}
+          {attachment && type.startsWith("audio/") && attachmentUrl ? (
+            <div className="flex min-w-[220px] items-center gap-2 rounded-md bg-white/45 p-2">
+              <Mic className="h-5 w-5 text-[#527556]" />
+              <audio controls src={attachmentUrl} className="h-8 w-[190px]" />
+            </div>
+          ) : null}
+          {attachment &&
+          !type.startsWith("image/") &&
+          !type.startsWith("video/") &&
+          !type.startsWith("audio/") ? (
+            <div className="flex min-w-[230px] items-center gap-3 rounded-md bg-white/45 p-3">
+              <FileText className="h-8 w-8 shrink-0 text-[#527556]" />
+              <div className="min-w-0">
+                <p className="truncate font-medium">{attachment.name}</p>
+                <p className="text-[11px] text-[#718071]">
+                  {attachment.type || "Arquivo"} ·{" "}
+                  {(attachment.size / 1024 / 1024).toFixed(1)} MB
+                </p>
+              </div>
+            </div>
+          ) : null}
+          {resolvedText ? (
+            <p className="whitespace-pre-wrap break-words px-1.5 pb-1 pt-2">
+              {resolvedText}
+            </p>
+          ) : (
+            <p className="px-1.5 pb-1 pt-2 text-muted-foreground">
+              Sua mensagem aparecerá aqui.
+            </p>
+          )}
+          <div className="flex justify-end gap-1 px-1 text-[10px] text-[#64806a]">
+            <span>{time}</span>
+            <span aria-label="Mensagem entregue">✓✓</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -828,29 +919,18 @@ export function NewBroadcastPage() {
                 {text.length} caracteres
               </p>
             </div>
-            <div className="rounded-lg bg-[#efe7d8] p-4">
-              <p className="mb-3 text-xs font-medium text-muted-foreground">
-                Prévia
-              </p>
-              <div className="ml-auto max-w-[85%] rounded-lg rounded-tr-none bg-[#d9fdd3] p-3 text-sm shadow-sm">
-                {attachmentUrl && attachment?.type.startsWith("image/") ? (
-                  <img
-                    src={attachmentUrl}
-                    alt="Prévia"
-                    className="mb-2 max-h-48 w-full rounded object-cover"
-                  />
-                ) : null}
-                {text ||
-                  (attachment
-                    ? attachment.name
-                    : "Sua mensagem aparecerá aqui.")}
-                <span className="ml-3 text-[10px] text-muted-foreground">
-                  agora
-                </span>
+            <div className="space-y-2">
+              <div>
+                <p className="text-sm font-semibold">Prévia no WhatsApp</p>
+                <p className="text-xs text-muted-foreground">
+                  Veja como a mensagem pode aparecer para seus contatos.
+                </p>
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Prévia visual. Os dados variam por contato.
-              </p>
+              <WhatsAppMessagePreview
+                text={text}
+                attachment={attachment}
+                attachmentUrl={attachmentUrl}
+              />
             </div>
           </CardContent>
           <div className="flex justify-between border-t p-6">
