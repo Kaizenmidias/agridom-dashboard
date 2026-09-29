@@ -41,3 +41,10 @@ test('DISPAROS-2C lifecycle routes and worker keep sending behind an executor bo
   assert.doesNotMatch(route, /sendWhatsApp(Content|Message|Media)|sendText|sendMedia|sendAudio|Evolution/);
   assert.rejects(() => executeBroadcastRecipient(), /EXECUTOR_NOT_CONFIGURED/);
 });
+
+test('DISPAROS does not bind an undefined worker id or fabricate undefined PATCH fields', () => {
+  assert.match(worker, /currentWorkerId = workerId\(\)/);
+  assert.match(route, /Object\.prototype\.hasOwnProperty\.call\(req\.body \|\| \{\}, "scheduled_at"\)/);
+  assert.match(route, /Object\.prototype\.hasOwnProperty\.call\(req\.body \|\| \{\}, "cadence_seconds"\)/);
+  assert.doesNotMatch(route, /scheduledAt: req\.body\?\.scheduled_at/);
+});

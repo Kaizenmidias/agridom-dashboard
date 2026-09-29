@@ -147,7 +147,7 @@ async function materializeCampaign({ campaignId, userId, now = new Date() }) {
 }
 
 async function claimNextBroadcastJob({
-  currentWorkerId,
+  currentWorkerId = workerId(),
   lockTimeoutMs = 86400000,
 } = {}) {
   const connection = await getPool().getConnection();
@@ -382,7 +382,7 @@ async function executeBroadcastRecipient({ connection, job } = {}) {
 
 async function processBroadcastJob(
   job,
-  { executor = executeBroadcastRecipient, currentWorkerId } = {},
+  { executor = executeBroadcastRecipient, currentWorkerId = workerId() } = {},
 ) {
   const connection = await getPool().getConnection();
   try {
@@ -498,7 +498,7 @@ async function processBroadcastJob(
 }
 
 async function processBroadcastBatch({
-  currentWorkerId,
+  currentWorkerId = workerId(),
   batchSize = 10,
   executor,
 } = {}) {

@@ -436,15 +436,12 @@ router.patch("/:id", async (req, res) => {
       req.body?.communication_account_id === undefined
         ? null
         : await validAccount(req.body.communication_account_id, req.userId);
-    const campaign = await campaigns.updateDraft(req.params.id, req.userId, {
-      name: req.body?.name,
-      communicationAccountId:
-        req.body?.communication_account_id === undefined
-          ? undefined
-          : (account?.id ?? null),
-      scheduledAt: req.body?.scheduled_at,
-      cadenceSeconds: req.body?.cadence_seconds,
-    });
+    const values = {};
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "name")) values.name = req.body.name;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "communication_account_id")) values.communicationAccountId = account?.id ?? null;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "scheduled_at")) values.scheduledAt = req.body.scheduled_at;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "cadence_seconds")) values.cadenceSeconds = req.body.cadence_seconds;
+    const campaign = await campaigns.updateDraft(req.params.id, req.userId, values);
     await writeEvent(campaign.id, req.userId, "updated");
     res.json({ campaign });
   } catch (error) {
