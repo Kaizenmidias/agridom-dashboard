@@ -28,6 +28,7 @@ test('DISPAROS-2C claims atomically, recovers stale locks and has bounded retry'
   assert.match(worker, /max_attempts/);
   assert.match(worker, /BACKOFF_MS/);
   assert.match(worker, /campaign_status/);
+  assert.match(worker, /WHATSAPP_ACCOUNT_NOT_READY/);
   assert.deepEqual(BACKOFF_MS, [5000, 30000, 120000]);
 });
 

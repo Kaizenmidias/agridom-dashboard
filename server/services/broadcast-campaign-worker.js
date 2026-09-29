@@ -12,13 +12,15 @@ async function finalizeCampaign(connection, campaignId) {
 }
 
 async function materializeCampaign({ campaignId, userId, now = new Date() }) {
-  const campaignResult = await query(`SELECT c.*, cc.content_type, cc.text_content FROM broadcast_campaigns c
+  const campaignResult = await query(`SELECT c.*, cc.content_type, cc.text_content, ca.channel AS account_channel, ca.archived_at AS account_archived_at, ca.status AS account_status, ca.owner_user_id AS account_owner_user_id FROM broadcast_campaigns c
     LEFT JOIN broadcast_campaign_contents cc ON cc.campaign_id = c.id
+    LEFT JOIN communication_accounts ca ON ca.id = c.communication_account_id
     WHERE c.id = ? AND c.created_by_user_id = ?`, [campaignId, userId]);
   const campaign = campaignResult.rows?.[0];
   if (!campaign) throw Object.assign(new Error('CAMPAIGN_NOT_FOUND'), { status: 404, code: 'CAMPAIGN_NOT_FOUND' });
   if (campaign.status !== 'draft') throw Object.assign(new Error('CAMPAIGN_NOT_EDITABLE'), { status: 409, code: 'CAMPAIGN_NOT_EDITABLE' });
   if (!campaign.communication_account_id) throw Object.assign(new Error('CAMPAIGN_ACCOUNT_REQUIRED'), { status: 400, code: 'CAMPAIGN_ACCOUNT_REQUIRED' });
+  if (campaign.account_channel !== 'whatsapp' || campaign.account_archived_at || campaign.account_status !== 'connected' || (campaign.account_owner_user_id != null && Number(campaign.account_owner_user_id) !== Number(userId))) throw Object.assign(new Error('WHATSAPP_ACCOUNT_NOT_READY'), { status: 409, code: 'WHATSAPP_ACCOUNT_NOT_READY' });
   if (!campaign.content_type || (campaign.content_type === 'text' && !String(campaign.text_content || '').trim())) throw Object.assign(new Error('CAMPAIGN_CONTENT_REQUIRED'), { status: 400, code: 'CAMPAIGN_CONTENT_REQUIRED' });
   const recipientResult = await query("SELECT id FROM broadcast_campaign_recipients WHERE campaign_id = ? AND status = 'pending'", [campaign.id]);
   if (!recipientResult.rows?.length) throw Object.assign(new Error('CAMPAIGN_RECIPIENTS_REQUIRED'), { status: 400, code: 'CAMPAIGN_RECIPIENTS_REQUIRED' });
