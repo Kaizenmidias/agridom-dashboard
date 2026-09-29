@@ -3,6 +3,7 @@ const { query } = require('../config/database');
 const CAMPAIGN_STATUSES = ['draft', 'scheduled', 'running', 'paused', 'completed', 'cancelled', 'failed'];
 const CONTENT_TYPES = ['text', 'image', 'video', 'document', 'audio'];
 const RECIPIENT_STATUSES = ['pending', 'processing', 'sent', 'delivered', 'read', 'failed', 'skipped', 'cancelled'];
+const BROADCAST_EVENT_TYPES = ['created', 'updated', 'content_updated', 'recipients_added', 'recipient_removed', 'scheduled', 'started', 'paused', 'resumed', 'cancelled', 'completed', 'failed'];
 
 class BroadcastCampaignError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -115,4 +116,4 @@ async function getRecipients(campaignId, userId, status) {
   return result.rows || [];
 }
 
-module.exports = { CAMPAIGN_STATUSES, CONTENT_TYPES, RECIPIENT_STATUSES, BroadcastCampaignError, normalizePhone, normalizeContent, createDraft, getCampaign, listCampaigns, updateDraft, updateContent, addRecipients, getRecipients };
+module.exports = { CAMPAIGN_STATUSES, CONTENT_TYPES, RECIPIENT_STATUSES, BROADCAST_EVENT_TYPES, BroadcastCampaignError, normalizePhone, normalizeContent, createDraft, getCampaign, listCampaigns, updateDraft, updateContent, addRecipients, getRecipients };

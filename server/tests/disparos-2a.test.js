@@ -20,6 +20,15 @@ test('DISPAROS-2A migration creates campaign domain with MySQL-safe contracts', 
   assert.doesNotMatch(migration, /api.?key|webhook.?secret|jwt/i);
 });
 
+test('DISPAROS event catalog covers every value used by the routes', () => {
+  const migration = fs.readFileSync(path.join(root, 'database', 'migrations', '20260929_broadcast_campaigns.sql'), 'utf8');
+  const incremental = fs.readFileSync(path.join(root, 'database', 'migrations', '20260929_broadcast_campaign_event_types.sql'), 'utf8');
+  const { BROADCAST_EVENT_TYPES } = domain;
+  for (const eventType of BROADCAST_EVENT_TYPES) assert.match(incremental, new RegExp(`'${eventType}'`));
+  assert.match(migration, /event_type ENUM/i);
+  assert.match(incremental, /MODIFY COLUMN event_type ENUM/i);
+});
+
 test('DISPAROS-2A domain validates statuses, content and snapshots', () => {
   assert.deepEqual(domain.CAMPAIGN_STATUSES, ['draft', 'scheduled', 'running', 'paused', 'completed', 'cancelled', 'failed']);
   assert.equal(domain.normalizePhone('(16) 99999-0000'), '16999990000');
