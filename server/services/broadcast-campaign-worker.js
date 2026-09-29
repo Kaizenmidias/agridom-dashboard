@@ -463,6 +463,8 @@ async function processBroadcastJob(
         error_name: safeWorkerError(error).name,
         error_stage: safeWorkerError(error).stage,
         error_message: safeWorkerError(error).message,
+        binding_operation: error?.bindingOperation || null,
+        binding_fields: error?.bindingFields || null,
         operation:
           current.content_type === "text"
             ? "sendText"

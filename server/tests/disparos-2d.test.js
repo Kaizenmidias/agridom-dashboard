@@ -40,3 +40,13 @@ test('DISPAROS preserva a etapa e a causa segura de falhas antes do HTTP', () =>
   assert.match(read('server', 'services', 'whatsapp-service.js'), /stage: 'configuration'/);
   assert.match(read('server', 'services', 'whatsapp-service.js'), /stage: 'persistence'/);
 });
+
+test('DISPAROS identifica o nome do bind indefinido sem registrar valores', () => {
+  const { assertNoUndefinedBindings } = require('../services/whatsapp-service');
+  assert.throws(() => assertNoUndefinedBindings('loadEvolutionConfig', { integrationProviderId: undefined }, { campaignId: 13, recipientId: 23, communicationAccountId: 1 }), (error) => {
+    assert.equal(error.code, 'BROADCAST_SQL_BIND_UNDEFINED');
+    assert.equal(error.stage, 'persistence');
+    assert.deepEqual(error.bindingFields, ['integrationProviderId']);
+    return true;
+  });
+});

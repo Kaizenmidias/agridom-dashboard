@@ -10,6 +10,21 @@ const parseJson = (value, fallback = {}) => {
   try { return JSON.parse(value || JSON.stringify(fallback)); } catch { return fallback; }
 };
 
+function assertNoUndefinedBindings(operation, namedParams, context = {}) {
+  const missing = Object.entries(namedParams).filter(([, value]) => value === undefined).map(([name]) => name);
+  if (!missing.length) return;
+  const error = new Error('BROADCAST_SQL_BIND_UNDEFINED');
+  error.code = 'BROADCAST_SQL_BIND_UNDEFINED';
+  error.stage = 'persistence';
+  error.retryable = false;
+  error.publicMessage = 'Nao foi possivel persistir o envio da campanha.';
+  error.bindingOperation = operation;
+  error.bindingFields = missing;
+  error.bindingContext = { campaignId: context.campaignId ?? null, recipientId: context.recipientId ?? null, communicationAccountId: context.communicationAccountId ?? null };
+  console.error('[Broadcast] SQL binding validation failed', { operation, fields: missing, ...error.bindingContext });
+  throw error;
+}
+
 function normalizePhone(value) {
   const input = String(value || '').trim();
   if (/@lid$/i.test(input) || (input.includes('@') && !/@(?:s\.whatsapp\.net|c\.us)$/i.test(input))) return null;
@@ -160,6 +175,7 @@ async function updateDeliveryReceipt(connection, accountId, update) {
 }
 
 async function loadEvolutionConfig(connection, account) {
+  assertNoUndefinedBindings('loadEvolutionConfig', { integrationProviderId: account.integration_provider_id }, account);
   const [rows] = await connection.execute("SELECT * FROM integration_providers WHERE id = ? AND provider = 'evolution' LIMIT 1", [account.integration_provider_id]);
   const row = rows[0];
   if (!row) throw providerError('Integracao Evolution nao configurada.', 'WHATSAPP_NOT_CONFIGURED');
@@ -193,6 +209,7 @@ async function findOrCreateLead(connection, account, phone, pushName) {
 
 async function getOrCreateConversation(connection, account, externalConversationId, leadId, direction, occurredAt, metadata = {}) {
   const conversationType = metadata.isGroup ? 'group' : 'contact';
+  assertNoUndefinedBindings('getOrCreateConversation', { conversationType, accountId: account.id, leadId: leadId ?? null, externalConversationId, displayName: metadata.displayName ?? null, occurredAt, inboundOccurredAt: direction === 'inbound' ? occurredAt : null, outboundOccurredAt: direction === 'outbound' ? occurredAt : null, unreadCount: direction === 'inbound' ? 1 : 0 }, account);
   await connection.execute(`INSERT INTO conversations (channel, conversation_type, communication_account_id, lead_id, external_conversation_id, display_name, last_message_at, last_inbound_at, last_outbound_at, unread_count) VALUES ('whatsapp', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE conversation_type = VALUES(conversation_type), lead_id = COALESCE(VALUES(lead_id), lead_id), display_name = COALESCE(display_name, VALUES(display_name)), last_message_at = GREATEST(COALESCE(last_message_at, VALUES(last_message_at)), VALUES(last_message_at)), last_inbound_at = IF(VALUES(last_inbound_at) IS NULL, last_inbound_at, VALUES(last_inbound_at)), last_outbound_at = IF(VALUES(last_outbound_at) IS NULL, last_outbound_at, VALUES(last_outbound_at)), unread_count = unread_count + VALUES(unread_count), updated_at = CURRENT_TIMESTAMP`, [conversationType, account.id, leadId, externalConversationId, metadata.displayName || null, occurredAt, direction === 'inbound' ? occurredAt : null, direction === 'outbound' ? occurredAt : null, direction === 'inbound' ? 1 : 0]);
   const [rows] = await connection.execute('SELECT * FROM conversations WHERE communication_account_id = ? AND external_conversation_id = ? FOR UPDATE', [account.id, externalConversationId]);
@@ -277,9 +294,12 @@ async function sendWhatsAppContent(connection, { account, leadId, recipient, tex
   if (accountStatus !== 'connected') throw Object.assign(new Error('WHATSAPP_ACCOUNT_NOT_CONNECTED'), { code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED', retryable: false, publicMessage: 'A conta WhatsApp nao esta conectada.' });
   if (!['text', 'image', 'audio', 'video', 'document'].includes(messageType)) throw Object.assign(new Error('MEDIA_TYPE_NOT_SUPPORTED'), { code: 'MEDIA_TYPE_NOT_SUPPORTED', retryable: false, publicMessage: 'Este tipo de mensagem nao e suportado para envio.' });
   if (messageType === 'text' && !String(text || '').trim()) throw Object.assign(new Error('INVALID_WHATSAPP_MESSAGE'), { code: 'INVALID_WHATSAPP_MESSAGE', retryable: false, publicMessage: 'Mensagem obrigatoria.' });
+  assertNoUndefinedBindings('sendWhatsAppContent.idempotency', { idempotencyKey }, account);
   const [existing] = await connection.execute('SELECT * FROM communication_messages WHERE idempotency_key = ? FOR UPDATE', [idempotencyKey]);
   if (existing[0]?.status === 'sent') return { idempotent: true, communicationMessageId: Number(existing[0].id), providerMessageId: existing[0].provider_message_id, messageId: existing[0].provider_message_id, conversationId: existing[0].conversation_id };
-  const [leadRows] = await connection.execute('SELECT * FROM prospects WHERE id = ? LIMIT 1', [leadId || 0]);
+  const safeLeadId = leadId ?? null;
+  assertNoUndefinedBindings('sendWhatsAppContent.leadLookup', { leadId: safeLeadId }, account);
+  const [leadRows] = await connection.execute('SELECT * FROM prospects WHERE id = ? LIMIT 1', [safeLeadId || 0]);
   const lead = leadRows[0] || null;
   let phone;
   try { phone = resolveWhatsAppDestination({ recipient, lead }); }
@@ -323,4 +343,4 @@ async function sendWhatsAppMessage(connection, options) { return sendWhatsAppCon
 
 async function sendWhatsAppMedia(connection, options) { return sendWhatsAppContent(connection, options); }
 
-module.exports = { normalizePhone, classifyWhatsAppIdentifier, resolveWhatsAppDestination, formatWhatsAppParticipantPhone, extractInbound, participantContractSummary, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent };
+module.exports = { normalizePhone, classifyWhatsAppIdentifier, resolveWhatsAppDestination, formatWhatsAppParticipantPhone, extractInbound, participantContractSummary, extractDeliveryStatus, deliveryUpdates, updateDeliveryReceipt, loadEvolutionConfig, findOrCreateLead, processWebhookEvent, processPendingWhatsAppEvents, sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppContent, assertNoUndefinedBindings };
