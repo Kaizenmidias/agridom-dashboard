@@ -11,8 +11,17 @@ const PAGE_SIZE_MAX = 100;
 const EXPLICIT_RECIPIENT_MAX = 1000;
 const parseId = (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
 const parsePage = (value, fallback) => Math.min(Math.max(Number(value) || fallback, 1), 100000);
-const errorResponse = (res, error) => res.status(Number(error?.status) || 500).json({ error: error?.status ? error.message : 'Nao foi possivel processar a campanha.' });
+const errorResponse = (res, error) => { if (!error?.status) console.error('[Broadcast] request failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); return res.status(Number(error?.status) || 500).json({ error: error?.status ? error.message : 'Nao foi possivel processar a campanha.' }); };
 const campaignForUser = (id, userId) => campaigns.getCampaign(id, userId);
+const FOLDER_SEGMENTS = {
+  'todos-os-leads': '1 = 1',
+  novos: "p.status = 'novo'",
+  qualificados: "(p.status = 'qualificado' OR COALESCE(p.score, 0) >= 70)",
+  'sem-site': "(p.website IS NULL OR p.website = '')",
+  'follow-up': "p.status = 'em_contato'",
+  convertidos: "p.status = 'convertido'",
+  arquivados: "p.status = 'arquivado'",
+};
 
 async function writeEvent(campaignId, userId, eventType, metadata = {}) {
   await query('INSERT INTO broadcast_campaign_events (campaign_id, event_type, metadata, created_by_user_id) VALUES (?, ?, ?, ?)', [campaignId, eventType, JSON.stringify(metadata), userId]);
@@ -60,6 +69,7 @@ router.post('/', async (req, res) => {
 router.get('/audience/preview', async (req, res) => {
   try {
     const params = [req.userId]; const conditions = ['p.owner_user_id = ?']; const q = String(req.query.search || '').trim().slice(0, 100);
+    if (req.query.folder_id) { const folder = FOLDER_SEGMENTS[String(req.query.folder_id)]; if (!folder) throw new campaigns.BroadcastCampaignError(400, 'INVALID_AUDIENCE_FOLDER'); conditions.push(folder); }
     if (q) { conditions.push('(p.business_name LIKE ? OR p.phone LIKE ? OR p.email LIKE ?)'); params.push(`%${q}%`, `%${q}%`, `%${q}%`); }
     for (const field of ['status', 'origin', 'city', 'state']) if (req.query[field]) { conditions.push(`p.${field} = ?`); params.push(String(req.query[field]).slice(0, 100)); }
     if (req.query.assigned_user_id) { const id = parseId(req.query.assigned_user_id); if (!id) throw new campaigns.BroadcastCampaignError(400, 'INVALID_AUDIENCE_FILTER'); conditions.push('p.assigned_user_id = ?'); params.push(id); }
@@ -77,6 +87,18 @@ router.get('/audience/preview', async (req, res) => {
       FROM prospects p WHERE ${where} ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`, [...params, pageSize, (page - 1) * pageSize]);
     const totals = metrics.rows?.[0] || {};
     res.json({ total: Number(totals.total || 0), with_phone: Number(totals.with_phone || 0), without_phone: Number(totals.without_phone || 0), potentially_duplicate: Number(totals.potentially_duplicate || 0), prospects: rows.rows || [], page, pageSize });
+  } catch (error) { errorResponse(res, error); }
+});
+
+router.get('/audience/folders', async (req, res) => {
+  try {
+    const names = { 'todos-os-leads': 'Todos os Leads', novos: 'Novos', qualificados: 'Qualificados', 'sem-site': 'Sem Site', 'follow-up': 'Follow-up', convertidos: 'Convertidos', arquivados: 'Arquivados' };
+    const folders = await Promise.all(Object.entries(FOLDER_SEGMENTS).map(async ([id, condition]) => {
+      const result = await query(`SELECT COUNT(*) AS total, SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone FROM prospects p WHERE p.owner_user_id = ? AND ${condition}`, [req.userId]);
+      const row = result.rows?.[0] || {};
+      return { id, name: names[id], total: Number(row.total || 0), with_phone: Number(row.with_phone || 0) };
+    }));
+    res.json({ folders });
   } catch (error) { errorResponse(res, error); }
 });
 

@@ -22,3 +22,11 @@ test('DISPAROS mantém start protegido por conta WhatsApp pronta', () => {
   assert.match(worker, /account_status !== 'connected'/);
   assert.doesNotMatch(worker, /apiKey|secret_ciphertext/);
 });
+
+test('DISPAROS expõe apenas os segmentos reais já usados pela tela de Leads', () => {
+  const route = read('server', 'routes', 'broadcast-campaigns.js');
+  assert.match(route, /audience\/folders/);
+  for (const id of ['todos-os-leads', 'novos', 'qualificados', 'sem-site', 'follow-up', 'convertidos', 'arquivados']) assert.match(route, new RegExp(id));
+  assert.match(route, /p\.owner_user_id = \?/);
+  assert.match(route, /with_phone/);
+});
