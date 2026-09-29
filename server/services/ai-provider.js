@@ -8,6 +8,9 @@ const PROVIDER_ERRORS = {
   rateLimit: 'AI_PROVIDER_RATE_LIMIT',
   invalidCredential: 'AI_PROVIDER_INVALID_CREDENTIALS',
   forbidden: 'AI_PROVIDER_FORBIDDEN',
+  quotaExceeded: 'AI_PROVIDER_QUOTA_EXCEEDED',
+  modelUnavailable: 'AI_PROVIDER_MODEL_UNAVAILABLE',
+  invalidRequest: 'AI_PROVIDER_INVALID_REQUEST',
   unavailable: 'AI_PROVIDER_UNAVAILABLE',
   invalidResponse: 'AI_PROVIDER_INVALID_RESPONSE',
   failed: 'AI_PROVIDER_FAILED',
@@ -17,10 +20,42 @@ const modelCache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const SUPPORTED_PROVIDERS = ['openai', 'gemini'];
 
-function providerError(code, message) {
+function providerError(code, message, details = {}) {
   const error = new Error(message);
   error.code = code;
+  Object.assign(error, details);
   return error;
+}
+
+function parseProviderErrorBody(text) {
+  if (!text) return {};
+  try { return JSON.parse(text) || {}; } catch { return {}; }
+}
+
+function classifyProviderFailure(status, payload = {}) {
+  const upstream = payload.error || payload;
+  const upstreamCode = String(upstream.code || upstream.type || '').toLowerCase();
+  const message = String(upstream.message || '').toLowerCase();
+  if (status === 401) return PROVIDER_ERRORS.invalidCredential;
+  if (status === 403) return /quota|billing|insufficient/.test(`${upstreamCode} ${message}`) ? PROVIDER_ERRORS.quotaExceeded : PROVIDER_ERRORS.forbidden;
+  if (status === 404 || /model_not_found|model.*not.*found|does not exist/.test(`${upstreamCode} ${message}`)) return PROVIDER_ERRORS.modelUnavailable;
+  if (status === 429) return /quota|billing|insufficient_quota/.test(`${upstreamCode} ${message}`) ? PROVIDER_ERRORS.quotaExceeded : PROVIDER_ERRORS.rateLimit;
+  if (status === 400) return PROVIDER_ERRORS.invalidRequest;
+  if (status >= 500) return PROVIDER_ERRORS.unavailable;
+  return PROVIDER_ERRORS.failed;
+}
+
+function providerMessage(code) {
+  return {
+    [PROVIDER_ERRORS.invalidCredential]: 'A credencial do provedor nao foi aceita.',
+    [PROVIDER_ERRORS.forbidden]: 'A credencial nao tem permissao para esta operacao.',
+    [PROVIDER_ERRORS.quotaExceeded]: 'A quota do provedor de IA foi excedida.',
+    [PROVIDER_ERRORS.modelUnavailable]: 'O modelo selecionado nao esta disponivel.',
+    [PROVIDER_ERRORS.invalidRequest]: 'A requisicao enviada ao provedor e invalida.',
+    [PROVIDER_ERRORS.rateLimit]: 'O provedor de IA atingiu o limite de requisicoes.',
+    [PROVIDER_ERRORS.unavailable]: 'O provedor esta indisponivel no momento.',
+    [PROVIDER_ERRORS.failed]: 'Nao foi possivel consultar o provedor de IA.',
+  }[code] || 'Nao foi possivel consultar o provedor de IA.';
 }
 
 async function getOpenAiKey() {
@@ -108,23 +143,29 @@ async function runOpenAi({ model, systemPrompt, messages, modelConfig = {}, time
         ...(Number.isFinite(Number(modelConfig.maxTokens)) ? { max_tokens: Number(modelConfig.maxTokens) } : {}),
       }),
     });
-    if (response.status === 429) throw providerError(PROVIDER_ERRORS.rateLimit, 'O provedor de IA atingiu o limite de requisicoes.');
-    if (!response.ok) throw providerError(PROVIDER_ERRORS.failed, 'O provedor de IA nao respondeu corretamente.');
-    const data = await response.json();
+    const rawBody = await response.text();
+    const data = parseProviderErrorBody(rawBody);
+    if (!response.ok) {
+      const code = classifyProviderFailure(response.status, data);
+      throw providerError(code, providerMessage(code), { upstreamStatus: response.status, upstreamCode: data.error?.code || data.error?.type || null });
+    }
+    if (!data || typeof data !== 'object') throw providerError(PROVIDER_ERRORS.invalidResponse, 'O provedor retornou uma resposta inesperada.');
+    const content = data.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) throw providerError(PROVIDER_ERRORS.invalidResponse, 'O provedor retornou uma resposta sem texto.');
     const usage = data.usage || {};
     return {
-      content: String(data.choices?.[0]?.message?.content || ''),
+      content,
       inputTokens: Number(usage.prompt_tokens || 0),
       outputTokens: Number(usage.completion_tokens || 0),
       totalTokens: Number(usage.total_tokens || 0),
       costAmount: calculateCost(modelConfig, Number(usage.prompt_tokens || 0), Number(usage.completion_tokens || 0)),
     };
   } catch (error) {
-    if (error.name === 'AbortError') throw providerError(PROVIDER_ERRORS.timeout, 'A requisicao ao provedor de IA expirou.');
+    if (error.name === 'AbortError' || error.code === 'ETIMEDOUT') throw providerError(PROVIDER_ERRORS.timeout, 'A requisicao ao provedor de IA expirou.');
     throw error.code ? error : providerError(PROVIDER_ERRORS.failed, 'Nao foi possivel consultar o provedor de IA.');
   } finally {
     clearTimeout(timeout);
   }
 }
 
-module.exports = { PROVIDER_ERRORS, SUPPORTED_PROVIDERS, calculateCost, runOpenAi, runGemini, runProvider, listModels, testProvider, invalidateModelCache, getProviderKey, encryptSecret };
+module.exports = { PROVIDER_ERRORS, SUPPORTED_PROVIDERS, calculateCost, classifyProviderFailure, runOpenAi, runGemini, runProvider, listModels, testProvider, invalidateModelCache, getProviderKey, encryptSecret };
