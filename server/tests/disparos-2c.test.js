@@ -31,11 +31,12 @@ test('DISPAROS-2C claims atomically, recovers stale locks and has bounded retry'
   assert.deepEqual(BACKOFF_MS, [5000, 30000, 120000]);
 });
 
-test('DISPAROS-2C lifecycle routes and worker are isolated from WhatsApp sending', () => {
+test('DISPAROS-2C lifecycle routes and worker keep sending behind an executor boundary', () => {
   for (const endpoint of ['/start', '/pause', '/resume', '/cancel', '/progress']) assert.match(route, new RegExp(`router\\.(post|get)\\(['"]\\/:id${endpoint}`));
   assert.match(route, /materializeCampaign/);
   assert.match(workerEntry, /processBroadcastBatch/);
-  assert.doesNotMatch(worker, /sendWhatsApp(Content|Message|Media)|sendText|sendMedia|sendAudio|Evolution/);
+  assert.match(worker, /executor/);
+  assert.doesNotMatch(worker, /axios|new EvolutionWhatsAppProvider/);
   assert.doesNotMatch(route, /sendWhatsApp(Content|Message|Media)|sendText|sendMedia|sendAudio|Evolution/);
   assert.rejects(() => executeBroadcastRecipient(), /EXECUTOR_NOT_CONFIGURED/);
 });

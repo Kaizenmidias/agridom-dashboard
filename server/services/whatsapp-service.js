@@ -110,7 +110,22 @@ async function updateDeliveryReceipt(connection, accountId, update) {
   }
   const current = String(message.delivery_status || '').toLowerCase();
   const regresses = (current === 'read' && ['sent', 'delivered'].includes(update.status)) || (current === 'delivered' && update.status === 'sent');
-  if (!regresses) await connection.execute('UPDATE communication_messages SET delivery_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [update.status, message.id]);
+  if (!regresses) {
+    await connection.execute('UPDATE communication_messages SET delivery_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [update.status, message.id]);
+    await connection.execute(`UPDATE broadcast_campaign_recipients r
+      JOIN broadcast_campaigns c ON c.id = r.campaign_id
+      SET r.status = CASE
+        WHEN ? = 'read' THEN 'read'
+        WHEN ? = 'delivered' AND r.status NOT IN ('read') THEN 'delivered'
+        WHEN ? = 'failed' AND r.status NOT IN ('read', 'delivered') THEN 'failed'
+        ELSE r.status END,
+        r.delivered_at = IF(? = 'delivered', COALESCE(r.delivered_at, UTC_TIMESTAMP()), r.delivered_at),
+        r.read_at = IF(? = 'read', COALESCE(r.read_at, UTC_TIMESTAMP()), r.read_at),
+        r.failed_at = IF(? = 'failed', COALESCE(r.failed_at, UTC_TIMESTAMP()), r.failed_at),
+        r.last_error = IF(? = 'failed', 'PROVIDER_DELIVERY_FAILED', r.last_error),
+        r.updated_at = CURRENT_TIMESTAMP
+      WHERE r.communication_message_id = ?`, [update.status, update.status, update.status, update.status, update.status, update.status, update.status, message.id]);
+  }
   console.info('[WhatsApp] recibo processado', { communicationAccountId: Number(accountId), messageId: Number(message.id), externalMessageIdHash: receiptHash(update.externalMessageId), previousStatus: current || null, status: regresses ? current : update.status, matched: true });
   return true;
 }
@@ -232,7 +247,7 @@ async function sendWhatsAppContent(connection, { account, leadId, recipient, tex
   if (!['text', 'image', 'audio', 'video', 'document'].includes(messageType)) throw Object.assign(new Error('MEDIA_TYPE_NOT_SUPPORTED'), { code: 'MEDIA_TYPE_NOT_SUPPORTED', retryable: false, publicMessage: 'Este tipo de mensagem nao e suportado para envio.' });
   if (messageType === 'text' && !String(text || '').trim()) throw Object.assign(new Error('INVALID_WHATSAPP_MESSAGE'), { code: 'INVALID_WHATSAPP_MESSAGE', retryable: false, publicMessage: 'Mensagem obrigatoria.' });
   const [existing] = await connection.execute('SELECT * FROM communication_messages WHERE idempotency_key = ? FOR UPDATE', [idempotencyKey]);
-  if (existing[0]?.status === 'sent') return { idempotent: true, messageId: existing[0].provider_message_id, conversationId: existing[0].conversation_id };
+  if (existing[0]?.status === 'sent') return { idempotent: true, communicationMessageId: Number(existing[0].id), providerMessageId: existing[0].provider_message_id, messageId: existing[0].provider_message_id, conversationId: existing[0].conversation_id };
   const [leadRows] = await connection.execute('SELECT * FROM prospects WHERE id = ? LIMIT 1', [leadId || 0]);
   const lead = leadRows[0] || null;
   const remoteJid = isGroup ? phone : `${phone}@s.whatsapp.net`;
@@ -266,7 +281,8 @@ async function sendWhatsAppContent(connection, { account, leadId, recipient, tex
     if (stored?.storagePath) await removeMedia(stored.storagePath).catch(() => {});
     throw error;
   }
-  return { ...result, conversationId: Number(conversation.id), recipient: phone };
+  const [messageRows] = await connection.execute('SELECT id, provider_message_id FROM communication_messages WHERE idempotency_key = ? LIMIT 1', [idempotencyKey]);
+  return { ...result, communicationMessageId: Number(messageRows[0]?.id || 0) || null, providerMessageId: messageRows[0]?.provider_message_id || result.externalMessageId || null, conversationId: Number(conversation.id), recipient: phone };
 }
 
 async function sendWhatsAppMessage(connection, options) { return sendWhatsAppContent(connection, { ...options, messageType: 'text' }); }

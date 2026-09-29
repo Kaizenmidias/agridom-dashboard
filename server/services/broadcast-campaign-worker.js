@@ -1,4 +1,5 @@
 const { getPool, query } = require('../config/database');
+const { sendWhatsAppContent, normalizePhone } = require('./whatsapp-service');
 
 const BACKOFF_MS = [5000, 30000, 120000];
 const TERMINAL_RECIPIENT_STATUSES = ['sent', 'delivered', 'read', 'failed', 'skipped', 'cancelled'];
@@ -59,7 +60,55 @@ async function claimNextBroadcastJob({ currentWorkerId, lockTimeoutMs = 86400000
   } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
 }
 
-async function executeBroadcastRecipient() { const error = new Error('EXECUTOR_NOT_CONFIGURED'); error.code = 'EXECUTOR_NOT_CONFIGURED'; error.retryable = false; throw error; }
+const TEMPLATE_VARIABLES = new Set(['nome', 'primeiro_nome', 'telefone', 'email', 'responsavel', 'empresa']);
+function resolveCampaignTemplate(value, variables) {
+  return String(value || '').replace(/{{\s*([a-z_]+)\s*}}/gi, (match, name) => {
+    const key = String(name).toLowerCase();
+    if (!TEMPLATE_VARIABLES.has(key)) { const error = new Error(`INVALID_TEMPLATE_VARIABLE:${key}`); error.code = 'INVALID_TEMPLATE_VARIABLE'; error.retryable = false; throw error; }
+    return variables[key] == null ? '' : String(variables[key]);
+  }).replace(/{{[^}]+}}/g, () => { const error = new Error('INVALID_TEMPLATE_VARIABLE'); error.code = 'INVALID_TEMPLATE_VARIABLE'; error.retryable = false; throw error; });
+}
+
+function classifyBroadcastError(error) {
+  if (error?.retryable === true) return error;
+  const retryableCodes = new Set(['EVOLUTION_UNAVAILABLE', 'EVOLUTION_TIMEOUT', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'WHATSAPP_ACCOUNT_NOT_CONNECTED']);
+  error.retryable = retryableCodes.has(String(error?.code || '').toUpperCase());
+  return error;
+}
+
+async function executeBroadcastRecipient({ connection, job } = {}) {
+  if (!connection || !job) { const error = new Error('EXECUTOR_NOT_CONFIGURED'); error.code = 'EXECUTOR_NOT_CONFIGURED'; error.retryable = false; throw error; }
+  const [rows] = await connection.execute(`SELECT c.*, cc.content_type, cc.text_content, cc.media_storage_path, cc.mime_type, cc.original_filename,
+      r.prospect_id, r.recipient_phone, r.recipient_name, r.status AS recipient_status,
+      p.business_name AS prospect_business_name, p.email AS prospect_email, p.phone AS prospect_phone,
+      u.name AS responsible_name, u.email AS responsible_email,
+      ca.id AS account_id, ca.channel AS account_channel, ca.provider AS account_provider, ca.status AS account_status,
+      ca.archived_at AS account_archived_at, ca.owner_user_id AS account_owner_user_id, ca.integration_provider_id, ca.external_instance_id
+    FROM broadcast_campaigns c
+    JOIN broadcast_campaign_contents cc ON cc.campaign_id = c.id
+    JOIN broadcast_campaign_recipients r ON r.campaign_id = c.id
+    LEFT JOIN prospects p ON p.id = r.prospect_id
+    LEFT JOIN users u ON u.id = p.assigned_user_id
+    JOIN communication_accounts ca ON ca.id = c.communication_account_id
+    WHERE c.id = ? AND r.id = ? LIMIT 1`, [job.campaign_id, job.recipient_id]);
+  const row = rows[0];
+  if (!row) { const error = new Error('BROADCAST_CONTEXT_NOT_FOUND'); error.code = 'BROADCAST_CONTEXT_NOT_FOUND'; error.retryable = false; throw error; }
+  if (row.account_channel !== 'whatsapp' || row.account_provider !== 'evolution' || row.account_archived_at || Number(row.account_owner_user_id) !== Number(row.created_by_user_id)) { const error = new Error('WHATSAPP_ACCOUNT_INVALID'); error.code = 'WHATSAPP_ACCOUNT_INVALID'; error.retryable = false; throw error; }
+  if (row.recipient_status !== 'processing') { const error = new Error('RECIPIENT_NOT_PROCESSING'); error.code = 'RECIPIENT_NOT_PROCESSING'; error.retryable = false; throw error; }
+  const phone = normalizePhone(row.recipient_phone);
+  if (!phone) { const error = new Error('RECIPIENT_PHONE_INVALID'); error.code = 'RECIPIENT_PHONE_INVALID'; error.retryable = false; throw error; }
+  if (row.content_type !== 'text') { const error = new Error('CAMPAIGN_MEDIA_NOT_AVAILABLE'); error.code = 'CAMPAIGN_MEDIA_NOT_AVAILABLE'; error.retryable = false; throw error; }
+  const name = String(row.recipient_name || row.prospect_business_name || '');
+  const variables = { nome: name, primeiro_nome: name.trim().split(/\s+/)[0] || '', telefone: row.recipient_phone, email: row.prospect_email || '', responsavel: row.responsible_name || row.responsible_email || '', empresa: row.prospect_business_name || name };
+  const text = resolveCampaignTemplate(row.text_content, variables);
+  if (!text.trim()) { const error = new Error('CAMPAIGN_CONTENT_EMPTY'); error.code = 'CAMPAIGN_CONTENT_EMPTY'; error.retryable = false; throw error; }
+  try {
+    const result = await sendWhatsAppContent(connection, { account: { id: row.account_id, status: row.account_status, owner_user_id: row.account_owner_user_id, integration_provider_id: row.integration_provider_id, external_instance_id: row.external_instance_id, auto_create_leads: false }, leadId: row.prospect_id, recipient: phone, text, messageType: 'text', idempotencyKey: `broadcast:${row.campaign_id}:${row.recipient_id}` });
+    if (!result.communicationMessageId || !result.providerMessageId) { const error = new Error('WHATSAPP_SEND_RESULT_INVALID'); error.code = 'WHATSAPP_SEND_RESULT_INVALID'; error.retryable = false; throw error; }
+    await connection.execute('UPDATE broadcast_campaign_recipients SET communication_message_id = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [result.communicationMessageId, row.recipient_id]);
+    return { success: true, communicationMessageId: result.communicationMessageId, providerMessageId: result.providerMessageId };
+  } catch (error) { throw classifyBroadcastError(error); }
+}
 
 async function processBroadcastJob(job, { executor = executeBroadcastRecipient, currentWorkerId } = {}) {
   const connection = await getPool().getConnection();
@@ -69,7 +118,7 @@ async function processBroadcastJob(job, { executor = executeBroadcastRecipient, 
     if (['paused', 'cancelled'].includes(current.campaign_status)) { await connection.execute("UPDATE broadcast_campaign_jobs SET status = ?, processed_at = IF(? = 'cancelled', UTC_TIMESTAMP(), NULL), locked_at = NULL, locked_by = NULL WHERE id = ?", [current.campaign_status === 'cancelled' ? 'cancelled' : 'pending', current.campaign_status, current.id]); await connection.execute("UPDATE broadcast_campaign_recipients SET status = ? WHERE id = ? AND status = 'processing'", [current.campaign_status === 'cancelled' ? 'cancelled' : 'pending', current.recipient_id]); await connection.commit(); return { skipped: true }; }
     if (current.campaign_status === 'scheduled') await connection.execute("UPDATE broadcast_campaigns SET status = 'running', started_at = COALESCE(started_at, UTC_TIMESTAMP()), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'scheduled'", [current.campaign_id]);
     try {
-      const result = await executor({ job: current });
+      const result = await (executor || executeBroadcastRecipient)({ connection, job: current });
       if (!result?.success) throw Object.assign(new Error('EXECUTOR_NO_SUCCESS'), { code: 'EXECUTOR_NO_SUCCESS', retryable: false });
       await connection.execute("UPDATE broadcast_campaign_jobs SET status = 'completed', processed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL, last_error = NULL WHERE id = ?", [current.id]);
       await connection.execute("UPDATE broadcast_campaign_recipients SET status = 'sent', sent_at = UTC_TIMESTAMP(), failed_at = NULL, last_error = NULL WHERE id = ?", [current.recipient_id]);
@@ -85,4 +134,4 @@ async function processBroadcastJob(job, { executor = executeBroadcastRecipient, 
 
 async function processBroadcastBatch({ currentWorkerId, batchSize = 10, executor } = {}) { let processed = 0; for (let index = 0; index < batchSize; index += 1) { const job = await claimNextBroadcastJob({ currentWorkerId }); if (!job) break; try { await processBroadcastJob(job, { executor, currentWorkerId }); } catch (error) { console.error('Broadcast job failed:', { job_id: job.id, code: safeError(error) }); } processed += 1; } return processed; }
 
-module.exports = { BACKOFF_MS, TERMINAL_RECIPIENT_STATUSES, workerId, materializeCampaign, claimNextBroadcastJob, executeBroadcastRecipient, processBroadcastJob, processBroadcastBatch };
+module.exports = { BACKOFF_MS, TERMINAL_RECIPIENT_STATUSES, TEMPLATE_VARIABLES, resolveCampaignTemplate, workerId, materializeCampaign, claimNextBroadcastJob, executeBroadcastRecipient, processBroadcastJob, processBroadcastBatch };
