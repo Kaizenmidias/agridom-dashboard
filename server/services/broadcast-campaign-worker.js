@@ -25,11 +25,13 @@ const safeError = (error) =>
 const safeWorkerError = (error) => ({
   name: String(error?.name || "Error").slice(0, 80),
   code: String(error?.code || "BROADCAST_JOB_FAILED").replace(/[^A-Z0-9_.:-]/gi, "_").slice(0, 100),
-  stage: String(error?.stage || "unknown").replace(/[^A-Z0-9_.:-]/gi, "_").slice(0, 80),
+  stage: String(error?.stage || (error?.code === "DATABASE_UNDEFINED_BIND" ? "persistence" : "unknown")).replace(/[^A-Z0-9_.:-]/gi, "_").slice(0, 80),
   message: safeError(error),
   providerStatus: Number.isInteger(error?.providerStatus) ? error.providerStatus : null,
   providerOperation: error?.operation || null,
   providerMessage: error?.providerMessage || null,
+  undefinedIndexes: Array.isArray(error?.undefinedIndexes) ? error.undefinedIndexes : null,
+  parameterCount: Number.isInteger(error?.parameterCount) ? error.parameterCount : null,
 });
 const workerId = (value) =>
   String(
@@ -463,6 +465,8 @@ async function processBroadcastJob(
         error_name: safeWorkerError(error).name,
         error_stage: safeWorkerError(error).stage,
         error_message: safeWorkerError(error).message,
+        undefined_indexes: safeWorkerError(error).undefinedIndexes,
+        parameter_count: safeWorkerError(error).parameterCount,
         binding_operation: error?.bindingOperation || null,
         binding_fields: error?.bindingFields || null,
         operation:

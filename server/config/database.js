@@ -9,6 +9,18 @@ const normalizeBooleanParam = (value) => {
 
 const normalizeParams = (params = []) => params.map(normalizeBooleanParam);
 
+class DatabaseUndefinedBindError extends TypeError {
+  constructor(params) {
+    const undefinedIndexes = params.reduce((indexes, value, index) => value === undefined ? [...indexes, index] : indexes, []);
+    super('Bind parameters must not contain undefined. To pass SQL NULL specify JS null');
+    this.name = 'DatabaseUndefinedBindError';
+    this.code = 'DATABASE_UNDEFINED_BIND';
+    this.undefinedIndexes = undefinedIndexes;
+    this.parameterCount = params.length;
+    Error.captureStackTrace?.(this, DatabaseUndefinedBindError);
+  }
+}
+
 const convertNumberedPlaceholders = (sql, params = []) => {
   const usedIndexes = [];
   const text = sql.replace(/\$(\d+)/g, (_match, index) => {
@@ -66,6 +78,15 @@ function getPool() {
   if (!pool) {
     const config = getPoolConfig();
     pool = mysql.createPool(config);
+    const originalPoolExecute = pool.execute.bind(pool);
+    pool.execute = (sql, params, ...rest) => originalPoolExecute(sql, assertNoUndefinedExecuteParams(params || []), ...rest);
+    const originalGetConnection = pool.getConnection.bind(pool);
+    pool.getConnection = async (...args) => {
+      const connection = await originalGetConnection(...args);
+      const originalConnectionExecute = connection.execute.bind(connection);
+      connection.execute = (sql, params, ...rest) => originalConnectionExecute(sql, assertNoUndefinedExecuteParams(params || []), ...rest);
+      return connection;
+    };
 
     console.log('Conexao MySQL configurada:', {
       host: config.host,
@@ -109,6 +130,12 @@ async function query(sql, params = []) {
   }
 }
 
+function assertNoUndefinedExecuteParams(params = []) {
+  const normalized = normalizeParams(params);
+  if (normalized.some((value) => value === undefined)) throw new DatabaseUndefinedBindError(normalized);
+  return normalized;
+}
+
 async function testConnection() {
   try {
     await query('SELECT 1 AS ok');
@@ -132,4 +159,6 @@ module.exports = {
   testConnection,
   closeConnection,
   getPool,
+  DatabaseUndefinedBindError,
+  assertNoUndefinedExecuteParams,
 };
