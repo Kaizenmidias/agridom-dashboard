@@ -74,6 +74,38 @@ export const broadcastAPI = {
       method: "PUT",
       body: JSON.stringify({ content_type: "text", text_content }),
     }),
+  uploadMedia: async (
+    id: number,
+    file: File,
+    content_type: "image" | "video" | "document" | "audio",
+    text_content: string,
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("content_type", content_type);
+    form.append("text_content", text_content);
+    const token = localStorage.getItem("token");
+    const response = await fetch(
+      buildApiUrl(`broadcast-campaigns/${id}/content/media`),
+      {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      },
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok)
+      throw new Error(payload?.error || "Não foi possível anexar o arquivo.");
+    return payload as {
+      campaign: Campaign;
+      media: {
+        content_type: string;
+        mime_type: string;
+        original_filename: string;
+        size: number;
+      };
+    };
+  },
   audience: (params: Record<string, string>) =>
     request<Audience>(`/audience/preview?${new URLSearchParams(params)}`),
   folders: () =>

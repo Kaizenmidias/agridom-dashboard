@@ -7,6 +7,9 @@ import {
   ChevronRight,
   Eye,
   Filter,
+  FileText,
+  Image,
+  Paperclip,
   Pause,
   Play,
   Plus,
@@ -18,6 +21,17 @@ import { toast } from "sonner";
 import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,6 +65,56 @@ function StatusBadge({ status }: { status: string }) {
     <Badge className={`border-0 ${statusClass[status] || ""}`}>
       {labels[status] || status}
     </Badge>
+  );
+}
+
+function DeleteDraftButton({
+  id,
+  onDeleted,
+}: {
+  id: number;
+  onDeleted: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await broadcastAPI.remove(id);
+      toast.success("Rascunho excluído.");
+      await onDeleted();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir o rascunho.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" variant="destructive">
+          Excluir
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir disparo?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Este rascunho será removido permanentemente. Essa ação não poderá
+            ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction disabled={busy} onClick={() => void remove()}>
+            Excluir disparo
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -255,6 +319,7 @@ export function BroadcastPage() {
                             >
                               Editar
                             </Button>
+                            <DeleteDraftButton id={item.id} onDeleted={load} />
                           </>
                         ) : (
                           <Button
@@ -337,6 +402,8 @@ export function NewBroadcastPage() {
   const [accountId, setAccountId] = useState("");
   const [scheduled, setScheduled] = useState("");
   const [text, setText] = useState("");
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<
     Array<{ id: number; name: string; phone_number?: string; status: string }>
   >([]);
@@ -417,7 +484,18 @@ export function NewBroadcastPage() {
 
         toast.success("Público adicionado ao disparo.");
       }
-      if (step === 3) await broadcastAPI.content(current, text);
+      if (step === 3) {
+        if (attachment) {
+          const type = attachment.type.startsWith("image/")
+            ? "image"
+            : attachment.type.startsWith("video/")
+              ? "video"
+              : attachment.type.startsWith("audio/")
+                ? "audio"
+                : "document";
+          await broadcastAPI.uploadMedia(current, attachment, type, text);
+        } else await broadcastAPI.content(current, text);
+      }
       setStep(Math.min(4, step + 1));
     } catch (e) {
       toast.error(
@@ -672,6 +750,60 @@ export function NewBroadcastPage() {
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Olá {{primeiro_nome}}, tudo bem?"
               />
+              <div className="mt-4 rounded-md border border-dashed p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Anexo</p>
+                    <p className="text-xs text-muted-foreground">
+                      Imagem, vídeo, documento ou áudio.
+                    </p>
+                  </div>
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
+                    <Paperclip className="h-4 w-4" />
+                    Adicionar arquivo
+                    <input
+                      className="sr-only"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,application/pdf,text/plain,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/webm"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setAttachment(file);
+                        setAttachmentUrl(
+                          file ? URL.createObjectURL(file) : null,
+                        );
+                      }}
+                    />
+                  </label>
+                </div>
+                {attachment ? (
+                  <div className="mt-3 flex items-center gap-3 rounded-md bg-muted/50 p-2 text-sm">
+                    {attachment.type.startsWith("image/") && attachmentUrl ? (
+                      <img
+                        src={attachmentUrl}
+                        alt="Prévia do anexo"
+                        className="h-12 w-12 rounded object-cover"
+                      />
+                    ) : (
+                      <FileText className="h-6 w-6 text-primary" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">
+                      {attachment.name}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setAttachment(null);
+                        if (attachmentUrl) URL.revokeObjectURL(attachmentUrl);
+                        setAttachmentUrl(null);
+                      }}
+                    >
+                      Remover
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {[
                   "nome",
@@ -696,12 +828,25 @@ export function NewBroadcastPage() {
                 {text.length} caracteres
               </p>
             </div>
-            <div className="rounded-lg bg-[#e8f5df] p-4">
+            <div className="rounded-lg bg-[#efe7d8] p-4">
               <p className="mb-3 text-xs font-medium text-muted-foreground">
                 Prévia
               </p>
-              <div className="max-w-[85%] rounded-lg rounded-tl-none bg-white p-3 text-sm shadow-sm">
-                {text || "Sua mensagem aparecerá aqui."}
+              <div className="ml-auto max-w-[85%] rounded-lg rounded-tr-none bg-[#d9fdd3] p-3 text-sm shadow-sm">
+                {attachmentUrl && attachment?.type.startsWith("image/") ? (
+                  <img
+                    src={attachmentUrl}
+                    alt="Prévia"
+                    className="mb-2 max-h-48 w-full rounded object-cover"
+                  />
+                ) : null}
+                {text ||
+                  (attachment
+                    ? attachment.name
+                    : "Sua mensagem aparecerá aqui.")}
+                <span className="ml-3 text-[10px] text-muted-foreground">
+                  agora
+                </span>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
                 Prévia visual. Os dados variam por contato.
