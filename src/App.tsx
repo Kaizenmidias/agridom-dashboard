@@ -29,7 +29,8 @@ import {
 import { ChatsPage } from "./pages/commercial/ChatsPage";
 import { ConnectedNumbersPage } from "./pages/commercial/ConnectedNumbersPage";
 import { AgentDetailPage } from "./pages/ai/AgentDetailPage";
-import { AgentsPage, AssistantsPage, ContentsPage, PromptsPage } from "./pages/ai/AiPlaceholders";
+import { AssistantsPage, ContentsPage, PromptsPage } from "./pages/ai/AiPlaceholders";
+import { AgentsManagementPage as AgentsPage } from "./pages/ai/AgentsManagementPage";
 import { CashFlowPage, RevenuesPage } from "./pages/finance/FinancePlaceholders";
 import { ContractsPage } from "./pages/legal/LegalPlaceholders";
 import { IntegrationsPage, SettingsPage } from "./pages/admin/AdminPlaceholders";
