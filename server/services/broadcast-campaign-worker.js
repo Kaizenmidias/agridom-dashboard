@@ -240,6 +240,8 @@ function broadcastErrorMessage(error) {
     return "A autenticação da Evolution falhou.";
   if (code === "EVOLUTION_UNAVAILABLE")
     return "A Evolution recusou o envio temporariamente.";
+  if (code === "EVOLUTION_REQUEST_FAILED")
+    return "A Evolution recusou o envio.";
   if (code === "WHATSAPP_ACCOUNT_NOT_CONNECTED")
     return "A instância do WhatsApp está desconectada.";
   if (code === "RECIPIENT_PHONE_INVALID")
@@ -364,18 +366,6 @@ async function executeBroadcastRecipient({ connection, job } = {}) {
       error.retryable = false;
       throw error;
     }
-    console.error("[Broadcast] provider delivery failed", {
-      campaign_id: Number(current.campaign_id),
-      recipient_id: Number(current.recipient_id),
-      communication_account_id: Number(current.account_id || 0) || null,
-      content_type: current.content_type || null,
-      provider_http_status: error?.providerStatus || null,
-      provider_error_code: error?.providerErrorCode || null,
-      provider_message: error?.providerMessage || null,
-      operation: "broadcast_send",
-      attempt: Number(current.attempt_count || 0),
-      temporary: retryable,
-    });
     await connection.execute(
       "UPDATE broadcast_campaign_recipients SET communication_message_id = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [result.communicationMessageId, row.recipient_id],
@@ -397,7 +387,7 @@ async function processBroadcastJob(
   const connection = await getPool().getConnection();
   try {
     const [currentRows] = await connection.execute(
-      "SELECT j.*, c.status AS campaign_status FROM broadcast_campaign_jobs j JOIN broadcast_campaigns c ON c.id = j.campaign_id WHERE j.id = ? AND j.status = 'processing' AND j.locked_by = ? FOR UPDATE",
+      "SELECT j.*, c.status AS campaign_status, c.communication_account_id, cc.content_type FROM broadcast_campaign_jobs j JOIN broadcast_campaigns c ON c.id = j.campaign_id LEFT JOIN broadcast_campaign_contents cc ON cc.campaign_id = c.id WHERE j.id = ? AND j.status = 'processing' AND j.locked_by = ? FOR UPDATE",
       [job.id, currentWorkerId],
     );
     const current = currentRows[0];
@@ -449,6 +439,27 @@ async function processBroadcastJob(
       return { completed: true };
     } catch (error) {
       const retryable = error?.retryable === true;
+      console.error("[Broadcast] provider delivery failed", {
+        campaign_id: Number(current.campaign_id),
+        recipient_id: Number(current.recipient_id),
+        communication_account_id:
+          Number(current.communication_account_id || 0) || null,
+        content_type: current.content_type || null,
+        provider_http_status: error?.providerStatus || null,
+        provider_error_code:
+          error?.providerCode || error?.providerErrorCode || null,
+        provider_operation: error?.operation || null,
+        provider_message: error?.providerMessage || null,
+        error_code: error?.code || null,
+        operation:
+          current.content_type === "text"
+            ? "sendText"
+            : current.content_type === "audio"
+              ? "sendAudio"
+              : "sendMedia",
+        attempt: Number(current.attempt_count || 0),
+        temporary: retryable,
+      });
       const terminal =
         !retryable ||
         Number(current.attempt_count) >= Number(current.max_attempts);
@@ -513,6 +524,8 @@ module.exports = {
   TERMINAL_RECIPIENT_STATUSES,
   TEMPLATE_VARIABLES,
   resolveCampaignTemplate,
+  classifyBroadcastError,
+  broadcastErrorMessage,
   workerId,
   materializeCampaign,
   claimNextBroadcastJob,
