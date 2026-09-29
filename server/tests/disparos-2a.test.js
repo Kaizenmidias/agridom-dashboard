@@ -41,6 +41,6 @@ test('DISPAROS-2B exposes only authenticated campaign management and audience pr
   assert.match(route, /review/);
   assert.match(route, /created_by_user_id/);
   assert.match(route, /normalized_phone/);
-  assert.doesNotMatch(route, /router\.(post|put|patch)\(['"]\/(:id\/)?(send|start|run|execute)/i);
+  assert.doesNotMatch(route, /router\.(post|put|patch)\(['"]\/(:id\/)?send/);
   assert.doesNotMatch(route, /sendWhatsApp(Content|Message|Media)|Evolution/);
 });

@@ -1,0 +1,88 @@
+const { getPool, query } = require('../config/database');
+
+const BACKOFF_MS = [5000, 30000, 120000];
+const TERMINAL_RECIPIENT_STATUSES = ['sent', 'delivered', 'read', 'failed', 'skipped', 'cancelled'];
+const safeError = (error) => String(error?.publicMessage || error?.code || error?.message || 'BROADCAST_JOB_FAILED').replace(/[^A-Z0-9_.:-]/gi, '_').slice(0, 500);
+const workerId = (value) => String(value || `broadcast-${process.pid}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 100);
+async function finalizeCampaign(connection, campaignId) {
+  const [rows] = await connection.execute("SELECT SUM(status IN ('pending', 'processing')) AS active, SUM(status = 'failed') AS failed FROM broadcast_campaign_recipients WHERE campaign_id = ?", [campaignId]);
+  const state = rows[0] || {};
+  if (Number(state.active || 0) === 0) await connection.execute("UPDATE broadcast_campaigns SET status = IF(status IN ('cancelled', 'paused'), status, 'completed'), completed_at = IF(status IN ('cancelled', 'paused'), completed_at, UTC_TIMESTAMP()), updated_at = CURRENT_TIMESTAMP WHERE id = ?", [campaignId]);
+}
+
+async function materializeCampaign({ campaignId, userId, now = new Date() }) {
+  const campaignResult = await query(`SELECT c.*, cc.content_type, cc.text_content FROM broadcast_campaigns c
+    LEFT JOIN broadcast_campaign_contents cc ON cc.campaign_id = c.id
+    WHERE c.id = ? AND c.created_by_user_id = ?`, [campaignId, userId]);
+  const campaign = campaignResult.rows?.[0];
+  if (!campaign) throw Object.assign(new Error('CAMPAIGN_NOT_FOUND'), { status: 404, code: 'CAMPAIGN_NOT_FOUND' });
+  if (campaign.status !== 'draft') throw Object.assign(new Error('CAMPAIGN_NOT_EDITABLE'), { status: 409, code: 'CAMPAIGN_NOT_EDITABLE' });
+  if (!campaign.communication_account_id) throw Object.assign(new Error('CAMPAIGN_ACCOUNT_REQUIRED'), { status: 400, code: 'CAMPAIGN_ACCOUNT_REQUIRED' });
+  if (!campaign.content_type || (campaign.content_type === 'text' && !String(campaign.text_content || '').trim())) throw Object.assign(new Error('CAMPAIGN_CONTENT_REQUIRED'), { status: 400, code: 'CAMPAIGN_CONTENT_REQUIRED' });
+  const recipientResult = await query("SELECT id FROM broadcast_campaign_recipients WHERE campaign_id = ? AND status = 'pending'", [campaign.id]);
+  if (!recipientResult.rows?.length) throw Object.assign(new Error('CAMPAIGN_RECIPIENTS_REQUIRED'), { status: 400, code: 'CAMPAIGN_RECIPIENTS_REQUIRED' });
+  const availableAt = campaign.scheduled_at && new Date(campaign.scheduled_at) > now ? campaign.scheduled_at : now;
+  const nextStatus = campaign.scheduled_at && new Date(campaign.scheduled_at) > now ? 'scheduled' : 'running';
+  const values = recipientResult.rows.map((recipient) => [campaign.id, recipient.id, availableAt]);
+  const pool = getPool();
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    for (let index = 0; index < values.length; index += 250) {
+      const chunk = values.slice(index, index + 250);
+      const placeholders = chunk.map(() => '(?, ?, ?, \'pending\')').join(', ');
+      await connection.execute(`INSERT INTO broadcast_campaign_jobs (campaign_id, recipient_id, available_at, status) VALUES ${placeholders} ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`, chunk.flat());
+    }
+    await connection.execute('UPDATE broadcast_campaigns SET status = ?, started_at = IF(? = \'running\', COALESCE(started_at, UTC_TIMESTAMP()), started_at), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = \'draft\'', [nextStatus, nextStatus, campaign.id]);
+    await connection.execute('INSERT INTO broadcast_campaign_events (campaign_id, event_type, metadata, created_by_user_id) VALUES (?, ?, ?, ?)', [campaign.id, nextStatus === 'scheduled' ? 'scheduled' : 'started', JSON.stringify({ jobs: recipientResult.rows.length }), userId]);
+    await connection.commit();
+    return { campaignId: Number(campaign.id), jobs: recipientResult.rows.length, status: nextStatus };
+  } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
+}
+
+async function claimNextBroadcastJob({ currentWorkerId, lockTimeoutMs = 86400000 } = {}) {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.execute("UPDATE broadcast_campaign_jobs SET status = 'pending', locked_at = NULL, locked_by = NULL, available_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE status = 'processing' AND locked_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? SECOND)", [Math.max(1, Math.ceil(lockTimeoutMs / 1000))]);
+    const [rows] = await connection.execute(`SELECT j.*, c.status AS campaign_status, r.status AS recipient_status
+      FROM broadcast_campaign_jobs j JOIN broadcast_campaigns c ON c.id = j.campaign_id
+      JOIN broadcast_campaign_recipients r ON r.id = j.recipient_id
+      WHERE j.status = 'pending' AND j.available_at <= UTC_TIMESTAMP() AND c.status IN ('scheduled', 'running')
+      ORDER BY j.id LIMIT 1 FOR UPDATE SKIP LOCKED`);
+    const job = rows[0];
+    if (!job) { await connection.rollback(); return null; }
+    await connection.execute("UPDATE broadcast_campaign_jobs SET status = 'processing', locked_by = ?, locked_at = UTC_TIMESTAMP(), attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'", [currentWorkerId, job.id]);
+    await connection.execute("UPDATE broadcast_campaign_recipients SET status = 'processing', last_attempt_at = UTC_TIMESTAMP(), attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'", [job.recipient_id]);
+    await connection.commit();
+    return { ...job, id: Number(job.id), campaign_id: Number(job.campaign_id), recipient_id: Number(job.recipient_id), attempt_count: Number(job.attempt_count) + 1 };
+  } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
+}
+
+async function executeBroadcastRecipient() { const error = new Error('EXECUTOR_NOT_CONFIGURED'); error.code = 'EXECUTOR_NOT_CONFIGURED'; error.retryable = false; throw error; }
+
+async function processBroadcastJob(job, { executor = executeBroadcastRecipient, currentWorkerId } = {}) {
+  const connection = await getPool().getConnection();
+  try {
+    const [currentRows] = await connection.execute('SELECT j.*, c.status AS campaign_status FROM broadcast_campaign_jobs j JOIN broadcast_campaigns c ON c.id = j.campaign_id WHERE j.id = ? AND j.status = \'processing\' AND j.locked_by = ? FOR UPDATE', [job.id, currentWorkerId]);
+    const current = currentRows[0]; if (!current) return { skipped: true };
+    if (['paused', 'cancelled'].includes(current.campaign_status)) { await connection.execute("UPDATE broadcast_campaign_jobs SET status = ?, processed_at = IF(? = 'cancelled', UTC_TIMESTAMP(), NULL), locked_at = NULL, locked_by = NULL WHERE id = ?", [current.campaign_status === 'cancelled' ? 'cancelled' : 'pending', current.campaign_status, current.id]); await connection.execute("UPDATE broadcast_campaign_recipients SET status = ? WHERE id = ? AND status = 'processing'", [current.campaign_status === 'cancelled' ? 'cancelled' : 'pending', current.recipient_id]); await connection.commit(); return { skipped: true }; }
+    if (current.campaign_status === 'scheduled') await connection.execute("UPDATE broadcast_campaigns SET status = 'running', started_at = COALESCE(started_at, UTC_TIMESTAMP()), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'scheduled'", [current.campaign_id]);
+    try {
+      const result = await executor({ job: current });
+      if (!result?.success) throw Object.assign(new Error('EXECUTOR_NO_SUCCESS'), { code: 'EXECUTOR_NO_SUCCESS', retryable: false });
+      await connection.execute("UPDATE broadcast_campaign_jobs SET status = 'completed', processed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL, last_error = NULL WHERE id = ?", [current.id]);
+      await connection.execute("UPDATE broadcast_campaign_recipients SET status = 'sent', sent_at = UTC_TIMESTAMP(), failed_at = NULL, last_error = NULL WHERE id = ?", [current.recipient_id]);
+      await finalizeCampaign(connection, current.campaign_id); await connection.commit(); return { completed: true };
+    } catch (error) {
+      const retryable = error?.retryable === true; const terminal = !retryable || Number(current.attempt_count) >= Number(current.max_attempts); const delay = BACKOFF_MS[Math.min(Math.max(Number(current.attempt_count) - 1, 0), BACKOFF_MS.length - 1)];
+      await connection.execute(`UPDATE broadcast_campaign_jobs SET status = ?, available_at = ${terminal ? 'available_at' : 'DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? MICROSECOND)'}, locked_at = NULL, locked_by = NULL, last_error = ?, processed_at = ${terminal ? 'UTC_TIMESTAMP()' : 'NULL'} WHERE id = ?`, terminal ? ['failed', safeError(error), current.id] : ['pending', delay * 1000, safeError(error), current.id]);
+      await connection.execute("UPDATE broadcast_campaign_recipients SET status = ?, failed_at = IF(? = 'failed', UTC_TIMESTAMP(), NULL), last_error = ? WHERE id = ?", [terminal ? 'failed' : 'pending', terminal ? 'failed' : 'pending', safeError(error), current.recipient_id]);
+      await finalizeCampaign(connection, current.campaign_id); await connection.commit(); return { failed: terminal, retrying: !terminal };
+    }
+  } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
+}
+
+async function processBroadcastBatch({ currentWorkerId, batchSize = 10, executor } = {}) { let processed = 0; for (let index = 0; index < batchSize; index += 1) { const job = await claimNextBroadcastJob({ currentWorkerId }); if (!job) break; try { await processBroadcastJob(job, { executor, currentWorkerId }); } catch (error) { console.error('Broadcast job failed:', { job_id: job.id, code: safeError(error) }); } processed += 1; } return processed; }
+
+module.exports = { BACKOFF_MS, TERMINAL_RECIPIENT_STATUSES, workerId, materializeCampaign, claimNextBroadcastJob, executeBroadcastRecipient, processBroadcastJob, processBroadcastBatch };

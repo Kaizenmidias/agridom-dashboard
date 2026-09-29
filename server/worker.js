@@ -5,6 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, envFile) });
 const { closeConnection } = require('./config/database');
 const { DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, processEventBatch, processJobBatch, workerId } = require('./services/automation-engine');
 const { processPendingWhatsAppEvents } = require('./services/whatsapp-service');
+const { processBroadcastBatch, workerId: broadcastWorkerId } = require('./services/broadcast-campaign-worker');
 
 const positiveInt = (value, fallback, max) => {
   const number = Number(value);
@@ -14,6 +15,7 @@ const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mil
 
 async function startWorker(options = {}) {
   const currentWorkerId = workerId(options.workerId);
+  const currentBroadcastWorkerId = broadcastWorkerId(options.workerId || currentWorkerId);
   const pollMs = positiveInt(options.pollMs ?? process.env.AUTOMATION_WORKER_POLL_MS, DEFAULT_POLL_MS, 60000);
   const batchSize = positiveInt(options.batchSize ?? process.env.AUTOMATION_WORKER_BATCH_SIZE, DEFAULT_BATCH_SIZE, 100);
   const lockTimeoutMs = positiveInt(options.lockTimeoutMs ?? process.env.AUTOMATION_JOB_LOCK_TIMEOUT_MS, DEFAULT_LOCK_TIMEOUT_MS, 24 * 60 * 60 * 1000);
@@ -29,7 +31,10 @@ async function startWorker(options = {}) {
         const events = await processEventBatch({ workerId: currentWorkerId, batchSize, lockTimeoutMs });
         const jobs = await processJobBatch({ currentWorkerId, batchSize, lockTimeoutMs });
         const whatsappEvents = await processPendingWhatsAppEvents({ batchSize });
-        return events + jobs + whatsappEvents;
+        let broadcasts = 0;
+        try { broadcasts = await processBroadcastBatch({ currentWorkerId: currentBroadcastWorkerId, batchSize: Math.min(batchSize, 10) }); }
+        catch (error) { console.error('Broadcast worker cycle failed:', error?.code || 'UNEXPECTED'); }
+        return events + jobs + whatsappEvents + broadcasts;
       })();
       const workCount = await currentCycle;
       if (!workCount && !stopping) await sleep(pollMs);
