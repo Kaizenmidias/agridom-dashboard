@@ -44,7 +44,9 @@ router.get('/', async (req, res) => {
     const params = [];
     let where = 'WHERE 1=1';
     if (search) { where += ' AND (a.name LIKE ? OR a.slug LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
-    if (['draft', 'active', 'inactive', 'archived'].includes(status)) { where += ' AND a.status = ?'; params.push(status); }
+    if (status === 'archived') { where += ' AND a.status = ?'; params.push(status); }
+    else if (['draft', 'active', 'inactive'].includes(status)) { where += ' AND a.status = ?'; params.push(status); }
+    else { where += " AND a.status <> 'archived'"; }
     const result = await query(`SELECT a.id, a.name, a.slug, a.description, a.role, a.provider, a.model, a.status, a.monthly_token_limit, a.token_limit_policy, a.created_at, a.updated_at,
       COALESCE(SUM(CASE WHEN u.created_at >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01') THEN u.total_tokens ELSE 0 END), 0) AS monthly_tokens,
       COUNT(DISTINCT b.id) AS binding_count
