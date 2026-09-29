@@ -15,6 +15,25 @@ const connectionQuery = async (connection, sql, params = []) => {
 router.use(authenticateToken);
 router.use(requireCommercialAccess);
 
+router.get('/folders', async (req, res) => {
+  try {
+    const result = await getQuery(req)(`SELECT f.id, f.name, f.description, f.icon, COUNT(m.prospect_id) AS total,
+      SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone
+      FROM lead_folders f LEFT JOIN lead_folder_members m ON m.folder_id = f.id
+      LEFT JOIN prospects p ON p.id = m.prospect_id WHERE f.owner_user_id = ? GROUP BY f.id ORDER BY f.name`, [req.userId]);
+    res.json({ folders: (result.rows || []).map((row) => ({ ...row, id: Number(row.id), total: Number(row.total || 0), with_phone: Number(row.with_phone || 0) })) });
+  } catch (error) { console.error('[Prospection] folders list failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel carregar as pastas.' }); }
+});
+
+router.post('/folders', async (req, res) => {
+  const name = normalizeText(req.body?.name);
+  if (!name || name.length > 150) return res.status(400).json({ error: 'Nome da pasta invalido.' });
+  try {
+    const result = await getQuery(req)('INSERT INTO lead_folders (owner_user_id, name, description, icon) VALUES (?, ?, ?, ?)', [req.userId, name, normalizeText(req.body?.description) || null, normalizeText(req.body?.icon) || 'folder']);
+    res.status(201).json({ folder: { id: Number(result.insertId), name, description: normalizeText(req.body?.description) || null, icon: normalizeText(req.body?.icon) || 'folder', total: 0, with_phone: 0 } });
+  } catch (error) { if (error?.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Já existe uma pasta com este nome.' }); console.error('[Prospection] folder create failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel criar a pasta.' }); }
+});
+
 const defaultSettings = {
   whatsapp_template: 'Olá, {{business_name}}! Tudo bem?',
   email_subject: 'Podemos ajudar sua empresa a vender mais',

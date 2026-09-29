@@ -69,7 +69,7 @@ router.post('/', async (req, res) => {
 router.get('/audience/preview', async (req, res) => {
   try {
     const params = [req.userId]; const conditions = ['p.owner_user_id = ?']; const q = String(req.query.search || '').trim().slice(0, 100);
-    if (req.query.folder_id) { const folder = FOLDER_SEGMENTS[String(req.query.folder_id)]; if (!folder) throw new campaigns.BroadcastCampaignError(400, 'INVALID_AUDIENCE_FOLDER'); conditions.push(folder); }
+    if (req.query.folder_id) { const folderId = parseId(req.query.folder_id); const folder = FOLDER_SEGMENTS[String(req.query.folder_id)]; if (folder) conditions.push(folder); else if (folderId) { conditions.push('EXISTS (SELECT 1 FROM lead_folder_members lfm JOIN lead_folders lf ON lf.id = lfm.folder_id WHERE lfm.prospect_id = p.id AND lfm.folder_id = ? AND lf.owner_user_id = ?)'); params.push(folderId, req.userId); } else throw new campaigns.BroadcastCampaignError(400, 'INVALID_AUDIENCE_FOLDER'); }
     if (q) { conditions.push('(p.business_name LIKE ? OR p.phone LIKE ? OR p.email LIKE ?)'); params.push(`%${q}%`, `%${q}%`, `%${q}%`); }
     for (const field of ['status', 'origin', 'city', 'state']) if (req.query[field]) { conditions.push(`p.${field} = ?`); params.push(String(req.query[field]).slice(0, 100)); }
     if (req.query.assigned_user_id) { const id = parseId(req.query.assigned_user_id); if (!id) throw new campaigns.BroadcastCampaignError(400, 'INVALID_AUDIENCE_FILTER'); conditions.push('p.assigned_user_id = ?'); params.push(id); }
@@ -93,12 +93,17 @@ router.get('/audience/preview', async (req, res) => {
 router.get('/audience/folders', async (req, res) => {
   try {
     const names = { 'todos-os-leads': 'Todos os Leads', novos: 'Novos', qualificados: 'Qualificados', 'sem-site': 'Sem Site', 'follow-up': 'Follow-up', convertidos: 'Convertidos', arquivados: 'Arquivados' };
+    const manual = await query(`SELECT f.id, f.name, f.description, COUNT(m.prospect_id) AS total,
+      SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone
+      FROM lead_folders f LEFT JOIN lead_folder_members m ON m.folder_id = f.id
+      LEFT JOIN prospects p ON p.id = m.prospect_id
+      WHERE f.owner_user_id = ? GROUP BY f.id ORDER BY f.name`, [req.userId]);
     const folders = await Promise.all(Object.entries(FOLDER_SEGMENTS).map(async ([id, condition]) => {
       const result = await query(`SELECT COUNT(*) AS total, SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone FROM prospects p WHERE p.owner_user_id = ? AND ${condition}`, [req.userId]);
       const row = result.rows?.[0] || {};
       return { id, name: names[id], total: Number(row.total || 0), with_phone: Number(row.with_phone || 0) };
     }));
-    res.json({ folders });
+    res.json({ folders, manual_folders: (manual.rows || []).map((row) => ({ id: Number(row.id), name: row.name, description: row.description, total: Number(row.total || 0), with_phone: Number(row.with_phone || 0) })) });
   } catch (error) { errorResponse(res, error); }
 });
 
@@ -128,5 +133,15 @@ router.post('/:id/pause', async (req, res) => { try { const campaign = await cam
 router.post('/:id/resume', async (req, res) => { try { const campaign = await campaignForUser(req.params.id, req.userId); if (campaign.status !== 'paused') return res.json({ campaign }); const next = campaign.scheduled_at && new Date(campaign.scheduled_at) > new Date() ? 'scheduled' : 'running'; await query('UPDATE broadcast_campaigns SET status = ?, paused_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND created_by_user_id = ? AND status = \'paused\'', [next, campaign.id, req.userId]); await writeEvent(campaign.id, req.userId, 'resumed'); res.json({ campaign: await campaignForUser(campaign.id, req.userId) }); } catch (error) { errorResponse(res, error); } });
 router.post('/:id/cancel', async (req, res) => { try { const campaign = await campaignForUser(req.params.id, req.userId); if (campaign.status === 'cancelled') return res.json({ campaign }); if (['completed', 'failed'].includes(campaign.status)) throw new campaigns.BroadcastCampaignError(409, 'CAMPAIGN_NOT_CANCELLABLE'); await query("UPDATE broadcast_campaigns SET status = 'cancelled', cancelled_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND created_by_user_id = ? AND status NOT IN ('completed', 'failed', 'cancelled')", [campaign.id, req.userId]); await query("UPDATE broadcast_campaign_jobs SET status = 'cancelled', processed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL WHERE campaign_id = ? AND status = 'pending'", [campaign.id]); await query("UPDATE broadcast_campaign_recipients SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE campaign_id = ? AND status = 'pending'", [campaign.id]); await writeEvent(campaign.id, req.userId, 'cancelled'); res.json({ campaign: await campaignForUser(campaign.id, req.userId) }); } catch (error) { errorResponse(res, error); } });
 router.get('/:id/progress', async (req, res) => { try { const campaign = await campaignForUser(req.params.id, req.userId); const result = await query(`SELECT COUNT(*) AS total, SUM(status = 'pending') AS pending, SUM(status = 'processing') AS processing, SUM(status = 'sent') AS sent, SUM(status = 'delivered') AS delivered, SUM(status = 'read') AS read_count, SUM(status = 'failed') AS failed, SUM(status = 'skipped') AS skipped, SUM(status = 'cancelled') AS cancelled FROM broadcast_campaign_recipients WHERE campaign_id = ?`, [campaign.id]); const jobs = await query("SELECT status, COUNT(*) AS total FROM broadcast_campaign_jobs WHERE campaign_id = ? GROUP BY status", [campaign.id]); const jobCounts = Object.fromEntries(['pending', 'processing', 'completed', 'failed', 'cancelled'].map((status) => [status, 0])); for (const row of jobs.rows || []) jobCounts[row.status] = Number(row.total); const totals = result.rows?.[0] || {}; res.json({ status: campaign.status, total: Number(totals.total || 0), pending: Number(totals.pending || 0), processing: Number(totals.processing || 0), sent: Number(totals.sent || 0), delivered: Number(totals.delivered || 0), read: Number(totals.read_count || 0), failed: Number(totals.failed || 0), skipped: Number(totals.skipped || 0), cancelled: Number(totals.cancelled || 0), jobs: jobCounts }); } catch (error) { errorResponse(res, error); } });
+
+router.post('/:id/recipients/folder', async (req, res) => {
+  try {
+    const campaign = await campaignForUser(req.params.id, req.userId); if (campaign.status !== 'draft') throw new campaigns.BroadcastCampaignError(409, 'CAMPAIGN_NOT_EDITABLE');
+    const folderId = parseId(req.body?.folder_id); if (!folderId) throw new campaigns.BroadcastCampaignError(400, 'INVALID_AUDIENCE_FOLDER');
+    const result = await query('SELECT p.id, p.business_name, p.normalized_phone FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id JOIN prospects p ON p.id = m.prospect_id WHERE m.folder_id = ? AND f.owner_user_id = ?', [folderId, req.userId]);
+    const eligible = (result.rows || []).filter((row) => row.normalized_phone); const existing = await campaigns.getRecipients(campaign.id, req.userId); const keys = new Set(existing.map((row) => `${row.prospect_id || ''}:${row.recipient_phone}`)); const unique = eligible.filter((row) => !keys.has(`${row.id}:${row.normalized_phone}`)); const added = await campaigns.addRecipients(campaign.id, req.userId, unique.map((row) => ({ prospectId: row.id, phone: row.normalized_phone, name: row.business_name })));
+    await writeEvent(campaign.id, req.userId, 'recipients_added', { source: 'folder', folder_id: folderId, requested: result.rows?.length || 0, added: added.recipientIds.length }); res.status(201).json({ added: added.recipientIds.length, missing_phone: (result.rows || []).length - eligible.length });
+  } catch (error) { errorResponse(res, error); }
+});
 
 module.exports = router;

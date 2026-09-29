@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   Archive,
   Building2,
@@ -68,6 +69,7 @@ import { formatPhone } from "@/utils/phone";
 import { buildWhatsAppUrl } from "@/utils/whatsapp";
 import { getWebsiteDomain, normalizeEmail, normalizeWebsiteUrl, slugify } from "@/utils/lead-formatters";
 import { cn } from "@/lib/utils";
+import { leadFoldersAPI } from "@/api/lead-folders";
 
 const BRAZILIAN_STATES = [
   { uf: "AC", name: "Acre" },
@@ -309,6 +311,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     void commercialEntitiesAPI.getUsers().then(({ users }) => setUserOptions(users)).catch(() => setUserOptions([]));
+    void leadFoldersAPI.list().then(({ folders }) => setCustomFolders(folders.map((folder) => ({ id: String(folder.id), name: folder.name, description: folder.description || null, icon: folder.icon || 'folder', isSystem: false, leadCount: folder.total, createdAt: new Date().toISOString() })))).catch(() => setCustomFolders([]));
   }, []);
 
   const allLeads = useMemo(() => {
@@ -419,22 +422,11 @@ export default function LeadsPage() {
     return `/comercial/leads/${slugify(`${lead.companyName || leadName}-${lead.id}`)}`;
   };
 
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     const name = newFolderName.trim();
     if (!name) return;
 
-    setCustomFolders((current) => [
-      ...current,
-      {
-        id: slugify(name),
-        name,
-        description: newFolderDescription.trim() || null,
-        icon: newFolderIcon,
-        isSystem: false,
-        leadCount: 0,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    try { const { folder } = await leadFoldersAPI.create({ name, description: newFolderDescription.trim() || null, icon: newFolderIcon }); setCustomFolders((current) => [...current, { id: String(folder.id), name: folder.name, description: folder.description || null, icon: folder.icon || 'folder', isSystem: false, leadCount: folder.total, createdAt: new Date().toISOString() }]); } catch (error) { toast({ title: "Não foi possível criar a pasta", description: error instanceof Error ? error.message : "Tente novamente.", variant: "destructive" }); return; }
     setNewFolderName("");
     setNewFolderDescription("");
     setNewFolderIcon("folder");
