@@ -32,6 +32,9 @@ const safeWorkerError = (error) => ({
   providerMessage: error?.providerMessage || null,
   undefinedIndexes: Array.isArray(error?.undefinedIndexes) ? error.undefinedIndexes : null,
   parameterCount: Number.isInteger(error?.parameterCount) ? error.parameterCount : null,
+  sourceFile: error?.sourceFile || null,
+  sourceFunction: error?.sourceFunction || null,
+  sourceLine: Number.isInteger(error?.sourceLine) ? error.sourceLine : null,
 });
 const workerId = (value) =>
   String(
@@ -467,6 +470,9 @@ async function processBroadcastJob(
         error_message: safeWorkerError(error).message,
         undefined_indexes: safeWorkerError(error).undefinedIndexes,
         parameter_count: safeWorkerError(error).parameterCount,
+        source_file: safeWorkerError(error).sourceFile,
+        source_function: safeWorkerError(error).sourceFunction,
+        source_line: safeWorkerError(error).sourceLine,
         binding_operation: error?.bindingOperation || null,
         binding_fields: error?.bindingFields || null,
         operation:

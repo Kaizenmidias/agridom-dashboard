@@ -35,7 +35,7 @@ test('DISPAROS-2D protege o contrato de receipts e mídia não validada', () => 
 test('DISPAROS preserva a etapa e a causa segura de falhas antes do HTTP', () => {
   const worker = require('../services/broadcast-campaign-worker');
   const error = Object.assign(new Error('credencial invalida'), { code: 'EVOLUTION_CREDENTIAL_DECRYPT_FAILED', stage: 'decrypt' });
-  assert.deepEqual(worker.safeWorkerError(error), { name: 'Error', code: 'EVOLUTION_CREDENTIAL_DECRYPT_FAILED', stage: 'decrypt', message: 'EVOLUTION_CREDENTIAL_DECRYPT_FAILED', providerStatus: null, providerOperation: null, providerMessage: null, undefinedIndexes: null, parameterCount: null });
+  assert.deepEqual(worker.safeWorkerError(error), { name: 'Error', code: 'EVOLUTION_CREDENTIAL_DECRYPT_FAILED', stage: 'decrypt', message: 'EVOLUTION_CREDENTIAL_DECRYPT_FAILED', providerStatus: null, providerOperation: null, providerMessage: null, undefinedIndexes: null, parameterCount: null, sourceFile: null, sourceFunction: null, sourceLine: null });
   assert.match(read('server', 'services', 'whatsapp-service.js'), /stage: 'decrypt'/);
   assert.match(read('server', 'services', 'whatsapp-service.js'), /stage: 'configuration'/);
   assert.match(read('server', 'services', 'whatsapp-service.js'), /stage: 'persistence'/);
@@ -58,6 +58,32 @@ test('database guard reports only undefined indexes and preserves caller stack',
     assert.deepEqual(error.undefinedIndexes, [1]);
     assert.equal(error.parameterCount, 3);
     assert.match(error.stack, /assertNoUndefinedExecuteParams/);
+    assert.equal(error.sourceFile, 'disparos-2d.test.js');
+    assert.equal(error.sourceFunction, null);
+    assert.ok(Number.isInteger(error.sourceLine));
+    assert.notEqual(error.sourceFile, 'database.js');
+    return true;
+  });
+});
+
+test('database guard exposes a sanitized callsite for a two-bind failure', () => {
+  const { assertNoUndefinedExecuteParams } = require('../config/database');
+  const worker = require('../services/broadcast-campaign-worker');
+  assert.throws(() => assertNoUndefinedExecuteParams([42, undefined]), (error) => {
+    assert.deepEqual(worker.safeWorkerError(error), {
+      name: 'DatabaseUndefinedBindError',
+      code: 'DATABASE_UNDEFINED_BIND',
+      stage: 'persistence',
+      message: 'DATABASE_UNDEFINED_BIND',
+      providerStatus: null,
+      providerOperation: null,
+      providerMessage: null,
+      undefinedIndexes: [1],
+      parameterCount: 2,
+      sourceFile: 'disparos-2d.test.js',
+      sourceFunction: null,
+      sourceLine: error.sourceLine,
+    });
     return true;
   });
 });

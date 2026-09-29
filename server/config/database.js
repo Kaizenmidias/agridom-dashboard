@@ -9,6 +9,18 @@ const normalizeBooleanParam = (value) => {
 
 const normalizeParams = (params = []) => params.map(normalizeBooleanParam);
 
+const extractProjectCallsite = (stack = '') => {
+  for (const frame of String(stack).split('\n').slice(1)) {
+    if (/node_modules|node:internal|internal[\\/]modules/i.test(frame)) continue;
+    const match = frame.match(/at\s+(?:(.+?)\s+\()?((?:[A-Za-z]:)?[^()\s]+):(\d+):(\d+)\)?$/);
+    if (!match) continue;
+    const filePath = match[2].replace(/\\/g, '/');
+    if (/\/database\.js$/i.test(filePath)) continue;
+    return { sourceFile: filePath.split('/').pop() || null, sourceFunction: match[1] ? match[1].trim() : null, sourceLine: Number(match[3]) };
+  }
+  return { sourceFile: null, sourceFunction: null, sourceLine: null };
+};
+
 class DatabaseUndefinedBindError extends TypeError {
   constructor(params) {
     const undefinedIndexes = params.reduce((indexes, value, index) => value === undefined ? [...indexes, index] : indexes, []);
@@ -18,6 +30,7 @@ class DatabaseUndefinedBindError extends TypeError {
     this.undefinedIndexes = undefinedIndexes;
     this.parameterCount = params.length;
     Error.captureStackTrace?.(this, DatabaseUndefinedBindError);
+    Object.assign(this, extractProjectCallsite(this.stack));
   }
 }
 
