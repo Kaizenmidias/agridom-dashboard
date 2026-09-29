@@ -60,6 +60,7 @@ const webhookRouter = require('./routes/webhooks');
 const conversationsRouter = require('./routes/conversations');
 const agentsRouter = require('./routes/agents');
 const aiRouter = require('./routes/ai');
+const broadcastCampaignsRouter = require('./routes/broadcast-campaigns');
 
 
 app.locals.query = query;
@@ -81,6 +82,7 @@ app.use('/api/webhooks', webhookRouter);
 app.use('/api/conversations', conversationsRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/broadcast-campaigns', broadcastCampaignsRouter);
 
 
 // Rota de teste
