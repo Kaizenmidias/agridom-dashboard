@@ -58,6 +58,22 @@ const statusClass: Record<string, string> = {
   cancelled: "bg-muted text-muted-foreground",
   failed: "bg-destructive/15 text-destructive",
 };
+const formatCadence = (seconds: number) => {
+  const value = Math.max(0, Number(seconds || 0));
+  if (!value) return "Sem intervalo adicional";
+  const parts = [
+    [Math.floor(value / 86400), "dia"],
+    [Math.floor((value % 86400) / 3600), "hora"],
+    [Math.floor((value % 3600) / 60), "minuto"],
+    [value % 60, "segundo"],
+  ]
+    .filter(([number]) => Number(number) > 0)
+    .map(
+      ([number, label]) =>
+        `${number} ${label}${Number(number) === 1 ? "" : "s"}`,
+    );
+  return parts.join(" e ");
+};
 const money = (value?: number | null) =>
   Number(value || 0).toLocaleString("pt-BR");
 
@@ -492,6 +508,12 @@ export function NewBroadcastPage() {
   const [name, setName] = useState("");
   const [accountId, setAccountId] = useState("");
   const [scheduled, setScheduled] = useState("");
+  const [cadence, setCadence] = useState({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
   const [text, setText] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
@@ -543,6 +565,13 @@ export function NewBroadcastPage() {
         .then(({ campaign }) => {
           setName(campaign.name);
           setText(campaign.text_content || "");
+          const total = Number(campaign.cadence_seconds || 0);
+          setCadence({
+            days: Math.floor(total / 86400),
+            hours: Math.floor((total % 86400) / 3600),
+            minutes: Math.floor((total % 3600) / 60),
+            seconds: total % 60,
+          });
         })
         .catch((e) => toast.error(e.message));
   }, [id]);
@@ -552,6 +581,11 @@ export function NewBroadcastPage() {
       const result = await broadcastAPI.create({
         name,
         communication_account_id: accountId ? Number(accountId) : null,
+        cadence_seconds:
+          cadence.days * 86400 +
+          cadence.hours * 3600 +
+          cadence.minutes * 60 +
+          cadence.seconds,
       });
       setCampaignId(result.campaign.id);
       return result.campaign.id;
@@ -562,6 +596,11 @@ export function NewBroadcastPage() {
       scheduled_at: scheduled
         ? new Date(scheduled).toISOString().slice(0, 19).replace("T", " ")
         : null,
+      cadence_seconds:
+        cadence.days * 86400 +
+        cadence.hours * 3600 +
+        cadence.minutes * 60 +
+        cadence.seconds,
     });
     return campaignId;
   };
@@ -711,6 +750,40 @@ export function NewBroadcastPage() {
                   onChange={(e) => setScheduled(e.target.value)}
                 />
               )}
+            </div>
+            <div className="space-y-2 rounded-md border p-4">
+              <p className="text-sm font-medium">Cadência de envio</p>
+              <p className="text-xs text-muted-foreground">
+                Defina o intervalo entre cada mensagem. Os envios serão
+                distribuídos ao longo do tempo conforme o intervalo configurado.
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {(
+                  [
+                    ["days", "Dias"],
+                    ["hours", "Horas"],
+                    ["minutes", "Minutos"],
+                    ["seconds", "Segundos"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label key={key} className="text-xs text-muted-foreground">
+                    {label}
+                    <Input
+                      className="mt-1"
+                      type="number"
+                      min={0}
+                      max={key === "days" ? 365 : 59}
+                      value={cadence[key]}
+                      onChange={(event) =>
+                        setCadence((current) => ({
+                          ...current,
+                          [key]: Math.max(0, Number(event.target.value) || 0),
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="flex justify-end">
               <Button disabled={saving} onClick={() => void next()}>
@@ -1005,6 +1078,32 @@ function ReviewStep({
                 ? new Date(review.campaign.scheduled_at).toLocaleString("pt-BR")
                 : "Enviar agora"}
             </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Cadência</p>
+            <p>
+              {formatCadence(Number(review.campaign.cadence_seconds || 0))}{" "}
+              entre mensagens
+            </p>
+            {Number(review.total_recipients || 0) > 1 &&
+            Number(review.campaign.cadence_seconds || 0) > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Duração aproximada: ~
+                {Math.floor(
+                  (Number(review.campaign.cadence_seconds) *
+                    (Number(review.total_recipients) - 1)) /
+                    3600,
+                )}
+                h{" "}
+                {Math.floor(
+                  ((Number(review.campaign.cadence_seconds) *
+                    (Number(review.total_recipients) - 1)) %
+                    3600) /
+                    60,
+                )}
+                min
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="rounded-md border p-4">

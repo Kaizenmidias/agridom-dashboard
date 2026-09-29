@@ -101,10 +101,11 @@ async function materializeCampaign({ campaignId, userId, now = new Date() }) {
     campaign.scheduled_at && new Date(campaign.scheduled_at) > now
       ? "scheduled"
       : "running";
-  const values = recipientResult.rows.map((recipient) => [
+  const cadenceSeconds = Math.max(0, Number(campaign.cadence_seconds || 0));
+  const values = recipientResult.rows.map((recipient, index) => [
     campaign.id,
     recipient.id,
-    availableAt,
+    new Date(new Date(availableAt).getTime() + cadenceSeconds * 1000 * index),
   ]);
   const pool = getPool();
   const connection = await pool.getConnection();
@@ -233,6 +234,24 @@ function classifyBroadcastError(error) {
   return error;
 }
 
+function broadcastErrorMessage(error) {
+  const code = String(error?.code || "");
+  if (code === "EVOLUTION_AUTH_FAILED")
+    return "A autenticação da Evolution falhou.";
+  if (code === "EVOLUTION_UNAVAILABLE")
+    return "A Evolution recusou o envio temporariamente.";
+  if (code === "WHATSAPP_ACCOUNT_NOT_CONNECTED")
+    return "A instância do WhatsApp está desconectada.";
+  if (code === "RECIPIENT_PHONE_INVALID")
+    return "O número de destino é inválido.";
+  if (code.startsWith("MEDIA_")) return "Não foi possível enviar a mídia.";
+  return String(
+    error?.publicMessage || error?.message || code || "Falha no envio.",
+  )
+    .replace(/_/g, " ")
+    .slice(0, 500);
+}
+
 async function executeBroadcastRecipient({ connection, job } = {}) {
   if (!connection || !job) {
     const error = new Error("EXECUTOR_NOT_CONFIGURED");
@@ -345,6 +364,18 @@ async function executeBroadcastRecipient({ connection, job } = {}) {
       error.retryable = false;
       throw error;
     }
+    console.error("[Broadcast] provider delivery failed", {
+      campaign_id: Number(current.campaign_id),
+      recipient_id: Number(current.recipient_id),
+      communication_account_id: Number(current.account_id || 0) || null,
+      content_type: current.content_type || null,
+      provider_http_status: error?.providerStatus || null,
+      provider_error_code: error?.providerErrorCode || null,
+      provider_message: error?.providerMessage || null,
+      operation: "broadcast_send",
+      attempt: Number(current.attempt_count || 0),
+      temporary: retryable,
+    });
     await connection.execute(
       "UPDATE broadcast_campaign_recipients SET communication_message_id = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [result.communicationMessageId, row.recipient_id],
@@ -431,15 +462,15 @@ async function processBroadcastJob(
       await connection.execute(
         `UPDATE broadcast_campaign_jobs SET status = ?, available_at = ${terminal ? "available_at" : "DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? MICROSECOND)"}, locked_at = NULL, locked_by = NULL, last_error = ?, processed_at = ${terminal ? "UTC_TIMESTAMP()" : "NULL"} WHERE id = ?`,
         terminal
-          ? ["failed", safeError(error), current.id]
-          : ["pending", delay * 1000, safeError(error), current.id],
+          ? ["failed", broadcastErrorMessage(error), current.id]
+          : ["pending", delay * 1000, broadcastErrorMessage(error), current.id],
       );
       await connection.execute(
         "UPDATE broadcast_campaign_recipients SET status = ?, failed_at = IF(? = 'failed', UTC_TIMESTAMP(), NULL), last_error = ? WHERE id = ?",
         [
           terminal ? "failed" : "pending",
           terminal ? "failed" : "pending",
-          safeError(error),
+          broadcastErrorMessage(error),
           current.recipient_id,
         ],
       );

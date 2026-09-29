@@ -30,13 +30,11 @@ const errorResponse = (res, error) => {
       code: error?.code || "UNKNOWN",
       message: error?.message || "unknown",
     });
-  return res
-    .status(Number(error?.status) || 500)
-    .json({
-      error: error?.status
-        ? error.message
-        : "Nao foi possivel processar a campanha.",
-    });
+  return res.status(Number(error?.status) || 500).json({
+    error: error?.status
+      ? error.message
+      : "Nao foi possivel processar a campanha.",
+  });
 };
 const campaignForUser = (id, userId) => campaigns.getCampaign(id, userId);
 const FOLDER_SEGMENTS = {
@@ -94,7 +92,10 @@ router.get("/", async (req, res) => {
       PAGE_SIZE_MAX,
     );
     const params = [req.userId];
-    const conditions = ["c.created_by_user_id = ?"];
+    const conditions = [
+      "c.created_by_user_id = ?",
+      "c.status NOT IN ('completed', 'cancelled')",
+    ];
     if (req.query.status) {
       if (!campaigns.CAMPAIGN_STATUSES.includes(String(req.query.status)))
         throw new campaigns.BroadcastCampaignError(
@@ -145,6 +146,7 @@ router.post("/", async (req, res) => {
       userId: req.userId,
       name: req.body?.name,
       communicationAccountId: account?.id ?? null,
+      cadenceSeconds: req.body?.cadence_seconds,
     });
     await writeEvent(campaign.id, req.userId, "created");
     res.status(201).json({ campaign });
@@ -441,6 +443,7 @@ router.patch("/:id", async (req, res) => {
           ? undefined
           : (account?.id ?? null),
       scheduledAt: req.body?.scheduled_at,
+      cadenceSeconds: req.body?.cadence_seconds,
     });
     await writeEvent(campaign.id, req.userId, "updated");
     res.json({ campaign });
@@ -498,18 +501,16 @@ router.post(
         media: true,
         content_type: contentType,
       });
-      res
-        .status(201)
-        .json({
-          campaign: updated,
-          media: {
-            content_type: contentType,
-            storage_path: stored.storagePath,
-            mime_type: stored.mime,
-            original_filename: stored.filename,
-            size: stored.size,
-          },
-        });
+      res.status(201).json({
+        campaign: updated,
+        media: {
+          content_type: contentType,
+          storage_path: stored.storagePath,
+          mime_type: stored.mime,
+          original_filename: stored.filename,
+          size: stored.size,
+        },
+      });
     } catch (error) {
       errorResponse(res, error);
     }
@@ -629,16 +630,14 @@ router.post("/:id/recipients", async (req, res) => {
       added: result.recipientIds.length,
       duplicates: prospects.length - eligible.length,
     });
-    res
-      .status(201)
-      .json({
-        requested: prospects.length,
-        eligible: eligible.length,
-        added: result.recipientIds.length,
-        duplicates: prospects.length - eligible.length,
-        missing_phone: 0,
-        invalid_phone: 0,
-      });
+    res.status(201).json({
+      requested: prospects.length,
+      eligible: eligible.length,
+      added: result.recipientIds.length,
+      duplicates: prospects.length - eligible.length,
+      missing_phone: 0,
+      invalid_phone: 0,
+    });
   } catch (error) {
     errorResponse(res, error);
   }
@@ -667,7 +666,7 @@ router.delete("/:id/recipients/:recipientId", async (req, res) => {
   }
 });
 
-router.post('/:id/start', async (req, res) => {
+router.post("/:id/start", async (req, res) => {
   try {
     const result = await materializeCampaign({
       campaignId: parseId(req.params.id),
@@ -815,12 +814,10 @@ router.post("/:id/recipients/folder", async (req, res) => {
       requested: result.rows?.length || 0,
       added: added.recipientIds.length,
     });
-    res
-      .status(201)
-      .json({
-        added: added.recipientIds.length,
-        missing_phone: (result.rows || []).length - eligible.length,
-      });
+    res.status(201).json({
+      added: added.recipientIds.length,
+      missing_phone: (result.rows || []).length - eligible.length,
+    });
   } catch (error) {
     errorResponse(res, error);
   }

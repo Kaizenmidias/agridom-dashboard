@@ -21,6 +21,7 @@ export type Campaign = {
   name: string;
   status: string;
   scheduled_at?: string | null;
+  cadence_seconds?: number;
   account_name?: string;
   account_phone?: string;
   total?: number;
