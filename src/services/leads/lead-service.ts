@@ -18,12 +18,16 @@ export async function getLeads(): Promise<Lead[]> {
     throw new Error(payload?.error || "Não foi possível carregar os leads.");
   }
 
-  const history = ((payload?.history || []) as ProspectContactHistory[]).reduce<Record<string, ProspectContactHistory[]>>((acc, item) => {
+  const history = ((payload?.history || []) as ProspectContactHistory[]).reduce<
+    Record<string, ProspectContactHistory[]>
+  >((acc, item) => {
     const key = String(item.prospect_id);
     acc[key] = [...(acc[key] || []), item];
     return acc;
   }, {});
-  const activities = ((payload?.activities || []) as Array<Record<string, any>>).reduce<Record<string, Array<Record<string, any>>>>((acc, item) => {
+  const activities = (
+    (payload?.activities || []) as Array<Record<string, any>>
+  ).reduce<Record<string, Array<Record<string, any>>>>((acc, item) => {
     const key = String(item.prospect_id);
     acc[key] = [...(acc[key] || []), item];
     return acc;
@@ -47,13 +51,13 @@ export async function getLeads(): Promise<Lead[]> {
         assignedUserName: item.assigned_user_name,
       })),
       ...(history[String(prospect.id)] || []).map((item) => ({
-      id: `history-${item.id}`,
-      channel: item.channel,
-      subject: item.subject,
-      message: item.message,
-      recipient: item.recipient,
-      deliveryStatus: item.delivery_status,
-      createdAt: item.created_at,
+        id: `history-${item.id}`,
+        channel: item.channel,
+        subject: item.subject,
+        message: item.message,
+        recipient: item.recipient,
+        deliveryStatus: item.delivery_status,
+        createdAt: item.created_at,
       })),
     ],
   }));
@@ -69,7 +73,11 @@ function getHeaders() {
   };
 }
 
-async function sendLead(endpoint: string, method: "POST" | "PATCH", lead: Partial<Lead>) {
+async function sendLead(
+  endpoint: string,
+  method: "POST" | "PATCH",
+  lead: Partial<Lead>,
+) {
   const response = await fetch(buildApiUrl(`prospection${endpoint}`), {
     method,
     headers: getHeaders(),
@@ -90,7 +98,8 @@ async function sendLead(endpoint: string, method: "POST" | "PATCH", lead: Partia
   });
 
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error || "Não foi possível salvar o lead.");
+  if (!response.ok)
+    throw new Error(payload?.error || "Não foi possível salvar o lead.");
   return prospectToLead(payload as Prospect);
 }
 
@@ -107,18 +116,40 @@ export function updateLeadDetails(id: string, lead: Partial<Lead>) {
 }
 
 export async function addLeadToPipeline(id: string) {
-  const response = await fetch(buildApiUrl(`prospection/prospects/${id}/add-to-crm`), {
-    method: "POST",
-    headers: getHeaders(),
-  });
+  const response = await fetch(
+    buildApiUrl(`prospection/prospects/${id}/add-to-crm`),
+    {
+      method: "POST",
+      headers: getHeaders(),
+    },
+  );
 
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error || "Não foi possível adicionar ao Kanban.");
+  if (!response.ok)
+    throw new Error(payload?.error || "Não foi possível adicionar ao Kanban.");
   return prospectToLead(payload as Prospect);
 }
 
 export async function deleteLead(id: string) {
-  const response = await fetch(buildApiUrl(`prospection/prospects/${id}`), { method: "DELETE", headers: getHeaders() });
+  const response = await fetch(buildApiUrl(`prospection/prospects/${id}`), {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error || "NÃ£o foi possÃ­vel excluir o lead.");
+  if (!response.ok)
+    throw new Error(payload?.error || "NÃ£o foi possÃ­vel excluir o lead.");
+}
+
+export async function deleteLeads(ids: string[]) {
+  const response = await fetch(buildApiUrl("prospection/prospects/bulk"), {
+    method: "DELETE",
+    headers: getHeaders(),
+    body: JSON.stringify({ ids: ids.map(Number) }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok)
+    throw new Error(
+      payload?.error || "NÃ£o foi possÃ­vel excluir os leads selecionados.",
+    );
+  return payload as { deleted: number; missing: number };
 }

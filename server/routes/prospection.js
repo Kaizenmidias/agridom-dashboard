@@ -35,6 +35,16 @@ router.post('/folders', async (req, res) => {
   } catch (error) { if (error?.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Já existe uma pasta com este nome.' }); console.error('[Prospection] folder create failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel criar a pasta.' }); }
 });
 
+router.delete('/folders/:id', async (req, res) => {
+  try {
+    const folderId = parseId(req.params.id);
+    if (!folderId) return res.status(400).json({ error: 'Pasta invalida.' });
+    const result = await getQuery(req)('DELETE FROM lead_folders WHERE id = ? AND owner_user_id = ?', [folderId, req.userId]);
+    if (!result.affectedRows) return res.status(404).json({ error: 'Pasta nao encontrada.' });
+    res.json({ success: true, id: folderId });
+  } catch (error) { console.error('[Prospection] folder delete failed', error); res.status(500).json({ error: 'Nao foi possivel excluir a pasta.' }); }
+});
+
 router.post('/folders/:id/members', async (req, res) => {
   try {
     const folderId = parseId(req.params.id);
@@ -448,6 +458,21 @@ router.patch('/prospects/:id', async (req, res) => {
   } finally {
     if (connection) connection.release();
   }
+});
+
+router.delete('/prospects/bulk', async (req, res) => {
+  let connection;
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).map(parseId).filter(Boolean))];
+    if (!ids.length || ids.length > 500) return res.status(400).json({ error: 'Informe entre 1 e 500 leads validos.' });
+    connection = await getPool().getConnection(); await connection.beginTransaction();
+    const [owned] = await connection.execute(`SELECT id FROM prospects WHERE owner_user_id = ? AND id IN (${ids.map(() => '?').join(',')})`, [req.userId, ...ids]);
+    const ownedIds = owned.map((row) => Number(row.id));
+    if (ownedIds.length) await connection.execute(`DELETE FROM prospects WHERE owner_user_id = ? AND id IN (${ownedIds.map(() => '?').join(',')})`, [req.userId, ...ownedIds]);
+    await connection.commit();
+    res.json({ success: true, deleted: ownedIds.length, missing: ids.length - ownedIds.length });
+  } catch (error) { if (connection) await connection.rollback(); console.error('[Prospection] bulk delete failed', error); res.status(500).json({ error: 'Nao foi possivel excluir os leads selecionados.' }); }
+  finally { if (connection) connection.release(); }
 });
 
 router.delete('/prospects/:id', async (req, res) => {

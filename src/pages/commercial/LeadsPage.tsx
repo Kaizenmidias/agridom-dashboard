@@ -56,18 +56,52 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
 import { useLeads } from "@/hooks/leads/useLeads";
-import { addLeadToPipeline as persistLeadToPipeline, createLead, deleteLead, updateLead } from "@/services/leads/lead-service";
-import { commercialEntitiesAPI, type UserOption } from "@/services/commercial-entities";
-import type { Lead, LeadFilters, LeadFolder, LeadLabel, LeadSource, LeadStatus } from "@/types/lead";
+import {
+  addLeadToPipeline as persistLeadToPipeline,
+  createLead,
+  deleteLead,
+  deleteLeads,
+  updateLead,
+} from "@/services/leads/lead-service";
+import {
+  commercialEntitiesAPI,
+  type UserOption,
+} from "@/services/commercial-entities";
+import type {
+  Lead,
+  LeadFilters,
+  LeadFolder,
+  LeadLabel,
+  LeadSource,
+  LeadStatus,
+} from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
 import { buildWhatsAppUrl } from "@/utils/whatsapp";
-import { getWebsiteDomain, normalizeEmail, normalizeWebsiteUrl, slugify } from "@/utils/lead-formatters";
+import {
+  getWebsiteDomain,
+  normalizeEmail,
+  normalizeWebsiteUrl,
+  slugify,
+} from "@/utils/lead-formatters";
 import { cn } from "@/lib/utils";
 import { leadFoldersAPI } from "@/api/lead-folders";
 
@@ -104,9 +138,17 @@ const BRAZILIAN_STATES = [
 function formatLeadBudget(lead: Lead) {
   const legacyBudget = (lead as Lead & { budget?: string | number }).budget;
   const raw = lead.metadata?.budget ?? legacyBudget ?? "";
-  if (typeof raw === "number") return raw.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const value = Number(String(raw).replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(value) && value > 0 ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não informado";
+  if (typeof raw === "number")
+    return raw.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const value = Number(
+    String(raw)
+      .replace(/[^\d,.-]/g, "")
+      .replace(/\./g, "")
+      .replace(",", "."),
+  );
+  return Number.isFinite(value) && value > 0
+    ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : "Não informado";
 }
 
 const statusLabels: Record<LeadStatus, string> = {
@@ -153,8 +195,10 @@ function getScoreClass(score?: number | null) {
 
 function getStatusClass(status: LeadStatus) {
   if (status === "convertido") return "bg-green-100 text-green-800";
-  if (status === "perdido" || status === "arquivado") return "bg-red-100 text-red-800";
-  if (status === "qualificado" || status === "reuniao" || status === "proposta") return "bg-blue-100 text-blue-800";
+  if (status === "perdido" || status === "arquivado")
+    return "bg-red-100 text-red-800";
+  if (status === "qualificado" || status === "reuniao" || status === "proposta")
+    return "bg-blue-100 text-blue-800";
   return "bg-slate-100 text-slate-700";
 }
 
@@ -189,7 +233,8 @@ function formatBrazilianPhoneInput(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  if (digits.length <= 10)
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
@@ -211,39 +256,93 @@ function leadToForm(lead: Lead) {
     employees: lead.metadata?.employees || "",
     budget: lead.metadata?.budget || "",
     notes: lead.metadata?.notes || "",
-    nextMeetingAt: lead.metadata?.nextMeetingAt ? lead.metadata.nextMeetingAt.slice(0, 16) : "",
+    nextMeetingAt: lead.metadata?.nextMeetingAt
+      ? lead.metadata.nextMeetingAt.slice(0, 16)
+      : "",
     meetingOwner: lead.metadata?.meetingOwner || "",
     labels: lead.metadata?.labels || [],
   };
 }
 
-function folderMatchesLead(folderId: string, lead: Lead, customFolders: LeadFolder[] = []) {
+function folderMatchesLead(
+  folderId: string,
+  lead: Lead,
+  customFolders: LeadFolder[] = [],
+) {
   if (folderId === "todos-os-leads") return true;
   if (folderId === "novos") return lead.status === "novo";
-  if (folderId === "qualificados") return lead.status === "qualificado" || (lead.score || 0) >= 70;
+  if (folderId === "qualificados")
+    return lead.status === "qualificado" || (lead.score || 0) >= 70;
   if (folderId === "sem-site") return !lead.website;
   if (folderId === "follow-up") return lead.status === "em_contato";
   if (folderId === "convertidos") return lead.status === "convertido";
   if (folderId === "arquivados") return lead.status === "arquivado";
   const custom = customFolders.find((folder) => folder.id === folderId);
-  return Boolean(custom?.prospectIds?.includes(String(lead.id)) || lead.folderId === folderId);
+  return Boolean(
+    custom?.prospectIds?.includes(String(lead.id)) ||
+    lead.folderId === folderId,
+  );
 }
 
 function buildFolders(leads: Lead[], customFolders: LeadFolder[]) {
   const now = new Date().toISOString();
   const systemFolders: LeadFolder[] = [
-    { id: "todos-os-leads", name: "Todos os Leads", icon: "folder", isSystem: true, createdAt: now },
-    { id: "novos", name: "Novos", icon: "circle", isSystem: true, createdAt: now },
-    { id: "qualificados", name: "Qualificados", icon: "check", isSystem: true, createdAt: now },
-    { id: "sem-site", name: "Sem Site", icon: "folder", isSystem: true, createdAt: now },
-    { id: "follow-up", name: "Follow-up", icon: "send", isSystem: true, createdAt: now },
-    { id: "convertidos", name: "Convertidos", icon: "check", isSystem: true, createdAt: now },
-    { id: "arquivados", name: "Arquivados", icon: "archive", isSystem: true, createdAt: now },
+    {
+      id: "todos-os-leads",
+      name: "Todos os Leads",
+      icon: "folder",
+      isSystem: true,
+      createdAt: now,
+    },
+    {
+      id: "novos",
+      name: "Novos",
+      icon: "circle",
+      isSystem: true,
+      createdAt: now,
+    },
+    {
+      id: "qualificados",
+      name: "Qualificados",
+      icon: "check",
+      isSystem: true,
+      createdAt: now,
+    },
+    {
+      id: "sem-site",
+      name: "Sem Site",
+      icon: "folder",
+      isSystem: true,
+      createdAt: now,
+    },
+    {
+      id: "follow-up",
+      name: "Follow-up",
+      icon: "send",
+      isSystem: true,
+      createdAt: now,
+    },
+    {
+      id: "convertidos",
+      name: "Convertidos",
+      icon: "check",
+      isSystem: true,
+      createdAt: now,
+    },
+    {
+      id: "arquivados",
+      name: "Arquivados",
+      icon: "archive",
+      isSystem: true,
+      createdAt: now,
+    },
   ];
 
   return [...systemFolders, ...customFolders].map((folder) => ({
     ...folder,
-    leadCount: leads.filter((lead) => folderMatchesLead(folder.id, lead, customFolders)).length,
+    leadCount: leads.filter((lead) =>
+      folderMatchesLead(folder.id, lead, customFolders),
+    ).length,
   }));
 }
 
@@ -297,6 +396,7 @@ export default function LeadsPage() {
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [folderTargetIds, setFolderTargetIds] = useState<string[]>([]);
   const [folderTarget, setFolderTarget] = useState("");
   const [folderMemberDialogOpen, setFolderMemberDialogOpen] = useState(false);
@@ -314,19 +414,57 @@ export default function LeadsPage() {
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
 
   useEffect(() => {
-    void commercialEntitiesAPI.getUsers().then(({ users }) => setUserOptions(users)).catch(() => setUserOptions([]));
-    void leadFoldersAPI.list().then(({ folders }) => setCustomFolders(folders.map((folder) => ({ id: String(folder.id), name: folder.name, description: folder.description || null, icon: folder.icon || 'folder', isSystem: false, leadCount: folder.total, prospectIds: (folder.prospect_ids || []).map(String), createdAt: new Date().toISOString() })))).catch(() => setCustomFolders([]));
+    void commercialEntitiesAPI
+      .getUsers()
+      .then(({ users }) => setUserOptions(users))
+      .catch(() => setUserOptions([]));
+    void leadFoldersAPI
+      .list()
+      .then(({ folders }) =>
+        setCustomFolders(
+          folders.map((folder) => ({
+            id: String(folder.id),
+            name: folder.name,
+            description: folder.description || null,
+            icon: folder.icon || "folder",
+            isSystem: false,
+            leadCount: folder.total,
+            prospectIds: (folder.prospect_ids || []).map(String),
+            createdAt: new Date().toISOString(),
+          })),
+        ),
+      )
+      .catch(() => setCustomFolders([]));
   }, []);
 
   const allLeads = useMemo(() => {
     const localIds = new Set(sessionLeads.map((lead) => lead.id));
     return [...sessionLeads, ...leads.filter((lead) => !localIds.has(lead.id))];
   }, [leads, sessionLeads]);
-  const folders = useMemo(() => buildFolders(allLeads, customFolders), [allLeads, customFolders]);
-  const selectedFolder = folders.find((folder) => folder.id === filters.folderId) || folders[0];
-  const cities = useMemo(() => Array.from(new Set(allLeads.map((lead) => lead.city).filter(Boolean))).sort() as string[], [allLeads]);
-  const owners = useMemo(() => Array.from(new Set(allLeads.map((lead) => lead.assignedTo).filter(Boolean))).sort() as string[], [allLeads]);
-  const availableLabels = useMemo(() => allLeads.flatMap((lead) => lead.metadata?.labels || []), [allLeads]);
+  const folders = useMemo(
+    () => buildFolders(allLeads, customFolders),
+    [allLeads, customFolders],
+  );
+  const selectedFolder =
+    folders.find((folder) => folder.id === filters.folderId) || folders[0];
+  const cities = useMemo(
+    () =>
+      Array.from(
+        new Set(allLeads.map((lead) => lead.city).filter(Boolean)),
+      ).sort() as string[],
+    [allLeads],
+  );
+  const owners = useMemo(
+    () =>
+      Array.from(
+        new Set(allLeads.map((lead) => lead.assignedTo).filter(Boolean)),
+      ).sort() as string[],
+    [allLeads],
+  );
+  const availableLabels = useMemo(
+    () => allLeads.flatMap((lead) => lead.metadata?.labels || []),
+    [allLeads],
+  );
 
   useEffect(() => {
     if (!leadForm.state) {
@@ -341,10 +479,14 @@ export default function LeadsPage() {
         setCitiesLoading(true);
         const response = await fetch(
           `https://servicodados.ibge.gov.br/api/v1/localidades/estados/${leadForm.state}/municipios?orderBy=nome`,
-          { signal: controller.signal }
+          { signal: controller.signal },
         );
         const data = await response.json();
-        setCityOptions(Array.isArray(data) ? data.map((city) => city.nome).filter(Boolean) : []);
+        setCityOptions(
+          Array.isArray(data)
+            ? data.map((city) => city.nome).filter(Boolean)
+            : [],
+        );
       } catch (error) {
         if (!controller.signal.aborted) setCityOptions([]);
       } finally {
@@ -361,17 +503,20 @@ export default function LeadsPage() {
     const normalizedQuery = query.trim().toLowerCase();
 
     return allLeads.filter((lead) => {
-      const textMatches = !normalizedQuery || [
-        lead.companyName,
-        lead.phone,
-        lead.email,
-        lead.city,
-        lead.assignedTo,
-      ].some((value) => value?.toLowerCase().includes(normalizedQuery));
+      const textMatches =
+        !normalizedQuery ||
+        [
+          lead.companyName,
+          lead.phone,
+          lead.email,
+          lead.city,
+          lead.assignedTo,
+        ].some((value) => value?.toLowerCase().includes(normalizedQuery));
 
       const fieldMatches =
         filters.contactField === "all" ||
-        (filters.contactField === "has_whatsapp" && Boolean(buildWhatsAppUrl(lead.phone))) ||
+        (filters.contactField === "has_whatsapp" &&
+          Boolean(buildWhatsAppUrl(lead.phone))) ||
         (filters.contactField === "has_email" && Boolean(lead.email)) ||
         (filters.contactField === "has_website" && Boolean(lead.website)) ||
         (filters.contactField === "without_website" && !lead.website);
@@ -396,10 +541,20 @@ export default function LeadsPage() {
     });
   }, [allLeads, customFolders, filters, query]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / itemsPerPage));
-  const paginatedLeads = filteredLeads.slice((page - 1) * itemsPerPage, page * itemsPerPage);
-  const activeFilters = Object.entries(filters).filter(([key, value]) => key !== "folderId" && value !== "all").length;
-  const allPageSelected = paginatedLeads.length > 0 && paginatedLeads.every((lead) => selectedIds.includes(lead.id));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredLeads.length / itemsPerPage),
+  );
+  const paginatedLeads = filteredLeads.slice(
+    (page - 1) * itemsPerPage,
+    page * itemsPerPage,
+  );
+  const activeFilters = Object.entries(filters).filter(
+    ([key, value]) => key !== "folderId" && value !== "all",
+  ).length;
+  const allPageSelected =
+    paginatedLeads.length > 0 &&
+    paginatedLeads.every((lead) => selectedIds.includes(lead.id));
 
   const updateFilter = (key: keyof LeadFilters, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -407,12 +562,20 @@ export default function LeadsPage() {
   };
 
   const toggleLead = (id: string) => {
-    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    setSelectedIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
   };
 
   const togglePageSelection = () => {
     const pageIds = paginatedLeads.map((lead) => lead.id);
-    setSelectedIds((current) => allPageSelected ? current.filter((id) => !pageIds.includes(id)) : Array.from(new Set([...current, ...pageIds])));
+    setSelectedIds((current) =>
+      allPageSelected
+        ? current.filter((id) => !pageIds.includes(id))
+        : Array.from(new Set([...current, ...pageIds])),
+    );
   };
 
   const resetFilters = () => {
@@ -430,38 +593,128 @@ export default function LeadsPage() {
     const name = newFolderName.trim();
     if (!name) return;
 
-    try { const { folder } = await leadFoldersAPI.create({ name, description: newFolderDescription.trim() || null, icon: newFolderIcon }); setCustomFolders((current) => [...current, { id: String(folder.id), name: folder.name, description: folder.description || null, icon: folder.icon || 'folder', isSystem: false, leadCount: folder.total, createdAt: new Date().toISOString() }]); } catch (error) { toast({ title: "Não foi possível criar a pasta", description: error instanceof Error ? error.message : "Tente novamente.", variant: "destructive" }); return; }
+    try {
+      const { folder } = await leadFoldersAPI.create({
+        name,
+        description: newFolderDescription.trim() || null,
+        icon: newFolderIcon,
+      });
+      setCustomFolders((current) => [
+        ...current,
+        {
+          id: String(folder.id),
+          name: folder.name,
+          description: folder.description || null,
+          icon: folder.icon || "folder",
+          isSystem: false,
+          leadCount: folder.total,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    } catch (error) {
+      toast({
+        title: "Não foi possível criar a pasta",
+        description:
+          error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
+      return;
+    }
     setNewFolderName("");
     setNewFolderDescription("");
     setNewFolderIcon("folder");
     setFolderDialogOpen(false);
   };
 
-  const openFolderMemberDialog = (ids: string[]) => { setFolderTargetIds(ids); setFolderTarget(""); setFolderMemberDialogOpen(true); };
+  const openFolderMemberDialog = (ids: string[]) => {
+    setFolderTargetIds(ids);
+    setFolderTarget("");
+    setFolderMemberDialogOpen(true);
+  };
   const handleAddToFolder = async () => {
     const folder = customFolders.find((item) => item.id === folderTarget);
     if (!folder) return;
     try {
       await leadFoldersAPI.addMembers(Number(folder.id), folderTargetIds);
       const { folders: refreshed } = await leadFoldersAPI.list();
-      setCustomFolders(refreshed.map((item) => ({ id: String(item.id), name: item.name, description: item.description || null, icon: item.icon || 'folder', isSystem: false, leadCount: item.total, prospectIds: (item.prospect_ids || []).map(String), createdAt: new Date().toISOString() })));
-      setFolderMemberDialogOpen(false); setSelectedIds([]); toast.success("Lead(s) adicionados à pasta.");
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível adicionar à pasta."); }
+      setCustomFolders(
+        refreshed.map((item) => ({
+          id: String(item.id),
+          name: item.name,
+          description: item.description || null,
+          icon: item.icon || "folder",
+          isSystem: false,
+          leadCount: item.total,
+          prospectIds: (item.prospect_ids || []).map(String),
+          createdAt: new Date().toISOString(),
+        })),
+      );
+      setFolderMemberDialogOpen(false);
+      setSelectedIds([]);
+      toast.success("Lead(s) adicionados à pasta.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível adicionar à pasta.",
+      );
+    }
   };
 
   const handleDeleteLead = async () => {
     if (!leadToDelete) return;
-    try { await deleteLead(leadToDelete.id); setSessionLeads((current) => current.filter((item) => item.id !== leadToDelete.id)); setSelectedIds((current) => current.filter((id) => id !== leadToDelete.id)); await reload(); toast.success("Lead excluído."); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível excluir o lead."); }
-    finally { setLeadToDelete(null); }
+    try {
+      await deleteLead(leadToDelete.id);
+      setSessionLeads((current) =>
+        current.filter((item) => item.id !== leadToDelete.id),
+      );
+      setSelectedIds((current) =>
+        current.filter((id) => id !== leadToDelete.id),
+      );
+      await reload();
+      toast.success("Lead excluído.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir o lead.",
+      );
+    } finally {
+      setLeadToDelete(null);
+    }
   };
 
-  const handleLeadFormChange = (key: keyof typeof emptyLeadForm, value: string) => {
+  const handleBulkDelete = async () => {
+    try {
+      const result = await deleteLeads(selectedIds);
+      setSessionLeads((current) =>
+        current.filter((lead) => !selectedIds.includes(lead.id)),
+      );
+      setSelectedIds([]);
+      await reload();
+      setBulkDeleteOpen(false);
+      toast.success(`${result.deleted} lead(s) excluído(s).`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir os leads selecionados.",
+      );
+    }
+  };
+
+  const handleLeadFormChange = (
+    key: keyof typeof emptyLeadForm,
+    value: string,
+  ) => {
     setLeadForm((current) => {
-      if (key === "phone") return { ...current, phone: formatBrazilianPhoneInput(value) };
+      if (key === "phone")
+        return { ...current, phone: formatBrazilianPhoneInput(value) };
       if (key === "state") return { ...current, state: value, city: "" };
-      if (key === "budget" || key === "revenue") return { ...current, [key]: formatBRLInput(value) };
-      if (key === "employees") return { ...current, employees: value.replace(/\D/g, "") };
+      if (key === "budget" || key === "revenue")
+        return { ...current, [key]: formatBRLInput(value) };
+      if (key === "employees")
+        return { ...current, employees: value.replace(/\D/g, "") };
       return { ...current, [key]: value };
     });
   };
@@ -479,7 +732,10 @@ export default function LeadsPage() {
   };
 
   const upsertLocalLead = (lead: Lead) => {
-    setSessionLeads((current) => [lead, ...current.filter((item) => item.id !== lead.id)]);
+    setSessionLeads((current) => [
+      lead,
+      ...current.filter((item) => item.id !== lead.id),
+    ]);
   };
 
   const handleSaveLead = async () => {
@@ -487,7 +743,9 @@ export default function LeadsPage() {
     if (!companyName) return;
 
     const now = new Date().toISOString();
-    const currentLead = editingLeadId ? allLeads.find((lead) => lead.id === editingLeadId) : null;
+    const currentLead = editingLeadId
+      ? allLeads.find((lead) => lead.id === editingLeadId)
+      : null;
     const savedLead: Lead = {
       id: currentLead?.id || `local-${Date.now()}`,
       companyName,
@@ -499,7 +757,9 @@ export default function LeadsPage() {
       state: leadForm.state.trim() || null,
       category: leadForm.category.trim() || null,
       assignedTo: leadForm.assignedTo.trim() || null,
-      assignedUserId: leadForm.assignedUserId ? Number(leadForm.assignedUserId) : null,
+      assignedUserId: leadForm.assignedUserId
+        ? Number(leadForm.assignedUserId)
+        : null,
       source: "manual",
       status: currentLead?.status || "novo",
       score: currentLead?.score || 0,
@@ -518,7 +778,9 @@ export default function LeadsPage() {
         employees: leadForm.employees.trim() || null,
         budget: leadForm.budget.trim() || null,
         notes: leadForm.notes.trim() || null,
-        nextMeetingAt: leadForm.nextMeetingAt ? new Date(leadForm.nextMeetingAt).toISOString() : null,
+        nextMeetingAt: leadForm.nextMeetingAt
+          ? new Date(leadForm.nextMeetingAt).toISOString()
+          : null,
         meetingOwner: leadForm.meetingOwner.trim() || null,
       },
     };
@@ -548,7 +810,11 @@ export default function LeadsPage() {
     const pipelineLead = await persistLeadToPipeline(lead.id);
     const normalizedPipelineLead: Lead = {
       ...pipelineLead,
-      status: pipelineLead.status === "novo" || pipelineLead.status === "nao_contatado" ? "qualificado" : pipelineLead.status,
+      status:
+        pipelineLead.status === "novo" ||
+        pipelineLead.status === "nao_contatado"
+          ? "qualificado"
+          : pipelineLead.status,
       folderId: "pipeline",
       folderName: "Pipeline",
       updatedAt: pipelineLead.updatedAt || now,
@@ -565,14 +831,17 @@ export default function LeadsPage() {
 
     for (const lead of leadsToSend) {
       const persisted = await persistLeadToPipeline(lead.id);
-        const pipelineLead = {
-          ...persisted,
-          status: persisted.status === "novo" || persisted.status === "nao_contatado" ? "qualificado" as LeadStatus : persisted.status,
-          folderId: "pipeline",
-          folderName: "Pipeline",
-          updatedAt: new Date().toISOString(),
-        };
-        upsertLocalLead(pipelineLead);
+      const pipelineLead = {
+        ...persisted,
+        status:
+          persisted.status === "novo" || persisted.status === "nao_contatado"
+            ? ("qualificado" as LeadStatus)
+            : persisted.status,
+        folderId: "pipeline",
+        folderName: "Pipeline",
+        updatedAt: new Date().toISOString(),
+      };
+      upsertLocalLead(pipelineLead);
     }
     await reload();
     setSelectedIds([]);
@@ -586,15 +855,25 @@ export default function LeadsPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Leads</h1>
-            <p className="text-sm text-muted-foreground">Organize pessoas, empresas e contatos comerciais.</p>
+            <p className="text-sm text-muted-foreground">
+              Organize pessoas, empresas e contatos comerciais.
+            </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative min-w-[280px]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="h-10 pl-9" placeholder="Buscar leads, empresas, e-mails..." value={query} onChange={(event) => setQuery(event.target.value)} />
+              <Input
+                className="h-10 pl-9"
+                placeholder="Buscar leads, empresas, e-mails..."
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
             </div>
             <Button variant="outline">Importar</Button>
-            <Button onClick={openCreateLeadDialog}><Plus className="mr-2 h-4 w-4" />Novo Lead</Button>
+            <Button onClick={openCreateLeadDialog}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Lead
+            </Button>
           </div>
         </div>
       </div>
@@ -604,7 +883,9 @@ export default function LeadsPage() {
           <AlertTitle>Erro ao carregar leads</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>{error}</span>
-            <Button variant="outline" size="sm" onClick={() => void reload()}>Tentar novamente</Button>
+            <Button variant="outline" size="sm" onClick={() => void reload()}>
+              Tentar novamente
+            </Button>
           </AlertDescription>
         </Alert>
       ) : null}
@@ -613,7 +894,9 @@ export default function LeadsPage() {
         <aside className="border-r border-border/80 bg-card/60">
           <div className="border-b border-border/70 px-4 py-3">
             <h2 className="text-sm font-semibold">Contatos</h2>
-            <p className="text-xs text-muted-foreground">{allLeads.length} registros no CRM</p>
+            <p className="text-xs text-muted-foreground">
+              {allLeads.length} registros no CRM
+            </p>
           </div>
           <div className="space-y-1 p-3">
             {folders.map((folder) => {
@@ -626,12 +909,14 @@ export default function LeadsPage() {
                   onClick={() => updateFilter("folderId", folder.id)}
                   className={cn(
                     "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-muted",
-                    active && "bg-primary/10 font-medium text-primary"
+                    active && "bg-primary/10 font-medium text-primary",
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{folder.leadCount || 0}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {folder.leadCount || 0}
+                  </span>
                 </button>
               );
             })}
@@ -639,27 +924,49 @@ export default function LeadsPage() {
             <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="mt-3 w-full justify-start">
-                  <FolderPlus className="mr-2 h-4 w-4" />Nova pasta
+                  <FolderPlus className="mr-2 h-4 w-4" />
+                  Nova pasta
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Nova pasta de leads</DialogTitle>
-                  <DialogDescription>Crie a estrutura visual da pasta. A persistência será conectada ao backend MySQL quando esta rotina estiver preparada.</DialogDescription>
+                  <DialogDescription>
+                    Crie a estrutura visual da pasta. A persistência será
+                    conectada ao backend MySQL quando esta rotina estiver
+                    preparada.
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="folder-name">Nome da pasta</Label>
-                    <Input id="folder-name" value={newFolderName} onChange={(event) => setNewFolderName(event.target.value)} />
+                    <Input
+                      id="folder-name"
+                      value={newFolderName}
+                      onChange={(event) => setNewFolderName(event.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="folder-description">Descrição opcional</Label>
-                    <Input id="folder-description" value={newFolderDescription} onChange={(event) => setNewFolderDescription(event.target.value)} />
+                    <Label htmlFor="folder-description">
+                      Descrição opcional
+                    </Label>
+                    <Input
+                      id="folder-description"
+                      value={newFolderDescription}
+                      onChange={(event) =>
+                        setNewFolderDescription(event.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Ícone</Label>
-                    <Select value={newFolderIcon} onValueChange={setNewFolderIcon}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select
+                      value={newFolderIcon}
+                      onValueChange={setNewFolderIcon}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="folder">Pasta</SelectItem>
                         <SelectItem value="circle">Círculo</SelectItem>
@@ -671,8 +978,18 @@ export default function LeadsPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setFolderDialogOpen(false)}>Cancelar</Button>
-                  <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>Criar pasta</Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setFolderDialogOpen(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleCreateFolder}
+                    disabled={!newFolderName.trim()}
+                  >
+                    Criar pasta
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -683,45 +1000,91 @@ export default function LeadsPage() {
           <div className="space-y-4 border-b border-border/70 p-4 md:p-5">
             <div className="flex flex-col gap-3 rounded-md border border-primary/30 bg-primary/10 p-4 text-primary-foreground sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-foreground">Encontre os contatos certos mais rápido</p>
-                <p className="text-xs text-muted-foreground">Use status, origem, cidade e score para priorizar os leads com maior chance de avanço.</p>
+                <p className="text-sm font-semibold text-foreground">
+                  Encontre os contatos certos mais rápido
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Use status, origem, cidade e score para priorizar os leads com
+                  maior chance de avanço.
+                </p>
               </div>
               <Button variant="secondary" size="sm" className="w-fit">
-                <Filter className="mr-2 h-4 w-4" />Aplicar filtro
+                <Filter className="mr-2 h-4 w-4" />
+                Aplicar filtro
               </Button>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">{selectedFolder?.name || "Todos os Leads"}</h2>
-                <p className="text-sm text-muted-foreground">{filteredLeads.length} lead(s) encontrados</p>
+                <h2 className="text-lg font-semibold">
+                  {selectedFolder?.name || "Todos os Leads"}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {filteredLeads.length} lead(s) encontrados
+                </p>
               </div>
-              {activeFilters > 0 ? <Badge variant="secondary">{activeFilters} filtro(s) ativo(s)</Badge> : null}
+              {activeFilters > 0 ? (
+                <Badge variant="secondary">
+                  {activeFilters} filtro(s) ativo(s)
+                </Badge>
+              ) : null}
             </div>
 
             <div className="grid gap-2 md:grid-cols-[repeat(4,minmax(130px,1fr))_auto]">
-              <Select value={filters.status} onValueChange={(value) => updateFilter("status", value)}>
-                <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+              <Select
+                value={filters.status}
+                onValueChange={(value) => updateFilter("status", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos status</SelectItem>
-                  {Object.entries(statusLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                  {Object.entries(statusLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <Select value={filters.source} onValueChange={(value) => updateFilter("source", value)}>
-                <SelectTrigger><SelectValue placeholder="Origem" /></SelectTrigger>
+              <Select
+                value={filters.source}
+                onValueChange={(value) => updateFilter("source", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Origem" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas origens</SelectItem>
-                  {Object.entries(sourceLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                  {Object.entries(sourceLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <Select value={filters.city} onValueChange={(value) => updateFilter("city", value)}>
-                <SelectTrigger><SelectValue placeholder="Cidade" /></SelectTrigger>
+              <Select
+                value={filters.city}
+                onValueChange={(value) => updateFilter("city", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Cidade" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas cidades</SelectItem>
-                  {cities.map((city) => <SelectItem key={city} value={city}>{city}</SelectItem>)}
+                  {cities.map((city) => (
+                    <SelectItem key={city} value={city}>
+                      {city}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <Select value={filters.scoreRange} onValueChange={(value) => updateFilter("scoreRange", value)}>
-                <SelectTrigger><SelectValue placeholder="Score" /></SelectTrigger>
+              <Select
+                value={filters.scoreRange}
+                onValueChange={(value) => updateFilter("scoreRange", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Score" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos scores</SelectItem>
                   <SelectItem value="low">0 a 39</SelectItem>
@@ -730,13 +1093,19 @@ export default function LeadsPage() {
                 </SelectContent>
               </Select>
               <Button variant="outline" onClick={resetFilters}>
-                <X className="mr-2 h-4 w-4" />Limpar
+                <X className="mr-2 h-4 w-4" />
+                Limpar
               </Button>
             </div>
 
             <div className="grid gap-2 md:grid-cols-3">
-              <Select value={filters.contactField} onValueChange={(value) => updateFilter("contactField", value)}>
-                <SelectTrigger><SelectValue placeholder="Contato" /></SelectTrigger>
+              <Select
+                value={filters.contactField}
+                onValueChange={(value) => updateFilter("contactField", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Contato" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos contatos</SelectItem>
                   <SelectItem value="has_whatsapp">Possui WhatsApp</SelectItem>
@@ -745,15 +1114,25 @@ export default function LeadsPage() {
                   <SelectItem value="without_website">Sem website</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={filters.assignedTo} onValueChange={(value) => updateFilter("assignedTo", value)}>
-                <SelectTrigger><SelectValue placeholder="Responsável" /></SelectTrigger>
+              <Select
+                value={filters.assignedTo}
+                onValueChange={(value) => updateFilter("assignedTo", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Responsável" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos responsáveis</SelectItem>
-                  {owners.map((owner) => <SelectItem key={owner} value={owner}>{owner}</SelectItem>)}
+                  {owners.map((owner) => (
+                    <SelectItem key={owner} value={owner}>
+                      {owner}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Button variant="outline" className="justify-start">
-                <Filter className="mr-2 h-4 w-4" />Filtros avançados
+                <Filter className="mr-2 h-4 w-4" />
+                Filtros avançados
               </Button>
             </div>
           </div>
@@ -761,11 +1140,34 @@ export default function LeadsPage() {
           <div className="p-4 md:p-5">
             {selectedIds.length > 0 ? (
               <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-3">
-                <span className="text-sm font-medium">{selectedIds.length} selecionado(s)</span>
-                {["Mover para pasta", "Alterar status", "Atribuir responsável", "Exportar", "Arquivar", "Excluir"].map((action) => (
-                  <Button key={action} variant={action === "Excluir" ? "destructive" : "outline"} size="sm">{action}</Button>
+                <span className="text-sm font-medium">
+                  {selectedIds.length} selecionado(s)
+                </span>
+                {[
+                  "Mover para pasta",
+                  "Alterar status",
+                  "Atribuir responsável",
+                  "Exportar",
+                  "Arquivar",
+                ].map((action) => (
+                  <Button key={action} variant="outline" size="sm">
+                    {action}
+                  </Button>
                 ))}
-                <Button variant="outline" size="sm" onClick={addSelectedToKanban}>Adicionar ao Kanban</Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setBulkDeleteOpen(true)}
+                >
+                  Excluir selecionados
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={addSelectedToKanban}
+                >
+                  Adicionar ao Kanban
+                </Button>
               </div>
             ) : null}
 
@@ -773,14 +1175,29 @@ export default function LeadsPage() {
               <LeadTableSkeleton />
             ) : allLeads.length === 0 ? (
               <div className="rounded-md border border-dashed p-8 text-center">
-                <h3 className="font-semibold">Nenhum lead encontrado na base atual</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Quando a tabela de prospecção receber contatos do n8n ou das buscas, eles aparecerão aqui.</p>
+                <h3 className="font-semibold">
+                  Nenhum lead encontrado na base atual
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Quando a tabela de prospecção receber contatos do n8n ou das
+                  buscas, eles aparecerão aqui.
+                </p>
               </div>
             ) : filteredLeads.length === 0 ? (
               <div className="rounded-md border border-dashed p-8 text-center">
-                <h3 className="font-semibold">Nenhum resultado para os filtros atuais</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Ajuste a busca ou limpe os filtros para visualizar mais leads.</p>
-                <Button variant="outline" className="mt-4" onClick={resetFilters}>Limpar filtros</Button>
+                <h3 className="font-semibold">
+                  Nenhum resultado para os filtros atuais
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Ajuste a busca ou limpe os filtros para visualizar mais leads.
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={resetFilters}
+                >
+                  Limpar filtros
+                </Button>
               </div>
             ) : (
               <>
@@ -788,14 +1205,19 @@ export default function LeadsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-10"><Checkbox checked={allPageSelected} onCheckedChange={togglePageSelection} /></TableHead>
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={allPageSelected}
+                            onCheckedChange={togglePageSelection}
+                          />
+                        </TableHead>
                         <TableHead>Nome</TableHead>
                         <TableHead>Organização</TableHead>
                         <TableHead>E-mail</TableHead>
                         <TableHead>Telefone</TableHead>
                         <TableHead>Cidade</TableHead>
-                         <TableHead>Orçamento</TableHead>
-                         <TableHead>Origem</TableHead>
+                        <TableHead>Orçamento</TableHead>
+                        <TableHead>Origem</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Responsável</TableHead>
                         <TableHead>Último contato</TableHead>
@@ -812,65 +1234,186 @@ export default function LeadsPage() {
 
                         return (
                           <TableRow key={lead.id} className="h-16">
-                            <TableCell><Checkbox checked={selectedIds.includes(lead.id)} onCheckedChange={() => toggleLead(lead.id)} /></TableCell>
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedIds.includes(lead.id)}
+                                onCheckedChange={() => toggleLead(lead.id)}
+                              />
+                            </TableCell>
                             <TableCell className="min-w-[240px]">
                               <div className="flex items-center gap-3">
                                 <Avatar className="h-9 w-9 border border-border/70 bg-muted">
-                                  <AvatarFallback>{leadName.slice(0, 1).toUpperCase()}</AvatarFallback>
+                                  <AvatarFallback>
+                                    {leadName.slice(0, 1).toUpperCase()}
+                                  </AvatarFallback>
                                 </Avatar>
                                 <div className="min-w-0">
-                                  <button type="button" className="truncate text-left font-medium hover:text-primary hover:underline" onClick={() => navigate(getLeadPath(lead))}>
+                                  <button
+                                    type="button"
+                                    className="truncate text-left font-medium hover:text-primary hover:underline"
+                                    onClick={() => navigate(getLeadPath(lead))}
+                                  >
                                     {leadName}
                                   </button>
                                   <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                                    <UserRound className="h-3 w-3" />{lead.category || "Sem categoria"}
+                                    <UserRound className="h-3 w-3" />
+                                    {lead.category || "Sem categoria"}
                                   </p>
                                 </div>
                               </div>
                             </TableCell>
                             <TableCell className="min-w-[210px]">
                               <div className="min-w-0">
-                                <p className="flex items-center gap-1 truncate font-medium"><Building2 className="h-3.5 w-3.5 text-muted-foreground" />{organization}</p>
+                                <p className="flex items-center gap-1 truncate font-medium">
+                                  <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                  {organization}
+                                </p>
                                 <p className="truncate text-xs text-muted-foreground">
-                                  {websiteUrl ? <a className="inline-flex items-center gap-1 hover:text-primary" href={websiteUrl} target="_blank" rel="noreferrer">{getWebsiteDomain(websiteUrl)}<ExternalLink className="h-3 w-3" /></a> : "Sem site"}
+                                  {websiteUrl ? (
+                                    <a
+                                      className="inline-flex items-center gap-1 hover:text-primary"
+                                      href={websiteUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      {getWebsiteDomain(websiteUrl)}
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  ) : (
+                                    "Sem site"
+                                  )}
                                 </p>
                               </div>
                             </TableCell>
                             <TableCell className="min-w-[220px]">
-                              {email ? <a className="inline-flex items-center gap-1 text-primary hover:underline" href={`mailto:${email}`}><Mail className="h-3.5 w-3.5" />{email}</a> : "Sem e-mail"}
+                              {email ? (
+                                <a
+                                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                                  href={`mailto:${email}`}
+                                >
+                                  <Mail className="h-3.5 w-3.5" />
+                                  {email}
+                                </a>
+                              ) : (
+                                "Sem e-mail"
+                              )}
                             </TableCell>
                             <TableCell className="min-w-[170px]">
                               <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center gap-1"><Phone className="h-3.5 w-3.5 text-muted-foreground" />{formatPhone(lead.phone)}</span>
-                                {whatsappUrl ? <Button variant="ghost" size="icon" className="h-7 w-7" asChild><a href={whatsappUrl} target="_blank" rel="noreferrer"><Send className="h-4 w-4" /></a></Button> : null}
+                                <span className="inline-flex items-center gap-1">
+                                  <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                                  {formatPhone(lead.phone)}
+                                </span>
+                                {whatsappUrl ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    asChild
+                                  >
+                                    <a
+                                      href={whatsappUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      <Send className="h-4 w-4" />
+                                    </a>
+                                  </Button>
+                                ) : null}
                               </div>
                             </TableCell>
-                            <TableCell>{[lead.city, lead.state].filter(Boolean).join(" / ") || "Não informada"}</TableCell>
-                            <TableCell className="whitespace-nowrap font-medium text-primary">{formatLeadBudget(lead)}</TableCell>
+                            <TableCell>
+                              {[lead.city, lead.state]
+                                .filter(Boolean)
+                                .join(" / ") || "Não informada"}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap font-medium text-primary">
+                              {formatLeadBudget(lead)}
+                            </TableCell>
                             <TableCell>{sourceLabels[lead.source]}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <Badge className={getStatusClass(lead.status)}>{statusLabels[lead.status]}</Badge>
-                                <Badge variant="outline" className={getScoreClass(lead.score)}>{lead.score || 0}</Badge>
+                                <Badge className={getStatusClass(lead.status)}>
+                                  {statusLabels[lead.status]}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className={getScoreClass(lead.score)}
+                                >
+                                  {lead.score || 0}
+                                </Badge>
                               </div>
                             </TableCell>
-                            <TableCell>{lead.assignedTo || "Sem responsável"}</TableCell>
-                            <TableCell>{formatDate(lead.lastContactAt)}</TableCell>
+                            <TableCell>
+                              {lead.assignedTo || "Sem responsável"}
+                            </TableCell>
+                            <TableCell>
+                              {formatDate(lead.lastContactAt)}
+                            </TableCell>
                             <TableCell>
                               <DropdownMenu>
-                                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => navigate(getLeadPath(lead))}>Ver lead</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => openEditLeadDialog(lead)}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
-                                  {whatsappUrl ? <DropdownMenuItem asChild><a href={whatsappUrl} target="_blank" rel="noreferrer">Abrir WhatsApp</a></DropdownMenuItem> : null}
-                                  {email ? <DropdownMenuItem asChild><a href={`mailto:${email}`}>Enviar e-mail</a></DropdownMenuItem> : null}
-                                  <DropdownMenuItem onClick={() => openFolderMemberDialog([lead.id])}>Mover para pasta</DropdownMenuItem>
-                                  <DropdownMenuItem>Alterar status</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => addLeadToKanban(lead)}>Adicionar ao Kanban</DropdownMenuItem>
-                                  <DropdownMenuItem>Criar tarefa</DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => navigate(getLeadPath(lead))}
+                                  >
+                                    Ver lead
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => openEditLeadDialog(lead)}
+                                  >
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                  {whatsappUrl ? (
+                                    <DropdownMenuItem asChild>
+                                      <a
+                                        href={whatsappUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        Abrir WhatsApp
+                                      </a>
+                                    </DropdownMenuItem>
+                                  ) : null}
+                                  {email ? (
+                                    <DropdownMenuItem asChild>
+                                      <a href={`mailto:${email}`}>
+                                        Enviar e-mail
+                                      </a>
+                                    </DropdownMenuItem>
+                                  ) : null}
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      openFolderMemberDialog([lead.id])
+                                    }
+                                  >
+                                    Mover para pasta
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem>
+                                    Alterar status
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => addLeadToKanban(lead)}
+                                  >
+                                    Adicionar ao Kanban
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem>
+                                    Criar tarefa
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem>Arquivar</DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-destructive" onClick={() => setLeadToDelete(lead)}><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => setLeadToDelete(lead)}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Excluir
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>
@@ -885,13 +1428,27 @@ export default function LeadsPage() {
                   {paginatedLeads.map((lead) => (
                     <div key={lead.id} className="rounded-md border p-4">
                       <div className="flex items-start gap-3">
-                        <Checkbox checked={selectedIds.includes(lead.id)} onCheckedChange={() => toggleLead(lead.id)} />
+                        <Checkbox
+                          checked={selectedIds.includes(lead.id)}
+                          onCheckedChange={() => toggleLead(lead.id)}
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium">{lead.companyName}</p>
-                          <p className="text-sm text-muted-foreground">{[lead.city, lead.state].filter(Boolean).join(" / ") || "Não informada"}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {[lead.city, lead.state]
+                              .filter(Boolean)
+                              .join(" / ") || "Não informada"}
+                          </p>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <Badge variant="outline" className={getScoreClass(lead.score)}>{lead.score || 0}</Badge>
-                            <Badge className={getStatusClass(lead.status)}>{statusLabels[lead.status]}</Badge>
+                            <Badge
+                              variant="outline"
+                              className={getScoreClass(lead.score)}
+                            >
+                              {lead.score || 0}
+                            </Badge>
+                            <Badge className={getStatusClass(lead.status)}>
+                              {statusLabels[lead.status]}
+                            </Badge>
                           </div>
                         </div>
                       </div>
@@ -919,8 +1476,14 @@ export default function LeadsPage() {
       <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>{editingLeadId ? "Editar lead" : "Novo lead"}</DialogTitle>
-            <DialogDescription>{editingLeadId ? "Atualize as informações principais do contato comercial." : "Cadastre as informações principais do contato comercial."}</DialogDescription>
+            <DialogTitle>
+              {editingLeadId ? "Editar lead" : "Novo lead"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingLeadId
+                ? "Atualize as informações principais do contato comercial."
+                : "Cadastre as informações principais do contato comercial."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid max-h-[68vh] gap-4 overflow-y-auto pr-2 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
@@ -928,7 +1491,9 @@ export default function LeadsPage() {
               <Input
                 id="lead-company"
                 value={leadForm.companyName}
-                onChange={(event) => handleLeadFormChange("companyName", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("companyName", event.target.value)
+                }
                 placeholder="Nome da empresa"
               />
             </div>
@@ -937,19 +1502,28 @@ export default function LeadsPage() {
               <Input
                 id="lead-contact"
                 value={leadForm.contactName}
-                onChange={(event) => handleLeadFormChange("contactName", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("contactName", event.target.value)
+                }
                 placeholder="Pessoa responsável"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="lead-category">Setor</Label>
-              <Select value={leadForm.category || undefined} onValueChange={(value) => handleLeadFormChange("category", value)}>
+              <Select
+                value={leadForm.category || undefined}
+                onValueChange={(value) =>
+                  handleLeadFormChange("category", value)
+                }
+              >
                 <SelectTrigger id="lead-category">
                   <SelectValue placeholder="Selecione o setor" />
                 </SelectTrigger>
                 <SelectContent>
                   {LEAD_SECTORS.map((sector) => (
-                    <SelectItem key={sector} value={sector}>{sector}</SelectItem>
+                    <SelectItem key={sector} value={sector}>
+                      {sector}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -959,7 +1533,9 @@ export default function LeadsPage() {
               <Input
                 id="lead-email"
                 value={leadForm.email}
-                onChange={(event) => handleLeadFormChange("email", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("email", event.target.value)
+                }
                 placeholder="contato@empresa.com"
               />
             </div>
@@ -968,7 +1544,9 @@ export default function LeadsPage() {
               <Input
                 id="lead-phone"
                 value={leadForm.phone}
-                onChange={(event) => handleLeadFormChange("phone", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("phone", event.target.value)
+                }
                 placeholder="(00) 00000-0000"
               />
             </div>
@@ -977,7 +1555,9 @@ export default function LeadsPage() {
               <Input
                 id="lead-website"
                 value={leadForm.website}
-                onChange={(event) => handleLeadFormChange("website", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("website", event.target.value)
+                }
                 placeholder="empresa.com.br"
               />
             </div>
@@ -986,7 +1566,9 @@ export default function LeadsPage() {
               <Input
                 id="lead-linkedin"
                 value={leadForm.linkedin}
-                onChange={(event) => handleLeadFormChange("linkedin", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("linkedin", event.target.value)
+                }
                 placeholder="linkedin.com/company/empresa"
               />
             </div>
@@ -995,7 +1577,9 @@ export default function LeadsPage() {
               <Input
                 id="lead-budget"
                 value={leadForm.budget}
-                onChange={(event) => handleLeadFormChange("budget", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("budget", event.target.value)
+                }
                 placeholder="R$ 0,00"
               />
             </div>
@@ -1004,7 +1588,9 @@ export default function LeadsPage() {
               <Input
                 id="lead-revenue"
                 value={leadForm.revenue}
-                onChange={(event) => handleLeadFormChange("revenue", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("revenue", event.target.value)
+                }
                 placeholder="R$ 0,00"
               />
             </div>
@@ -1013,33 +1599,56 @@ export default function LeadsPage() {
               <Input
                 id="lead-employees"
                 value={leadForm.employees}
-                onChange={(event) => handleLeadFormChange("employees", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("employees", event.target.value)
+                }
                 placeholder="Ex.: 25"
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-[1fr_88px]">
               <div className="space-y-2">
                 <Label htmlFor="lead-city">Cidade</Label>
-                <Select value={leadForm.city || undefined} onValueChange={(value) => handleLeadFormChange("city", value)} disabled={!leadForm.state || citiesLoading}>
+                <Select
+                  value={leadForm.city || undefined}
+                  onValueChange={(value) => handleLeadFormChange("city", value)}
+                  disabled={!leadForm.state || citiesLoading}
+                >
                   <SelectTrigger id="lead-city">
-                    <SelectValue placeholder={leadForm.state ? (citiesLoading ? "Carregando..." : "Selecione") : "Escolha a UF"} />
+                    <SelectValue
+                      placeholder={
+                        leadForm.state
+                          ? citiesLoading
+                            ? "Carregando..."
+                            : "Selecione"
+                          : "Escolha a UF"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {cityOptions.map((city) => (
-                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                      <SelectItem key={city} value={city}>
+                        {city}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lead-state">UF</Label>
-                <Select value={leadForm.state || undefined} onValueChange={(value) => handleLeadFormChange("state", value)}>
+                <Select
+                  value={leadForm.state || undefined}
+                  onValueChange={(value) =>
+                    handleLeadFormChange("state", value)
+                  }
+                >
                   <SelectTrigger id="lead-state">
                     <SelectValue placeholder="UF" />
                   </SelectTrigger>
                   <SelectContent>
                     {BRAZILIAN_STATES.map((state) => (
-                      <SelectItem key={state.uf} value={state.uf}>{state.uf}</SelectItem>
+                      <SelectItem key={state.uf} value={state.uf}>
+                        {state.uf}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1050,7 +1659,9 @@ export default function LeadsPage() {
               <Input
                 id="lead-address"
                 value={leadForm.address}
-                onChange={(event) => handleLeadFormChange("address", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("address", event.target.value)
+                }
                 placeholder="Rua, número, bairro"
               />
             </div>
@@ -1060,15 +1671,21 @@ export default function LeadsPage() {
                 id="lead-meeting-date"
                 type="datetime-local"
                 value={leadForm.nextMeetingAt}
-                onChange={(event) => handleLeadFormChange("nextMeetingAt", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("nextMeetingAt", event.target.value)
+                }
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lead-meeting-owner">Responsável pela reunião</Label>
+              <Label htmlFor="lead-meeting-owner">
+                Responsável pela reunião
+              </Label>
               <Input
                 id="lead-meeting-owner"
                 value={leadForm.meetingOwner}
-                onChange={(event) => handleLeadFormChange("meetingOwner", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("meetingOwner", event.target.value)
+                }
                 placeholder="Nome do responsável"
               />
             </div>
@@ -1077,7 +1694,9 @@ export default function LeadsPage() {
               <LeadLabelPicker
                 labels={leadForm.labels}
                 availableLabels={availableLabels}
-                onChange={(labels) => setLeadForm((current) => ({ ...current, labels }))}
+                onChange={(labels) =>
+                  setLeadForm((current) => ({ ...current, labels }))
+                }
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
@@ -1085,56 +1704,152 @@ export default function LeadsPage() {
               <Input
                 id="lead-notes"
                 value={leadForm.notes}
-                onChange={(event) => handleLeadFormChange("notes", event.target.value)}
+                onChange={(event) =>
+                  handleLeadFormChange("notes", event.target.value)
+                }
                 placeholder="Contexto inicial, dores e próximos passos"
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="lead-owner">Responsável</Label>
-              <Select value={leadForm.assignedUserId || "unassigned"} onValueChange={(value) => {
-                if (value === "unassigned") {
-                  setLeadForm((current) => ({ ...current, assignedUserId: "", assignedTo: "" }));
-                  return;
-                }
-                const selected = userOptions.find((user) => String(user.id) === value);
-                setLeadForm((current) => ({ ...current, assignedUserId: value, assignedTo: selected?.name || "" }));
-              }}>
-                <SelectTrigger id="lead-owner"><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
-                <SelectContent><SelectItem value="unassigned">Sem responsável</SelectItem>{userOptions.map((user) => <SelectItem key={user.id} value={String(user.id)}>{user.name} ({user.email})</SelectItem>)}</SelectContent>
+              <Select
+                value={leadForm.assignedUserId || "unassigned"}
+                onValueChange={(value) => {
+                  if (value === "unassigned") {
+                    setLeadForm((current) => ({
+                      ...current,
+                      assignedUserId: "",
+                      assignedTo: "",
+                    }));
+                    return;
+                  }
+                  const selected = userOptions.find(
+                    (user) => String(user.id) === value,
+                  );
+                  setLeadForm((current) => ({
+                    ...current,
+                    assignedUserId: value,
+                    assignedTo: selected?.name || "",
+                  }));
+                }}
+              >
+                <SelectTrigger id="lead-owner">
+                  <SelectValue placeholder="Selecione o responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Sem responsável</SelectItem>
+                  {userOptions.map((user) => (
+                    <SelectItem key={user.id} value={String(user.id)}>
+                      {user.name} ({user.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setLeadDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveLead} disabled={!leadForm.companyName.trim() || savingLead}>
-              <Plus className="mr-2 h-4 w-4" />{savingLead ? "Salvando..." : editingLeadId ? "Salvar lead" : "Adicionar lead"}
+            <Button variant="outline" onClick={() => setLeadDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveLead}
+              disabled={!leadForm.companyName.trim() || savingLead}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              {savingLead
+                ? "Salvando..."
+                : editingLeadId
+                  ? "Salvar lead"
+                  : "Adicionar lead"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={folderMemberDialogOpen} onOpenChange={setFolderMemberDialogOpen}>
+      <Dialog
+        open={folderMemberDialogOpen}
+        onOpenChange={setFolderMemberDialogOpen}
+      >
         <DialogContent>
-          <DialogHeader><DialogTitle>Adicionar lead à pasta</DialogTitle><DialogDescription>Escolha uma pasta manual para salvar a associação.</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Adicionar lead à pasta</DialogTitle>
+            <DialogDescription>
+              Escolha uma pasta manual para salvar a associação.
+            </DialogDescription>
+          </DialogHeader>
           <Select value={folderTarget} onValueChange={setFolderTarget}>
-            <SelectTrigger><SelectValue placeholder="Selecione uma pasta" /></SelectTrigger>
-            <SelectContent>{customFolders.map((folder) => <SelectItem value={folder.id} key={folder.id}>{folder.name}</SelectItem>)}</SelectContent>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione uma pasta" />
+            </SelectTrigger>
+            <SelectContent>
+              {customFolders.map((folder) => (
+                <SelectItem value={folder.id} key={folder.id}>
+                  {folder.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
-          <DialogFooter><Button variant="outline" onClick={() => setFolderMemberDialogOpen(false)}>Cancelar</Button><Button disabled={!folderTarget} onClick={() => void handleAddToFolder()}>Adicionar</Button></DialogFooter>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setFolderMemberDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={!folderTarget}
+              onClick={() => void handleAddToFolder()}
+            >
+              Adicionar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={Boolean(leadToDelete)} onOpenChange={(open) => !open && setLeadToDelete(null)}>
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir lead</AlertDialogTitle>
+            <AlertDialogTitle>
+              Excluir {selectedIds.length} leads?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação exigirá integração de exclusão com o backend antes de remover dados reais. O lead selecionado foi marcado apenas para confirmação visual nesta etapa.
+              Esta ação removerá os leads selecionados e não poderá ser
+              desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void handleDeleteLead()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirmar</AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => void handleBulkDelete()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(leadToDelete)}
+        onOpenChange={(open) => !open && setLeadToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lead</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação exigirá integração de exclusão com o backend antes de
+              remover dados reais. O lead selecionado foi marcado apenas para
+              confirmação visual nesta etapa.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleDeleteLead()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Confirmar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -76,6 +76,22 @@ router.delete('/:id', async (req, res) => {
   } catch (error) { errorResponse(res, error); }
 });
 
+router.put('/:id/audience', async (req, res) => {
+  try {
+    const campaign = await campaignForUser(req.params.id, req.userId);
+    if (campaign.status !== 'draft') throw new campaigns.BroadcastCampaignError(409, 'CAMPAIGN_NOT_EDITABLE');
+    const folderIds = [...new Set((Array.isArray(req.body?.folder_ids) ? req.body.folder_ids : []).map(parseId).filter(Boolean))];
+    const rows = folderIds.length ? await query(`SELECT DISTINCT p.id, p.business_name, p.normalized_phone
+      FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id JOIN prospects p ON p.id = m.prospect_id
+      WHERE f.owner_user_id = ? AND m.folder_id IN (${folderIds.map(() => '?').join(',')})`, [req.userId, ...folderIds]) : { rows: [] };
+    const eligible = (rows.rows || []).filter((row) => row.normalized_phone);
+    await query('DELETE FROM broadcast_campaign_recipients WHERE campaign_id = ?', [campaign.id]);
+    const added = await campaigns.addRecipients(campaign.id, req.userId, eligible.map((row) => ({ prospectId: row.id, phone: row.normalized_phone, name: row.business_name })));
+    await writeEvent(campaign.id, req.userId, 'recipients_added', { source: 'folders', folder_ids: folderIds, requested: rows.rows?.length || 0, added: added.recipientIds.length, replaced: true });
+    res.json({ folder_ids: folderIds, selected_folders: folderIds.length, eligible: added.recipientIds.length, missing_phone: (rows.rows || []).length - eligible.length });
+  } catch (error) { errorResponse(res, error); }
+});
+
 router.get('/audience/preview', async (req, res) => {
   try {
     const params = [req.userId]; const conditions = ['p.owner_user_id = ?']; const q = String(req.query.search || '').trim().slice(0, 100);
@@ -102,18 +118,12 @@ router.get('/audience/preview', async (req, res) => {
 
 router.get('/audience/folders', async (req, res) => {
   try {
-    const names = { 'todos-os-leads': 'Todos os Leads', novos: 'Novos', qualificados: 'Qualificados', 'sem-site': 'Sem Site', 'follow-up': 'Follow-up', convertidos: 'Convertidos', arquivados: 'Arquivados' };
     const manual = await query(`SELECT f.id, f.name, f.description, COUNT(m.prospect_id) AS total,
       SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone
       FROM lead_folders f LEFT JOIN lead_folder_members m ON m.folder_id = f.id
       LEFT JOIN prospects p ON p.id = m.prospect_id
       WHERE f.owner_user_id = ? GROUP BY f.id ORDER BY f.name`, [req.userId]);
-    const folders = await Promise.all(Object.entries(FOLDER_SEGMENTS).map(async ([id, condition]) => {
-      const result = await query(`SELECT COUNT(*) AS total, SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone FROM prospects p WHERE p.owner_user_id = ? AND ${condition}`, [req.userId]);
-      const row = result.rows?.[0] || {};
-      return { id, name: names[id], total: Number(row.total || 0), with_phone: Number(row.with_phone || 0) };
-    }));
-    res.json({ folders, manual_folders: (manual.rows || []).map((row) => ({ id: Number(row.id), name: row.name, description: row.description, total: Number(row.total || 0), with_phone: Number(row.with_phone || 0) })) });
+    res.json({ manual_folders: (manual.rows || []).map((row) => ({ id: Number(row.id), name: row.name, description: row.description, total: Number(row.total || 0), with_phone: Number(row.with_phone || 0) })) });
   } catch (error) { errorResponse(res, error); }
 });
 
