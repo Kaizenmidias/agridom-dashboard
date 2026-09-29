@@ -10,6 +10,14 @@ router.use(authenticateToken, requireCommercialAccess);
 const idOf = (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
 const clean = (value, max = 100000) => String(value || '').trim().slice(0, max);
 const jsonObject = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+const parseJsonField = (value, fallback, fieldName) => {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'object') return value;
+  if (typeof value === 'string') {
+    try { return JSON.parse(value); } catch (error) { console.error('Invalid agent JSON field:', { field: fieldName, error: error.message }); return fallback; }
+  }
+  return fallback;
+};
 
 async function audit(agentId, actorUserId, action, metadata = {}) {
   await query('INSERT INTO ai_agent_audit (agent_id, actor_user_id, action, metadata) VALUES (?, ?, ?, ?)', [agentId || null, actorUserId || null, action, JSON.stringify(metadata)]);
@@ -21,7 +29,7 @@ async function getAgent(agentId, includePrompt = true) {
     WHERE a.id = ? GROUP BY a.id`, [agentId]);
   const rows = result.rows || [];
   if (!rows[0]) return null;
-  const agent = { ...rows[0], model_config: rows[0].model_config ? JSON.parse(rows[0].model_config) : {}, total_tokens: Number(rows[0].total_tokens), usage_count: Number(rows[0].usage_count) };
+  const agent = { ...rows[0], model_config: parseJsonField(rows[0].model_config, {}, 'model_config'), total_tokens: Number(rows[0].total_tokens), usage_count: Number(rows[0].usage_count) };
   if (!includePrompt) delete agent.system_prompt;
   const permissionsResult = await query('SELECT permission_key, enabled FROM ai_agent_permissions WHERE agent_id = ? ORDER BY permission_key', [agentId]);
   const bindingsResult = await query(`SELECT b.id, b.mode, b.status, b.communication_account_id, c.display_name, c.phone_number, c.status AS account_status
@@ -66,7 +74,7 @@ router.post('/', requireCommercialAdmin, async (req, res) => {
     await savePermissions(agentId, req.body?.permissions);
     await audit(agentId, req.userId, 'created');
     res.status(201).json({ agent: await getAgent(agentId) });
-  } catch (error) { console.error('Erro ao criar agente:', error); res.status(500).json({ error: 'Nao foi possivel criar o agente.' }); }
+  } catch (error) { console.error('Erro ao criar agente:', { code: error.code, message: error.message }); res.status(500).json({ error: 'Nao foi possivel criar o agente.', code: 'AGENT_CREATE_FAILED' }); }
 });
 
 async function savePermissions(agentId, permissions) {
@@ -120,3 +128,4 @@ router.post('/:id/test', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.parseJsonField = parseJsonField;
