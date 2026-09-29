@@ -271,6 +271,7 @@ async function handleMessageSend(req, res, requestedType, text) {
         providerErrorCode: error?.providerErrorCode || null,
         providerErrorType: error?.providerErrorType || null,
         providerMessage: error?.providerMessage || null,
+        providerRequestShape: error?.providerRequestShape || null,
         errorCode,
         ...safeDatabaseError(error),
         leadId: conversation.lead_id ? Number(conversation.lead_id) : null,

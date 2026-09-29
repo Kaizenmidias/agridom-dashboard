@@ -43,6 +43,26 @@ test('Evolution provider sends the v2 text payload and never exposes credentials
   assert.equal(error.providerMessage, 'REDACTED rejected');
 });
 
+test('Evolution 400 diagnostics extract object, nested and string response bodies safely', () => {
+  const cases = [
+    { data: { status: 400, error: 'Bad Request', message: ['destination invalid'] }, message: 'destination invalid' },
+    { data: { response: { message: ['invalid number'] } }, message: 'invalid number' },
+    { data: 'Bad Request', message: 'Bad Request' },
+  ];
+  for (const item of cases) {
+    const error = providerError('A Evolution recusou a operacao.', 'EVOLUTION_REQUEST_FAILED', false, { status: 400, response: { data: item.data }, config: { method: 'post', url: 'https://evolution.example.com/message/sendText/instance-1', data: { number: '5511999999999', text: 'Ola', linkPreview: false } } });
+    assert.equal(error.providerStatus, 400);
+    assert.match(error.providerMessage, new RegExp(item.message));
+    assert.deepEqual(error.providerRequestShape, { endpoint: '/message/sendText/instance-1', payloadKeys: ['linkPreview', 'number', 'text'], hasNumber: true, numberLength: 13, numberCountryPrefix: '55', hasText: true, textLength: 3, instancePresent: true });
+  }
+});
+
+test('Evolution diagnostics redact credential-like response content', () => {
+  const error = providerError('A Evolution recusou a operacao.', 'EVOLUTION_REQUEST_FAILED', false, { status: 400, response: { data: { message: 'apikey=abc token=xyz authorization=Bearer secret password=pass credential=cred' } } });
+  assert.doesNotMatch(error.providerMessage, /abc|xyz|Bearer|secret|pass|cred/);
+  assert.match(error.providerMessage, /REDACTED/);
+});
+
 test('Evolution provider builds the v2 media payload without a data URL prefix', async () => {
   const provider = new EvolutionWhatsAppProvider({ baseUrl: 'https://evolution.example.com', apiKey: 'secret-key' });
   let captured;

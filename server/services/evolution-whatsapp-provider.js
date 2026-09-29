@@ -8,15 +8,42 @@ const clean = (value, fallback = "EVOLUTION_ERROR") =>
     .slice(0, 300);
 const safeProviderMessage = (value) =>
   clean(
-    String(value || "")
+    String(Array.isArray(value)
+      ? value.map((item) => (typeof item === "object" ? item?.message || item?.error || "" : item)).join("; ")
+      : typeof value === "object"
+        ? value?.message || value?.error || ""
+        : value || "")
       .replace(/[A-Za-z0-9+/]{80,}={0,2}/g, "[redacted]")
       .replace(/\b\d{7,}\b/g, "[redacted]")
       .replace(
-        /(?:secret|api[_ -]?key|authorization|token)[^ ]*/gi,
+        /(?:secret|api[_ -]?key|authorization|token|password|credential)[^\s,:;]*/gi,
         "[REDACTED]",
       ),
     "",
   );
+
+const providerResponseData = (data) => {
+  if (typeof data === "string" || Array.isArray(data)) return data;
+  if (!data || typeof data !== "object") return "";
+  return data.message ?? data.response?.message ?? data.error?.message ?? data.error ?? data;
+};
+
+const providerRequestShape = (config) => {
+  if (!config) return null;
+  const payload = config.data && typeof config.data === "string" ? (() => { try { return JSON.parse(config.data); } catch { return {}; } })() : config.data || {};
+  const number = payload.number == null ? "" : String(payload.number);
+  const path = String(config.url || "").replace(/https?:\/\/[^/]+/i, "");
+  return {
+    endpoint: path.slice(0, 180),
+    payloadKeys: Object.keys(payload).sort().slice(0, 20),
+    hasNumber: Boolean(number),
+    numberLength: number ? number.length : 0,
+    numberCountryPrefix: number.startsWith("55") ? "55" : null,
+    hasText: Boolean(payload.text),
+    textLength: payload.text == null ? 0 : String(payload.text).length,
+    instancePresent: /\/message\/[^/]+\/[^/]+/.test(path),
+  };
+};
 
 function providerError(message, code, retryable = false, cause) {
   const error = new Error(message);
@@ -31,14 +58,20 @@ function providerError(message, code, retryable = false, cause) {
   // Provider responses can echo credentials or message content; keep diagnostics code-only.
   error.providerDetail = clean(cause?.code || code, code);
   const data = cause?.response?.data;
-  error.providerErrorCode = clean(data?.code || data?.errorCode || "", "");
+  const responseData = providerResponseData(data);
+  error.providerErrorCode = clean(
+    (typeof data === "object" && !Array.isArray(data) ? data.code || data.errorCode : "") || "",
+    "",
+  );
   error.providerCode =
     error.providerErrorCode ||
-    clean(data?.status || data?.error?.code || "", "");
-  error.providerErrorType = clean(data?.type || data?.error || "", "");
-  error.providerMessage = safeProviderMessage(
-    data?.message || data?.error?.message || "",
+    clean(typeof data === "object" && !Array.isArray(data) ? data.status || data.error?.code : "", "");
+  error.providerErrorType = clean(
+    typeof data === "object" && !Array.isArray(data) ? data.type || data.error?.type || data.error : "",
+    "",
   );
+  error.providerMessage = safeProviderMessage(responseData);
+  error.providerRequestShape = providerRequestShape(cause?.config);
   error.operation = cause?.config
     ? `${String(cause.config.method || "").toUpperCase()} ${String(cause.config.url || "").replace(/https?:\/\/[^/]+/i, "")}`.slice(
         0,
