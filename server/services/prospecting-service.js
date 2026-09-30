@@ -63,7 +63,7 @@ function normalize(item) {
   const normalizedWebsite = website(item.website || item.url);
   const social = item.socialMedia || item.socialProfiles || {};
   return {
-    company_name: text(item.name || item.businessName || item.placeName || item.title) || 'Empresa sem nome',
+    company_name: text(item.title || item.businessName || item.name || item.placeName),
     category: text(item.categoryName || item.category || (Array.isArray(item.categories) ? item.categories[0] : null)),
     address: text(item.address || item.street), city: text(item.city), state: text(item.state),
     phone: text(item.phoneNumber || item.phone || item.internationalPhone || item.telephone), normalized_phone: normalizedPhone,

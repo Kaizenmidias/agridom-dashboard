@@ -34,18 +34,25 @@ test('PROSPECCAO normaliza search_parameters JSON do job antes do provider', () 
   assert.deepEqual(normalizeIntegrationMetadata(JSON.stringify(objectParameters)), objectParameters);
 });
 
-test('PROSPECCAO normaliza dados reais do Google Maps sem inventar enriquecimento', () => {
-  const result = normalize({ name: 'Empresa X', title: 'Accounting firm', categoryName: 'Contabilidade', phoneNumber: '(71) 99999-9999', website: 'https://www.Example.com/site', url: 'https://maps.google.com/example', placeId: 'ChIJexample', address: 'Rua A', totalScore: 4.8, reviewsCount: 12 });
-  assert.equal(result.company_name, 'Empresa X');
-  assert.equal(result.category, 'Contabilidade');
-  assert.equal(result.normalized_phone, '5571999999999');
+test('PROSPECCAO normaliza fixture realista do Compass sem inventar enriquecimento', () => {
+  const result = normalize({ title: 'Escritorio Exemplo Contabilidade Campinas', categoryName: 'Accountant', categories: ['Accountant', 'Accounting firm'], searchString: 'Contabilidade em campinas', phone: '(00) 0000-0000', phoneUnformatted: '+550000000000', website: 'https://example.com', url: 'https://www.google.com/maps/example', placeId: 'example-place-id', address: 'Rua A', city: 'Campinas', state: 'Sao Paulo', totalScore: 5, reviewsCount: 536 });
+  assert.equal(result.company_name, 'Escritorio Exemplo Contabilidade Campinas');
+  assert.equal(result.category, 'Accountant');
+  assert.equal(result.normalized_phone, '550000000000');
   assert.equal(result.normalized_website_domain, 'example.com');
-  assert.equal(result.rating, 4.8);
-  assert.equal(result.review_count, 12);
-  assert.equal(result.google_maps_url, 'https://maps.google.com/example');
+  assert.equal(result.rating, 5);
+  assert.equal(result.review_count, 536);
+  assert.equal(result.google_maps_url, 'https://www.google.com/maps/example');
   assert.equal(result.place_id, 'ChIJexample');
   assert.equal(result.email, null);
   assert.equal(result.whatsapp_status, undefined);
+});
+
+test('PROSPECCAO nunca usa categoria como nome quando title esta ausente', () => {
+  const result = normalize({ title: null, categoryName: 'Accountant', categories: ['Accounting firm'] });
+  assert.equal(result.company_name, null);
+  assert.equal(result.category, 'Accountant');
+  assert.notEqual(result.company_name, result.category);
 });
 
 test('PROSPECCAO preserva campos Compass opcionais sem fabricar contatos', () => {
