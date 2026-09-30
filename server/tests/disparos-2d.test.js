@@ -32,6 +32,12 @@ test('DISPAROS-2D protege o contrato de receipts e mídia não validada', () => 
   assert.match(executor, /recipient_phone/);
 });
 
+test('DISPAROS seleciona o recipient_id usado na correlação após o envio', () => {
+  const worker = read('server', 'services', 'broadcast-campaign-worker.js');
+  assert.match(worker, /r\.id AS recipient_id, r\.prospect_id/);
+  assert.match(worker, /\[result\.communicationMessageId, row\.recipient_id\]/);
+});
+
 test('DISPAROS preserva a etapa e a causa segura de falhas antes do HTTP', () => {
   const worker = require('../services/broadcast-campaign-worker');
   const error = Object.assign(new Error('credencial invalida'), { code: 'EVOLUTION_CREDENTIAL_DECRYPT_FAILED', stage: 'decrypt' });

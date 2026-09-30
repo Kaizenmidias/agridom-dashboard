@@ -277,7 +277,7 @@ async function executeBroadcastRecipient({ connection, job } = {}) {
   }
   const [rows] = await connection.execute(
     `SELECT c.*, cc.content_type, cc.text_content, cc.media_storage_path, cc.mime_type, cc.original_filename,
-      r.prospect_id, r.recipient_phone, r.recipient_name, r.status AS recipient_status,
+      r.id AS recipient_id, r.prospect_id, r.recipient_phone, r.recipient_name, r.status AS recipient_status,
       p.business_name AS prospect_business_name, p.email AS prospect_email, p.phone AS prospect_phone,
       u.name AS responsible_name, u.email AS responsible_email,
       ca.id AS account_id, ca.channel AS account_channel, ca.provider AS account_provider, ca.status AS account_status,
