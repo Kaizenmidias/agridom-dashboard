@@ -81,6 +81,14 @@ test('AUTOMATIONS-3A reserva slots de cadência serialmente sob lock', async () 
   } };
   const slot = await reserveWhatsAppSlot(connection, 4, 1, { cadenceValue: 60, cadenceUnit: 'seconds' }, new Date('2026-09-29T10:00:00Z'));
   assert.equal(slot.toISOString(), '2026-09-29T10:01:00.000Z');
-  assert.match(calls[0].sql, /FOR UPDATE/);
-  assert.equal(calls[1].params[0].toISOString(), '2026-09-29T10:02:00.000Z');
+  assert.match(calls[1].sql, /FOR UPDATE/);
+  assert.equal(calls[2].params[0].toISOString(), '2026-09-29T10:02:00.000Z');
+});
+
+test('AUTOMATIONS-3A inicializa a fila antes do FOR UPDATE para eliminar a corrida da primeira reserva', () => {
+  const engine = read('server', 'services', 'automation-engine.js');
+  assert.match(engine, /INSERT IGNORE INTO automation_whatsapp_cadence/);
+  assert.match(engine, /SELECT UNIX_TIMESTAMP\(next_available_at\).*FOR UPDATE/);
+  assert.match(engine, /UPDATE automation_whatsapp_cadence SET next_available_at/);
+  assert.ok(engine.indexOf('INSERT IGNORE INTO automation_whatsapp_cadence') < engine.indexOf('SELECT UNIX_TIMESTAMP(next_available_at)'));
 });

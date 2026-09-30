@@ -36,12 +36,13 @@ const cadenceSeconds = (config = {}) => {
 async function reserveWhatsAppSlot(connection, automationId, accountId, config, now = new Date()) {
   const seconds = cadenceSeconds(config);
   if (!seconds) return now;
+  // Create the unique queue row before locking it. FOR UPDATE cannot lock a missing row.
+  await connection.execute('INSERT IGNORE INTO automation_whatsapp_cadence (automation_id, communication_account_id, next_available_at) VALUES (?, ?, ?)', [automationId, accountId, now]);
   const [rows] = await connection.execute('SELECT UNIX_TIMESTAMP(next_available_at) AS next_available_epoch FROM automation_whatsapp_cadence WHERE automation_id = ? AND communication_account_id = ? FOR UPDATE', [automationId, accountId]);
   const stored = rows[0]?.next_available_epoch != null ? new Date(Number(rows[0].next_available_epoch) * 1000) : null;
   const slot = stored && stored > now ? stored : now;
   const next = new Date(slot.getTime() + seconds * 1000);
-  if (rows[0]) await connection.execute('UPDATE automation_whatsapp_cadence SET next_available_at = ?, updated_at = CURRENT_TIMESTAMP WHERE automation_id = ? AND communication_account_id = ?', [next, automationId, accountId]);
-  else await connection.execute('INSERT INTO automation_whatsapp_cadence (automation_id, communication_account_id, next_available_at) VALUES (?, ?, ?)', [automationId, accountId, next]);
+  await connection.execute('UPDATE automation_whatsapp_cadence SET next_available_at = ?, updated_at = CURRENT_TIMESTAMP WHERE automation_id = ? AND communication_account_id = ?', [next, automationId, accountId]);
   return slot;
 }
 
