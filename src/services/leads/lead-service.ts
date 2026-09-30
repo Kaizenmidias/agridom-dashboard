@@ -153,3 +153,14 @@ export async function deleteLeads(ids: string[]) {
     );
   return payload as { deleted: number; missing: number };
 }
+
+export async function applyBulkLeadAction(ids: string[], action: "status" | "assignee" | "archive", value?: string | number | null) {
+  const response = await fetch(buildApiUrl("prospection/prospects/bulk-action"), {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ ids: ids.map(Number), action, value }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error || "Não foi possível processar os leads selecionados.");
+  return payload as { processed: number; missing: number };
+}

@@ -198,8 +198,8 @@ export const ACTION_CATALOG: ActionCatalogItem[] = [
   },
   {
     id: "whatsapp.send",
-    name: "Enviar mensagem no WhatsApp",
-    description: "Envia uma mensagem pelo número conectado",
+    name: "Disparo WhatsApp",
+    description: "Envia mensagens pelo número conectado respeitando a cadência",
     category: "communication",
     icon: MessageCircle,
     availability: "available",

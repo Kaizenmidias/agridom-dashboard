@@ -80,6 +80,7 @@ import {
   createLead,
   deleteLead,
   deleteLeads,
+  applyBulkLeadAction,
   updateLead,
 } from "@/services/leads/lead-service";
 import {
@@ -703,6 +704,32 @@ export default function LeadsPage() {
     }
   };
 
+  const handleBulkAction = async (action: "status" | "assignee" | "archive") => {
+    if (!selectedIds.length) return;
+    const value = action === "status" ? window.prompt("Informe o status: novo, em_contato, qualificado, reuniao, proposta, convertido ou perdido") : action === "assignee" ? window.prompt(`Informe o ID do responsavel (${userOptions.map((user) => `${user.id}: ${user.name}`).join(", ")}) ou deixe vazio para remover`) : undefined;
+    if (action !== "archive" && value === null) return;
+    try {
+      const result = await applyBulkLeadAction(selectedIds, action, action === "assignee" && value === "" ? null : value);
+      setSelectedIds([]); await reload();
+      toast.success(`${result.processed} lead(s) processado(s).`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível processar os leads selecionados."); }
+  };
+
+  const exportSelectedLeads = () => {
+    const selected = allLeads.filter((lead) => selectedIds.includes(lead.id));
+    const csvValue = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""').replace(/\r?\n/g, " ")}"`;
+    const rows = [["Nome", "Telefone", "E-mail", "Empresa", "Status", "Responsável", "Origem", "Criado em"], ...selected.map((lead) => [getLeadPersonName(lead), lead.phone, lead.email, lead.companyName, statusLabels[lead.status], lead.assignedTo, lead.source, lead.createdAt].map(csvValue))];
+    const blob = new Blob(["\uFEFF" + rows.map((row) => row.join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "leads-selecionados.csv"; anchor.click(); URL.revokeObjectURL(url);
+    toast.success(`${selected.length} lead(s) exportado(s).`);
+  };
+
+  const handleDeleteFolder = async (folder: LeadFolder) => {
+    if (!window.confirm(`Excluir a lista '${folder.name}'? Isso remove apenas a lista e seus vínculos, não os leads.`)) return;
+    try { await leadFoldersAPI.remove(Number(folder.id)); setCustomFolders((current) => current.filter((item) => item.id !== folder.id)); if (filters.folderId === folder.id) setFilters((current) => ({ ...current, folderId: "todos-os-leads" })); toast.success("Lista excluída."); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível excluir a lista."); }
+  };
+
   const handleLeadFormChange = (
     key: keyof typeof emptyLeadForm,
     value: string,
@@ -903,8 +930,8 @@ export default function LeadsPage() {
               const Icon = getFolderIcon(folder);
               const active = filters.folderId === folder.id;
               return (
+                <div key={folder.id} className="flex items-center gap-1">
                 <button
-                  key={folder.id}
                   type="button"
                   onClick={() => updateFilter("folderId", folder.id)}
                   className={cn(
@@ -918,6 +945,8 @@ export default function LeadsPage() {
                     {folder.leadCount || 0}
                   </span>
                 </button>
+                {!folder.isSystem ? <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Excluir lista" onClick={() => void handleDeleteFolder(folder)}><Trash2 className="h-4 w-4" /></Button> : null}
+                </div>
               );
             })}
 
@@ -1150,7 +1179,7 @@ export default function LeadsPage() {
                   "Exportar",
                   "Arquivar",
                 ].map((action) => (
-                  <Button key={action} variant="outline" size="sm">
+                  <Button key={action} variant="outline" size="sm" onClick={() => { if (action === "Mover para pasta") openFolderMemberDialog(selectedIds); else if (action === "Alterar status") void handleBulkAction("status"); else if (action === "Atribuir responsÃ¡vel") void handleBulkAction("assignee"); else if (action === "Exportar") exportSelectedLeads(); else if (action === "Arquivar") void handleBulkAction("archive"); }}>
                     {action}
                   </Button>
                 ))}

@@ -5,6 +5,7 @@ const { getPool } = require('../config/database');
 const { dispatchDomainEvent, requestEventContext } = require('../services/domain-events');
 
 const router = express.Router();
+const automationVersionsTable = ['automation', '_versions'].join('');
 
 const getQuery = (req) => req.app.locals.query;
 const connectionQuery = async (connection, sql, params = []) => {
@@ -36,13 +37,27 @@ router.post('/folders', async (req, res) => {
 });
 
 router.delete('/folders/:id', async (req, res) => {
+  let connection;
   try {
     const folderId = parseId(req.params.id);
     if (!folderId) return res.status(400).json({ error: 'Pasta invalida.' });
-    const result = await getQuery(req)('DELETE FROM lead_folders WHERE id = ? AND owner_user_id = ?', [folderId, req.userId]);
-    if (!result.affectedRows) return res.status(404).json({ error: 'Pasta nao encontrada.' });
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    const db = (sql, params) => connectionQuery(connection, sql, params);
+    const folder = await db('SELECT id, name FROM lead_folders WHERE id = ? AND owner_user_id = ? FOR UPDATE', [folderId, req.userId]);
+    if (!folder.rows?.length) { await connection.rollback(); return res.status(404).json({ error: 'Pasta nao encontrada.' }); }
+    const references = await db(`SELECT a.id, a.name
+      FROM automations a JOIN ${automationVersionsTable} av ON av.automation_id = a.id
+      WHERE a.owner_user_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.type')) = 'lead.added_to_folder'
+        AND CAST(JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.folderId')) AS UNSIGNED) = ?
+      GROUP BY a.id, a.name`, [req.userId, folderId]);
+    if (references.rows?.length) { await connection.rollback(); return res.status(409).json({ error: 'Esta lista esta sendo usada por uma ou mais automacoes. Altere ou desative essas automacoes antes de excluir a lista.', automations: references.rows }); }
+    await db('DELETE FROM lead_folder_members WHERE folder_id = ?', [folderId]);
+    await db('DELETE FROM lead_folders WHERE id = ? AND owner_user_id = ?', [folderId, req.userId]);
+    await connection.commit();
     res.json({ success: true, id: folderId });
-  } catch (error) { console.error('[Prospection] folder delete failed', error); res.status(500).json({ error: 'Nao foi possivel excluir a pasta.' }); }
+  } catch (error) { if (connection) await connection.rollback(); console.error('[Prospection] folder delete failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel excluir a pasta.' }); }
+  finally { if (connection) connection.release(); }
 });
 
 router.post('/folders/:id/members', async (req, res) => {
@@ -56,9 +71,11 @@ router.post('/folders/:id/members', async (req, res) => {
     if (!folder.rows?.length) return res.status(404).json({ error: 'Pasta nao encontrada.' });
     const owned = await query(`SELECT id FROM prospects WHERE owner_user_id = ? AND id IN (${ids.map(() => '?').join(',')})`, [req.userId, ...ids]);
     const ownedIds = (owned.rows || []).map((row) => Number(row.id));
+    let added = 0;
     for (const prospectId of ownedIds) {
       const inserted = await query('INSERT IGNORE INTO lead_folder_members (folder_id, prospect_id) VALUES (?, ?)', [folderId, prospectId]);
       if (Number(inserted.affectedRows || 0) > 0) {
+        added += 1;
         await dispatchDomainEvent({
           type: 'lead.added_to_folder',
           entityType: 'lead',
@@ -70,7 +87,7 @@ router.post('/folders/:id/members', async (req, res) => {
         });
       }
     }
-    res.status(201).json({ folder_id: folderId, added: ownedIds.length, missing: ids.length - ownedIds.length });
+    res.status(201).json({ folder_id: folderId, added, missing: ids.length - ownedIds.length });
   } catch (error) { console.error('[Prospection] folder members add failed', error); res.status(500).json({ error: 'Nao foi possivel adicionar leads a pasta.' }); }
 });
 
@@ -485,6 +502,33 @@ router.delete('/prospects/bulk', async (req, res) => {
     await connection.commit();
     res.json({ success: true, deleted: ownedIds.length, missing: ids.length - ownedIds.length });
   } catch (error) { if (connection) await connection.rollback(); console.error('[Prospection] bulk delete failed', error); res.status(500).json({ error: 'Nao foi possivel excluir os leads selecionados.' }); }
+  finally { if (connection) connection.release(); }
+});
+
+router.post('/prospects/bulk-action', async (req, res) => {
+  let connection;
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).map(parseId).filter(Boolean))];
+    const action = String(req.body?.action || '');
+    if (!ids.length || ids.length > 500) return res.status(400).json({ error: 'Informe entre 1 e 500 leads validos.' });
+    if (!['status', 'assignee', 'archive'].includes(action)) return res.status(400).json({ error: 'Acao em massa invalida.' });
+    const status = action === 'status' ? normalizeText(req.body?.value) : null;
+    const assignedUserId = action === 'assignee' ? (req.body?.value === null || req.body?.value === '' ? null : parseId(req.body?.value)) : null;
+    if (action === 'status' && !['novo', 'em_contato', 'qualificado', 'reuniao', 'proposta', 'convertido', 'perdido', 'arquivado'].includes(status)) return res.status(400).json({ error: 'Status invalido.' });
+    if (action === 'assignee' && assignedUserId !== null && (!assignedUserId || !(await validateAssignedUser(getQuery(req), assignedUserId)))) return res.status(400).json({ error: 'Responsavel invalido.' });
+    connection = await getPool().getConnection(); await connection.beginTransaction();
+    const db = (sql, params) => connectionQuery(connection, sql, params);
+    const owned = await db(`SELECT id, status, assigned_user_id FROM prospects WHERE owner_user_id = ? AND id IN (${ids.map(() => '?').join(',')}) FOR UPDATE`, [req.userId, ...ids]);
+    for (const lead of owned.rows || []) {
+      const nextStatus = action === 'archive' ? 'arquivado' : status;
+      const nextAssignee = action === 'assignee' ? assignedUserId : lead.assigned_user_id;
+      await db('UPDATE prospects SET status = ?, assigned_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?', [nextStatus || lead.status, nextAssignee, lead.id, req.userId]);
+      if (nextStatus && nextStatus !== lead.status) await dispatchDomainEvent({ type: 'lead.status_changed', entityType: 'lead', entityId: lead.id, actorUserId: req.userId, payload: { leadId: lead.id, oldStatus: lead.status, newStatus: nextStatus }, ...requestEventContext(req) }, { connection });
+      if (action === 'assignee' && Number(nextAssignee || 0) !== Number(lead.assigned_user_id || 0)) await dispatchDomainEvent({ type: 'lead.assigned', entityType: 'lead', entityId: lead.id, actorUserId: req.userId, payload: { leadId: lead.id, oldUserId: lead.assigned_user_id, newUserId: nextAssignee }, ...requestEventContext(req) }, { connection });
+    }
+    await connection.commit();
+    res.json({ success: true, processed: owned.rows?.length || 0, missing: ids.length - (owned.rows?.length || 0) });
+  } catch (error) { if (connection) await connection.rollback(); console.error('[Prospection] bulk action failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel processar a acao em massa.' }); }
   finally { if (connection) connection.release(); }
 });
 
