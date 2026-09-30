@@ -57,6 +57,14 @@ test('PROSPECCAO preserva campos Compass opcionais sem fabricar contatos', () =>
   assert.equal(result.instagram_url, null);
 });
 
+test('PROSPECCAO nao chama a Apify durante a suite local e preserva reviewCount ausente', () => {
+  const page = read('src', 'pages', 'commercial', 'ProspectingPage.tsx');
+  const service = read('server', 'services', 'prospecting-service.js');
+  assert.match(page, /item\.reviewCount == null \? item\.rating/);
+  assert.match(service, /review_count:/);
+  assert.doesNotMatch(read('server', 'tests', 'prospecting-apify.test.js'), /api\.apify\.com/);
+});
+
 test('PROSPECCAO usa integracao criptografada e worker persistente para jobs Apify', () => {
   const route = read('server', 'routes', 'prospecting.js');
   const worker = read('server', 'worker.js');

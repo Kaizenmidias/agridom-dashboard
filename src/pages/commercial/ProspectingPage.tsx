@@ -461,7 +461,7 @@ function ProspectingResultsTable({
                       <TableCell>{item.email ? <a className="text-primary hover:underline" href={`mailto:${item.email}`}>{item.email}</a> : "Sem e-mail"}</TableCell>
                       <TableCell>{item.website ? <a className="text-primary hover:underline" href={item.website.startsWith("http") ? item.website : `https://${item.website}`} target="_blank" rel="noreferrer">Abrir</a> : "Sem site"}</TableCell>
                       <TableCell>{[item.city, item.state].filter(Boolean).join(" / ") || "Não informado"}</TableCell>
-                      <TableCell>{item.rating ? `${item.rating} (${item.reviewCount || 0})` : "Não informada"}</TableCell>
+                      <TableCell>{item.rating == null ? "Não informada" : item.reviewCount == null ? item.rating : `${item.rating} (${item.reviewCount})`}</TableCell>
                       <TableCell>{item.cnpj ? formatCnpj(item.cnpj) : item.instagramUsername ? `@${item.instagramUsername}` : "Não informado"}</TableCell>
                       <TableCell><Badge className={getDuplicateBadge(item.duplicateStatus)}>{getDuplicateLabel(item.duplicateStatus)}</Badge></TableCell>
                       <TableCell>{item.validationStatus}</TableCell>
