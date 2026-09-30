@@ -92,3 +92,12 @@ test('AUTOMATIONS-3A inicializa a fila antes do FOR UPDATE para eliminar a corri
   assert.match(engine, /UPDATE automation_whatsapp_cadence SET next_available_at/);
   assert.ok(engine.indexOf('INSERT IGNORE INTO automation_whatsapp_cadence') < engine.indexOf('SELECT UNIX_TIMESTAMP(next_available_at)'));
 });
+
+test('AUTOMATIONS-3A persiste a cadencia padrao ao criar ou selecionar WhatsApp sem alterar legado', () => {
+  const builder = read('src', 'components', 'automations', 'AutomationBuilder.tsx');
+  assert.match(builder, /const defaultActionConfig = \(actionId\?\: string\)/);
+  assert.match(builder, /actionId === "whatsapp\.send"[\s\S]*cadenceValue: 1, cadenceUnit: "minutes"/);
+  assert.match(builder, /patch\.config\?\.actionType === "whatsapp\.send"[\s\S]*patch\.config\.cadenceValue === undefined/);
+  assert.match(builder, /type === "action" \? defaultActionConfig\(actionId\)/);
+  assert.match(builder, /config: node\.data\.config/);
+});

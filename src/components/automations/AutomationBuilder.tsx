@@ -170,6 +170,14 @@ const defaultConfig = (type: BuilderType): Record<string, unknown> =>
           }
         : {};
 
+const defaultActionConfig = (actionId?: string): Record<string, unknown> => ({
+  ...defaultConfig("action"),
+  ...(actionId === "whatsapp.send"
+    ? { cadenceValue: 1, cadenceUnit: "minutes" }
+    : {}),
+  ...(actionId ? { actionType: actionId } : {}),
+});
+
 export function definitionToBuilder(
   definition: AutomationDefinition,
 ): BuilderNode[] {
@@ -465,7 +473,13 @@ function FreeformAutomationBuilder(props: {
   const remember = () => { history.current = [...history.current.slice(-39), { nodes, edges }]; future.current = []; setDirty(true); };
   const undo = () => { const previous = history.current.pop(); if (!previous) return; future.current.push({ nodes, edges }); setNodes(previous.nodes); setEdges(previous.edges); setSelectedId(null); setSelectedEdgeId(null); };
   const redo = () => { const next = future.current.pop(); if (!next) return; history.current.push({ nodes, edges }); setNodes(next.nodes); setEdges(next.edges); };
-  const updateSelected = (patch: Partial<BuilderNode>) => { setDirty(true); setNodes((current) => current.map((node) => node.id === selectedId ? { ...node, data: { ...node.data, ...patch } } : node)); };
+  const updateSelected = (patch: Partial<BuilderNode>) => {
+    const dataPatch = patch.config?.actionType === "whatsapp.send" && patch.config.cadenceValue === undefined && patch.config.cadenceUnit === undefined
+      ? { ...patch, config: { ...patch.config, cadenceValue: 1, cadenceUnit: "minutes" } }
+      : patch;
+    setDirty(true);
+    setNodes((current) => current.map((node) => node.id === selectedId ? { ...node, data: { ...node.data, ...dataPatch } } : node));
+  };
   const updateConfig = (key: string, value: unknown) => updateSelected({ config: { ...(selected?.data.config || {}), [key]: value }, label: key === "actionType" ? ACTION_CATALOG.find((item) => item.id === String(value))?.name || "Executar ação" : selected?.data.label });
   const validConnection = (connection: Connection, ignoredEdgeId?: string) => {
     if (!connection.source || !connection.target || connection.source === connection.target || connection.target === "trigger_1") return false;
@@ -483,7 +497,7 @@ function FreeformAutomationBuilder(props: {
     if (props.readOnly) return;
     const type = kind === "trigger" ? "trigger" : kind === "condition" ? "condition" : kind === "wait" ? "wait" : "action";
     if (type === "trigger" && nodes.some((node) => node.data.type === "trigger")) { toast.error("Esta automação já possui um gatilho."); return; }
-    const id = `${type}_${Date.now()}`; const config = type === "trigger" ? { triggerType: actionId || props.triggerType } : actionId ? { ...defaultConfig("action"), actionType: actionId } : defaultConfig(type);
+    const id = `${type}_${Date.now()}`; const config = type === "trigger" ? { triggerType: actionId || props.triggerType } : type === "action" ? defaultActionConfig(actionId) : defaultConfig(type);
     remember(); setDirty(true); setNodes((current) => current.concat({ id, type: "kaizen", position, data: { id, type, label: type === "trigger" ? triggers[String(config.triggerType)] || String(config.triggerType) : actionId ? ACTION_CATALOG.find((item) => item.id === actionId)?.name || "Executar ação" : nodeMeta[type].title, config, x: position.x, y: position.y } }));
     setSelectedId(id);
   };
