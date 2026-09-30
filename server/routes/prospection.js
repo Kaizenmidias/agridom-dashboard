@@ -224,7 +224,7 @@ router.get('/bootstrap', async (req, res) => {
     const prospects = await query(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email,
         folders.folders_json, last_contact.last_contact_at
       FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
-      LEFT JOIN (SELECT m.prospect_id, JSON_ARRAYAGG(JSON_OBJECT('id', f.id, 'name', f.name) ORDER BY f.name) AS folders_json
+      LEFT JOIN (SELECT m.prospect_id, JSON_ARRAYAGG(JSON_OBJECT('id', f.id, 'name', f.name)) AS folders_json
         FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id WHERE f.owner_user_id = ? GROUP BY m.prospect_id) folders ON folders.prospect_id = p.id
       LEFT JOIN (SELECT c.lead_id, MAX(COALESCE(cm.sent_at, cm.created_at)) AS last_contact_at
         FROM conversations c JOIN communication_messages cm ON cm.conversation_id = c.id JOIN communication_accounts ca ON ca.id = c.communication_account_id
@@ -252,7 +252,8 @@ router.get('/bootstrap', async (req, res) => {
     }, {});
     const rows = (prospects.rows || []).map((prospect) => ({
       ...prospect,
-      folders: typeof prospect.folders_json === 'string' ? JSON.parse(prospect.folders_json) : (prospect.folders_json || []),
+      folders: (typeof prospect.folders_json === 'string' ? JSON.parse(prospect.folders_json) : (prospect.folders_json || []))
+        .sort((left, right) => String(left.name || '').localeCompare(String(right.name || ''), 'pt-BR')),
       labels: labelsByProspect[String(prospect.id)] || [],
     }));
     res.json({

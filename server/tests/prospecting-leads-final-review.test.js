@@ -34,6 +34,8 @@ test('Leads usa listas reais com fallback e resumo de múltiplas listas', () => 
   assert.doesNotMatch(leadsPage, /lead\.category \|\| "Sem categoria"/);
   assert.match(route, /lead_folder_members m JOIN lead_folders f/);
   assert.match(route, /JSON_ARRAYAGG\(JSON_OBJECT/);
+  assert.doesNotMatch(route, /JSON_ARRAYAGG\(JSON_OBJECT\([^)]*\)\s+ORDER BY/i);
+  assert.match(route, /\.sort\(\(left, right\) => String\(left\.name/);
   assert.match(route, /f\.owner_user_id = \?/);
 });
 
