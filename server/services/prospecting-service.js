@@ -61,7 +61,20 @@ async function apifySearch(parameters, config) {
 function normalize(item) {
   const normalizedPhone = phone(item.phoneNumber || item.phone || item.telephone);
   const normalizedWebsite = website(item.website || item.url);
-  return { company_name: text(item.title || item.name || item.businessName) || 'Empresa sem nome', category: text(item.categoryName || item.category), address: text(item.address || item.street), city: text(item.city), state: text(item.state), phone: text(item.phoneNumber || item.phone || item.telephone), normalized_phone: normalizedPhone, website: text(item.website || item.url), normalized_website_domain: normalizedWebsite, rating: item.totalScore == null && item.rating == null ? null : Number(item.totalScore ?? item.rating), review_count: item.reviewsCount == null && item.reviewCount == null ? null : Number(item.reviewsCount ?? item.reviewCount), raw_payload: safePayload(item) };
+  const social = item.socialMedia || item.socialProfiles || {};
+  return {
+    company_name: text(item.name || item.businessName || item.placeName || item.title) || 'Empresa sem nome',
+    category: text(item.categoryName || item.category || (Array.isArray(item.categories) ? item.categories[0] : null)),
+    address: text(item.address || item.street), city: text(item.city), state: text(item.state),
+    phone: text(item.phoneNumber || item.phone || item.internationalPhone || item.telephone), normalized_phone: normalizedPhone,
+    email: text(item.email || (Array.isArray(item.emails) ? item.emails[0] : null)),
+    website: text(item.website), normalized_website_domain: website(item.website),
+    instagram_url: text(item.instagram || item.instagramUrl || social.instagram || social.instagrams?.[0]),
+    google_maps_url: text(item.url || item.googleMapsUrl), place_id: text(item.placeId),
+    rating: item.totalScore == null && item.rating == null ? null : Number(item.totalScore ?? item.rating),
+    review_count: item.reviewsCount == null && item.totalReviews == null && item.reviewCount == null ? null : Number(item.reviewsCount ?? item.totalReviews ?? item.reviewCount),
+    raw_payload: safePayload(item),
+  };
 }
 
 async function recordEvent(connection, jobId, eventType, message) {
