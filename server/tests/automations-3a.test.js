@@ -76,7 +76,7 @@ test('AUTOMATIONS-3A reserva slots de cadência serialmente sob lock', async () 
   const calls = [];
   const connection = { execute: async (sql, params) => {
     calls.push({ sql, params });
-    if (sql.startsWith('SELECT next_available_at')) return [[{ next_available_at: '2026-09-29T10:01:00Z' }]];
+    if (sql.includes('UNIX_TIMESTAMP(next_available_at)')) return [[{ next_available_epoch: Math.floor(new Date('2026-09-29T10:01:00Z').getTime() / 1000) }]];
     return [{ affectedRows: 1 }];
   } };
   const slot = await reserveWhatsAppSlot(connection, 4, 1, { cadenceValue: 60, cadenceUnit: 'seconds' }, new Date('2026-09-29T10:00:00Z'));

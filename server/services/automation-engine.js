@@ -36,8 +36,8 @@ const cadenceSeconds = (config = {}) => {
 async function reserveWhatsAppSlot(connection, automationId, accountId, config, now = new Date()) {
   const seconds = cadenceSeconds(config);
   if (!seconds) return now;
-  const [rows] = await connection.execute('SELECT next_available_at FROM automation_whatsapp_cadence WHERE automation_id = ? AND communication_account_id = ? FOR UPDATE', [automationId, accountId]);
-  const stored = rows[0]?.next_available_at ? new Date(rows[0].next_available_at) : null;
+  const [rows] = await connection.execute('SELECT UNIX_TIMESTAMP(next_available_at) AS next_available_epoch FROM automation_whatsapp_cadence WHERE automation_id = ? AND communication_account_id = ? FOR UPDATE', [automationId, accountId]);
+  const stored = rows[0]?.next_available_epoch != null ? new Date(Number(rows[0].next_available_epoch) * 1000) : null;
   const slot = stored && stored > now ? stored : now;
   const next = new Date(slot.getTime() + seconds * 1000);
   if (rows[0]) await connection.execute('UPDATE automation_whatsapp_cadence SET next_available_at = ?, updated_at = CURRENT_TIMESTAMP WHERE automation_id = ? AND communication_account_id = ?', [next, automationId, accountId]);
@@ -286,7 +286,7 @@ async function completeBootstrapJob(job, currentWorkerId) {
         const previousOutput = parseJson(existingSteps[0]?.output, {});
         const persistedSlot = previousOutput.cadence?.scheduled_at ? new Date(previousOutput.cadence.scheduled_at) : null;
         const slot = persistedSlot && !Number.isNaN(persistedSlot.getTime()) ? persistedSlot : await reserveWhatsAppSlot(connection, current.automation_id, accountId, step.config);
-        if (slot > new Date()) {
+        if (slot.getTime() > Date.now()) {
           const scheduledAt = slot.toISOString().slice(0, 19).replace('T', ' ');
           await connection.execute("UPDATE automation_run_steps SET status = 'queued', output = ?, finished_at = NULL WHERE automation_run_id = ? AND step_key = ?", [JSON.stringify({ cadence: { scheduled_at: scheduledAt } }), job.automation_run_id, step.id]);
           await connection.execute("UPDATE automation_runs SET status = 'queued', current_step_key = ? WHERE id = ?", [step.id, job.automation_run_id]);

@@ -35,6 +35,6 @@ test('WhatsApp cadence is presented as Disparo WhatsApp without a new technical 
   const engine = read('server', 'services', 'automation-engine.js');
   assert.match(catalog, /id: "whatsapp\.send",\s+name: "Disparo WhatsApp"/);
   assert.match(engine, /automation_whatsapp_cadence/);
-  assert.match(engine, /SELECT next_available_at.*FOR UPDATE/);
+  assert.match(engine, /UNIX_TIMESTAMP\(next_available_at\).*FOR UPDATE/);
   assert.match(engine, /persistedSlot/);
 });

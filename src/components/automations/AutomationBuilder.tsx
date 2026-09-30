@@ -379,7 +379,7 @@ function KaizenFlowNode({ data, selected }: NodeProps<FlowNode>) {
   const action = data.type === "action" ? ACTION_CATALOG.find((item) => item.id === String(data.config.actionType)) : null;
   const summary = data.type === "trigger"
     ? String(data.config.triggerType) === "lead.added_to_folder"
-      ? String(data.config.folderName || "Lista não selecionada")
+      ? data.config.folderName === "__NOT_FOUND__" ? "Lista não encontrada" : String(data.config.folderName || "Lista não selecionada")
       : "Quando este evento acontecer"
     : data.type === "condition"
       ? `${String(data.config.field || "Campo")} ${String(data.config.operator || "é igual a").replaceAll("_", " ")}${data.config.value ? ` ${String(data.config.value)}` : ""}`
@@ -435,6 +435,7 @@ function FreeformAutomationBuilder(props: {
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [labels, setLabels] = useState<Array<{ id: number; name: string; color: string }>>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
+  const [leadFolders, setLeadFolders] = useState<LeadFolder[]>([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const history = useRef<Array<{ nodes: FlowNode[]; edges: Edge[] }>>([]);
   const future = useRef<Array<{ nodes: FlowNode[]; edges: Edge[] }>>([]);
@@ -445,6 +446,20 @@ function FreeformAutomationBuilder(props: {
       setPipelines(pipelineData.pipelines); setStages(pipelineData.stages); setLabels(labelData.labels); setUsers(userData.users);
     }).catch(() => undefined);
   }, []);
+  useEffect(() => {
+    if (props.triggerType !== "lead.added_to_folder") return;
+    void leadFoldersAPI.list().then((result) => setLeadFolders(result.folders)).catch(() => setLeadFolders([]));
+  }, [props.triggerType]);
+  useEffect(() => {
+    if (!leadFolders.length) return;
+    setNodes((current) => current.map((node) => {
+      if (node.data.type !== "trigger" || String(node.data.config.triggerType) !== "lead.added_to_folder") return node;
+      const folder = leadFolders.find((item) => Number(item.id) === Number(node.data.config.folderId));
+      const nextName = folder?.name || (node.data.config.folderId ? "__NOT_FOUND__" : undefined);
+      if (node.data.config.folderName === nextName) return node;
+      return { ...node, data: { ...node.data, config: { ...node.data.config, folderName: nextName } } };
+    }));
+  }, [leadFolders, setNodes]);
   const selected = nodes.find((node) => node.id === selectedId);
   const requestBack = () => { if (dirty && !window.confirm("Você possui alterações não salvas. Deseja sair mesmo assim?")) return; props.onBack?.(); };
   const remember = () => { history.current = [...history.current.slice(-39), { nodes, edges }]; future.current = []; setDirty(true); };
