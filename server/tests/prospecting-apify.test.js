@@ -23,6 +23,17 @@ test('PROSPECCAO usa o contrato do Actor compass e encerra imediatamente job fai
   assert.match(page, /currentJob\.status === 'failed'/);
 });
 
+test('PROSPECCAO normaliza search_parameters JSON do job antes do provider', () => {
+  const service = read('server', 'services', 'prospecting-service.js');
+  assert.match(service, /parameters = normalizeIntegrationMetadata\(job\.search_parameters\)/);
+  assert.match(service, /PROSPECTING_JOB_PAYLOAD_INVALID/);
+  assert.match(service, /stage: 'job_payload'/);
+  assert.doesNotMatch(service, /JSON\.parse\(job\.search_parameters/);
+  const objectParameters = { searchTerms: 'Agencias', city: 'Salvador', state: 'BA' };
+  assert.deepEqual(normalizeIntegrationMetadata(objectParameters), objectParameters);
+  assert.deepEqual(normalizeIntegrationMetadata(JSON.stringify(objectParameters)), objectParameters);
+});
+
 test('PROSPECCAO normaliza dados reais do Google Maps sem inventar enriquecimento', () => {
   const result = normalize({ title: 'Empresa X', categoryName: 'Contabilidade', phoneNumber: '(71) 99999-9999', website: 'https://www.Example.com/site', address: 'Rua A', totalScore: 4.8, reviewsCount: 12 });
   assert.equal(result.company_name, 'Empresa X');

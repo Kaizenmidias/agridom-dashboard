@@ -70,6 +70,7 @@ async function recordEvent(connection, jobId, eventType, message) {
 
 async function processProspectingJob(jobId) {
   const connection = await getPool().getConnection();
+  let actorId = null;
   try {
     await connection.beginTransaction();
     const [jobs] = await connection.execute('SELECT * FROM prospecting_jobs WHERE id = ? FOR UPDATE', [jobId]);
@@ -81,7 +82,14 @@ async function processProspectingJob(jobId) {
     await connection.commit();
     const [configs] = await getPool().execute("SELECT * FROM integration_providers WHERE provider = 'apify' LIMIT 1");
     if (!configs[0]?.secret_ciphertext) throw Object.assign(new Error('Configure a integracao Apify em Administracao > Integracoes.'), { code: 'APIFY_NOT_CONFIGURED' });
-    const parameters = JSON.parse(job.search_parameters || '{}');
+    const integrationMetadata = normalizeIntegrationMetadata(configs[0].configuration_metadata);
+    actorId = String(integrationMetadata.googleMapsActorId || '').trim() || null;
+    let parameters;
+    try {
+      parameters = normalizeIntegrationMetadata(job.search_parameters);
+    } catch (error) {
+      throw Object.assign(new Error('Parametros da busca possuem formato invalido.'), { code: 'PROSPECTING_JOB_PAYLOAD_INVALID', stage: 'job_payload', actorId });
+    }
     console.info('[Prospecting] provider run started', { jobId, provider: 'apify' });
     const items = await apifySearch(parameters, configs[0]);
     const dedup = new Set();
@@ -107,7 +115,7 @@ async function processProspectingJob(jobId) {
   } catch (error) {
     await connection.rollback().catch(() => {});
     await getPool().execute("UPDATE prospecting_jobs SET status = 'failed', failed_at = CURRENT_TIMESTAMP, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [String(error.message || 'Falha na prospeccao').slice(0, 500), jobId]).catch(() => {});
-    console.error('[Prospecting] job failed', { jobId, stage: 'provider', provider: 'apify', actorId: error?.actorId || null, operation: 'run_sync_get_dataset_items', errorCode: error?.code || 'UNEXPECTED', errorName: error?.name || 'Error', providerStatus: error?.providerStatus || null, providerErrorType: error?.providerErrorType || null, providerErrorCode: error?.providerErrorCode || null, providerMessage: String(error?.providerMessage || error?.message || '').replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]').replace(/token[=:]\s*[^\s,]+/gi, 'token=[redacted]').slice(0, 240), timeout: Boolean(error?.timeout) });
+    console.error('[Prospecting] job failed', { jobId, stage: error?.stage || 'provider', provider: 'apify', actorId: error?.actorId || actorId || null, operation: error?.stage === 'job_payload' ? 'deserialize_search_parameters' : 'run_sync_get_dataset_items', errorCode: error?.code || 'UNEXPECTED', errorName: error?.name || 'Error', providerStatus: error?.providerStatus || null, providerErrorType: error?.providerErrorType || null, providerErrorCode: error?.providerErrorCode || null, providerMessage: String(error?.providerMessage || error?.message || '').replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]').replace(/token[=:]\s*[^\s,]+/gi, 'token=[redacted]').slice(0, 240), timeout: Boolean(error?.timeout) });
   } finally { connection.release(); }
 }
 
