@@ -221,9 +221,15 @@ async function syncProspectLabels(query, prospectId, ownerUserId, labels, option
 router.get('/bootstrap', async (req, res) => {
   try {
     const query = getQuery(req);
-    const prospects = await query(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
+    const prospects = await query(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email,
+        folders.folders_json, last_contact.last_contact_at
       FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
-      WHERE p.owner_user_id = ? ORDER BY p.created_at DESC`, [req.userId]);
+      LEFT JOIN (SELECT m.prospect_id, JSON_ARRAYAGG(JSON_OBJECT('id', f.id, 'name', f.name) ORDER BY f.name) AS folders_json
+        FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id WHERE f.owner_user_id = ? GROUP BY m.prospect_id) folders ON folders.prospect_id = p.id
+      LEFT JOIN (SELECT c.lead_id, MAX(COALESCE(cm.sent_at, cm.created_at)) AS last_contact_at
+        FROM conversations c JOIN communication_messages cm ON cm.conversation_id = c.id JOIN communication_accounts ca ON ca.id = c.communication_account_id
+        WHERE c.lead_id IS NOT NULL AND ca.owner_user_id = ? GROUP BY c.lead_id) last_contact ON last_contact.lead_id = p.id
+      WHERE p.owner_user_id = ? ORDER BY p.created_at DESC`, [req.userId, req.userId, req.userId]);
     const settings = await query('SELECT * FROM prospecting_settings WHERE owner_user_id = ? LIMIT 1', [req.userId]);
     const history = await query(
       'SELECT * FROM prospect_contact_history WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT 100',
@@ -246,6 +252,7 @@ router.get('/bootstrap', async (req, res) => {
     }, {});
     const rows = (prospects.rows || []).map((prospect) => ({
       ...prospect,
+      folders: typeof prospect.folders_json === 'string' ? JSON.parse(prospect.folders_json) : (prospect.folders_json || []),
       labels: labelsByProspect[String(prospect.id)] || [],
     }));
     res.json({
@@ -321,6 +328,7 @@ router.post('/prospects', async (req, res) => {
       website,
       leadScore: 0,
       status: 'Novo',
+      origin: 'Manual',
       analysisReport,
     }, { connection });
     if (created.reason === 'missing_normalized_phone') {

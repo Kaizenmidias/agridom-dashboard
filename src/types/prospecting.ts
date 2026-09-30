@@ -158,7 +158,6 @@ export interface GoogleMapsSearchPayload {
   searchTerms: string;
   quantity: number;
   minimumRating: number | null;
-  onlyValidatedWhatsApp: boolean;
   destinationFolderId?: number | null;
 }
 
@@ -169,7 +168,6 @@ export interface CnpjSearchPayload {
   city?: string | null;
   quantity: number;
   includeSecondaryActivity: boolean;
-  onlyValidatedWhatsApp: boolean;
   destinationFolderId?: number | null;
 }
 

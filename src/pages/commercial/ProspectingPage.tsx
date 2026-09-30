@@ -136,12 +136,10 @@ function IntegrationConsumption({ integrations }: { integrations: IntegrationSum
 }
 
 function GoogleMapsSearchForm({
-  disabledWhatsApp,
   onSubmit,
   running,
   destinationFolderId,
 }: {
-  disabledWhatsApp: boolean;
   onSubmit: (payload: ProspectingSearchPayload) => void;
   running: boolean;
   destinationFolderId: number | null;
@@ -149,7 +147,6 @@ function GoogleMapsSearchForm({
   const [searchTerms, setSearchTerms] = useState("");
   const [quantity, setQuantity] = useState("20");
   const [minimumRating, setMinimumRating] = useState("any");
-  const [onlyValidatedWhatsApp, setOnlyValidatedWhatsApp] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -180,15 +177,8 @@ function GoogleMapsSearchForm({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="flex items-center gap-2">
-            <Checkbox checked={onlyValidatedWhatsApp} disabled={disabledWhatsApp} onCheckedChange={(value) => setOnlyValidatedWhatsApp(Boolean(value))} />
-            <Label>So com WhatsApp validado</Label>
-          </div>
-          {disabledWhatsApp ? <p className="text-xs text-muted-foreground">Configure um serviço de validação de WhatsApp em Administração / Integrações.</p> : null}
-        </div>
       </div>
-      <Button disabled={running || !searchTerms.trim()} onClick={() => onSubmit({ source: "google_maps", searchTerms, quantity: Number(quantity), minimumRating: minimumRating === "any" ? null : Number(minimumRating), onlyValidatedWhatsApp, destinationFolderId })}>
+      <Button disabled={running || !searchTerms.trim()} onClick={() => onSubmit({ source: "google_maps", searchTerms, quantity: Number(quantity), minimumRating: minimumRating === "any" ? null : Number(minimumRating), destinationFolderId })}>
         {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Buscar empresas
       </Button>
     </div>
@@ -196,12 +186,10 @@ function GoogleMapsSearchForm({
 }
 
 function CnpjSearchForm({
-  disabledWhatsApp,
   onSubmit,
   running,
   destinationFolderId,
 }: {
-  disabledWhatsApp: boolean;
   onSubmit: (payload: ProspectingSearchPayload) => void;
   running: boolean;
   destinationFolderId: number | null;
@@ -214,7 +202,6 @@ function CnpjSearchForm({
   const [city, setCity] = useState("");
   const [quantity, setQuantity] = useState("20");
   const [includeSecondaryActivity, setIncludeSecondaryActivity] = useState(false);
-  const [onlyValidatedWhatsApp, setOnlyValidatedWhatsApp] = useState(false);
 
   useEffect(() => {
     const handle = setTimeout(async () => {
@@ -294,13 +281,9 @@ function CnpjSearchForm({
             <Checkbox checked={includeSecondaryActivity} onCheckedChange={(value) => setIncludeSecondaryActivity(Boolean(value))} />
             <Label>Incluir atividade secundaria</Label>
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox checked={onlyValidatedWhatsApp} disabled={disabledWhatsApp} onCheckedChange={(value) => setOnlyValidatedWhatsApp(Boolean(value))} />
-            <Label>So com WhatsApp validado</Label>
-          </div>
         </div>
       </div>
-      <Button disabled={running || selectedCnaes.length === 0 || !state} onClick={() => onSubmit({ source: "cnpj", cnaeCodes: selectedCnaes.map((item) => item.code), state, city: city || null, quantity: Number(quantity), includeSecondaryActivity, onlyValidatedWhatsApp, destinationFolderId })}>
+      <Button disabled={running || selectedCnaes.length === 0 || !state} onClick={() => onSubmit({ source: "cnpj", cnaeCodes: selectedCnaes.map((item) => item.code), state, city: city || null, quantity: Number(quantity), includeSecondaryActivity, destinationFolderId })}>
         {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Buscar empresas
       </Button>
     </div>
@@ -445,11 +428,11 @@ function ProspectingResultsTable({
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle>Resultados encontrados</CardTitle>
-            <CardDescription>Selecione oportunidades novas ou possiveis duplicados para revisar e importar.</CardDescription>
+            <CardDescription>Os novos leads encontrados foram adicionados automaticamente ao CRM. Selecione os contatos que deseja organizar em uma lista.</CardDescription>
           </div>
           <div className="flex gap-2">
             <Button variant="outline"><Filter className="mr-2 h-4 w-4" />Filtros</Button>
-            <Button disabled={selectedIds.length === 0} onClick={onImport}><Plus className="mr-2 h-4 w-4" />Adicionar selecionados aos Leads</Button>
+            <Button disabled={selectedIds.length === 0} onClick={onImport}><Plus className="mr-2 h-4 w-4" />Adicionar selecionados à lista</Button>
           </div>
         </div>
         {selectedIds.length > 0 ? <Badge variant="secondary" className="w-fit">{selectedIds.length} selecionado(s)</Badge> : null}
@@ -633,7 +616,6 @@ export default function ProspectingPage() {
   const [leadFolders, setLeadFolders] = useState<LeadFolder[]>([]);
   const [destinationFolderId, setDestinationFolderId] = useState<number | null>(null);
 
-  const whatsappConfigured = integrations.some((item) => item.provider === "whatsapp_validator" && item.configured);
 
   const loadInitialData = async () => {
     try {
@@ -810,10 +792,10 @@ export default function ProspectingPage() {
               ))}
             </TabsList>
             <TabsContent value="google_maps" className="mt-6">
-              <GoogleMapsSearchForm disabledWhatsApp={!whatsappConfigured} running={running} destinationFolderId={destinationFolderId} onSubmit={startSearch} />
+              <GoogleMapsSearchForm running={running} destinationFolderId={destinationFolderId} onSubmit={startSearch} />
             </TabsContent>
             <TabsContent value="cnpj" className="mt-6">
-              <CnpjSearchForm disabledWhatsApp={!whatsappConfigured} running={running} destinationFolderId={destinationFolderId} onSubmit={startSearch} />
+              <CnpjSearchForm running={running} destinationFolderId={destinationFolderId} onSubmit={startSearch} />
             </TabsContent>
             <TabsContent value="instagram" className="mt-6">
               <InstagramSearchForm running={running} destinationFolderId={destinationFolderId} onSubmit={startSearch} />

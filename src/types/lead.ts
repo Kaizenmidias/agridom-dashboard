@@ -25,6 +25,11 @@ export interface LeadLabel {
   color: string;
 }
 
+export interface LeadFolderSummary {
+  id: string | number;
+  name: string;
+}
+
 export interface Lead {
   id: string;
   companyName: string;
@@ -43,6 +48,7 @@ export interface Lead {
   status: LeadStatus;
   folderId?: string | null;
   folderName?: string | null;
+  folders?: LeadFolderSummary[];
   assignedTo?: string | null;
   assignedUserId?: number | null;
   googleMapsUrl?: string | null;

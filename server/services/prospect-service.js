@@ -64,6 +64,7 @@ function buildInsertValues(input = {}) {
       input.website ? 1 : 0,
       input.leadScore ?? 0,
       input.status || 'Novo',
+      textOrNull(input.origin),
       input.analysisReport == null ? null : JSON.stringify(input.analysisReport),
     ],
   };
@@ -93,8 +94,8 @@ async function createOrFindProspect(input = {}, options = {}) {
       `INSERT INTO prospects (
         owner_user_id, assigned_user_id, business_name, normalized_business_name, category, address, city, state,
         phone, normalized_phone, email, website, normalized_website, website_exists,
-        lead_score, status, analysis_report
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        lead_score, status, origin, analysis_report
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       values,
     );
     const prospect = await execute('SELECT * FROM prospects WHERE id = ?', [insert.insertId]);

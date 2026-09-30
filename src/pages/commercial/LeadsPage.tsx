@@ -19,6 +19,7 @@ import {
   Send,
   Trash2,
   UserRound,
+  Folder,
   X,
 } from "lucide-react";
 import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
@@ -1304,8 +1305,10 @@ export default function LeadsPage() {
                                     {leadName}
                                   </button>
                                   <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                                    <UserRound className="h-3 w-3" />
-                                    {lead.category || "Sem categoria"}
+                                    <Folder className="h-3 w-3" />
+                                    {lead.folders?.length
+                                      ? `${lead.folders[0].name}${lead.folders.length > 1 ? ` +${lead.folders.length - 1}` : ""}`
+                                      : "Sem lista"}
                                   </p>
                                 </div>
                               </div>

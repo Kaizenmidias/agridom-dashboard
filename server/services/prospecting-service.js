@@ -135,6 +135,7 @@ async function persistCandidate(connection, job, item, counters) {
     phone: row.phone,
     email: row.email,
     website: row.website,
+    origin: 'Scraping',
     analysisReport: {
       source: 'google_maps',
       google_maps_url: row.google_maps_url,
