@@ -42,6 +42,10 @@ export const leadFoldersAPI = {
         body: JSON.stringify({ prospect_ids: prospectIds.map(Number) }),
       },
     ),
+  removeMember: (folderId: number, prospectId: string) =>
+    request<{ success: boolean }>(`/folders/${folderId}/members/${Number(prospectId)}`, { method: "DELETE" }),
+  removeMembers: (folderId: number, prospectIds: string[]) =>
+    request<{ success: boolean; removed: number; missing: number }>(`/folders/${folderId}/members`, { method: "DELETE", body: JSON.stringify({ prospect_ids: prospectIds.map(Number) }) }),
   remove: (folderId: number) =>
     request<{ success: boolean }>(`/folders/${folderId}`, { method: "DELETE" }),
 };

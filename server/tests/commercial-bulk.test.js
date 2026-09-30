@@ -23,11 +23,16 @@ test('Lead folder deletion protects automation references and preserves leads', 
   const route = read('server', 'routes', 'prospection.js');
   const page = read('src', 'pages', 'commercial', 'LeadsPage.tsx');
   assert.match(route, /JSON_EXTRACT\(av\.definition/);
+  assert.match(route, /a\.status = 'active'/);
+  assert.match(route, /av\.id = a\.active_version_id/);
+  assert.match(route, /av\.status = 'published'/);
   assert.match(route, /Esta lista esta sendo usada/);
   assert.match(route, /DELETE FROM lead_folder_members/);
   assert.match(route, /DELETE FROM lead_folders/);
   assert.doesNotMatch(route, /DELETE FROM prospects WHERE.*folder/);
   assert.match(page, /handleDeleteFolder/);
+  assert.match(page, /removeMembers/);
+  assert.match(page, /Remover da lista/);
 });
 
 test('WhatsApp cadence is presented as Disparo WhatsApp without a new technical action type', () => {

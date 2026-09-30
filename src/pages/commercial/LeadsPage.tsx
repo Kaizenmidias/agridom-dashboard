@@ -730,6 +730,24 @@ export default function LeadsPage() {
     catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível excluir a lista."); }
   };
 
+  const currentManualFolder = customFolders.find((folder) => folder.id === filters.folderId);
+  const refreshFolderState = async () => {
+    const { folders: refreshed } = await leadFoldersAPI.list();
+    setCustomFolders(refreshed.map((item) => ({ id: String(item.id), name: item.name, description: item.description || null, icon: item.icon || "folder", isSystem: false, leadCount: item.total, prospectIds: (item.prospect_ids || []).map(String), createdAt: new Date().toISOString() })));
+    setSelectedIds([]);
+    await reload();
+  };
+  const removeLeadsFromCurrentFolder = async (ids: string[]) => {
+    if (!currentManualFolder || !ids.length) return;
+    const label = ids.length === 1 ? `Remover 1 lead da lista '${currentManualFolder.name}'?` : `Remover ${ids.length} leads da lista '${currentManualFolder.name}'?`;
+    if (!window.confirm(`${label}\n\nOs leads continuarão no CRM e em outras listas.`)) return;
+    try {
+      const result = await leadFoldersAPI.removeMembers(Number(currentManualFolder.id), ids);
+      await refreshFolderState();
+      toast.success(`${result.removed} lead(s) removido(s) da lista.`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível remover os leads da lista."); }
+  };
+
   const handleLeadFormChange = (
     key: keyof typeof emptyLeadForm,
     value: string,
@@ -1183,6 +1201,7 @@ export default function LeadsPage() {
                     {action}
                   </Button>
                 ))}
+                {currentManualFolder ? <Button variant="outline" size="sm" onClick={() => void removeLeadsFromCurrentFolder(selectedIds)}>Remover da lista</Button> : null}
                 <Button
                   variant="destructive"
                   size="sm"
@@ -1423,6 +1442,7 @@ export default function LeadsPage() {
                                   >
                                     Mover para pasta
                                   </DropdownMenuItem>
+                                  {currentManualFolder ? <DropdownMenuItem onClick={() => void removeLeadsFromCurrentFolder([lead.id])}>Remover da lista</DropdownMenuItem> : null}
                                   <DropdownMenuItem>
                                     Alterar status
                                   </DropdownMenuItem>

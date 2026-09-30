@@ -47,8 +47,9 @@ router.delete('/folders/:id', async (req, res) => {
     const folder = await db('SELECT id, name FROM lead_folders WHERE id = ? AND owner_user_id = ? FOR UPDATE', [folderId, req.userId]);
     if (!folder.rows?.length) { await connection.rollback(); return res.status(404).json({ error: 'Pasta nao encontrada.' }); }
     const references = await db(`SELECT a.id, a.name
-      FROM automations a JOIN ${automationVersionsTable} av ON av.automation_id = a.id
-      WHERE a.owner_user_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.type')) = 'lead.added_to_folder'
+      FROM automations a JOIN ${automationVersionsTable} av ON av.id = a.active_version_id
+      WHERE a.owner_user_id = ? AND a.status = 'active' AND av.status = 'published'
+        AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.type')) = 'lead.added_to_folder'
         AND CAST(JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.folderId')) AS UNSIGNED) = ?
       GROUP BY a.id, a.name`, [req.userId, folderId]);
     if (references.rows?.length) { await connection.rollback(); return res.status(409).json({ error: 'Esta lista esta sendo usada por uma ou mais automacoes. Altere ou desative essas automacoes antes de excluir a lista.', automations: references.rows }); }
@@ -100,6 +101,18 @@ router.delete('/folders/:id/members/:prospectId', async (req, res) => {
     if (!result.affectedRows) return res.status(404).json({ error: 'Membro nao encontrado.' });
     res.json({ success: true });
   } catch (error) { console.error('[Prospection] folder member remove failed', error); res.status(500).json({ error: 'Nao foi possivel remover o lead da pasta.' }); }
+});
+
+router.delete('/folders/:id/members', async (req, res) => {
+  try {
+    const folderId = parseId(req.params.id);
+    const ids = [...new Set((Array.isArray(req.body?.prospect_ids) ? req.body.prospect_ids : []).map(parseId).filter(Boolean))];
+    if (!folderId || !ids.length) return res.status(400).json({ error: 'Informe uma pasta e ao menos um lead.' });
+    const result = await getQuery(req)(`DELETE m FROM lead_folder_members m
+      JOIN lead_folders f ON f.id = m.folder_id JOIN prospects p ON p.id = m.prospect_id
+      WHERE m.folder_id = ? AND f.owner_user_id = ? AND p.owner_user_id = ? AND m.prospect_id IN (${ids.map(() => '?').join(',')})`, [folderId, req.userId, req.userId, ...ids]);
+    res.json({ success: true, removed: Number(result.affectedRows || 0), missing: ids.length - Number(result.affectedRows || 0) });
+  } catch (error) { console.error('[Prospection] bulk folder members remove failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel remover os leads da pasta.' }); }
 });
 
 const defaultSettings = {
