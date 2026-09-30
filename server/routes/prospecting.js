@@ -61,20 +61,21 @@ router.post('/integrations/:provider/test', async (req, res) => {
   if (req.params.provider !== 'apify') return res.status(400).json({ error: 'Integracao nao suportada nesta fase.' });
   const [rows] = await getPool().execute("SELECT * FROM integration_providers WHERE provider = 'apify' LIMIT 1");
   if (!rows[0]?.secret_ciphertext) return res.status(409).json({ error: 'Configure a integracao Apify antes de testar.' });
+  let actorId = null;
   try {
     const token = decryptSecret(rows[0])?.token;
     const metadata = JSON.parse(rows[0].configuration_metadata || '{}');
-    const actorId = String(metadata.googleMapsActorId || '').replace('/', '~');
+    actorId = String(metadata.googleMapsActorId || '').trim().replace('/', '~');
     if (!actorId) return res.status(400).json({ error: 'Configure o Actor do Google Maps na integracao Apify.' });
     await testApifyActor({ token, actorId });
     await getPool().execute("UPDATE integration_providers SET status = 'connected', last_tested_at = CURRENT_TIMESTAMP, last_test_status = 'success', last_error = NULL WHERE provider = 'apify'");
     res.json({ success: true, message: 'Conexao com Apify validada.' });
   } catch (error) {
     console.error('[Apify] integration test failed', {
-      provider: 'apify', operation: 'actor_metadata', actorId: error?.actorId || undefined,
+      provider: 'apify', operation: 'actor_metadata', actorId: error?.actorId || actorId,
       error_code: error?.code || 'APIFY_TEST_ERROR', provider_status: error?.providerStatus || null,
       provider_error_type: error?.providerErrorType || null, provider_error_code: error?.providerErrorCode || null,
-      provider_message: safeMessage(error?.providerMessage), timeout: Boolean(error?.timeout),
+      provider_message: safeMessage(error?.providerMessage || error?.message), timeout: Boolean(error?.timeout),
     });
     if (error?.code) {
       await getPool().execute("UPDATE integration_providers SET status = ?, last_tested_at = CURRENT_TIMESTAMP, last_test_status = 'error', last_error = ? WHERE provider = 'apify'", [error.code === 'APIFY_INVALID_TOKEN' ? 'auth_error' : 'provider_error', safeMessage(error.message)]).catch(() => {});

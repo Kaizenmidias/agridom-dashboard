@@ -65,3 +65,11 @@ test('PROSPECCAO identifica com seguranca a causa da falha de teste da Apify', a
     (error) => error.code === 'APIFY_NETWORK_ERROR' && error.status === 502 && !error.message.includes(token),
   );
 });
+
+test('PROSPECCAO preserva o Actor no diagnóstico mesmo quando a falha ocorre fora do provider', () => {
+  const route = read('server', 'routes', 'prospecting.js');
+  assert.match(route, /let actorId = null/);
+  assert.match(route, /actorId = String\(metadata\.googleMapsActorId \|\| ''\)\.trim\(\)/);
+  assert.match(route, /error\?\.actorId \|\| actorId/);
+  assert.match(route, /error\?\.providerMessage \|\| error\?\.message/);
+});
