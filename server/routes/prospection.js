@@ -609,6 +609,77 @@ router.post('/prospects/:id/add-to-crm', async (req, res) => {
   }
 });
 
+router.post('/prospects/import-to-folder', async (req, res) => {
+  let connection;
+  let transactionStarted = false;
+  try {
+    const folderId = parseId(req.body?.folder_id);
+    const ids = [...new Set((Array.isArray(req.body?.prospect_ids) ? req.body.prospect_ids : []).map(parseId).filter(Boolean))];
+    if (!folderId || !ids.length || ids.length > 500) return res.status(400).json({ error: 'Informe uma lista e entre 1 e 500 leads validos.' });
+
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+    const db = (sql, params) => connectionQuery(connection, sql, params);
+    const folder = await db('SELECT id, name FROM lead_folders WHERE id = ? AND owner_user_id = ? FOR UPDATE', [folderId, req.userId]);
+    if (!folder.rows?.length) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(404).json({ error: 'Lista de destino nao encontrada.' });
+    }
+
+    const leads = await db(`SELECT id, analysis_report FROM prospects WHERE owner_user_id = ? AND id IN (${ids.map(() => '?').join(',')}) FOR UPDATE`, [req.userId, ...ids]);
+    const foundIds = new Set((leads.rows || []).map((row) => Number(row.id)));
+    let newLeads = 0;
+    let existingLeads = 0;
+    let addedToFolder = 0;
+    let alreadyInFolder = 0;
+    let triggers = 0;
+
+    for (const lead of leads.rows || []) {
+      let report = {};
+      try { report = typeof lead.analysis_report === 'string' ? JSON.parse(lead.analysis_report || '{}') : (lead.analysis_report || {}); } catch { report = {}; }
+      if (report.crmSent) existingLeads += 1;
+      else {
+        newLeads += 1;
+        await db(`UPDATE prospects SET analysis_report = JSON_SET(COALESCE(analysis_report, JSON_OBJECT()), '$.crmSent', true, '$.crmSentAt', ?), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?`, [new Date().toISOString(), lead.id, req.userId]);
+      }
+      const membership = await db('INSERT IGNORE INTO lead_folder_members (folder_id, prospect_id) VALUES (?, ?)', [folderId, lead.id]);
+      if (Number(membership.affectedRows || 0) > 0) {
+        addedToFolder += 1;
+        triggers += 1;
+        await dispatchDomainEvent({
+          type: 'lead.added_to_folder',
+          entityType: 'lead',
+          entityId: lead.id,
+          actorUserId: req.userId,
+          payload: { leadId: lead.id, folderId },
+          idempotencyKey: `lead-folder:${folderId}:${lead.id}`,
+          ...requestEventContext(req),
+        }, { connection });
+      } else alreadyInFolder += 1;
+    }
+    await connection.commit();
+    transactionStarted = false;
+    res.status(201).json({
+      selected: ids.length,
+      new_leads: newLeads,
+      existing_leads: existingLeads,
+      added_to_folder: addedToFolder,
+      already_in_folder: alreadyInFolder,
+      triggers,
+      failed: ids.length - foundIds.size,
+      folder: { id: folderId, name: folder.rows[0].name },
+    });
+  } catch (error) {
+    if (connection && transactionStarted) await connection.rollback();
+    console.error('[Prospection] import to folder failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' });
+    res.status(500).json({ error: 'Nao foi possivel importar os leads para a lista.' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
 router.put('/settings', async (req, res) => {
   try {
     const payload = { ...defaultSettings, ...req.body };

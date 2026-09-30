@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import { prospectionAPI } from '@/api/prospection'
+import { leadFoldersAPI, type LeadFolder } from '@/api/lead-folders'
 import type {
   Prospect,
   ProspectContactHistory,
@@ -188,6 +189,8 @@ const ProspeccaoPage = () => {
   const [syncing, setSyncing] = useState(false)
   const [loadingStates, setLoadingStates] = useState(false)
   const [loadingCities, setLoadingCities] = useState(false)
+  const [loadingFolders, setLoadingFolders] = useState(false)
+  const [leadFolders, setLeadFolders] = useState<LeadFolder[]>([])
   const [bootstrap, setBootstrap] = useState<ProspectionBootstrap | null>(null)
   const [searchForm, setSearchForm] = useState<ProspectSearchInput>(initialSearch)
   const [states, setStates] = useState<StateOption[]>([])
@@ -201,6 +204,7 @@ const ProspeccaoPage = () => {
   const [settingsDraft, setSettingsDraft] = useState<Partial<ProspectingSettings>>({})
   const [newFolderName, setNewFolderName] = useState('')
   const [folderDestination, setFolderDestination] = useState('')
+  const [destinationFolderId, setDestinationFolderId] = useState('')
   const [extraFolders, setExtraFolders] = useState<string[]>([])
   const [detailProspect, setDetailProspect] = useState<Prospect | null>(null)
   const [bulkAction, setBulkAction] = useState<BulkAction | undefined>(undefined)
@@ -230,6 +234,22 @@ const ProspeccaoPage = () => {
 
   useEffect(() => {
     void loadBootstrap()
+  }, [])
+
+  const loadLeadFolders = async () => {
+    try {
+      setLoadingFolders(true)
+      const result = await leadFoldersAPI.list()
+      setLeadFolders(result.folders || [])
+    } catch (error: any) {
+      toast({ title: 'Erro ao carregar listas', description: error.message || 'NÃ£o foi possÃ­vel carregar as listas de Leads.', variant: 'destructive' })
+    } finally {
+      setLoadingFolders(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadLeadFolders()
   }, [])
 
   useEffect(() => {
@@ -445,6 +465,11 @@ const ProspeccaoPage = () => {
   }
 
   const handleAddToCRM = async (prospect: Prospect) => {
+    const destinationId = Number(destinationFolderId)
+    if (!destinationId) {
+      toast({ title: 'Selecione uma lista de destino', description: 'Escolha uma lista real de Leads antes de importar.' })
+      return
+    }
     if (isLeadInCRM(prospect)) {
       toast({
         title: 'Lead já enviado para o CRM',
@@ -454,12 +479,13 @@ const ProspeccaoPage = () => {
     }
 
     try {
-      await prospectionAPI.addToCRM(prospect.id)
+      await prospectionAPI.importToFolder([prospect.id], destinationId)
       toast({
         title: 'Lead enviado para o CRM',
         description: `${prospect.business_name} agora está salvo no CRM.`,
       })
       await loadBootstrap()
+      await loadLeadFolders()
     } catch (error: any) {
       toast({
         title: 'Erro ao enviar para o CRM',
@@ -470,9 +496,12 @@ const ProspeccaoPage = () => {
   }
 
   const handleAddSelectedToCRM = async () => {
-    const eligibleProspects = selectedProspects.filter((prospect) => !isLeadInCRM(prospect))
-
-    if (eligibleProspects.length === 0) {
+    const destinationId = Number(destinationFolderId)
+    if (!destinationId) {
+      toast({ title: 'Selecione uma lista de destino', description: 'Escolha uma lista real de Leads antes de importar.' })
+      return
+    }
+    if (selectedProspects.length === 0) {
       toast({
         title: 'Nenhum lead elegível',
         description: 'Selecione leads que ainda não foram enviados para o CRM.',
@@ -481,13 +510,14 @@ const ProspeccaoPage = () => {
     }
 
     try {
-      await Promise.all(eligibleProspects.map((prospect) => prospectionAPI.addToCRM(prospect.id)))
+      const result = await prospectionAPI.importToFolder(selectedProspects.map((prospect) => prospect.id), destinationId)
       toast({
-        title: 'Leads enviados para o CRM',
-        description: `${eligibleProspects.length} lead(s) enviado(s) em massa para o CRM.`,
+        title: 'Importacao concluida',
+        description: `${result.new_leads} novos, ${result.existing_leads} existentes, ${result.added_to_folder} adicionados a lista e ${result.already_in_folder} ja pertenciam a lista.`,
       })
       setSelectedIds([])
       await loadBootstrap()
+      await loadLeadFolders()
     } catch (error: any) {
       toast({
         title: 'Erro no envio em massa para o CRM',
@@ -670,7 +700,7 @@ const ProspeccaoPage = () => {
               Escolha nicho, estado e cidade. Ao buscar novamente o mesmo mercado, o sistema tenta avançar para outros leads ainda não prospectados.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-4">
+          <CardContent className="grid gap-4 md:grid-cols-5">
             <div className="space-y-2">
               <Label htmlFor="niche">Nicho</Label>
               <Input
@@ -745,7 +775,21 @@ const ProspeccaoPage = () => {
                     quantity: Number(event.target.value || 1),
                   }))
                 }
-              />
+                />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="destination-folder">Lista de destino</Label>
+              <Select value={destinationFolderId} onValueChange={setDestinationFolderId} disabled={loadingFolders}>
+                <SelectTrigger id="destination-folder">
+                  <SelectValue placeholder={loadingFolders ? 'Carregando listas...' : 'Selecione uma lista'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {leadFolders.map((folder) => (
+                    <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!loadingFolders && leadFolders.length === 0 ? <p className="text-xs text-muted-foreground">Crie uma lista em Leads para importar resultados.</p> : null}
             </div>
             <div className="md:col-span-4">
               <Button className="w-full md:w-auto" onClick={() => void handleSearch()} disabled={searching}>

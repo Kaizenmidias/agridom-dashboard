@@ -74,6 +74,22 @@ export const prospectionAPI = {
     return request<Prospect>(`/prospects/${id}/add-to-crm`, { method: 'POST' })
   },
 
+  importToFolder(prospectIds: number[], folderId: number) {
+    return request<{
+      selected: number
+      new_leads: number
+      existing_leads: number
+      added_to_folder: number
+      already_in_folder: number
+      triggers: number
+      failed: number
+      folder: { id: number; name: string }
+    }>('/prospects/import-to-folder', {
+      method: 'POST',
+      body: JSON.stringify({ prospect_ids: prospectIds, folder_id: folderId }),
+    })
+  },
+
   deleteProspect(id: number) {
     return request<{ success: boolean; id: number }>(`/prospects/${id}`, { method: 'DELETE' })
   },
