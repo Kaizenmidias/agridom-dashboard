@@ -205,10 +205,10 @@ const ProspeccaoPage = () => {
   const [newFolderName, setNewFolderName] = useState('')
   const [folderDestination, setFolderDestination] = useState('')
   const [destinationFolderId, setDestinationFolderId] = useState('')
+  const [pageSize, setPageSize] = useState(50)
   const [extraFolders, setExtraFolders] = useState<string[]>([])
   const [detailProspect, setDetailProspect] = useState<Prospect | null>(null)
   const [bulkAction, setBulkAction] = useState<BulkAction | undefined>(undefined)
-  const pageSize = 10
 
   const loadBootstrap = async () => {
     try {
@@ -380,6 +380,10 @@ const ProspeccaoPage = () => {
   )
 
   const totalPages = Math.max(1, Math.ceil(filteredProspects.length / pageSize))
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages))
+  }, [totalPages])
 
   useEffect(() => {
     setPage(1)
@@ -777,20 +781,6 @@ const ProspeccaoPage = () => {
                 }
                 />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="destination-folder">Lista de destino</Label>
-              <Select value={destinationFolderId} onValueChange={setDestinationFolderId} disabled={loadingFolders}>
-                <SelectTrigger id="destination-folder">
-                  <SelectValue placeholder={loadingFolders ? 'Carregando listas...' : 'Selecione uma lista'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {leadFolders.map((folder) => (
-                    <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {!loadingFolders && leadFolders.length === 0 ? <p className="text-xs text-muted-foreground">Crie uma lista em Leads para importar resultados.</p> : null}
-            </div>
             <div className="md:col-span-4">
               <Button className="w-full md:w-auto" onClick={() => void handleSearch()} disabled={searching}>
                 {searching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
@@ -901,6 +891,16 @@ const ProspeccaoPage = () => {
                         <SelectItem value="delete">Excluir selecionados</SelectItem>
                       </SelectContent>
                     </Select>
+                    {bulkAction === 'crm' ? (
+                      <Select value={destinationFolderId} onValueChange={setDestinationFolderId} disabled={loadingFolders}>
+                        <SelectTrigger className="w-full sm:w-[220px]">
+                          <SelectValue placeholder={loadingFolders ? 'Carregando listas...' : 'Adicionar Ã  lista'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {leadFolders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : null}
                     <Button onClick={() => void handleApplyBulkAction()} disabled={!bulkAction || selectedIds.length === 0}>
                       Aplicar
                     </Button>
@@ -925,6 +925,14 @@ const ProspeccaoPage = () => {
                     {paginatedProspects.every((prospect) => selectedIds.includes(prospect.id))
                       ? 'Limpar seleção da página'
                       : 'Selecionar página atual'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedIds((current) => Array.from(new Set([...current, ...filteredProspects.map((prospect) => prospect.id)])))}
+                    disabled={filteredProspects.length === 0}
+                  >
+                    Selecionar todos os resultados
                   </Button>
                 </div>
               </div>
@@ -1027,7 +1035,7 @@ const ProspeccaoPage = () => {
                               size="sm"
                               onClick={(event) => {
                                 event.stopPropagation()
-                                void handleAddToCRM(prospect)
+                                setSelectedIds([prospect.id]); setBulkAction('crm')
                               }}
                               disabled={inCRM}
                             >
@@ -1187,7 +1195,7 @@ const ProspeccaoPage = () => {
                                   size="sm"
                                   onClick={(event) => {
                                     event.stopPropagation()
-                                    void handleAddToCRM(prospect)
+                                    setSelectedIds([prospect.id]); setBulkAction('crm')
                                   }}
                                   disabled={inCRM}
                                 >
@@ -1216,9 +1224,13 @@ const ProspeccaoPage = () => {
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-muted-foreground">
-                  Exibindo {paginatedProspects.length} de {filteredProspects.length} lead(s) | selecionados: {selectedIds.length}
+                  Mostrando {filteredProspects.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, filteredProspects.length)} de {filteredProspects.length} | selecionados: {selectedIds.length}
                 </p>
                 <div className="flex items-center gap-2">
+                  <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(1) }}>
+                    <SelectTrigger className="w-[110px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>{[25, 50, 75, 100, 150].map((size) => <SelectItem key={size} value={String(size)}>{size} por pÃ¡gina</SelectItem>)}</SelectContent>
+                  </Select>
                   <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1}>
                     Anterior
                   </Button>
