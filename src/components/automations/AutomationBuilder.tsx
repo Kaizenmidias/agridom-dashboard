@@ -363,7 +363,7 @@ function definitionFromFlow(nodes: FlowNode[], edges: Edge[], triggerType: strin
     schemaVersion: 1,
     trigger: {
       type: String(trigger?.data.config.triggerType || triggerType || "lead.created"),
-      config: Object.fromEntries(Object.entries(trigger?.data.config || {}).filter(([key]) => key !== "triggerType")),
+      config: Object.fromEntries(Object.entries(trigger?.data.config || {}).filter(([key]) => key !== "triggerType" && key !== "folderName")),
       next: trigger ? edges.find((edge) => edge.source === trigger.id && edge.sourceHandle !== "yes" && edge.sourceHandle !== "no")?.target || null : null,
     },
     steps,
@@ -378,15 +378,19 @@ function KaizenFlowNode({ data, selected }: NodeProps<FlowNode>) {
   const Icon = meta.icon;
   const action = data.type === "action" ? ACTION_CATALOG.find((item) => item.id === String(data.config.actionType)) : null;
   const summary = data.type === "trigger"
-    ? "Quando este evento acontecer"
+    ? String(data.config.triggerType) === "lead.added_to_folder"
+      ? String(data.config.folderName || "Lista não selecionada")
+      : "Quando este evento acontecer"
     : data.type === "condition"
       ? `${String(data.config.field || "Campo")} ${String(data.config.operator || "é igual a").replaceAll("_", " ")}${data.config.value ? ` ${String(data.config.value)}` : ""}`
       : data.type === "wait"
-        ? `${String(data.config.amount || 1)} ${String(data.config.unit || "hours").replace("hours", "horas").replace("minutes", "minutos").replace("days", "dias")}`
+        ? `${String(data.config.amount || 1)} ${String(data.config.unit || "hours").replace("seconds", "segundos").replace("hours", "horas").replace("minutes", "minutos").replace("days", "dias")}`
         : data.type === "action"
-          ? action?.description || "Configure esta ação"
+          ? String(data.config.actionType) === "whatsapp.send"
+            ? `${String(data.config.accountName || (data.config.accountId ? `Conta #${data.config.accountId}` : "Conta não selecionada"))} · Cadência: ${String(data.config.cadenceValue || 1)} ${String(data.config.cadenceUnit || "minutes").replace("seconds", "segundos").replace("minutes", "minutos").replace("hours", "horas").replace("days", "dias")}`
+            : action?.description || "Configure esta ação"
           : "Fim deste caminho";
-  const incomplete = data.type === "action" && ["lead.add_tag", "lead.remove_tag"].includes(String(data.config.actionType)) && !data.config.labelId;
+  const incomplete = (data.type === "trigger" && String(data.config.triggerType) === "lead.added_to_folder" && !Number(data.config.folderId)) || (data.type === "action" && ["lead.add_tag", "lead.remove_tag"].includes(String(data.config.actionType)) && !data.config.labelId);
   return (
     <div className={`group relative w-[264px] rounded-xl border bg-[#181A1F] p-4 text-[#F4F5F7] shadow-xl transition hover:-translate-y-0.5 hover:shadow-2xl ${meta.color} ${selected ? "ring-2 ring-[#B7FF3C] ring-offset-2 ring-offset-[#0E1013]" : ""}`}>
       {data.type !== "trigger" ? <Handle type="target" position={Position.Left} id="input" className="!h-3 !w-3 !border-2 !border-[#0A0A0A] !bg-[#B7FF3C]" /> : null}
@@ -476,7 +480,7 @@ function FreeformAutomationBuilder(props: {
   const organize = () => { if (props.readOnly) return; remember(); setNodes((current) => current.map((node, index) => ({ ...node, position: { x: 80 + (index % 4) * 300, y: 160 + Math.floor(index / 4) * 190 }, data: { ...node.data, x: 80 + (index % 4) * 300, y: 160 + Math.floor(index / 4) * 190 } }))); };
   const currentDefinition = () => definitionFromFlow(nodes, edges, props.triggerType);
   const save = async (notify = true) => { setSaving(true); try { const latest = currentDefinition(); if (props.draft) await automationsAPI.updateVersion(props.automationId, props.draft.id, latest); else await automationsAPI.createVersion(props.automationId, latest); setDirty(false); if (notify) toast.success("Rascunho salvo."); await props.onSaved(); return true; } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível salvar o rascunho."); return false; } finally { setSaving(false); } };
-  const publishCurrent = async () => { if (!props.onPublish) return; setSaving(true); try { const latest = currentDefinition(); let versionId = props.draft?.id; if (versionId) await automationsAPI.updateVersion(props.automationId, versionId, latest); else versionId = (await automationsAPI.createVersion(props.automationId, latest)).id; setDirty(false); await props.onPublish(latest, versionId); } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível publicar o fluxo."); } finally { setSaving(false); } };
+  const publishCurrent = async () => { if (!props.onPublish) return; const latest = currentDefinition(); if (latest.trigger.type === "lead.added_to_folder" && !Number(latest.trigger.config.folderId)) { toast.error("Selecione a lista do gatilho 'Novo lead na lista'."); return; } setSaving(true); try { let versionId = props.draft?.id; if (versionId) await automationsAPI.updateVersion(props.automationId, versionId, latest); else versionId = (await automationsAPI.createVersion(props.automationId, latest)).id; setDirty(false); await props.onPublish(latest, versionId); } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível publicar o fluxo."); } finally { setSaving(false); } };
   useEffect(() => { const onKey = (event: KeyboardEvent) => { const target = event.target as HTMLElement; if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return; if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; } if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; } if ((event.key === "Delete" || event.key === "Backspace") && (selectedId || selectedEdgeId)) { event.preventDefault(); deleteSelected(); } if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void save(); } }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); });
   useEffect(() => { const onBeforeUnload = (event: BeforeUnloadEvent) => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; }; window.addEventListener("beforeunload", onBeforeUnload); return () => window.removeEventListener("beforeunload", onBeforeUnload); }, [dirty]);
   const matches = ACTION_CATALOG.filter((item) => [item.name, item.description, item.category, ...item.aliases].join(" ").toLowerCase().includes(search.toLowerCase()));
@@ -1231,6 +1235,8 @@ function NodeInspector({
 }) {
   const [whatsappAccounts, setWhatsappAccounts] = useState<WhatsAppAccount[]>([]);
   const [leadFolders, setLeadFolders] = useState<LeadFolder[]>([]);
+  const [leadFoldersLoading, setLeadFoldersLoading] = useState(false);
+  const [leadFoldersError, setLeadFoldersError] = useState(false);
   const actionType = String(node.config.actionType || "lead.add_tag");
   useEffect(() => {
     if (actionType !== "whatsapp.send") return;
@@ -1238,7 +1244,9 @@ function NodeInspector({
   }, [actionType]);
   useEffect(() => {
     if (node.type !== "trigger" || String(node.config.triggerType) !== "lead.added_to_folder") return;
-    void leadFoldersAPI.list().then((result) => setLeadFolders(result.folders)).catch(() => setLeadFolders([]));
+    setLeadFoldersLoading(true);
+    setLeadFoldersError(false);
+    void leadFoldersAPI.list().then((result) => { setLeadFolders(result.folders); const folder = result.folders.find((item) => item.id === Number(node.config.folderId)); if (folder && node.config.folderName !== folder.name) updateNode({ config: { ...node.config, folderName: folder.name } }); }).catch(() => { setLeadFolders([]); setLeadFoldersError(true); }).finally(() => setLeadFoldersLoading(false));
   }, [node.type, node.config.triggerType]);
   if (node.type === "trigger")
     return (
@@ -1250,7 +1258,7 @@ function NodeInspector({
         <FieldLabel label="Evento">
           <Select
             value={String(node.config.triggerType || "lead.created")}
-            onValueChange={(value) => updateConfig("triggerType", value)}
+            onValueChange={(value) => updateNode({ config: value === "lead.added_to_folder" ? { triggerType: value } : { triggerType: value, folderId: undefined, folderName: undefined } })}
           >
             <SelectTrigger>
               <SelectValue />
@@ -1266,8 +1274,8 @@ function NodeInspector({
         </FieldLabel>
         {String(node.config.triggerType) === "lead.added_to_folder" ? (
           <FieldLabel label="Lista">
-            <Select value={String(node.config.folderId || "")} onValueChange={(value) => updateConfig("folderId", Number(value))}>
-              <SelectTrigger><SelectValue placeholder={leadFolders.length ? "Selecione a lista" : "Nenhuma lista encontrada"} /></SelectTrigger>
+            <Select value={String(node.config.folderId || "")} onValueChange={(value) => { const folder = leadFolders.find((item) => item.id === Number(value)); updateNode({ config: { ...node.config, folderId: Number(value), folderName: folder?.name } }); }}>
+              <SelectTrigger><SelectValue placeholder={leadFoldersLoading ? "Carregando listas..." : leadFoldersError ? "Não foi possível carregar as listas." : leadFolders.length ? "Selecione uma lista" : "Nenhuma lista encontrada."} /></SelectTrigger>
               <SelectContent>{leadFolders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}</SelectContent>
             </Select>
           </FieldLabel>

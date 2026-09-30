@@ -20,6 +20,13 @@ test('AUTOMATIONS-3A define o evento de lead adicionado a lista e o emitem somen
   assert.match(page, /"lead\.added_to_folder": "Novo lead na lista"/);
   assert.match(builder, /"lead\.added_to_folder": "Novo lead na lista"/);
   assert.match(builder, /leadFoldersAPI\.list\(\)/);
+  assert.match(builder, /Carregando listas\.\.\./);
+  assert.match(builder, /folderName/);
+  assert.match(builder, /Lista não selecionada/);
+  assert.match(builder, /Selecione a lista do gatilho/);
+  assert.match(builder, /key !== "folderName"/);
+  assert.match(builder, /seconds.*segundos/);
+  assert.match(builder, /Cadência/);
   assert.match(page, /leadFoldersAPI\.list\(\)/);
   assert.match(page, /DEFAULT_DEFINITION\(triggerType, folderId \|\| undefined\)/);
   assert.match(page, /Selecione uma lista/);
