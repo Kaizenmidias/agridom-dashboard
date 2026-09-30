@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { getPool } = require('../config/database');
 const { encryptSecret, decryptSecret } = require('../services/integration-crypto');
 const { testApifyActor, safeMessage } = require('../services/apify-integration-test');
+const { normalizeIntegrationMetadata } = require('../services/integration-metadata');
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get('/integrations', async (req, res) => {
       configured: Boolean(row.secret_ciphertext) && ['configured', 'connected', 'provider_error', 'auth_error'].includes(row.status),
       status: row.status,
       tokenMasked: row.secret_ciphertext ? '********' : '',
-      metadata: { ...(typeof row.configuration_metadata === 'object' ? row.configuration_metadata : JSON.parse(row.configuration_metadata || '{}')), tokenConfigured: Boolean(row.secret_ciphertext) },
+      metadata: { ...normalizeIntegrationMetadata(row.configuration_metadata), tokenConfigured: Boolean(row.secret_ciphertext) },
     })),
   });
 });
@@ -64,7 +65,7 @@ router.post('/integrations/:provider/test', async (req, res) => {
   let actorId = null;
   try {
     const token = decryptSecret(rows[0])?.token;
-    const metadata = JSON.parse(rows[0].configuration_metadata || '{}');
+    const metadata = normalizeIntegrationMetadata(rows[0].configuration_metadata);
     actorId = String(metadata.googleMapsActorId || '').trim().replace('/', '~');
     if (!actorId) return res.status(400).json({ error: 'Configure o Actor do Google Maps na integracao Apify.' });
     await testApifyActor({ token, actorId });

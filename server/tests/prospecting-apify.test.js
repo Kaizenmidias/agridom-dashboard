@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { actorInput, normalize } = require('../services/prospecting-service');
 const { testApifyActor } = require('../services/apify-integration-test');
+const { normalizeIntegrationMetadata } = require('../services/integration-metadata');
 
 const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', '..', ...parts), 'utf8');
 
@@ -72,4 +73,21 @@ test('PROSPECCAO preserva o Actor no diagnóstico mesmo quando a falha ocorre fo
   assert.match(route, /actorId = String\(metadata\.googleMapsActorId \|\| ''\)\.trim\(\)/);
   assert.match(route, /error\?\.actorId \|\| actorId/);
   assert.match(route, /error\?\.providerMessage \|\| error\?\.message/);
+});
+
+test('PROSPECCAO normaliza metadata do MySQL como objeto, JSON, nula e rejeita JSON invalido', () => {
+  const metadata = { googleMapsActorId: 'compass/crawler-google-places' };
+  assert.deepEqual(normalizeIntegrationMetadata(metadata), metadata);
+  assert.deepEqual(normalizeIntegrationMetadata(JSON.stringify(metadata)), metadata);
+  assert.deepEqual(normalizeIntegrationMetadata(null), {});
+  assert.throws(() => normalizeIntegrationMetadata('{invalid'), { code: 'INTEGRATION_METADATA_INVALID' });
+  assert.equal(normalizeIntegrationMetadata(metadata).googleMapsActorId, 'compass/crawler-google-places');
+});
+
+test('PROSPECCAO usa a mesma normalizacao no GET, teste e worker', () => {
+  const route = read('server', 'routes', 'prospecting.js');
+  const service = read('server', 'services', 'prospecting-service.js');
+  assert.match(route, /normalizeIntegrationMetadata\(row\.configuration_metadata\)/);
+  assert.match(route, /normalizeIntegrationMetadata\(rows\[0\]\.configuration_metadata\)/);
+  assert.match(service, /normalizeIntegrationMetadata\(config\.configuration_metadata\)/);
 });

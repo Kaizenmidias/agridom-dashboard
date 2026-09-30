@@ -1,5 +1,6 @@
 const { getPool } = require('../config/database');
 const { decryptSecret } = require('./integration-crypto');
+const { normalizeIntegrationMetadata } = require('./integration-metadata');
 
 const digits = (value) => String(value || '').replace(/\D/g, '');
 const phone = (value) => {
@@ -26,7 +27,7 @@ function actorInput(parameters) {
 
 async function apifySearch(parameters, config) {
   const token = decryptSecret(config)?.token;
-  const metadata = JSON.parse(config.configuration_metadata || '{}');
+  const metadata = normalizeIntegrationMetadata(config.configuration_metadata);
   const actorId = String(metadata.googleMapsActorId || '').trim().replace('/', '~');
   if (!token) throw Object.assign(new Error('Configure a integracao Apify em Administracao > Integracoes.'), { code: 'APIFY_NOT_CONFIGURED' });
   if (!actorId) throw Object.assign(new Error('Configure o Actor do Google Maps na integracao Apify.'), { code: 'APIFY_ACTOR_NOT_CONFIGURED' });
