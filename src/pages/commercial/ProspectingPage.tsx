@@ -617,6 +617,24 @@ export default function ProspectingPage() {
     setResults(resultData.items);
   };
 
+  useEffect(() => {
+    const active = history.find((item) => ['queued', 'running'].includes(item.status));
+    if (!active) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const data = await prospectingAPI.getJob(active.id);
+        if (cancelled) return;
+        setJob(data.job);
+        setEvents(data.events);
+        if (data.job.status === 'completed') setResults((await prospectingAPI.getResults(active.id)).items);
+        else if (['queued', 'running'].includes(data.job.status)) window.setTimeout(poll, 2000);
+      } catch { /* the next page load can recover the job again */ }
+    };
+    void poll();
+    return () => { cancelled = true; };
+  }, [history]);
+
   const startSearch = async (payload: ProspectingSearchPayload) => {
     try {
       setRunning(true);
@@ -624,12 +642,21 @@ export default function ProspectingPage() {
       setResults([]);
       const createdJob = await prospectingAPI.createJob(payload);
       setJob(createdJob);
-      await refreshJob(createdJob.id);
-      const completedJob = await prospectingAPI.startJob(createdJob.id);
-      setJob(completedJob);
-      await refreshJob(createdJob.id);
+      await prospectingAPI.startJob(createdJob.id);
+      let currentJob = createdJob;
+      for (let attempt = 0; attempt < 180; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        const data = await prospectingAPI.getJob(createdJob.id);
+        currentJob = data.job;
+        setJob(data.job);
+        setEvents(data.events);
+        if (['completed', 'failed', 'cancelled'].includes(data.job.status)) break;
+      }
+      const resultData = await prospectingAPI.getResults(createdJob.id);
+      setResults(resultData.items);
       await loadInitialData();
-      toast({ title: "Busca finalizada", description: `${completedJob.foundCount} resultado(s) encontrados.` });
+      if (currentJob.status === 'completed') toast({ title: "Busca finalizada", description: `${currentJob.foundCount} resultado(s) encontrados.` });
+      else throw new Error(currentJob.errorMessage || 'A busca nao foi concluida.');
     } catch (error) {
       toast({
         title: "Não foi possível executar a busca",

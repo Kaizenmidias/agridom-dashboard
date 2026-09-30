@@ -6,6 +6,7 @@ const { closeConnection } = require('./config/database');
 const { DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, processEventBatch, processJobBatch, workerId } = require('./services/automation-engine');
 const { processPendingWhatsAppEvents } = require('./services/whatsapp-service');
 const { processBroadcastBatch, workerId: broadcastWorkerId } = require('./services/broadcast-campaign-worker');
+const { processProspectingBatch } = require('./services/prospecting-service');
 
 const positiveInt = (value, fallback, max) => {
   const number = Number(value);
@@ -34,7 +35,10 @@ async function startWorker(options = {}) {
         let broadcasts = 0;
         try { broadcasts = await processBroadcastBatch({ currentWorkerId: currentBroadcastWorkerId, batchSize: Math.min(batchSize, 10) }); }
         catch (error) { console.error('Broadcast worker cycle failed:', error?.code || 'UNEXPECTED'); }
-        return events + jobs + whatsappEvents + broadcasts;
+        let prospecting = 0;
+        try { prospecting = await processProspectingBatch(Math.min(batchSize, 2)); }
+        catch (error) { console.error('Prospecting worker cycle failed:', error?.code || 'UNEXPECTED'); }
+        return events + jobs + whatsappEvents + broadcasts + prospecting;
       })();
       const workCount = await currentCycle;
       if (!workCount && !stopping) await sleep(pollMs);

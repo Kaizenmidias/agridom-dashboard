@@ -1,5 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const { getPool } = require('../config/database');
+const { encryptSecret, decryptSecret } = require('../services/integration-crypto');
 
 const router = express.Router();
 
@@ -23,31 +25,49 @@ const authenticateRequest = (req, res, next) => {
 router.use(authenticateRequest);
 
 router.get('/integrations', async (req, res) => {
-  const result = await getQuery(req)('SELECT provider, display_name, status, configuration_metadata FROM integration_providers ORDER BY display_name');
+  const result = await getQuery(req)("SELECT provider, display_name, status, configuration_metadata, secret_ciphertext FROM integration_providers ORDER BY display_name");
   res.json({
     integrations: (result.rows || []).map((row) => ({
       provider: row.provider,
       displayName: row.display_name,
       configured: row.status === 'configured',
       status: row.status,
-      metadata: row.configuration_metadata || {},
+      metadata: { ...(typeof row.configuration_metadata === 'object' ? row.configuration_metadata : JSON.parse(row.configuration_metadata || '{}')), tokenMasked: row.secret_ciphertext ? '********' : '' },
     })),
   });
 });
 
 router.put('/integrations/:provider', async (req, res) => {
+  if (req.params.provider !== 'apify') return res.status(400).json({ error: 'Integracao nao suportada nesta fase.' });
   const metadata = req.body?.metadata || {};
-  await getQuery(req)(
-    `INSERT INTO integration_providers (provider, display_name, status, configuration_metadata)
-     VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE status = VALUES(status), configuration_metadata = VALUES(configuration_metadata), updated_at = CURRENT_TIMESTAMP`,
-    [req.params.provider, req.params.provider, 'configured', JSON.stringify(metadata)]
-  );
-  res.json({ provider: req.params.provider, configured: true, metadata });
+  const connection = await getPool().getConnection();
+  try {
+    const [currentRows] = await connection.execute('SELECT * FROM integration_providers WHERE provider = ? LIMIT 1', [req.params.provider]);
+    const current = currentRows[0];
+    const token = String(req.body?.token || '').trim();
+    const envelope = token ? encryptSecret({ token }) : null;
+    const safeMetadata = { googleMapsActorId: String(metadata.googleMapsActorId || ''), instagramActorId: String(metadata.instagramActorId || ''), timeoutMinutes: Number(metadata.timeoutMinutes || 10), pollIntervalSeconds: Number(metadata.pollIntervalSeconds || 5) };
+    await connection.execute(`INSERT INTO integration_providers (provider, display_name, status, configuration_metadata, secret_ciphertext, secret_iv, secret_auth_tag)
+      VALUES ('apify', 'Apify', 'configured', ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE status = 'configured', configuration_metadata = VALUES(configuration_metadata), secret_ciphertext = COALESCE(VALUES(secret_ciphertext), secret_ciphertext), secret_iv = COALESCE(VALUES(secret_iv), secret_iv), secret_auth_tag = COALESCE(VALUES(secret_auth_tag), secret_auth_tag), updated_at = CURRENT_TIMESTAMP`,
+      [JSON.stringify(safeMetadata), envelope?.ciphertext || current?.secret_ciphertext || null, envelope?.iv || current?.secret_iv || null, envelope?.authTag || current?.secret_auth_tag || null]);
+    res.json({ provider: 'apify', configured: Boolean(envelope || current?.secret_ciphertext), metadata: { ...safeMetadata, tokenMasked: envelope || current?.secret_ciphertext ? '********' : '' } });
+  } finally { connection.release(); }
 });
 
 router.post('/integrations/:provider/test', async (req, res) => {
-  res.json({ success: true, message: `Integracao ${req.params.provider} registrada.` });
+  if (req.params.provider !== 'apify') return res.status(400).json({ error: 'Integracao nao suportada nesta fase.' });
+  const [rows] = await getPool().execute("SELECT * FROM integration_providers WHERE provider = 'apify' LIMIT 1");
+  if (!rows[0]?.secret_ciphertext) return res.status(409).json({ error: 'Configure a integracao Apify antes de testar.' });
+  try {
+    const token = decryptSecret(rows[0])?.token;
+    const metadata = JSON.parse(rows[0].configuration_metadata || '{}');
+    const actorId = String(metadata.googleMapsActorId || '').replace('/', '~');
+    if (!actorId) return res.status(400).json({ error: 'Configure o Actor do Google Maps na integracao Apify.' });
+    const response = await fetch(`https://api.apify.com/v2/acts/${encodeURIComponent(actorId)}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) return res.status(response.status === 401 ? 401 : 502).json({ error: response.status === 401 ? 'Token da Apify invalido.' : 'Actor do Google Maps nao acessivel.' });
+    res.json({ success: true, message: 'Conexao com Apify validada.' });
+  } catch { res.status(502).json({ error: 'Nao foi possivel validar a conexao com a Apify.' }); }
 });
 
 router.get('/cnaes', async (req, res) => {
@@ -85,7 +105,7 @@ router.post('/jobs', async (req, res) => {
 });
 
 router.post('/jobs/:id/start', async (req, res) => {
-  await getQuery(req)("UPDATE prospecting_jobs SET status = 'completed', started_at = CURRENT_TIMESTAMP, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND created_by = ?", [req.params.id, req.userId]);
+  await getQuery(req)("UPDATE prospecting_jobs SET status = CASE WHEN status IN ('queued', 'pending') THEN 'queued' ELSE status END, integration_provider = 'apify' WHERE id = ? AND created_by = ?", [req.params.id, req.userId]);
   const result = await getQuery(req)('SELECT * FROM prospecting_jobs WHERE id = ? AND created_by = ?', [req.params.id, req.userId]);
   if (!result.rows?.length) return res.status(404).json({ error: 'Job nao encontrado' });
   res.json(result.rows[0]);
