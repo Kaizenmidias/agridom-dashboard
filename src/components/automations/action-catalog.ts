@@ -197,6 +197,15 @@ export const ACTION_CATALOG: ActionCatalogItem[] = [
     aliases: ["email", "mensagem"],
   },
   {
+    id: "whatsapp.send",
+    name: "Enviar mensagem no WhatsApp",
+    description: "Envia uma mensagem pelo número conectado",
+    category: "communication",
+    icon: MessageCircle,
+    availability: "available",
+    aliases: ["whats", "zap", "wpp"],
+  },
+  {
     id: "whatsapp.send_message",
     name: "Enviar mensagem no WhatsApp",
     description: "Envia uma mensagem pelo provider conectado",

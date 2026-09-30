@@ -57,6 +57,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { whatsappAPI, type WhatsAppAccount } from "@/api/whatsapp";
+import { leadFoldersAPI, type LeadFolder } from "@/api/lead-folders";
 import {
   Dialog,
   DialogContent,
@@ -102,6 +103,7 @@ export type BuilderNode = {
 };
 
 const triggers: Record<string, string> = {
+  "lead.added_to_folder": "Novo lead na lista",
   "lead.created": "Lead criado",
   "lead.updated": "Lead atualizado",
   "lead.status_changed": "Status alterado",
@@ -1228,11 +1230,16 @@ function NodeInspector({
   stages: PipelineStage[];
 }) {
   const [whatsappAccounts, setWhatsappAccounts] = useState<WhatsAppAccount[]>([]);
+  const [leadFolders, setLeadFolders] = useState<LeadFolder[]>([]);
   const actionType = String(node.config.actionType || "lead.add_tag");
   useEffect(() => {
     if (actionType !== "whatsapp.send") return;
     void whatsappAPI.listAccounts().then((result) => setWhatsappAccounts(result.accounts.filter((account) => account.status === "connected"))).catch(() => setWhatsappAccounts([]));
   }, [actionType]);
+  useEffect(() => {
+    if (node.type !== "trigger" || String(node.config.triggerType) !== "lead.added_to_folder") return;
+    void leadFoldersAPI.list().then((result) => setLeadFolders(result.folders)).catch(() => setLeadFolders([]));
+  }, [node.type, node.config.triggerType]);
   if (node.type === "trigger")
     return (
       <div className="space-y-3">
@@ -1255,8 +1262,16 @@ function NodeInspector({
                 </SelectItem>
               ))}
             </SelectContent>
-          </Select>
+         </Select>
         </FieldLabel>
+        {String(node.config.triggerType) === "lead.added_to_folder" ? (
+          <FieldLabel label="Lista">
+            <Select value={String(node.config.folderId || "")} onValueChange={(value) => updateConfig("folderId", Number(value))}>
+              <SelectTrigger><SelectValue placeholder={leadFolders.length ? "Selecione a lista" : "Nenhuma lista encontrada"} /></SelectTrigger>
+              <SelectContent>{leadFolders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </FieldLabel>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           O evento e persistido e avaliado pela engine de automacoes.
         </p>
@@ -1297,6 +1312,7 @@ function NodeInspector({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="seconds">Segundos</SelectItem>
               <SelectItem value="minutes">Minutos</SelectItem>
               <SelectItem value="hours">Horas</SelectItem>
               <SelectItem value="days">Dias</SelectItem>
@@ -1483,6 +1499,7 @@ function NodeInspector({
       {actionType === "activity.complete" ? <FieldLabel label="ID da atividade"><Input type="number" min="1" value={String(node.config.activityId || "")} onChange={(event) => updateConfig("activityId", Number(event.target.value))} /></FieldLabel> : null}
       {actionType === "email.send" ? <><FieldLabel label="Destinatário"><Input value={String(node.config.recipient || "{{lead.email}}")} onChange={(event) => updateConfig("recipient", event.target.value)} /></FieldLabel><FieldLabel label="Assunto"><Input value={String(node.config.subject || "")} placeholder="Ex.: Olá, {{lead.name}}" onChange={(event) => updateConfig("subject", event.target.value)} /></FieldLabel></> : null}
       {actionType === "whatsapp.send" ? <><FieldLabel label="Conta WhatsApp"><Select value={String(node.config.accountId || "")} onValueChange={(value) => updateConfig("accountId", Number(value))}><SelectTrigger><SelectValue placeholder={whatsappAccounts.length ? "Selecione a conta" : "Nenhuma conta conectada"} /></SelectTrigger><SelectContent>{whatsappAccounts.map((account) => <SelectItem key={account.id} value={String(account.id)}>{account.name}{account.phoneNumber ? ` - ${account.phoneNumber}` : ""}</SelectItem>)}</SelectContent></Select></FieldLabel><FieldLabel label="Destinatário"><Input value={String(node.config.recipient || "{{lead.phone}}")} onChange={(event) => updateConfig("recipient", event.target.value)} /></FieldLabel></> : null}
+      {actionType === "whatsapp.send" ? <div className="grid grid-cols-2 gap-2"><FieldLabel label="Cadência"><Input type="number" min="1" value={String(node.config.cadenceValue || 1)} onChange={(event) => updateConfig("cadenceValue", Number(event.target.value))} /></FieldLabel><FieldLabel label="Unidade"><Select value={String(node.config.cadenceUnit || "minutes")} onValueChange={(value) => updateConfig("cadenceUnit", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="seconds">Segundos</SelectItem><SelectItem value="minutes">Minutos</SelectItem><SelectItem value="hours">Horas</SelectItem><SelectItem value="days">Dias</SelectItem></SelectContent></Select></FieldLabel></div> : null}
       {actionType === "notification.create" ? <><FieldLabel label="Título"><Input value={String(node.config.title || "")} onChange={(event) => updateConfig("title", event.target.value)} /></FieldLabel><FieldLabel label="Mensagem"><Textarea value={String(node.config.message || "")} onChange={(event) => updateConfig("message", event.target.value)} /></FieldLabel></> : null}
       {[
         "email.send",

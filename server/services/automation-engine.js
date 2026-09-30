@@ -26,6 +26,24 @@ const parseJson = (value, fallback = {}) => {
 const workerId = (provided) => provided || `${os.hostname()}:${process.pid}:${crypto.randomUUID()}`;
 const lockSeconds = (value) => Math.max(1, Math.ceil(positiveInt(value, DEFAULT_LOCK_TIMEOUT_MS, 24 * 60 * 60 * 1000) / 1000));
 const safeError = (error) => `ENGINE_ERROR:${String(error?.code || 'UNEXPECTED').replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80) || 'UNEXPECTED'}`;
+const cadenceSeconds = (config = {}) => {
+  const amount = Number(config.cadenceAmount ?? config.cadenceValue ?? config.cadence ?? 0);
+  const unit = String(config.cadenceUnit || 'minutes');
+  if (!Number.isInteger(amount) || amount <= 0) return 0;
+  return amount * (unit === 'days' ? 86400 : unit === 'hours' ? 3600 : unit === 'seconds' ? 1 : 60);
+};
+
+async function reserveWhatsAppSlot(connection, automationId, accountId, config, now = new Date()) {
+  const seconds = cadenceSeconds(config);
+  if (!seconds) return now;
+  const [rows] = await connection.execute('SELECT next_available_at FROM automation_whatsapp_cadence WHERE automation_id = ? AND communication_account_id = ? FOR UPDATE', [automationId, accountId]);
+  const stored = rows[0]?.next_available_at ? new Date(rows[0].next_available_at) : null;
+  const slot = stored && stored > now ? stored : now;
+  const next = new Date(slot.getTime() + seconds * 1000);
+  if (rows[0]) await connection.execute('UPDATE automation_whatsapp_cadence SET next_available_at = ?, updated_at = CURRENT_TIMESTAMP WHERE automation_id = ? AND communication_account_id = ?', [next, automationId, accountId]);
+  else await connection.execute('INSERT INTO automation_whatsapp_cadence (automation_id, communication_account_id, next_available_at) VALUES (?, ?, ?)', [automationId, accountId, next]);
+  return slot;
+}
 
 async function matchAutomationsForEvent(connection, event) {
   const [rows] = await connection.execute(
@@ -35,10 +53,11 @@ async function matchAutomationsForEvent(connection, event) {
        AND av.automation_id = a.id AND av.status = 'published'
      WHERE a.status = 'active'
        AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.type')) = ?
+       AND (? <> 'lead.added_to_folder' OR JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.folderId')) = JSON_UNQUOTE(JSON_EXTRACT(?, '$.folderId')))
        AND COALESCE(?, 0) < ${MAX_LINEAGE_DEPTH}
        AND (COALESCE(?, 0) = 0 OR a.id <> COALESCE(?, 0))
      ORDER BY a.id`,
-    [event.event_type, event.lineage_depth, event.source_automation_id, event.source_automation_id]
+    [event.event_type, event.event_type, JSON.stringify(event.payload || {}), event.lineage_depth, event.source_automation_id, event.source_automation_id]
   );
   return rows.map((row) => ({ ...row, automation_id: Number(row.automation_id), automation_version_id: Number(row.automation_version_id), definition: parseJson(row.definition) }));
 }
@@ -249,8 +268,8 @@ async function completeBootstrapJob(job, currentWorkerId) {
     } else if (step.type === 'wait') {
       const amount = Number(step.config?.amount ?? step.config?.duration);
       const unit = step.config?.unit || 'minutes';
-      if (!Number.isInteger(amount) || amount <= 0 || !['minutes', 'hours', 'days'].includes(unit)) throw new Error('INVALID_WAIT');
-      const seconds = amount * (unit === 'days' ? 86400 : unit === 'hours' ? 3600 : 60);
+      if (!Number.isInteger(amount) || amount <= 0 || !['seconds', 'minutes', 'hours', 'days'].includes(unit)) throw new Error('INVALID_WAIT');
+      const seconds = amount * (unit === 'days' ? 86400 : unit === 'hours' ? 3600 : unit === 'minutes' ? 60 : 1);
       const executeAt = new Date(Date.now() + seconds * 1000).toISOString().slice(0, 19).replace('T', ' ');
       status = 'waiting';
       output = { wait: { amount, unit }, resume_at: executeAt };
@@ -261,6 +280,21 @@ async function completeBootstrapJob(job, currentWorkerId) {
       await connection.commit();
       return { completed: true, waiting: true, jobId: Number(job.id), runId: Number(job.automation_run_id) };
     } else if (step.type === 'action') {
+      if (['whatsapp.send', 'whatsapp.send_message'].includes(String(step.config?.actionType))) {
+        const accountId = Number(step.config?.accountId || 0);
+        if (!Number.isSafeInteger(accountId) || accountId <= 0) throw new Error('WHATSAPP_ACCOUNT_REQUIRED');
+        const previousOutput = parseJson(existingSteps[0]?.output, {});
+        const persistedSlot = previousOutput.cadence?.scheduled_at ? new Date(previousOutput.cadence.scheduled_at) : null;
+        const slot = persistedSlot && !Number.isNaN(persistedSlot.getTime()) ? persistedSlot : await reserveWhatsAppSlot(connection, current.automation_id, accountId, step.config);
+        if (slot > new Date()) {
+          const scheduledAt = slot.toISOString().slice(0, 19).replace('T', ' ');
+          await connection.execute("UPDATE automation_run_steps SET status = 'queued', output = ?, finished_at = NULL WHERE automation_run_id = ? AND step_key = ?", [JSON.stringify({ cadence: { scheduled_at: scheduledAt } }), job.automation_run_id, step.id]);
+          await connection.execute("UPDATE automation_runs SET status = 'queued', current_step_key = ? WHERE id = ?", [step.id, job.automation_run_id]);
+          await connection.execute("UPDATE automation_jobs SET status = 'pending', execute_at = ?, available_at = ?, locked_at = NULL, locked_by = NULL WHERE id = ?", [slot, slot, job.id]);
+          await connection.commit();
+          return { completed: true, scheduled: true, jobId: Number(job.id), runId: Number(job.automation_run_id), scheduledAt };
+        }
+      }
       output = await executeAction(connection, step.config.actionType, step.config, context);
     } else if (step.type === 'finish') {
       nextStep = null;
@@ -325,4 +359,4 @@ async function processJobBatch(options = {}) {
   return processed;
 }
 
-module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, claimNextJob, completeBootstrapJob, createRunAndJob, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, workerId };
+module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, claimNextJob, completeBootstrapJob, createRunAndJob, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, reserveWhatsAppSlot, workerId };

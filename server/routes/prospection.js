@@ -56,7 +56,20 @@ router.post('/folders/:id/members', async (req, res) => {
     if (!folder.rows?.length) return res.status(404).json({ error: 'Pasta nao encontrada.' });
     const owned = await query(`SELECT id FROM prospects WHERE owner_user_id = ? AND id IN (${ids.map(() => '?').join(',')})`, [req.userId, ...ids]);
     const ownedIds = (owned.rows || []).map((row) => Number(row.id));
-    for (const prospectId of ownedIds) await query('INSERT IGNORE INTO lead_folder_members (folder_id, prospect_id) VALUES (?, ?)', [folderId, prospectId]);
+    for (const prospectId of ownedIds) {
+      const inserted = await query('INSERT IGNORE INTO lead_folder_members (folder_id, prospect_id) VALUES (?, ?)', [folderId, prospectId]);
+      if (Number(inserted.affectedRows || 0) > 0) {
+        await dispatchDomainEvent({
+          type: 'lead.added_to_folder',
+          entityType: 'lead',
+          entityId: prospectId,
+          actorUserId: req.userId,
+          payload: { leadId: prospectId, folderId },
+          idempotencyKey: `lead-folder:${folderId}:${prospectId}`,
+          ...requestEventContext(req),
+        });
+      }
+    }
     res.status(201).json({ folder_id: folderId, added: ownedIds.length, missing: ids.length - ownedIds.length });
   } catch (error) { console.error('[Prospection] folder members add failed', error); res.status(500).json({ error: 'Nao foi possivel adicionar leads a pasta.' }); }
 });

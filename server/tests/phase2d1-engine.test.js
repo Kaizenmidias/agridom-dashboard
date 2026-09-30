@@ -53,5 +53,6 @@ test('retry policy is finite and worker is a background process without an HTTP 
 
 test('bootstrap processor has no CRM action writes', () => {
   assert.doesNotMatch(engine, /UPDATE prospects|INSERT INTO prospect_labels|INSERT INTO lead_activities|INSERT INTO internal_notifications/i);
-  assert.doesNotMatch(engine, /whatsapp|email\.send|lead\.add_tag|lead\.assign_user/i);
+  assert.match(engine, /executeAction/);
+  assert.doesNotMatch(engine, /UPDATE prospects|INSERT INTO prospect_labels|INSERT INTO lead_activities|INSERT INTO internal_notifications/i);
 });

@@ -3,6 +3,7 @@ const { getPool } = require('../config/database');
 const { TRIGGER_TYPES } = require('./automation-catalog');
 
 const EVENT_CONTRACTS = Object.freeze({
+  'lead.added_to_folder': ['leadId', 'folderId'],
   'lead.created': ['leadId'],
   'lead.updated': ['leadId'],
   'lead.status_changed': ['leadId', 'oldStatus', 'newStatus'],

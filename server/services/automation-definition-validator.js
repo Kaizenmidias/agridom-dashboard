@@ -96,6 +96,9 @@ function validateAutomationDefinition(input, options = {}) {
     if (definition.trigger.config !== undefined && !isPlainObject(definition.trigger.config)) {
       errors.push(error('trigger.config', 'INVALID_TRIGGER_CONFIG', 'Configuracao do trigger deve ser um objeto.'));
     }
+    if (definition.trigger.type === 'lead.added_to_folder' && (!Number.isSafeInteger(Number(definition.trigger.config?.folderId)) || Number(definition.trigger.config.folderId) <= 0)) {
+      errors.push(error('trigger.config.folderId', 'MISSING_FOLDER', 'Selecione a lista do gatilho.'));
+    }
     if (definition.trigger.next !== undefined && definition.trigger.next !== null && typeof definition.trigger.next !== 'string') {
       errors.push(error('trigger.next', 'INVALID_TRIGGER_REFERENCE', 'Referencia do trigger deve ser texto ou null.'));
     }
@@ -144,6 +147,7 @@ function validateAutomationDefinition(input, options = {}) {
           'activity.create_call': ['title'], 'activity.create_follow_up': ['title'], 'activity.complete': ['activityId'],
           'notification.create': ['title', 'message'],
           'email.send': ['subject', 'message'],
+          'whatsapp.send': ['accountId', 'message'],
         }[step.config.actionType] || [];
         requiredFields.forEach((field) => {
           if (step.config[field] === undefined || step.config[field] === null || step.config[field] === '') errors.push(error(`${path}.config.${field}`, 'MISSING_ACTION_CONFIG', `Configuracao obrigatoria ausente: ${field}.`));
@@ -153,7 +157,7 @@ function validateAutomationDefinition(input, options = {}) {
         errors.push(error(`${path}.config.duration`, 'INVALID_WAIT_DURATION', 'Duracao de wait deve ser um inteiro positivo.'));
       } else if (step.type === 'wait' && step.config.amount !== undefined && (!Number.isInteger(step.config.amount) || step.config.amount <= 0)) {
         errors.push(error(`${path}.config.amount`, 'INVALID_WAIT_AMOUNT', 'Quantidade de wait deve ser um inteiro positivo.'));
-      } else if (step.type === 'wait' && step.config.unit !== undefined && !['minutes', 'hours', 'days'].includes(step.config.unit)) {
+      } else if (step.type === 'wait' && step.config.unit !== undefined && !['seconds', 'minutes', 'hours', 'days'].includes(step.config.unit)) {
         errors.push(error(`${path}.config.unit`, 'INVALID_WAIT_UNIT', 'Unidade de wait deve ser minutes, hours ou days.'));
       }
       if (options.requireSteps && step.type === 'condition' && (!['status', 'pipeline', 'pipeline_stage', 'assigned_user', 'origin', 'source', 'phone', 'email', 'website', 'label'].includes(step.config?.field) || !['equals', 'not_equals', 'contains', 'not_contains', 'is_empty', 'is_not_empty', 'has_label', 'does_not_have_label'].includes(step.config?.operator))) {

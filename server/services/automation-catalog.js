@@ -1,4 +1,5 @@
 const TRIGGER_TYPES = Object.freeze([
+  'lead.added_to_folder',
   'lead.created',
   'lead.updated',
   'lead.status_changed',
