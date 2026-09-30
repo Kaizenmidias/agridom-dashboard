@@ -43,7 +43,7 @@ test('PROSPECCAO normaliza fixture realista do Compass sem inventar enriquecimen
   assert.equal(result.rating, 5);
   assert.equal(result.review_count, 536);
   assert.equal(result.google_maps_url, 'https://www.google.com/maps/example');
-  assert.equal(result.place_id, 'ChIJexample');
+  assert.equal(result.place_id, 'example-place-id');
   assert.equal(result.email, null);
   assert.equal(result.whatsapp_status, undefined);
 });
