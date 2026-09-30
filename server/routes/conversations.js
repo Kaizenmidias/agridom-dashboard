@@ -8,6 +8,16 @@ const { sendFile, LIMITS } = require('../services/chat-media');
 
 const router = express.Router();
 router.use(authenticateToken, requireCommercialAccess);
+router.use('/:id', async (req, res, next) => {
+  if (!/^\d+$/.test(String(req.params.id || ''))) return next();
+  try {
+    const [rows] = await getPool().execute(`SELECT c.id FROM conversations c
+      JOIN communication_accounts ca ON ca.id = c.communication_account_id
+      WHERE c.id = ? AND ca.owner_user_id = ? LIMIT 1`, [req.params.id, req.userId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Conversa nao encontrada.' });
+    return next();
+  } catch { return res.status(500).json({ error: 'Nao foi possivel validar a conversa.' }); }
+});
 const parsePage = (value, fallback, max) => Math.min(Math.max(Number(value) || fallback, 1), max);
 const mediaUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: Math.max(...Object.values(LIMITS)) } });
 const profileRefreshes = new Map();
@@ -45,8 +55,8 @@ router.get('/', async (req, res) => {
     const page = parsePage(req.query.page, 1, 10000);
     const limit = parsePage(req.query.limit, 30, 100);
     const offset = (page - 1) * limit;
-    const params = [];
-    const where = ['c.channel = ?', 'c.hidden_at IS NULL']; params.push(String(req.query.channel || 'whatsapp'));
+    const params = [req.userId];
+    const where = ['ca.owner_user_id = ?', 'c.channel = ?', 'c.hidden_at IS NULL']; params.push(String(req.query.channel || 'whatsapp'));
     if (req.query.archived === 'true') where.push('c.archived_at IS NOT NULL'); else where.push('c.archived_at IS NULL');
     if (req.query.status) { where.push('c.status = ?'); params.push(String(req.query.status)); }
     if (req.query.assignedUserId) { where.push('c.assigned_user_id = ?'); params.push(Number(req.query.assignedUserId)); }

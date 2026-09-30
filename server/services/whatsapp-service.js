@@ -209,10 +209,27 @@ async function findOrCreateLead(connection, account, phone, pushName) {
 
 async function getOrCreateConversation(connection, account, externalConversationId, leadId, direction, occurredAt, metadata = {}) {
   const conversationType = metadata.isGroup ? 'group' : 'contact';
-  assertNoUndefinedBindings('getOrCreateConversation', { conversationType, accountId: account.id, leadId: leadId ?? null, externalConversationId, displayName: metadata.displayName ?? null, occurredAt, inboundOccurredAt: direction === 'inbound' ? occurredAt : null, outboundOccurredAt: direction === 'outbound' ? occurredAt : null, unreadCount: direction === 'inbound' ? 1 : 0 }, account);
+  let resolvedLeadId = leadId ?? null;
+  const ownerUserId = account.owner_user_id == null ? null : Number(account.owner_user_id);
+  if (!metadata.isGroup && ownerUserId && resolvedLeadId == null) {
+    const normalizedPhone = normalizePhone(externalConversationId);
+    if (normalizedPhone) {
+      const [matches] = await connection.execute('SELECT id FROM prospects WHERE owner_user_id = ? AND normalized_phone = ? LIMIT 2', [ownerUserId, normalizedPhone]);
+      if (matches.length === 1) resolvedLeadId = Number(matches[0].id);
+    }
+  }
+  if (resolvedLeadId != null && ownerUserId) {
+    const [ownedLead] = await connection.execute('SELECT id FROM prospects WHERE id = ? AND owner_user_id = ? LIMIT 1', [resolvedLeadId, ownerUserId]);
+    if (!ownedLead[0]) resolvedLeadId = null;
+  }
+  assertNoUndefinedBindings('getOrCreateConversation', { conversationType, accountId: account.id, leadId: resolvedLeadId, externalConversationId, displayName: metadata.displayName ?? null, occurredAt, inboundOccurredAt: direction === 'inbound' ? occurredAt : null, outboundOccurredAt: direction === 'outbound' ? occurredAt : null, unreadCount: direction === 'inbound' ? 1 : 0 }, account);
   await connection.execute(`INSERT INTO conversations (channel, conversation_type, communication_account_id, lead_id, external_conversation_id, display_name, last_message_at, last_inbound_at, last_outbound_at, unread_count) VALUES ('whatsapp', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE conversation_type = VALUES(conversation_type), lead_id = COALESCE(VALUES(lead_id), lead_id), display_name = COALESCE(display_name, VALUES(display_name)), last_message_at = GREATEST(COALESCE(last_message_at, VALUES(last_message_at)), VALUES(last_message_at)), last_inbound_at = IF(VALUES(last_inbound_at) IS NULL, last_inbound_at, VALUES(last_inbound_at)), last_outbound_at = IF(VALUES(last_outbound_at) IS NULL, last_outbound_at, VALUES(last_outbound_at)), unread_count = unread_count + VALUES(unread_count), updated_at = CURRENT_TIMESTAMP`, [conversationType, account.id, leadId, externalConversationId, metadata.displayName || null, occurredAt, direction === 'inbound' ? occurredAt : null, direction === 'outbound' ? occurredAt : null, direction === 'inbound' ? 1 : 0]);
+    ON DUPLICATE KEY UPDATE conversation_type = VALUES(conversation_type), display_name = COALESCE(display_name, VALUES(display_name)), last_message_at = GREATEST(COALESCE(last_message_at, VALUES(last_message_at)), VALUES(last_message_at)), last_inbound_at = IF(VALUES(last_inbound_at) IS NULL, last_inbound_at, VALUES(last_inbound_at)), last_outbound_at = IF(VALUES(last_outbound_at) IS NULL, last_outbound_at, VALUES(last_outbound_at)), unread_count = unread_count + VALUES(unread_count), updated_at = CURRENT_TIMESTAMP`, [conversationType, account.id, resolvedLeadId, externalConversationId, metadata.displayName || null, occurredAt, direction === 'inbound' ? occurredAt : null, direction === 'outbound' ? occurredAt : null, direction === 'inbound' ? 1 : 0]);
   const [rows] = await connection.execute('SELECT * FROM conversations WHERE communication_account_id = ? AND external_conversation_id = ? FOR UPDATE', [account.id, externalConversationId]);
+  if (rows[0]?.lead_id == null && resolvedLeadId != null) {
+    await connection.execute('UPDATE conversations SET lead_id = ? WHERE id = ? AND lead_id IS NULL', [resolvedLeadId, rows[0].id]);
+    rows[0].lead_id = resolvedLeadId;
+  }
   return rows[0];
 }
 
