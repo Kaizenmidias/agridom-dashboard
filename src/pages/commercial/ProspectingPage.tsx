@@ -45,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { prospectingAPI } from "@/api/prospecting";
+import { leadFoldersAPI, type LeadFolder } from "@/api/lead-folders";
 import type {
   BrazilianCity,
   CnaeCode,
@@ -70,6 +71,7 @@ const sourceConfig = {
 };
 
 const stateOptions = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+const MAX_PROSPECTING_REQUESTED_QUANTITY = 100;
 
 function queryToSource(value: string | null): ProspectingSource {
   if (value === "cnpj") return "cnpj";
@@ -137,10 +139,12 @@ function GoogleMapsSearchForm({
   disabledWhatsApp,
   onSubmit,
   running,
+  destinationFolderId,
 }: {
   disabledWhatsApp: boolean;
   onSubmit: (payload: ProspectingSearchPayload) => void;
   running: boolean;
+  destinationFolderId: number | null;
 }) {
   const [searchTerms, setSearchTerms] = useState("");
   const [quantity, setQuantity] = useState("20");
@@ -160,6 +164,7 @@ function GoogleMapsSearchForm({
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{[10, 20, 30, 50, 100].map((item) => <SelectItem key={item} value={String(item)}>{item}</SelectItem>)}</SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">Máximo: {MAX_PROSPECTING_REQUESTED_QUANTITY} novos leads por busca.</p>
         </div>
         <div className="space-y-2">
           <Label>Estrelas minimas</Label>
@@ -183,7 +188,7 @@ function GoogleMapsSearchForm({
           {disabledWhatsApp ? <p className="text-xs text-muted-foreground">Configure um serviço de validação de WhatsApp em Administração / Integrações.</p> : null}
         </div>
       </div>
-      <Button disabled={running || !searchTerms.trim()} onClick={() => onSubmit({ source: "google_maps", searchTerms, quantity: Number(quantity), minimumRating: minimumRating === "any" ? null : Number(minimumRating), onlyValidatedWhatsApp })}>
+      <Button disabled={running || !searchTerms.trim()} onClick={() => onSubmit({ source: "google_maps", searchTerms, quantity: Number(quantity), minimumRating: minimumRating === "any" ? null : Number(minimumRating), onlyValidatedWhatsApp, destinationFolderId })}>
         {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Buscar empresas
       </Button>
     </div>
@@ -194,10 +199,12 @@ function CnpjSearchForm({
   disabledWhatsApp,
   onSubmit,
   running,
+  destinationFolderId,
 }: {
   disabledWhatsApp: boolean;
   onSubmit: (payload: ProspectingSearchPayload) => void;
   running: boolean;
+  destinationFolderId: number | null;
 }) {
   const [cnaeQuery, setCnaeQuery] = useState("");
   const [cnaes, setCnaes] = useState<CnaeCode[]>([]);
@@ -279,6 +286,7 @@ function CnpjSearchForm({
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{[10, 20, 30, 50, 100].map((item) => <SelectItem key={item} value={String(item)}>{item} empresas</SelectItem>)}</SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">Máximo: {MAX_PROSPECTING_REQUESTED_QUANTITY} novos leads por busca.</p>
           <p className="text-xs text-muted-foreground">Consumo estimado informado pela integração quando disponível.</p>
         </div>
         <div className="space-y-2 rounded-md border p-3">
@@ -292,14 +300,14 @@ function CnpjSearchForm({
           </div>
         </div>
       </div>
-      <Button disabled={running || selectedCnaes.length === 0 || !state} onClick={() => onSubmit({ source: "cnpj", cnaeCodes: selectedCnaes.map((item) => item.code), state, city: city || null, quantity: Number(quantity), includeSecondaryActivity, onlyValidatedWhatsApp })}>
+      <Button disabled={running || selectedCnaes.length === 0 || !state} onClick={() => onSubmit({ source: "cnpj", cnaeCodes: selectedCnaes.map((item) => item.code), state, city: city || null, quantity: Number(quantity), includeSecondaryActivity, onlyValidatedWhatsApp, destinationFolderId })}>
         {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Buscar empresas
       </Button>
     </div>
   );
 }
 
-function InstagramSearchForm({ onSubmit, running }: { onSubmit: (payload: ProspectingSearchPayload) => void; running: boolean }) {
+function InstagramSearchForm({ onSubmit, running, destinationFolderId }: { onSubmit: (payload: ProspectingSearchPayload) => void; running: boolean; destinationFolderId: number | null }) {
   const [searchTerms, setSearchTerms] = useState("");
   const [quantity, setQuantity] = useState("20");
 
@@ -316,8 +324,9 @@ function InstagramSearchForm({ onSubmit, running }: { onSubmit: (payload: Prospe
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>{[10, 20, 30, 50, 100].map((item) => <SelectItem key={item} value={String(item)}>{item} perfis</SelectItem>)}</SelectContent>
         </Select>
+        <p className="text-xs text-muted-foreground">Máximo: {MAX_PROSPECTING_REQUESTED_QUANTITY} novos leads por busca.</p>
       </div>
-      <Button disabled={running || !searchTerms.trim()} onClick={() => onSubmit({ source: "instagram", searchTerms, quantity: Number(quantity) })}>
+      <Button disabled={running || !searchTerms.trim()} onClick={() => onSubmit({ source: "instagram", searchTerms, quantity: Number(quantity), destinationFolderId })}>
         {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Instagram className="mr-2 h-4 w-4" />}Buscar perfis
       </Button>
     </div>
@@ -388,6 +397,27 @@ function ProspectingSummaryCards({ results }: { results: ProspectingResult[] }) 
   );
 }
 
+function ProspectingJobMetrics({ job }: { job: ProspectingJob | null }) {
+  if (!job) return null;
+  const budget = job.requestedQuantity * 2;
+  const targetReached = job.foundCount >= job.requestedQuantity;
+  const budgetReached = job.processedCount >= budget && !targetReached;
+  return (
+    <Card className="rounded-lg border shadow-none">
+      <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div><p className="text-xs text-muted-foreground">Meta</p><p className="font-semibold">{job.requestedQuantity} novos leads</p></div>
+        <div><p className="text-xs text-muted-foreground">Novos encontrados</p><p className="font-semibold">{job.foundCount}</p></div>
+        <div><p className="text-xs text-muted-foreground">Duplicados ignorados</p><p className="font-semibold">{job.duplicateCount}</p></div>
+        <div><p className="text-xs text-muted-foreground">Inválidos / sem telefone</p><p className="font-semibold">{job.invalidCount}</p></div>
+        <div><p className="text-xs text-muted-foreground">Candidatos analisados</p><p className="font-semibold">{job.processedCount}</p></div>
+        {targetReached ? <p className="text-sm font-medium text-primary sm:col-span-2 lg:col-span-5">{job.foundCount} de {job.requestedQuantity} novos leads encontrados</p> : null}
+        {budgetReached ? <p className="text-sm text-muted-foreground sm:col-span-2 lg:col-span-5">Limite de coleta atingido</p> : null}
+        {!targetReached && !budgetReached && job.status === "completed" ? <p className="text-sm text-muted-foreground sm:col-span-2 lg:col-span-5">Busca concluída antes de atingir a meta.</p> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ProspectingResultsTable({
   results,
   selectedIds,
@@ -401,7 +431,13 @@ function ProspectingResultsTable({
   onToggleAll: () => void;
   onImport: () => void;
 }) {
-  const allSelected = results.length > 0 && results.filter((item) => item.duplicateStatus !== "duplicate").every((item) => selectedIds.includes(item.id));
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
+  const visibleResults = results.filter((item) => item.duplicateStatus === "new" && item.prospectId != null);
+  const pageCount = Math.max(1, Math.ceil(visibleResults.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageResults = visibleResults.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const allSelected = pageResults.length > 0 && pageResults.every((item) => selectedIds.includes(item.id));
 
   return (
     <Card className="rounded-lg border shadow-none">
@@ -419,7 +455,7 @@ function ProspectingResultsTable({
         {selectedIds.length > 0 ? <Badge variant="secondary" className="w-fit">{selectedIds.length} selecionado(s)</Badge> : null}
       </CardHeader>
       <CardContent>
-        {results.length === 0 ? (
+        {visibleResults.length === 0 ? (
           <div className="rounded-md border border-dashed p-8 text-center">
             <p className="font-medium">Nenhum resultado carregado</p>
             <p className="text-sm text-muted-foreground">Execute uma consulta para visualizar os resultados normalizados.</p>
@@ -445,8 +481,8 @@ function ProspectingResultsTable({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {results.map((item) => {
-                  const disabled = item.duplicateStatus === "duplicate";
+                {pageResults.map((item) => {
+                  const disabled = item.prospectId == null;
                   const whatsappUrl = buildProspectingWhatsAppUrl(item.phone);
                   return (
                     <TableRow key={item.id}>
@@ -483,6 +519,19 @@ function ProspectingResultsTable({
             </Table>
           </div>
         )}
+        {visibleResults.length > 0 ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className="text-muted-foreground">{visibleResults.length} novo(s) exibível(is)</span>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="prospecting-page-size" className="text-xs">Por página</Label>
+            <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }}>
+              <SelectTrigger id="prospecting-page-size" className="h-8 w-20"><SelectValue /></SelectTrigger>
+              <SelectContent>{[25, 50, 75, 100, 150].map((size) => <SelectItem key={size} value={String(size)}>{size}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</Button>
+            <span>{currentPage} / {pageCount}</span>
+            <Button variant="outline" size="sm" disabled={currentPage >= pageCount} onClick={() => setPage((value) => value + 1)}>Próxima</Button>
+          </div>
+        </div> : null}
       </CardContent>
     </Card>
   );
@@ -493,15 +542,17 @@ function ProspectingImportDialog({
   onOpenChange,
   selectedCount,
   source,
+  folders,
   onConfirm,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedCount: number;
   source: ProspectingSource;
-  onConfirm: (options: { folderName: string; status: string; assignedTo: string; tags: string[] }) => void;
+  folders: LeadFolder[];
+  onConfirm: (options: { folderId: number }) => void;
 }) {
-  const [folderName, setFolderName] = useState("Novos");
+  const [folderId, setFolderId] = useState("");
   const [status, setStatus] = useState("Novo");
   const [assignedTo, setAssignedTo] = useState("");
   const [tags, setTags] = useState("");
@@ -514,7 +565,7 @@ function ProspectingImportDialog({
           <DialogDescription>{selectedCount} resultado(s) selecionado(s). Duplicados definitivos seráo ignorados pelo backend.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-2"><Label>Pasta de destino</Label><Input value={folderName} onChange={(event) => setFolderName(event.target.value)} /></div>
+          <div className="space-y-2"><Label>Lista de destino</Label><Select value={folderId} onValueChange={setFolderId}><SelectTrigger><SelectValue placeholder="Selecione uma lista..." /></SelectTrigger><SelectContent>{folders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-2">
             <Label>Status inicial</Label>
             <Select value={status} onValueChange={setStatus}>
@@ -532,7 +583,7 @@ function ProspectingImportDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={() => onConfirm({ folderName, status, assignedTo, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean) })}>Importar</Button>
+          <Button disabled={!folderId} onClick={() => onConfirm({ folderId: Number(folderId) })}>Adicionar à lista</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -579,6 +630,8 @@ export default function ProspectingPage() {
   const [running, setRunning] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [importOpen, setImportOpen] = useState(false);
+  const [leadFolders, setLeadFolders] = useState<LeadFolder[]>([]);
+  const [destinationFolderId, setDestinationFolderId] = useState<number | null>(null);
 
   const whatsappConfigured = integrations.some((item) => item.provider === "whatsapp_validator" && item.configured);
 
@@ -590,6 +643,7 @@ export default function ProspectingPage() {
       ]);
       setIntegrations(integrationData.integrations);
       setHistory(historyData.items);
+      setLeadFolders((await leadFoldersAPI.list()).folders || []);
     } catch (error) {
       toast({
         title: "Erro ao carregar prospecção",
@@ -676,20 +730,16 @@ export default function ProspectingPage() {
   };
 
   const toggleAllResults = () => {
-    const selectable = results.filter((item) => item.duplicateStatus !== "duplicate").map((item) => item.id);
+    const selectable = results.filter((item) => item.duplicateStatus === "new" && item.prospectId != null).map((item) => item.id);
     const allSelected = selectable.every((id) => selectedIds.includes(id));
     setSelectedIds(allSelected ? [] : selectable);
   };
 
-  const importSelected = async (options: { folderName: string; status: string; assignedTo: string; tags: string[] }) => {
+  const importSelected = async (options: { folderId: number }) => {
     try {
       const result = await prospectingAPI.importResults({
         resultIds: selectedIds,
-        folderName: options.folderName,
-        status: options.status,
-        assignedTo: options.assignedTo,
-        origin: `Prospeccao - ${sourceConfig[source].label}`,
-        tags: options.tags,
+        folderId: options.folderId,
       });
       toast({ title: "Importação concluída", description: result.message });
       setImportOpen(false);
@@ -741,6 +791,17 @@ export default function ProspectingPage() {
         </CardHeader>
         <CardContent>
           <Tabs value={source} onValueChange={handleSourceChange}>
+            <div className="mb-4 max-w-md space-y-2">
+              <Label htmlFor="destination-folder">Lista de destino (opcional)</Label>
+              <Select value={destinationFolderId == null ? "none" : String(destinationFolderId)} onValueChange={(value) => setDestinationFolderId(value === "none" ? null : Number(value))}>
+                <SelectTrigger id="destination-folder"><SelectValue placeholder="Selecione uma lista..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem lista</SelectItem>
+                  {leadFolders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {leadFolders.length === 0 ? <p className="text-xs text-muted-foreground">Nenhuma lista encontrada. Você pode criar uma em Leads.</p> : null}
+            </div>
             <TabsList className="grid w-full grid-cols-3">
               {Object.entries(sourceConfig).map(([key, config]) => (
                 <TabsTrigger key={key} value={key} className="gap-2">
@@ -749,22 +810,23 @@ export default function ProspectingPage() {
               ))}
             </TabsList>
             <TabsContent value="google_maps" className="mt-6">
-              <GoogleMapsSearchForm disabledWhatsApp={!whatsappConfigured} running={running} onSubmit={startSearch} />
+              <GoogleMapsSearchForm disabledWhatsApp={!whatsappConfigured} running={running} destinationFolderId={destinationFolderId} onSubmit={startSearch} />
             </TabsContent>
             <TabsContent value="cnpj" className="mt-6">
-              <CnpjSearchForm disabledWhatsApp={!whatsappConfigured} running={running} onSubmit={startSearch} />
+              <CnpjSearchForm disabledWhatsApp={!whatsappConfigured} running={running} destinationFolderId={destinationFolderId} onSubmit={startSearch} />
             </TabsContent>
             <TabsContent value="instagram" className="mt-6">
-              <InstagramSearchForm running={running} onSubmit={startSearch} />
+              <InstagramSearchForm running={running} destinationFolderId={destinationFolderId} onSubmit={startSearch} />
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
 
       <ProspectingSummaryCards results={results} />
+      <ProspectingJobMetrics job={job} />
       <ProspectingResultsTable results={results} selectedIds={selectedIds} onToggle={toggleResult} onToggleAll={toggleAllResults} onImport={() => setImportOpen(true)} />
 
-      <ProspectingImportDialog open={importOpen} onOpenChange={setImportOpen} selectedCount={selectedIds.length} source={source} onConfirm={importSelected} />
+      <ProspectingImportDialog open={importOpen} onOpenChange={setImportOpen} selectedCount={selectedIds.length} source={source} folders={leadFolders} onConfirm={importSelected} />
     </div>
   );
 }

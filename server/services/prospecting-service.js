@@ -1,6 +1,13 @@
 const { getPool } = require('../config/database');
 const { decryptSecret } = require('./integration-crypto');
 const { normalizeIntegrationMetadata } = require('./integration-metadata');
+const { createOrFindProspect } = require('./prospect-service');
+const { dispatchDomainEvent } = require('./domain-events');
+
+const MIN_PROSPECTING_REQUESTED_QUANTITY = 1;
+const MAX_PROSPECTING_REQUESTED_QUANTITY = 100;
+const PROSPECTING_CANDIDATE_MULTIPLIER = 2;
+const MAX_CANDIDATE_BUDGET = MAX_PROSPECTING_REQUESTED_QUANTITY * PROSPECTING_CANDIDATE_MULTIPLIER;
 
 const digits = (value) => String(value || '').replace(/\D/g, '');
 const phone = (value) => {
@@ -19,13 +26,37 @@ const safePayload = (value) => JSON.stringify(value).slice(0, 100000);
 
 function actorInput(parameters) {
   const searchTerm = String(parameters.searchTerms || '').trim();
-  const location = [parameters.city, parameters.state].filter(Boolean).join(', ');
+  const quantity = validateRequestedQuantity(parameters.quantity);
+  const locationQuery = [parameters.city, parameters.state].filter(Boolean).join(', ');
   const input = {
     searchStringsArray: [searchTerm],
-    maxCrawledPlacesPerSearch: Math.min(Math.max(Number(parameters.quantity) || 20, 1), 150),
+    maxCrawledPlacesPerSearch: candidateBudget(quantity),
   };
-  if (location) input.location = location;
+  if (locationQuery) input.locationQuery = locationQuery;
   return input;
+}
+
+function candidateBudget(requestedQuantity) {
+  return validateRequestedQuantity(requestedQuantity) * PROSPECTING_CANDIDATE_MULTIPLIER;
+}
+
+function validateRequestedQuantity(value) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < MIN_PROSPECTING_REQUESTED_QUANTITY || value > MAX_PROSPECTING_REQUESTED_QUANTITY) {
+    const error = new Error(`A quantidade deve ser um inteiro entre ${MIN_PROSPECTING_REQUESTED_QUANTITY} e ${MAX_PROSPECTING_REQUESTED_QUANTITY}.`);
+    error.code = 'PROSPECTING_QUANTITY_INVALID';
+    error.minimum = MIN_PROSPECTING_REQUESTED_QUANTITY;
+    error.maximum = MAX_PROSPECTING_REQUESTED_QUANTITY;
+    throw error;
+  }
+  return value;
+}
+
+function targetReached(foundCount, requestedQuantity) {
+  return foundCount >= requestedQuantity;
+}
+
+function budgetReached(processedCount, foundCount, requestedQuantity) {
+  return processedCount >= candidateBudget(requestedQuantity) && foundCount < requestedQuantity;
 }
 
 async function apifySearch(parameters, config) {
@@ -59,14 +90,14 @@ async function apifySearch(parameters, config) {
 }
 
 function normalize(item) {
-  const normalizedPhone = phone(item.phoneNumber || item.phone || item.telephone);
+  const normalizedPhone = phone(item.phoneNumber || item.phone || item.phoneUnformatted || item.telephone);
   const normalizedWebsite = website(item.website || item.url);
   const social = item.socialMedia || item.socialProfiles || {};
   return {
     company_name: text(item.title || item.businessName || item.name || item.placeName),
     category: text(item.categoryName || item.category || (Array.isArray(item.categories) ? item.categories[0] : null)),
     address: text(item.address || item.street), city: text(item.city), state: text(item.state),
-    phone: text(item.phoneNumber || item.phone || item.internationalPhone || item.telephone), normalized_phone: normalizedPhone,
+    phone: text(item.phoneNumber || item.phone || item.phoneUnformatted || item.internationalPhone || item.telephone), normalized_phone: normalizedPhone,
     email: text(item.email || (Array.isArray(item.emails) ? item.emails[0] : null)),
     website: text(item.website), normalized_website_domain: website(item.website),
     instagram_url: text(item.instagram || item.instagramUrl || social.instagram || social.instagrams?.[0]),
@@ -81,6 +112,95 @@ async function recordEvent(connection, jobId, eventType, message) {
   await connection.execute('INSERT INTO prospecting_job_events (job_id, event_type, message, metadata) VALUES (?, ?, ?, ?)', [jobId, eventType, message, JSON.stringify({})]);
 }
 
+async function persistCandidate(connection, job, item, counters) {
+  const row = normalize(item);
+  counters.processedCount += 1;
+  if (!row.normalized_phone) {
+    counters.invalidCount += 1;
+    await connection.execute(
+      `INSERT INTO prospecting_results (id, job_id, prospect_id, source, company_name, category, address, city, state, phone, normalized_phone, website, normalized_website_domain, rating, review_count, whatsapp_status, duplicate_status, raw_payload)
+       VALUES (UUID(), ?, NULL, 'google_maps', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_checked', 'invalid_no_phone', ?)`,
+      [job.id, row.company_name, row.category, row.address, row.city, row.state, row.phone, row.normalized_phone, row.website, row.normalized_website_domain, row.rating, row.review_count, row.raw_payload],
+    );
+    return row;
+  }
+
+  const result = await createOrFindProspect({
+    ownerUserId: job.created_by,
+    businessName: row.company_name,
+    category: row.category,
+    address: row.address,
+    city: row.city,
+    state: row.state,
+    phone: row.phone,
+    email: row.email,
+    website: row.website,
+    analysisReport: {
+      source: 'google_maps',
+      google_maps_url: row.google_maps_url,
+      google_rating: row.rating,
+      google_reviews: row.review_count,
+      instagram: row.instagram_url,
+      place_id: row.place_id,
+    },
+  }, { connection });
+  const duplicateStatus = result.created ? 'new' : 'duplicate';
+  if (result.created) counters.foundCount += 1;
+  else counters.duplicateCount += 1;
+  const resultInsert = await connection.execute(
+    `INSERT INTO prospecting_results (id, job_id, prospect_id, source, company_name, category, address, city, state, phone, normalized_phone, website, normalized_website_domain, rating, review_count, whatsapp_status, duplicate_status, raw_payload)
+     VALUES (UUID(), ?, ?, 'google_maps', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_checked', ?, ?)`,
+    [job.id, result.prospect.id, row.company_name, row.category, row.address, row.city, row.state, row.phone, row.normalized_phone, row.website, row.normalized_website_domain, row.rating, row.review_count, duplicateStatus, row.raw_payload],
+  );
+  let membershipCreated = false;
+  if (result.created && job.destination_folder_id != null) {
+    const [membership] = await connection.execute('INSERT IGNORE INTO lead_folder_members (folder_id, prospect_id) VALUES (?, ?)', [job.destination_folder_id, result.prospect.id]);
+    membershipCreated = Number(membership.affectedRows || 0) > 0;
+  }
+  return { row, membershipCreated, prospectId: result.prospect.id };
+}
+
+async function processCandidates(connection, job, parameters, items) {
+  const requestedQuantity = Math.max(Number(job.requested_quantity) || 0, 0);
+  const budget = candidateBudget(requestedQuantity);
+  const minimumRating = parameters.minimumRating == null ? null : Number(parameters.minimumRating);
+  const candidates = items
+    .filter((candidate) => minimumRating == null || Number(candidate.totalScore ?? candidate.rating ?? 0) >= minimumRating)
+    .slice(0, budget);
+  const counters = { processedCount: 0, foundCount: 0, duplicateCount: 0, invalidCount: 0 };
+
+  for (const item of candidates) {
+    await connection.beginTransaction();
+    try {
+      const candidateResult = await persistCandidate(connection, job, item, counters);
+      await connection.execute(
+        `UPDATE prospecting_jobs SET processed_count = ?, found_count = ?, duplicate_count = ?, invalid_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [counters.processedCount, counters.foundCount, counters.duplicateCount, counters.invalidCount, job.id],
+      );
+      await connection.commit();
+      if (candidateResult.membershipCreated) {
+        await dispatchDomainEvent({
+          type: 'lead.added_to_folder',
+          entityType: 'lead',
+          entityId: candidateResult.prospectId,
+          actorUserId: job.created_by,
+          payload: { leadId: candidateResult.prospectId, folderId: job.destination_folder_id },
+          idempotencyKey: `prospecting-job-folder:${job.id}:${candidateResult.prospectId}:${job.destination_folder_id}`,
+        });
+      }
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    }
+    if (targetReached(counters.foundCount, requestedQuantity)) break;
+  }
+  return {
+    ...counters,
+    targetReached: targetReached(counters.foundCount, requestedQuantity),
+    budgetReached: budgetReached(counters.processedCount, counters.foundCount, requestedQuantity),
+  };
+}
+
 async function processProspectingJob(jobId) {
   const connection = await getPool().getConnection();
   let actorId = null;
@@ -89,6 +209,7 @@ async function processProspectingJob(jobId) {
     const [jobs] = await connection.execute('SELECT * FROM prospecting_jobs WHERE id = ? FOR UPDATE', [jobId]);
     const job = jobs[0];
     if (!job || ['completed', 'failed', 'cancelled'].includes(job.status)) { await connection.rollback(); return; }
+    validateRequestedQuantity(job.requested_quantity);
     console.info('[Prospecting] job claimed', { jobId, status: job.status });
     await connection.execute("UPDATE prospecting_jobs SET status = 'running', started_at = COALESCE(started_at, CURRENT_TIMESTAMP), integration_provider = 'apify' WHERE id = ?", [jobId]);
     await recordEvent(connection, jobId, 'job_started', 'Busca iniciada.');
@@ -104,27 +225,13 @@ async function processProspectingJob(jobId) {
       throw Object.assign(new Error('Parametros da busca possuem formato invalido.'), { code: 'PROSPECTING_JOB_PAYLOAD_INVALID', stage: 'job_payload', actorId });
     }
     console.info('[Prospecting] provider run started', { jobId, provider: 'apify' });
-    const items = await apifySearch(parameters, configs[0]);
-    const dedup = new Set();
-    let duplicates = 0;
-    const connection2 = await getPool().getConnection();
-    try {
-      await connection2.beginTransaction();
-      const minimumRating = parameters.minimumRating == null ? null : Number(parameters.minimumRating);
-      for (const item of items.filter((candidate) => minimumRating == null || Number(candidate.totalScore ?? candidate.rating ?? 0) >= minimumRating).slice(0, Number(job.requested_quantity))) {
-        const row = normalize(item);
-        const key = row.normalized_phone || row.normalized_website_domain || row.company_name.toLowerCase();
-        if (dedup.has(key)) { duplicates += 1; continue; }
-        dedup.add(key);
-        const [existing] = await connection2.execute('SELECT id FROM prospects WHERE owner_user_id = ? AND ((normalized_phone IS NOT NULL AND normalized_phone = ?) OR (normalized_website IS NOT NULL AND normalized_website = ?)) LIMIT 1', [job.created_by, row.normalized_phone, row.normalized_website_domain]);
-        const status = existing[0] ? 'duplicate' : 'new';
-        await connection2.execute(`INSERT INTO prospecting_results (id, job_id, source, company_name, category, address, city, state, phone, normalized_phone, website, normalized_website_domain, rating, review_count, whatsapp_status, duplicate_status, raw_payload) VALUES (UUID(), ?, 'google_maps', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_checked', ?, ?)`, [jobId, row.company_name, row.category, row.address, row.city, row.state, row.phone, row.normalized_phone, row.website, row.normalized_website_domain, row.rating, row.review_count, status, row.raw_payload]);
-      }
-      await connection2.execute('UPDATE prospecting_jobs SET status = \'completed\', processed_count = ?, found_count = ?, duplicate_count = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [dedup.size, dedup.size, duplicates, jobId]);
-      await recordEvent(connection2, jobId, 'job_completed', 'Busca concluida.');
-      await connection2.commit();
-      console.info('[Prospecting] job completed', { jobId, resultCount: dedup.size });
-    } finally { connection2.release(); }
+    const items = await apifySearch({ ...parameters, quantity: job.requested_quantity }, configs[0]);
+    const counters = await processCandidates(connection, job, parameters, items);
+    await connection.beginTransaction();
+    await connection.execute('UPDATE prospecting_jobs SET status = \'completed\', processed_count = ?, found_count = ?, duplicate_count = ?, invalid_count = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [counters.processedCount, counters.foundCount, counters.duplicateCount, counters.invalidCount, jobId]);
+    await recordEvent(connection, jobId, 'job_completed', 'Busca concluida.');
+    await connection.commit();
+    console.info('[Prospecting] job completed', { jobId, resultCount: counters.foundCount });
   } catch (error) {
     await connection.rollback().catch(() => {});
     await getPool().execute("UPDATE prospecting_jobs SET status = 'failed', failed_at = CURRENT_TIMESTAMP, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [String(error.message || 'Falha na prospeccao').slice(0, 500), jobId]).catch(() => {});
@@ -138,4 +245,4 @@ async function processProspectingBatch(limit = 2) {
   return jobs.length;
 }
 
-module.exports = { actorInput, normalize, processProspectingBatch, processProspectingJob };
+module.exports = { actorInput, budgetReached, candidateBudget, MAX_CANDIDATE_BUDGET, MAX_PROSPECTING_REQUESTED_QUANTITY, MIN_PROSPECTING_REQUESTED_QUANTITY, normalize, processCandidates, processProspectingBatch, processProspectingJob, targetReached, validateRequestedQuantity };

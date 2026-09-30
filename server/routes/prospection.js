@@ -3,6 +3,7 @@ const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess } = require('../middleware/commercial-access');
 const { getPool } = require('../config/database');
 const { dispatchDomainEvent, requestEventContext } = require('../services/domain-events');
+const { createOrFindProspect } = require('../services/prospect-service');
 
 const router = express.Router();
 const automationVersionsTable = ['automation', '_versions'].join('');
@@ -307,58 +308,58 @@ router.post('/prospects', async (req, res) => {
     await connection.beginTransaction();
     transactionStarted = true;
     const db = (sql, params) => connectionQuery(connection, sql, params);
-    const insert = await db(
-      `INSERT INTO prospects (
-        owner_user_id, assigned_user_id, business_name, normalized_business_name, category, address, city, state,
-        phone, normalized_phone, email, website, normalized_website, website_exists,
-        lead_score, status, analysis_report
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        req.userId,
-        assignedUserId,
-        businessName,
-        normalizeBusinessName(businessName),
-        normalizeNullable(req.body.category),
-        normalizeNullable(req.body.metadata?.address),
-        normalizeNullable(req.body.city),
-        normalizeNullable(req.body.state),
-        phone,
-        onlyDigits(phone),
-        normalizeNullable(req.body.email),
-        website,
-        normalizeWebsite(website),
-        website ? 1 : 0,
-        0,
-        'Novo',
-        JSON.stringify(analysisReport),
-      ]
-    );
-
-    await insertHistory(db, {
-      prospectId: insert.insertId,
+    const created = await createOrFindProspect({
       ownerUserId: req.userId,
-      message: 'Lead cadastrado manualmente no CRM.',
-      recipient: normalizeNullable(req.body.email) || phone,
-      metadata: { action: 'created', source: analysisReport.source },
-    });
-
-    await syncProspectLabels(db, insert.insertId, req.userId, req.body.metadata?.labels, { connection, eventContext: requestEventContext(req) });
-
-    await dispatchDomainEvent({
-      type: 'lead.created',
-      entityType: 'lead',
-      entityId: insert.insertId,
-      actorUserId: req.userId,
-      payload: { leadId: insert.insertId, source: analysisReport.source, status: 'Novo', assignedUserId },
-      ...requestEventContext(req),
+      assignedUserId,
+      businessName,
+      category: req.body.category,
+      address: req.body.metadata?.address,
+      city: req.body.city,
+      state: req.body.state,
+      phone,
+      email: req.body.email,
+      website,
+      leadScore: 0,
+      status: 'Novo',
+      analysisReport,
     }, { connection });
+    if (created.reason === 'missing_normalized_phone') {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(400).json({ error: 'Telefone normalizavel e obrigatorio para criar o lead.', reason: created.reason });
+    }
+
+    if (created.created) {
+      await insertHistory(db, {
+        prospectId: created.prospect.id,
+        ownerUserId: req.userId,
+        message: 'Lead cadastrado manualmente no CRM.',
+        recipient: normalizeNullable(req.body.email) || phone,
+        metadata: { action: 'created', source: analysisReport.source },
+      });
+
+      await syncProspectLabels(db, created.prospect.id, req.userId, req.body.metadata?.labels, { connection, eventContext: requestEventContext(req) });
+
+      await dispatchDomainEvent({
+        type: 'lead.created',
+        entityType: 'lead',
+        entityId: created.prospect.id,
+        actorUserId: req.userId,
+        payload: { leadId: created.prospect.id, source: analysisReport.source, status: 'Novo', assignedUserId },
+        ...requestEventContext(req),
+      }, { connection });
+    }
 
     const result = await db(`SELECT p.*, u.name AS assigned_user_name, u.email AS assigned_user_email
       FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
-      WHERE p.id = ? AND p.owner_user_id = ?`, [insert.insertId, req.userId]);
+      WHERE p.id = ?`, [created.prospect.id]);
     await connection.commit();
     transactionStarted = false;
-    res.status(201).json(await hydrateProspect(getQuery(req), result.rows[0], req.userId));
+    res.status(created.created ? 201 : 200).json({
+      ...(await hydrateProspect(getQuery(req), result.rows[0], req.userId)),
+      created: created.created,
+      duplicate: created.duplicate,
+    });
   } catch (error) {
     if (connection && transactionStarted) await connection.rollback();
     console.error('Erro ao criar prospect:', error);

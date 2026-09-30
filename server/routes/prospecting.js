@@ -4,6 +4,7 @@ const { getPool } = require('../config/database');
 const { encryptSecret, decryptSecret } = require('../services/integration-crypto');
 const { testApifyActor, safeMessage } = require('../services/apify-integration-test');
 const { normalizeIntegrationMetadata } = require('../services/integration-metadata');
+const { MAX_PROSPECTING_REQUESTED_QUANTITY, validateRequestedQuantity } = require('../services/prospecting-service');
 
 const router = express.Router();
 
@@ -109,15 +110,37 @@ router.get('/cities', async (req, res) => {
 router.post('/jobs', async (req, res) => {
   const { randomUUID } = require('crypto');
   const id = randomUUID();
-  const quantity = Number(req.body?.quantity || req.body?.requestedQuantity || 20);
-  await getQuery(req)(
-    `INSERT INTO prospecting_jobs (id, source, status, search_parameters, requested_quantity, created_by)
-     VALUES (?, ?, 'queued', ?, ?, ?)`,
-    [id, req.body?.source || 'google_maps', JSON.stringify(req.body || {}), quantity, req.userId]
-  );
-  const result = await getQuery(req)('SELECT * FROM prospecting_jobs WHERE id = ?', [id]);
-  console.info('[Prospecting] job created', { jobId: id, source: req.body?.source || 'google_maps', status: 'queued' });
-  res.status(201).json(result.rows[0]);
+  const hasQuantity = Object.prototype.hasOwnProperty.call(req.body || {}, 'quantity') || Object.prototype.hasOwnProperty.call(req.body || {}, 'requestedQuantity');
+  const quantity = hasQuantity ? (req.body?.quantity ?? req.body?.requestedQuantity) : 20;
+  try { validateRequestedQuantity(quantity); } catch (error) { return res.status(400).json({ error: `A quantidade maxima por busca e de ${MAX_PROSPECTING_REQUESTED_QUANTITY} novos leads.` }); }
+  const rawFolderId = req.body?.destinationFolderId;
+  const destinationFolderId = rawFolderId === null || rawFolderId === '' || rawFolderId === undefined ? null : Number(rawFolderId);
+  if (destinationFolderId !== null && (!Number.isSafeInteger(destinationFolderId) || destinationFolderId <= 0)) return res.status(400).json({ error: 'Lista de destino invalida.' });
+  let connection;
+  try {
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    if (destinationFolderId !== null) {
+      const [folders] = await connection.execute('SELECT id FROM lead_folders WHERE id = ? AND owner_user_id = ? LIMIT 1', [destinationFolderId, req.userId]);
+      if (!folders.length) {
+        await connection.rollback();
+        return res.status(400).json({ error: 'Lista de destino inexistente ou sem permissao.' });
+      }
+    }
+    await connection.execute(
+      `INSERT INTO prospecting_jobs (id, source, status, search_parameters, requested_quantity, created_by, destination_folder_id)
+       VALUES (?, ?, 'queued', ?, ?, ?, ?)`,
+      [id, req.body?.source || 'google_maps', JSON.stringify(req.body || {}), quantity, req.userId, destinationFolderId]
+    );
+    const [rows] = await connection.execute('SELECT * FROM prospecting_jobs WHERE id = ?', [id]);
+    await connection.commit();
+    console.info('[Prospecting] job created', { jobId: id, source: req.body?.source || 'google_maps', status: 'queued', destinationFolderId });
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    await connection?.rollback().catch(() => {});
+    console.error('[Prospecting] job creation failed', { code: error?.code || 'UNKNOWN' });
+    res.status(500).json({ error: 'Nao foi possivel criar a busca.' });
+  } finally { connection?.release(); }
 });
 
 router.post('/jobs/:id/start', async (req, res) => {
@@ -144,12 +167,59 @@ router.post('/jobs/:id/cancel', async (req, res) => {
 });
 
 router.get('/jobs/:id/results', async (req, res) => {
-  const result = await getQuery(req)('SELECT * FROM prospecting_results WHERE job_id = ? ORDER BY created_at DESC', [req.params.id]);
+  const result = await getQuery(req)(`SELECT pr.*
+    FROM prospecting_results pr
+    JOIN prospecting_jobs j ON j.id = pr.job_id
+    JOIN prospects p ON p.id = pr.prospect_id
+    WHERE pr.job_id = ? AND j.created_by = ? AND pr.duplicate_status = 'new' AND pr.prospect_id IS NOT NULL AND p.owner_user_id = ?
+    ORDER BY pr.created_at DESC`, [req.params.id, req.userId, req.userId]);
   res.json({ items: result.rows || [] });
 });
 
 router.post('/imports', async (req, res) => {
-  res.json({ imported: 0, skippedDuplicates: 0, failed: 0, message: 'Importacao direta ainda nao configurada.' });
+  const ids = [...new Set((Array.isArray(req.body?.result_ids) ? req.body.result_ids : []).map(String).filter(Boolean))];
+  const folderId = Number(req.body?.folder_id);
+  if (!ids.length || !Number.isSafeInteger(folderId) || folderId <= 0) return res.status(400).json({ error: 'Resultados e lista de destino sao obrigatorios.' });
+  let connection;
+  try {
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    const [folders] = await connection.execute('SELECT id, name FROM lead_folders WHERE id = ? AND owner_user_id = ? LIMIT 1', [folderId, req.userId]);
+    if (!folders.length) { await connection.rollback(); return res.status(400).json({ error: 'Lista inexistente ou sem permissao.' }); }
+    const placeholders = ids.map(() => '?').join(',');
+    const [results] = await connection.execute(`SELECT pr.id, pr.prospect_id
+      FROM prospecting_results pr JOIN prospects p ON p.id = pr.prospect_id
+      JOIN prospecting_jobs j ON j.id = pr.job_id
+      WHERE pr.id IN (${placeholders}) AND j.created_by = ? AND pr.duplicate_status = 'new' AND pr.prospect_id IS NOT NULL AND p.owner_user_id = ?`, [...ids, req.userId, req.userId]);
+    if (results.length !== ids.length) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Um ou mais resultados nao sao novos ou nao possuem prospect associado.' });
+    }
+    const created = [];
+    let alreadyInFolder = 0;
+    for (const row of results) {
+      const [membership] = await connection.execute('INSERT IGNORE INTO lead_folder_members (folder_id, prospect_id) VALUES (?, ?)', [folderId, row.prospect_id]);
+      if (Number(membership.affectedRows || 0) > 0) created.push(Number(row.prospect_id));
+      else alreadyInFolder += 1;
+    }
+    await connection.commit();
+    for (const prospectId of created) {
+      await dispatchDomainEvent({
+        type: 'lead.added_to_folder',
+        entityType: 'lead',
+        entityId: prospectId,
+        actorUserId: req.userId,
+        payload: { leadId: prospectId, folderId },
+        ...requestEventContext(req),
+        idempotencyKey: `prospecting-result-folder:${folderId}:${prospectId}`,
+      });
+    }
+    res.json({ imported: created.length, added_to_folder: created.length, already_in_folder: alreadyInFolder, folder: folders[0], message: `${created.length} lead(s) associado(s) a lista.` });
+  } catch (error) {
+    await connection?.rollback().catch(() => {});
+    console.error('[Prospecting] add results to folder failed', { code: error?.code || 'UNKNOWN' });
+    res.status(500).json({ error: 'Nao foi possivel adicionar os leads a lista.' });
+  } finally { connection?.release(); }
 });
 
 router.get('/history', async (req, res) => {

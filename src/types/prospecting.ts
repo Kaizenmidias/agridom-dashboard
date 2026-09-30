@@ -98,6 +98,7 @@ export interface ProspectingJob {
 export interface ProspectingResult extends NormalizedProspect {
   id: string;
   jobId: string;
+  prospectId?: number | null;
   duplicateStatus: DuplicateStatus;
   duplicateLeadId?: string | null;
   duplicateReason?: string | null;
@@ -158,6 +159,7 @@ export interface GoogleMapsSearchPayload {
   quantity: number;
   minimumRating: number | null;
   onlyValidatedWhatsApp: boolean;
+  destinationFolderId?: number | null;
 }
 
 export interface CnpjSearchPayload {
@@ -168,12 +170,14 @@ export interface CnpjSearchPayload {
   quantity: number;
   includeSecondaryActivity: boolean;
   onlyValidatedWhatsApp: boolean;
+  destinationFolderId?: number | null;
 }
 
 export interface InstagramSearchPayload {
   source: "instagram";
   searchTerms: string;
   quantity: number;
+  destinationFolderId?: number | null;
 }
 
 export type ProspectingSearchPayload =
@@ -183,11 +187,7 @@ export type ProspectingSearchPayload =
 
 export interface LeadImportPayload {
   resultIds: string[];
-  folderName: string;
-  status: string;
-  assignedTo?: string | null;
-  origin: string;
-  tags: string[];
+  folderId: number;
 }
 
 export interface LeadImportResult {
@@ -195,5 +195,6 @@ export interface LeadImportResult {
   skippedDuplicates: number;
   failed: number;
   message: string;
+  added_to_folder?: number;
+  already_in_folder?: number;
 }
-

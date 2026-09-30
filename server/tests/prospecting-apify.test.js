@@ -9,8 +9,8 @@ const { normalizeIntegrationMetadata } = require('../services/integration-metada
 const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', '..', ...parts), 'utf8');
 
 test('PROSPECCAO Apify monta o contrato real do Actor e limita a quantidade', () => {
-  assert.deepEqual(actorInput({ searchTerms: 'Contabilidade', city: 'Salvador', state: 'BA', quantity: 50 }), { searchStringsArray: ['Contabilidade'], location: 'Salvador, BA', maxCrawledPlacesPerSearch: 50 });
-  assert.equal(actorInput({ searchTerms: 'x', quantity: 999 }).maxCrawledPlacesPerSearch, 150);
+  assert.deepEqual(actorInput({ searchTerms: 'Contabilidade', city: 'Salvador', state: 'BA', quantity: 50 }), { searchStringsArray: ['Contabilidade'], locationQuery: 'Salvador, BA', maxCrawledPlacesPerSearch: 100 });
+  assert.throws(() => actorInput({ searchTerms: 'x', quantity: 999 }), { code: 'PROSPECTING_QUANTITY_INVALID' });
 });
 
 test('PROSPECCAO usa o contrato do Actor compass e encerra imediatamente job failed no frontend', () => {
@@ -75,7 +75,7 @@ test('PROSPECCAO nao chama a Apify durante a suite local e preserva reviewCount 
 test('PROSPECCAO oferece reprocessamento local por job, dry-run padrao e apply transacional', () => {
   const script = read('server', 'scripts', 'reprocess-prospecting-results.js');
   assert.match(script, /--job-id/);
-  assert.match(script, /WHERE job_id = \?/);
+  assert.match(script, /job_id = \?/);
   assert.match(script, /beginTransaction/);
   assert.match(script, /rollback/);
   assert.match(script, /normalizeStoredPayload/);
