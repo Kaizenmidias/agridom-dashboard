@@ -60,6 +60,7 @@ import {
 } from "@/services/automations";
 
 const TRIGGER_LABELS: Record<string, string> = {
+  "lead.added_to_folder": "Novo lead na lista",
   "lead.created": "Lead criado",
   "lead.updated": "Lead atualizado",
   "lead.status_changed": "Status do Lead alterado",

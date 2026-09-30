@@ -10,11 +10,16 @@ const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', '..', ...p
 
 test('AUTOMATIONS-3A define o evento de lead adicionado a lista e o emitem somente apos novo membership', () => {
   const route = read('server', 'routes', 'prospection.js');
+  const page = read('src', 'pages', 'commercial', 'AutomationsPage.tsx');
+  const builder = read('src', 'components', 'automations', 'AutomationBuilder.tsx');
   assert.ok(EVENT_CONTRACTS['lead.added_to_folder']);
   assert.deepEqual(validateEventInput({ type: 'lead.added_to_folder', entityType: 'lead', entityId: 7, payload: { leadId: 7, folderId: 3 } }).payload, { leadId: 7, folderId: 3 });
   assert.match(route, /INSERT IGNORE INTO lead_folder_members/);
   assert.match(route, /Number\(inserted\.affectedRows \|\| 0\) > 0/);
   assert.match(route, /type: 'lead\.added_to_folder'/);
+  assert.match(page, /"lead\.added_to_folder": "Novo lead na lista"/);
+  assert.match(builder, /"lead\.added_to_folder": "Novo lead na lista"/);
+  assert.match(builder, /leadFoldersAPI\.list\(\)/);
 });
 
 test('AUTOMATIONS-3A restringe o trigger de lista pela pasta configurada', async () => {
