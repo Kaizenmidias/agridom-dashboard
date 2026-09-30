@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { getPool } = require('../config/database');
 const { encryptSecret, decryptSecret } = require('../services/integration-crypto');
+const { testApifyActor, safeMessage } = require('../services/apify-integration-test');
 
 const router = express.Router();
 
@@ -65,10 +66,21 @@ router.post('/integrations/:provider/test', async (req, res) => {
     const metadata = JSON.parse(rows[0].configuration_metadata || '{}');
     const actorId = String(metadata.googleMapsActorId || '').replace('/', '~');
     if (!actorId) return res.status(400).json({ error: 'Configure o Actor do Google Maps na integracao Apify.' });
-    const response = await fetch(`https://api.apify.com/v2/acts/${encodeURIComponent(actorId)}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!response.ok) return res.status(response.status === 401 ? 401 : 502).json({ error: response.status === 401 ? 'Token da Apify invalido.' : 'Actor do Google Maps nao acessivel.' });
+    await testApifyActor({ token, actorId });
+    await getPool().execute("UPDATE integration_providers SET status = 'connected', last_tested_at = CURRENT_TIMESTAMP, last_test_status = 'success', last_error = NULL WHERE provider = 'apify'");
     res.json({ success: true, message: 'Conexao com Apify validada.' });
-  } catch { res.status(502).json({ error: 'Nao foi possivel validar a conexao com a Apify.' }); }
+  } catch (error) {
+    console.error('[Apify] integration test failed', {
+      provider: 'apify', operation: 'actor_metadata', actorId: error?.actorId || undefined,
+      error_code: error?.code || 'APIFY_TEST_ERROR', provider_status: error?.providerStatus || null,
+      provider_error_type: error?.providerErrorType || null, provider_error_code: error?.providerErrorCode || null,
+      provider_message: safeMessage(error?.providerMessage), timeout: Boolean(error?.timeout),
+    });
+    if (error?.code) {
+      await getPool().execute("UPDATE integration_providers SET status = ?, last_tested_at = CURRENT_TIMESTAMP, last_test_status = 'error', last_error = ? WHERE provider = 'apify'", [error.code === 'APIFY_INVALID_TOKEN' ? 'auth_error' : 'provider_error', safeMessage(error.message)]).catch(() => {});
+    }
+    res.status(error?.status || 502).json({ error: error?.message || 'Nao foi possivel validar a conexao com a Apify.', code: error?.code || 'APIFY_TEST_ERROR' });
+  }
 });
 
 router.get('/cnaes', async (req, res) => {

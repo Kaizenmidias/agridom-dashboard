@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { actorInput, normalize } = require('../services/prospecting-service');
+const { testApifyActor } = require('../services/apify-integration-test');
 
 const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', '..', ...parts), 'utf8');
 
@@ -44,4 +45,23 @@ test('PROSPECCAO preserva o contrato do modal: token em metadata, mascara no niv
   assert.match(page, /await prospectingAPI\.saveIntegrationMetadata/);
   assert.match(page, /await prospectingAPI\.testIntegration\(updated\.provider\)/);
   assert.ok(page.indexOf('await prospectingAPI.saveIntegrationMetadata') < page.indexOf('await prospectingAPI.testIntegration(updated.provider)'));
+});
+
+test('PROSPECCAO identifica com seguranca a causa da falha de teste da Apify', async () => {
+  const token = 'secret-token-value';
+  await assert.rejects(
+    testApifyActor({ token, actorId: 'compass~crawler-google-places', fetchImpl: async () => ({ ok: false, status: 404, text: async () => JSON.stringify({ message: 'Actor not found' }) }) }),
+    (error) => {
+      assert.equal(error.code, 'APIFY_ACTOR_NOT_FOUND');
+      assert.equal(error.status, 404);
+      assert.equal(error.providerStatus, 404);
+      assert.doesNotMatch(error.message, /secret-token-value/);
+      assert.doesNotMatch(error.providerMessage, /secret-token-value/);
+      return true;
+    },
+  );
+  await assert.rejects(
+    testApifyActor({ token, actorId: 'compass~crawler-google-places', fetchImpl: async () => { throw Object.assign(new Error('socket timeout'), { code: 'ETIMEDOUT' }); } }),
+    (error) => error.code === 'APIFY_NETWORK_ERROR' && error.status === 502 && !error.message.includes(token),
+  );
 });
