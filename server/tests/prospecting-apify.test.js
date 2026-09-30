@@ -72,6 +72,17 @@ test('PROSPECCAO nao chama a Apify durante a suite local e preserva reviewCount 
   assert.doesNotMatch(read('server', 'tests', 'prospecting-apify.test.js'), /api\.apify\.com/);
 });
 
+test('PROSPECCAO oferece reprocessamento local por job, dry-run padrao e apply transacional', () => {
+  const script = read('server', 'scripts', 'reprocess-prospecting-results.js');
+  assert.match(script, /--job-id/);
+  assert.match(script, /WHERE job_id = \?/);
+  assert.match(script, /beginTransaction/);
+  assert.match(script, /rollback/);
+  assert.match(script, /normalizeStoredPayload/);
+  assert.doesNotMatch(script, /apifySearch/);
+  assert.throws(() => require('../scripts/reprocess-prospecting-results').parseArgs([]), /--job-id/);
+});
+
 test('PROSPECCAO usa integracao criptografada e worker persistente para jobs Apify', () => {
   const route = read('server', 'routes', 'prospecting.js');
   const worker = read('server', 'worker.js');
