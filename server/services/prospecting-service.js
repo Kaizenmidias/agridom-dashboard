@@ -66,12 +66,14 @@ async function processProspectingJob(jobId) {
     const [jobs] = await connection.execute('SELECT * FROM prospecting_jobs WHERE id = ? FOR UPDATE', [jobId]);
     const job = jobs[0];
     if (!job || ['completed', 'failed', 'cancelled'].includes(job.status)) { await connection.rollback(); return; }
+    console.info('[Prospecting] job claimed', { jobId, status: job.status });
     await connection.execute("UPDATE prospecting_jobs SET status = 'running', started_at = COALESCE(started_at, CURRENT_TIMESTAMP), integration_provider = 'apify' WHERE id = ?", [jobId]);
     await recordEvent(connection, jobId, 'job_started', 'Busca iniciada.');
     await connection.commit();
     const [configs] = await getPool().execute("SELECT * FROM integration_providers WHERE provider = 'apify' LIMIT 1");
     if (!configs[0]?.secret_ciphertext) throw Object.assign(new Error('Configure a integracao Apify em Administracao > Integracoes.'), { code: 'APIFY_NOT_CONFIGURED' });
     const parameters = JSON.parse(job.search_parameters || '{}');
+    console.info('[Prospecting] provider run started', { jobId, provider: 'apify' });
     const items = await apifySearch(parameters, configs[0]);
     const dedup = new Set();
     let duplicates = 0;
@@ -91,10 +93,12 @@ async function processProspectingJob(jobId) {
       await connection2.execute('UPDATE prospecting_jobs SET status = \'completed\', processed_count = ?, found_count = ?, duplicate_count = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [dedup.size, dedup.size, duplicates, jobId]);
       await recordEvent(connection2, jobId, 'job_completed', 'Busca concluida.');
       await connection2.commit();
+      console.info('[Prospecting] job completed', { jobId, resultCount: dedup.size });
     } finally { connection2.release(); }
   } catch (error) {
     await connection.rollback().catch(() => {});
     await getPool().execute("UPDATE prospecting_jobs SET status = 'failed', failed_at = CURRENT_TIMESTAMP, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [String(error.message || 'Falha na prospeccao').slice(0, 500), jobId]).catch(() => {});
+    console.error('[Prospecting] job failed', { jobId, stage: error?.code || 'provider', errorCode: error?.code || 'UNEXPECTED' });
   } finally { connection.release(); }
 }
 

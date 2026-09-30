@@ -644,7 +644,7 @@ export default function ProspectingPage() {
       setJob(createdJob);
       await prospectingAPI.startJob(createdJob.id);
       let currentJob = createdJob;
-      for (let attempt = 0; attempt < 180; attempt += 1) {
+      for (let attempt = 0; attempt < 90; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 2000));
         const data = await prospectingAPI.getJob(createdJob.id);
         currentJob = data.job;
@@ -652,6 +652,7 @@ export default function ProspectingPage() {
         setEvents(data.events);
         if (['completed', 'failed', 'cancelled'].includes(data.job.status)) break;
       }
+      if (['queued', 'running'].includes(currentJob.status)) throw new Error('A busca excedeu o tempo limite de processamento. Tente novamente em instantes.');
       const resultData = await prospectingAPI.getResults(createdJob.id);
       setResults(resultData.items);
       await loadInitialData();

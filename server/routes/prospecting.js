@@ -116,6 +116,7 @@ router.post('/jobs', async (req, res) => {
     [id, req.body?.source || 'google_maps', JSON.stringify(req.body || {}), quantity, req.userId]
   );
   const result = await getQuery(req)('SELECT * FROM prospecting_jobs WHERE id = ?', [id]);
+  console.info('[Prospecting] job created', { jobId: id, source: req.body?.source || 'google_maps', status: 'queued' });
   res.status(201).json(result.rows[0]);
 });
 
@@ -123,6 +124,7 @@ router.post('/jobs/:id/start', async (req, res) => {
   await getQuery(req)("UPDATE prospecting_jobs SET status = CASE WHEN status IN ('queued', 'pending') THEN 'queued' ELSE status END, integration_provider = 'apify' WHERE id = ? AND created_by = ?", [req.params.id, req.userId]);
   const result = await getQuery(req)('SELECT * FROM prospecting_jobs WHERE id = ? AND created_by = ?', [req.params.id, req.userId]);
   if (!result.rows?.length) return res.status(404).json({ error: 'Job nao encontrado' });
+  console.info('[Prospecting] job queued', { jobId: req.params.id, status: result.rows[0].status });
   res.json(result.rows[0]);
 });
 

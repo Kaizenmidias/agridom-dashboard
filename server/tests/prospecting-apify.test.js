@@ -91,3 +91,13 @@ test('PROSPECCAO usa a mesma normalizacao no GET, teste e worker', () => {
   assert.match(route, /normalizeIntegrationMetadata\(rows\[0\]\.configuration_metadata\)/);
   assert.match(service, /normalizeIntegrationMetadata\(config\.configuration_metadata\)/);
 });
+
+test('PROSPECCAO permanece processavel quando outro ciclo do worker falha', () => {
+  const worker = read('server', 'worker.js');
+  const page = read('src', 'pages', 'commercial', 'ProspectingPage.tsx');
+  assert.match(worker, /Automation event cycle failed/);
+  assert.match(worker, /Automation job cycle failed/);
+  assert.match(worker, /processProspectingBatch/);
+  assert.match(page, /attempt < 90/);
+  assert.match(page, /excedeu o tempo limite de processamento/);
+});

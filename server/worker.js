@@ -29,15 +29,21 @@ async function startWorker(options = {}) {
   try {
     while (!stopping) {
       currentCycle = (async () => {
-        const events = await processEventBatch({ workerId: currentWorkerId, batchSize, lockTimeoutMs });
-        const jobs = await processJobBatch({ currentWorkerId, batchSize, lockTimeoutMs });
-        const whatsappEvents = await processPendingWhatsAppEvents({ batchSize });
+        let events = 0;
+        let jobs = 0;
+        let whatsappEvents = 0;
+        try { events = await processEventBatch({ workerId: currentWorkerId, batchSize, lockTimeoutMs }); }
+        catch (error) { console.error('Automation event cycle failed:', error?.code || 'UNEXPECTED'); }
+        try { jobs = await processJobBatch({ currentWorkerId, batchSize, lockTimeoutMs }); }
+        catch (error) { console.error('Automation job cycle failed:', error?.code || 'UNEXPECTED'); }
+        try { whatsappEvents = await processPendingWhatsAppEvents({ batchSize }); }
+        catch (error) { console.error('WhatsApp event cycle failed:', error?.code || 'UNEXPECTED'); }
         let broadcasts = 0;
         try { broadcasts = await processBroadcastBatch({ currentWorkerId: currentBroadcastWorkerId, batchSize: Math.min(batchSize, 10) }); }
         catch (error) { console.error('Broadcast worker cycle failed:', error?.code || 'UNEXPECTED'); }
         let prospecting = 0;
         try { prospecting = await processProspectingBatch(Math.min(batchSize, 2)); }
-        catch (error) { console.error('Prospecting worker cycle failed:', error?.code || 'UNEXPECTED'); }
+        catch (error) { console.error('[Prospecting] worker cycle failed:', { code: error?.code || 'UNEXPECTED', message: String(error?.message || '').slice(0, 240) }); }
         return events + jobs + whatsappEvents + broadcasts + prospecting;
       })();
       const workCount = await currentCycle;
