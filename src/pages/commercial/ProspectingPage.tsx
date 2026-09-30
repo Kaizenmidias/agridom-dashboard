@@ -653,6 +653,8 @@ export default function ProspectingPage() {
         if (['completed', 'failed', 'cancelled'].includes(data.job.status)) break;
       }
       if (['queued', 'running'].includes(currentJob.status)) throw new Error('A busca excedeu o tempo limite de processamento. Tente novamente em instantes.');
+      if (currentJob.status === 'failed') throw new Error(currentJob.errorMessage || 'A busca falhou no provedor de prospecção.');
+      if (currentJob.status === 'cancelled') throw new Error('A busca foi cancelada.');
       const resultData = await prospectingAPI.getResults(createdJob.id);
       setResults(resultData.items);
       await loadInitialData();

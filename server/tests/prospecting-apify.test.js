@@ -9,8 +9,18 @@ const { normalizeIntegrationMetadata } = require('../services/integration-metada
 const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', '..', ...parts), 'utf8');
 
 test('PROSPECCAO Apify monta o contrato real do Actor e limita a quantidade', () => {
-  assert.deepEqual(actorInput({ searchTerms: 'Contabilidade em Salvador', quantity: 50 }), { searchTerms: ['Contabilidade em Salvador'], maxItems: 50 });
-  assert.equal(actorInput({ searchTerms: 'x', quantity: 999 }).maxItems, 150);
+  assert.deepEqual(actorInput({ searchTerms: 'Contabilidade', city: 'Salvador', state: 'BA', quantity: 50 }), { searchStringsArray: ['Contabilidade'], location: 'Salvador, BA', maxCrawledPlacesPerSearch: 50 });
+  assert.equal(actorInput({ searchTerms: 'x', quantity: 999 }).maxCrawledPlacesPerSearch, 150);
+});
+
+test('PROSPECCAO usa o contrato do Actor compass e encerra imediatamente job failed no frontend', () => {
+  const service = read('server', 'services', 'prospecting-service.js');
+  const page = read('src', 'pages', 'commercial', 'ProspectingPage.tsx');
+  assert.match(service, /searchStringsArray/);
+  assert.match(service, /maxCrawledPlacesPerSearch/);
+  assert.match(service, /APIFY_INPUT_INVALID/);
+  assert.match(service, /providerStatus/);
+  assert.match(page, /currentJob\.status === 'failed'/);
 });
 
 test('PROSPECCAO normaliza dados reais do Google Maps sem inventar enriquecimento', () => {

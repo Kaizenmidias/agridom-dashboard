@@ -18,17 +18,21 @@ const text = (value) => String(value || '').trim() || null;
 const safePayload = (value) => JSON.stringify(value).slice(0, 100000);
 
 function actorInput(parameters) {
+  const searchTerm = String(parameters.searchTerms || '').trim();
+  const location = [parameters.city, parameters.state].filter(Boolean).join(', ');
   const input = {
-    searchTerms: [String(parameters.searchTerms || '').trim()],
-    maxItems: Math.min(Math.max(Number(parameters.quantity) || 20, 1), 150),
+    searchStringsArray: [searchTerm],
+    maxCrawledPlacesPerSearch: Math.min(Math.max(Number(parameters.quantity) || 20, 1), 150),
   };
+  if (location) input.location = location;
   return input;
 }
 
 async function apifySearch(parameters, config) {
   const token = decryptSecret(config)?.token;
   const metadata = normalizeIntegrationMetadata(config.configuration_metadata);
-  const actorId = String(metadata.googleMapsActorId || '').trim().replace('/', '~');
+  const configuredActorId = String(metadata.googleMapsActorId || '').trim();
+  const actorId = configuredActorId.replace('/', '~');
   if (!token) throw Object.assign(new Error('Configure a integracao Apify em Administracao > Integracoes.'), { code: 'APIFY_NOT_CONFIGURED' });
   if (!actorId) throw Object.assign(new Error('Configure o Actor do Google Maps na integracao Apify.'), { code: 'APIFY_ACTOR_NOT_CONFIGURED' });
   const timeout = Math.min(Math.max(Number(metadata.timeoutMinutes || 10), 1), 30) * 60 * 1000;
@@ -37,14 +41,19 @@ async function apifySearch(parameters, config) {
   try {
     const response = await fetch(`https://api.apify.com/v2/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(actorInput(parameters)), signal: controller.signal });
     if (!response.ok) {
-      const status = response.status === 401 ? 'Token da Apify invalido.' : response.status === 404 ? 'Actor do Google Maps nao encontrado.' : 'A Apify recusou a execucao do Actor.';
-      throw Object.assign(new Error(status), { code: response.status === 401 ? 'APIFY_INVALID_TOKEN' : 'APIFY_PROVIDER_ERROR' });
+      const body = await response.text();
+      let payload = {};
+      try { payload = JSON.parse(body); } catch { /* resposta nao JSON */ }
+      const status = response.status === 400 ? 'A Apify rejeitou os parametros da busca.' : response.status === 401 ? 'Token da Apify invalido.' : response.status === 403 ? 'Token da Apify sem acesso ao Actor.' : response.status === 404 ? 'Actor do Google Maps nao encontrado.' : response.status === 429 ? 'Limite de requisicoes da Apify atingido.' : response.status >= 500 ? 'Apify indisponivel no momento.' : 'A Apify recusou a execucao do Actor.';
+      const code = response.status === 400 ? 'APIFY_INPUT_INVALID' : response.status === 401 ? 'APIFY_AUTH_FAILED' : response.status === 403 ? 'APIFY_ACTOR_FORBIDDEN' : response.status === 404 ? 'APIFY_ACTOR_NOT_FOUND' : response.status === 429 ? 'APIFY_RATE_LIMITED' : response.status >= 500 ? 'APIFY_PROVIDER_ERROR' : 'APIFY_PROVIDER_ERROR';
+      throw Object.assign(new Error(status), { code, actorId: configuredActorId, providerStatus: response.status, providerErrorType: payload?.type || payload?.errorType || null, providerErrorCode: payload?.code || payload?.errorCode || null, providerMessage: String(payload?.error?.message || payload?.message || body).replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]').replace(/token[=:]\s*[^\s,]+/gi, 'token=[redacted]').slice(0, 240), timeout: false });
     }
     const items = await response.json();
     if (!Array.isArray(items)) throw Object.assign(new Error('Resposta invalida do dataset da Apify.'), { code: 'APIFY_INVALID_DATASET' });
     return items;
   } catch (error) {
-    if (error.name === 'AbortError') throw Object.assign(new Error('Tempo limite excedido na consulta da Apify.'), { code: 'APIFY_TIMEOUT' });
+    if (error.name === 'AbortError') throw Object.assign(new Error('Tempo limite excedido na consulta da Apify.'), { code: 'APIFY_TIMEOUT', actorId: configuredActorId, providerStatus: null, timeout: true });
+    if (!error.code) throw Object.assign(new Error('Nao foi possivel conectar a Apify.'), { code: 'APIFY_NETWORK_ERROR', actorId: configuredActorId, providerStatus: null, providerErrorType: error.name || 'NetworkError', providerMessage: String(error.message || '').slice(0, 240), timeout: false });
     throw error;
   } finally { clearTimeout(timer); }
 }
@@ -98,7 +107,7 @@ async function processProspectingJob(jobId) {
   } catch (error) {
     await connection.rollback().catch(() => {});
     await getPool().execute("UPDATE prospecting_jobs SET status = 'failed', failed_at = CURRENT_TIMESTAMP, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [String(error.message || 'Falha na prospeccao').slice(0, 500), jobId]).catch(() => {});
-    console.error('[Prospecting] job failed', { jobId, stage: error?.code || 'provider', errorCode: error?.code || 'UNEXPECTED' });
+    console.error('[Prospecting] job failed', { jobId, stage: 'provider', provider: 'apify', actorId: error?.actorId || null, operation: 'run_sync_get_dataset_items', errorCode: error?.code || 'UNEXPECTED', errorName: error?.name || 'Error', providerStatus: error?.providerStatus || null, providerErrorType: error?.providerErrorType || null, providerErrorCode: error?.providerErrorCode || null, providerMessage: String(error?.providerMessage || error?.message || '').replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]').replace(/token[=:]\s*[^\s,]+/gi, 'token=[redacted]').slice(0, 240), timeout: Boolean(error?.timeout) });
   } finally { connection.release(); }
 }
 
