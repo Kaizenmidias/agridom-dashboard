@@ -59,6 +59,19 @@ test('AUTOMATIONS-3A exige lista e conta/mensagem no fluxo WhatsApp', () => {
   assert.ok(invalid.errors.filter((item) => item.code === 'MISSING_ACTION_CONFIG').length >= 2);
 });
 
+test('AUTOMATIONS-3A mantém o trigger canônico no round-trip do Builder', () => {
+  const builder = read('src', 'components', 'automations', 'AutomationBuilder.tsx');
+  const catalog = read('src', 'components', 'automations', 'action-catalog.ts');
+  const definition = { schemaVersion: 1, trigger: { type: 'lead.added_to_folder', config: { folderId: 5 } }, steps: [{ id: 'send', type: 'action', config: { actionType: 'whatsapp.send', accountId: 1, recipient: '{{lead.phone}}', message: 'Ola', cadenceValue: 1, cadenceUnit: 'minutes' }, next: null }] };
+  assert.equal(definition.trigger.type, 'lead.added_to_folder');
+  assert.equal(definition.trigger.config.folderId, 5);
+  assert.equal(definition.steps[0].config.actionType, 'whatsapp.send');
+  assert.match(builder, /flowDefinition\(definition, props\.triggerType\)/);
+  assert.match(builder, /type: String\(triggerType \|\| trigger\?\.data\.config\.triggerType/);
+  assert.match(builder, /key !== "folderName"/);
+  assert.match(catalog, /id: "whatsapp\.send",\s+name: "Disparo WhatsApp"/);
+});
+
 test('AUTOMATIONS-3A reserva slots de cadência serialmente sob lock', async () => {
   const calls = [];
   const connection = { execute: async (sql, params) => {

@@ -252,7 +252,7 @@ export function builderToDefinition(
     schemaVersion: 1,
     trigger: {
       type: String(
-        trigger?.config.triggerType || triggerType || "lead.created",
+        triggerType || trigger?.config.triggerType || "lead.created",
       ),
       config: Object.fromEntries(
         Object.entries(trigger?.config || {}).filter(
@@ -283,7 +283,7 @@ type FlowNode = Node<FlowNodeData, "kaizen">;
 
 const flowNodeTypes = { kaizen: KaizenFlowNode };
 
-function flowDefinition(definition: AutomationDefinition): { nodes: FlowNode[]; edges: Edge[] } {
+function flowDefinition(definition: AutomationDefinition, canonicalTriggerType?: string): { nodes: FlowNode[]; edges: Edge[] } {
   const steps = Array.isArray(definition.steps) ? definition.steps : [];
   const legacyTriggerNext = (definition.trigger as AutomationDefinition["trigger"] & { next?: string | null }).next || (!Object.prototype.hasOwnProperty.call(definition, "layout") ? steps[0]?.id : null);
   if (!steps.length) return { nodes: [], edges: [] };
@@ -296,8 +296,8 @@ function flowDefinition(definition: AutomationDefinition): { nodes: FlowNode[]; 
       data: {
         id: "trigger_1",
         type: "trigger",
-        label: triggers[definition.trigger.type] || definition.trigger.type,
-        config: { ...definition.trigger.config, triggerType: definition.trigger.type },
+        label: triggers[canonicalTriggerType || definition.trigger.type] || canonicalTriggerType || definition.trigger.type,
+        config: { ...definition.trigger.config, triggerType: canonicalTriggerType || definition.trigger.type },
         next: legacyTriggerNext || null,
         x: layout.trigger_1?.x ?? 80,
         y: layout.trigger_1?.y ?? 220,
@@ -362,7 +362,7 @@ function definitionFromFlow(nodes: FlowNode[], edges: Edge[], triggerType: strin
   return {
     schemaVersion: 1,
     trigger: {
-      type: String(trigger?.data.config.triggerType || triggerType || "lead.created"),
+      type: String(triggerType || trigger?.data.config.triggerType || "lead.created"),
       config: Object.fromEntries(Object.entries(trigger?.data.config || {}).filter(([key]) => key !== "triggerType" && key !== "folderName")),
       next: trigger ? edges.find((edge) => edge.source === trigger.id && edge.sourceHandle !== "yes" && edge.sourceHandle !== "no")?.target || null : null,
     },
@@ -423,7 +423,7 @@ function FreeformAutomationBuilder(props: {
   readOnly?: boolean;
 }) {
   const definition = props.draft?.definition || props.active?.definition || { schemaVersion: 1 as const, trigger: { type: props.triggerType, config: {} }, steps: [] };
-  const initial = useMemo(() => flowDefinition(definition), [definition]);
+  const initial = useMemo(() => flowDefinition(definition, props.triggerType), [definition, props.triggerType]);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
