@@ -34,3 +34,14 @@ test('PROSPECCAO usa integracao criptografada e worker persistente para jobs Api
   assert.match(service, /duplicate_status/);
   assert.match(worker, /processProspectingBatch/);
 });
+
+test('PROSPECCAO preserva o contrato do modal: token em metadata, mascara no nivel publico e save antes do teste', () => {
+  const route = read('server', 'routes', 'prospecting.js');
+  const page = read('src', 'components', 'integrations', 'IntegrationLibrary.tsx');
+  assert.match(route, /const token = String\(metadata\.token \|\| ''\)/);
+  assert.match(route, /tokenMasked: row\.secret_ciphertext/);
+  assert.match(route, /tokenConfigured: Boolean\(row\.secret_ciphertext\)/);
+  assert.match(page, /await prospectingAPI\.saveIntegrationMetadata/);
+  assert.match(page, /await prospectingAPI\.testIntegration\(updated\.provider\)/);
+  assert.ok(page.indexOf('await prospectingAPI.saveIntegrationMetadata') < page.indexOf('await prospectingAPI.testIntegration(updated.provider)'));
+});

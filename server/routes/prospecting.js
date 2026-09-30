@@ -30,9 +30,10 @@ router.get('/integrations', async (req, res) => {
     integrations: (result.rows || []).map((row) => ({
       provider: row.provider,
       displayName: row.display_name,
-      configured: row.status === 'configured',
+      configured: Boolean(row.secret_ciphertext) && ['configured', 'connected', 'provider_error', 'auth_error'].includes(row.status),
       status: row.status,
-      metadata: { ...(typeof row.configuration_metadata === 'object' ? row.configuration_metadata : JSON.parse(row.configuration_metadata || '{}')), tokenMasked: row.secret_ciphertext ? '********' : '' },
+      tokenMasked: row.secret_ciphertext ? '********' : '',
+      metadata: { ...(typeof row.configuration_metadata === 'object' ? row.configuration_metadata : JSON.parse(row.configuration_metadata || '{}')), tokenConfigured: Boolean(row.secret_ciphertext) },
     })),
   });
 });
@@ -44,14 +45,14 @@ router.put('/integrations/:provider', async (req, res) => {
   try {
     const [currentRows] = await connection.execute('SELECT * FROM integration_providers WHERE provider = ? LIMIT 1', [req.params.provider]);
     const current = currentRows[0];
-    const token = String(req.body?.token || '').trim();
+    const token = String(metadata.token || '').trim();
     const envelope = token ? encryptSecret({ token }) : null;
     const safeMetadata = { googleMapsActorId: String(metadata.googleMapsActorId || ''), instagramActorId: String(metadata.instagramActorId || ''), timeoutMinutes: Number(metadata.timeoutMinutes || 10), pollIntervalSeconds: Number(metadata.pollIntervalSeconds || 5) };
     await connection.execute(`INSERT INTO integration_providers (provider, display_name, status, configuration_metadata, secret_ciphertext, secret_iv, secret_auth_tag)
       VALUES ('apify', 'Apify', 'configured', ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE status = 'configured', configuration_metadata = VALUES(configuration_metadata), secret_ciphertext = COALESCE(VALUES(secret_ciphertext), secret_ciphertext), secret_iv = COALESCE(VALUES(secret_iv), secret_iv), secret_auth_tag = COALESCE(VALUES(secret_auth_tag), secret_auth_tag), updated_at = CURRENT_TIMESTAMP`,
       [JSON.stringify(safeMetadata), envelope?.ciphertext || current?.secret_ciphertext || null, envelope?.iv || current?.secret_iv || null, envelope?.authTag || current?.secret_auth_tag || null]);
-    res.json({ provider: 'apify', configured: Boolean(envelope || current?.secret_ciphertext), metadata: { ...safeMetadata, tokenMasked: envelope || current?.secret_ciphertext ? '********' : '' } });
+    res.json({ provider: 'apify', displayName: 'Apify', configured: Boolean(envelope || current?.secret_ciphertext), status: 'configured', tokenMasked: envelope || current?.secret_ciphertext ? '********' : '', metadata: { ...safeMetadata, tokenConfigured: Boolean(envelope || current?.secret_ciphertext) } });
   } finally { connection.release(); }
 });
 
