@@ -20,6 +20,12 @@ test('AUTOMATIONS-3A define o evento de lead adicionado a lista e o emitem somen
   assert.match(page, /"lead\.added_to_folder": "Novo lead na lista"/);
   assert.match(builder, /"lead\.added_to_folder": "Novo lead na lista"/);
   assert.match(builder, /leadFoldersAPI\.list\(\)/);
+  assert.match(page, /leadFoldersAPI\.list\(\)/);
+  assert.match(page, /DEFAULT_DEFINITION\(triggerType, folderId \|\| undefined\)/);
+  assert.match(page, /Selecione uma lista/);
+  assert.match(page, /Carregando listas\.\.\./);
+  assert.match(page, /Nenhuma lista encontrada/);
+  assert.match(page, /setFolderId\(null\)/);
 });
 
 test('AUTOMATIONS-3A restringe o trigger de lista pela pasta configurada', async () => {

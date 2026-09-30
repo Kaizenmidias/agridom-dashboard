@@ -50,6 +50,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AutomationBuilder } from "@/components/automations/AutomationBuilder";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
+import { leadFoldersAPI, type LeadFolder } from "@/api/lead-folders";
 import {
   automationsAPI,
   type AutomationDefinition,
@@ -87,9 +88,9 @@ const STATUS_CLASS: Record<AutomationStatus, string> = {
   archived: "border-red-400/50 text-red-300",
 };
 
-const DEFAULT_DEFINITION = (trigger: string): AutomationDefinition => ({
+const DEFAULT_DEFINITION = (trigger: string, folderId?: number): AutomationDefinition => ({
   schemaVersion: 1,
-  trigger: { type: trigger, config: {} },
+  trigger: { type: trigger, config: trigger === "lead.added_to_folder" && folderId ? { folderId } : {} },
   steps: [],
 });
 
@@ -138,8 +139,22 @@ export function AutomationsPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [triggerType, setTriggerType] = useState("lead.created");
+  const [folderId, setFolderId] = useState<number | null>(null);
+  const [folders, setFolders] = useState<LeadFolder[]>([]);
+  const [foldersLoading, setFoldersLoading] = useState(false);
+  const [foldersError, setFoldersError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AutomationSummary | null>(null);
+
+  useEffect(() => {
+    if (!createOpen || triggerType !== "lead.added_to_folder") return;
+    setFoldersLoading(true);
+    setFoldersError(false);
+    void leadFoldersAPI.list()
+      .then((result) => setFolders(result.folders))
+      .catch(() => { setFolders([]); setFoldersError(true); })
+      .finally(() => setFoldersLoading(false));
+  }, [createOpen, triggerType]);
 
   const load = async () => {
     setLoading(true);
@@ -203,17 +218,22 @@ export function AutomationsPage() {
 
   const create = async () => {
     if (!name.trim()) return;
+    if (triggerType === "lead.added_to_folder" && !folderId) {
+      toast.error("Selecione a lista que iniciará esta automação.");
+      return;
+    }
     setSaving(true);
     try {
       const automation = await automationsAPI.create({
         name: name.trim(),
         description: description.trim(),
         trigger_type: triggerType,
-        definition: DEFAULT_DEFINITION(triggerType),
+        definition: DEFAULT_DEFINITION(triggerType, folderId || undefined),
       });
       setCreateOpen(false);
       setName("");
       setDescription("");
+      setFolderId(null);
       navigate(`/comercial/automacoes/${automation.id}`);
     } catch (createError) {
       toast.error(
@@ -429,7 +449,7 @@ export function AutomationsPage() {
             </div>
             <div className="space-y-2">
               <Label>Quando</Label>
-              <Select value={triggerType} onValueChange={setTriggerType}>
+              <Select value={triggerType} onValueChange={(value) => { setTriggerType(value); if (value !== "lead.added_to_folder") setFolderId(null); }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -442,6 +462,17 @@ export function AutomationsPage() {
                 </SelectContent>
               </Select>
             </div>
+            {triggerType === "lead.added_to_folder" ? (
+              <div className="space-y-2">
+                <Label>Lista</Label>
+                <Select value={folderId ? String(folderId) : ""} onValueChange={(value) => setFolderId(Number(value))} disabled={foldersLoading || foldersError || folders.length === 0}>
+                  <SelectTrigger><SelectValue placeholder={foldersLoading ? "Carregando listas..." : foldersError ? "Não foi possível carregar as listas." : "Selecione uma lista"} /></SelectTrigger>
+                  <SelectContent>{folders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}</SelectContent>
+                </Select>
+                {!foldersLoading && !foldersError && folders.length === 0 ? <p className="text-xs text-muted-foreground">Nenhuma lista encontrada. Crie uma lista em Leads primeiro.</p> : null}
+                {foldersError ? <p className="text-xs text-destructive">Não foi possível carregar as listas.</p> : null}
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
@@ -449,7 +480,7 @@ export function AutomationsPage() {
             </Button>
             <Button
               onClick={() => void create()}
-              disabled={!name.trim() || saving}
+              disabled={!name.trim() || saving || (triggerType === "lead.added_to_folder" && (!folderId || foldersLoading || foldersError || folders.length === 0))}
             >
               <Plus className="mr-2 h-4 w-4" />
               Criar
