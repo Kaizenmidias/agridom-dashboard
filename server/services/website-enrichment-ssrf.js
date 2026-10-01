@@ -67,7 +67,7 @@ async function fetchHtml(value, options = {}) {
       continue;
     }
     if (response.statusCode < 200 || response.statusCode >= 300) throw Object.assign(new Error(`Website respondeu HTTP ${response.statusCode}.`), { code: 'ENRICHMENT_HTTP_ERROR' });
-    if (!String(response.headers['content-type'] || '').toLowerCase().includes('text/html')) { response.destroy(); throw Object.assign(new Error('Website nao retornou HTML.'), { code: 'ENRICHMENT_NON_HTML' }); }
+    if (!options.allowNonHtml && !String(response.headers['content-type'] || '').toLowerCase().includes('text/html')) { response.destroy(); throw Object.assign(new Error('Website nao retornou HTML.'), { code: 'ENRICHMENT_NON_HTML' }); }
     const chunks = []; let total = 0;
     for await (const chunk of response) { total += chunk.length; if (total > maxBytes) { response.destroy(); throw Object.assign(new Error('HTML excedeu o limite de tamanho.'), { code: 'ENRICHMENT_SIZE_LIMIT' }); } chunks.push(chunk); }
     return { url: url.toString(), html: Buffer.concat(chunks).toString('utf8'), responseTimeMs: Date.now() - requestStarted, headers: response.headers };

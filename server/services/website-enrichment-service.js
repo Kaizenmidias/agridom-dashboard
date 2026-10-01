@@ -59,6 +59,9 @@ function mergeResults(pages) {
     opportunities: [...new Set([...(result.opportunities || []), ...page.diagnostic.opportunities.filter((opportunity) => !/^\d+ imagens sem atributo alt$/i.test(opportunity))])],
   }), { technology: {}, seo: null, marketing: {}, mobile: null, security: { headers: {} }, performance: {}, opportunities: [] });
   if (imageOpportunity) diagnostic.opportunities.push(imageOpportunity);
+  diagnostic.homepage = pages[0]?.diagnostic || null;
+  diagnostic.seoAggregate = { pagesAnalyzed: pages.length, imageCount: pages.reduce((sum, page) => sum + Number(page.diagnostic.seo?.imageCount || 0), 0), imagesWithoutAlt: pages.reduce((sum, page) => sum + Number(page.diagnostic.seo?.imagesWithoutAlt || 0), 0), pagesWithoutTitle: pages.filter((page) => !page.diagnostic.seo?.titlePresent).length, pagesWithoutMetaDescription: pages.filter((page) => !page.diagnostic.seo?.metaDescriptionPresent).length, pagesWithoutH1: pages.filter((page) => !page.diagnostic.seo?.h1Count).length, pagesWithMultipleH1: pages.filter((page) => Number(page.diagnostic.seo?.h1Count || 0) > 1).length, internalLinks: pages.reduce((sum, page) => sum + Number(page.diagnostic.seo?.internalLinks || 0), 0), externalLinks: pages.reduce((sum, page) => sum + Number(page.diagnostic.seo?.externalLinks || 0), 0) };
+  diagnostic.limitations = { analysisType: 'static_html', maxPages: pages.length, javascriptOnlyContentMayBeMissed: true, missingMeansNotDetectedOnAnalyzedPages: true, performanceMeasured: false };
   return { fields: merged, diagnostic: { ...diagnostic, opportunities: [...new Set(diagnostic.opportunities)], pagesAnalyzed: pages.length, partialError: pages.partialError ? { code: pages.partialError.code || 'ENRICHMENT_PARTIAL', message: safeError(pages.partialError) } : null } };
 }
 

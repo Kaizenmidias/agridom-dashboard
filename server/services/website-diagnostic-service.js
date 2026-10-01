@@ -1,11 +1,17 @@
 const { getPool } = require('../config/database');
 const { crawlWebsite, mergeResults, websiteUrl } = require('./website-enrichment-service');
 const { validateUrl } = require('./website-enrichment-ssrf');
+const { fetchHtml } = require('./website-enrichment-ssrf');
 const { buildDiagnosticResult } = require('./website-diagnostic-rules');
 
 const MAX_ATTEMPTS = 2;
 const safeError = (error) => String(error?.code || 'DIAGNOSTIC_ERROR').replace(/[^A-Z0-9_]/gi, '').slice(0, 80) || 'DIAGNOSTIC_ERROR';
 const normalizeUrl = (value) => { const url = new URL(websiteUrl(value)); url.hash = ''; return url.toString(); };
+async function inspectAuxiliary(normalizedUrl) {
+  const base = new URL(normalizedUrl); const inspect = async (path) => { try { const result = await fetchHtml(new URL(path, base).toString(), { allowNonHtml: true, maxBytes: 64 * 1024, timeoutMs: 3000 }); return { status: 'detected', evidence: result.html.slice(0, 500) }; } catch (error) { return ['ENRICHMENT_HTTP_ERROR', 'ENRICHMENT_NON_HTML'].includes(error?.code) ? { status: 'not_detected' } : { status: 'unavailable' }; } };
+  const robots = await inspect('/robots.txt'); const sitemap = await inspect('/sitemap.xml');
+  return { robots: { status: robots.status, sitemapReference: robots.evidence ? /sitemap:/i.test(robots.evidence) : false }, sitemap: { status: sitemap.status } };
+}
 
 async function createDiagnostic({ connection = getPool(), ownerUserId, prospectId = null, url }) {
   const normalizedUrl = normalizeUrl(url);
@@ -40,7 +46,7 @@ async function processOneDiagnostic({ connection, workerId, crawl = crawlWebsite
   try { job = await claimNextDiagnostic({ connection: claim, workerId }); } finally { if (!connection) claim.release(); }
   if (!job) return false;
   const persistence = connection || pool;
-  try { const merged = mergeResults(await crawl(job.normalized_url, { maxPages: 5 })); const result = buildDiagnosticResult(merged); const status = result.pagesAnalyzed > 0 ? (merged.diagnostic.partialError ? 'partial' : 'completed') : 'failed'; await persistence.execute('UPDATE website_diagnostics SET status=?, overall_score=?, summary_payload=?, seo_payload=?, performance_payload=?, mobile_payload=?, security_payload=?, technology_payload=?, tracking_payload=?, conversion_payload=?, social_payload=?, gaps_payload=?, recommendations_payload=?, pages_analyzed=?, completed_at=CURRENT_TIMESTAMP, last_error=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?', [status, result.overallScore, JSON.stringify(result.summary), JSON.stringify(result.seo), JSON.stringify(result.performance), JSON.stringify(result.mobile), JSON.stringify(result.security), JSON.stringify(result.technology), JSON.stringify(result.tracking), JSON.stringify(result.conversion), JSON.stringify(result.social), JSON.stringify(result.gaps), JSON.stringify(result.recommendations), result.pagesAnalyzed, job.id]); return true; }
+  try { const merged = mergeResults(await crawl(job.normalized_url, { maxPages: 5 })); merged.diagnostic.infrastructure = await inspectAuxiliary(job.normalized_url); const result = buildDiagnosticResult(merged, { domain: job.domain }); const status = result.pagesAnalyzed > 0 ? (merged.diagnostic.partialError ? 'partial' : 'completed') : 'failed'; await persistence.execute('UPDATE website_diagnostics SET status=?, overall_score=?, summary_payload=?, seo_payload=?, performance_payload=?, mobile_payload=?, security_payload=?, technology_payload=?, tracking_payload=?, conversion_payload=?, social_payload=?, gaps_payload=?, recommendations_payload=?, pages_analyzed=?, completed_at=CURRENT_TIMESTAMP, last_error=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?', [status, result.overallScore, JSON.stringify(result.summary), JSON.stringify(result.seo), JSON.stringify(result.performance), JSON.stringify(result.mobile), JSON.stringify(result.security), JSON.stringify(result.technology), JSON.stringify(result.tracking), JSON.stringify(result.conversion), JSON.stringify(result.social), JSON.stringify(result.gaps), JSON.stringify(result.recommendations), result.pagesAnalyzed, job.id]); return true; }
   catch (error) { const terminal = job.attempt_count >= MAX_ATTEMPTS; await persistence.execute("UPDATE website_diagnostics SET status=?, available_at=DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE), last_error=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", [terminal ? 'failed' : 'pending', safeError(error), job.id]); return true; }
 }
 async function processWebsiteDiagnosticBatch({ limit = 1, connection, workerId } = {}) { let count = 0; while (count < Math.min(Number(limit) || 1, 1) && await processOneDiagnostic({ connection, workerId })) count += 1; return count; }
