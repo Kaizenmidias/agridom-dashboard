@@ -1,0 +1,12 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { buildDiagnosticResult, scoreSignals } = require('../services/website-diagnostic-rules');
+const { parseRow, normalizeUrl } = require('../services/website-diagnostic-service');
+
+const base = (overrides = {}) => ({ fields: { businessName: 'Empresa Teste' }, diagnostic: { pagesAnalyzed: 1, seo: { titlePresent: true, metaDescriptionPresent: true, canonical: true, robotsMeta: true, structuredData: true, openGraph: true, h1Count: 1, imagesWithoutAlt: 0 }, mobile: { viewport: true }, security: { https: true, mixedContent: false, headers: { contentSecurityPolicy: 'default-src self' } }, marketing: { googleAnalytics: true, googleTagManager: true, metaPixel: true, whatsapp: true, instagram: true, linkedin: false, contactForm: true, clickablePhone: true, clickableEmail: true }, technology: { wordpress: true }, ...overrides } });
+
+test('calcula score sem tratar categoria nula como zero', () => { assert.equal(scoreSignals([{ value: true, weight: 1 }, { value: null, weight: 1 }]), 100); });
+test('performance permanece indisponível sem PageSpeed ou Lighthouse', () => { const result = buildDiagnosticResult(base()); assert.deepEqual(result.performance, { status: 'unavailable', score: null, message: 'Análise de performance ainda não disponível.' }); });
+test('gaps e recomendações são determinísticos e baseados em evidência', () => { const result = buildDiagnosticResult(base({ seo: { titlePresent: true, metaDescriptionPresent: false, canonical: true, robotsMeta: true, structuredData: false, openGraph: true, h1Count: 1, imagesWithoutAlt: 2 }, marketing: { metaPixel: false } })); assert.deepEqual(result.gaps.map((gap) => gap.id), ['seo-meta-description', 'seo-image-alt', 'tracking-meta-pixel']); assert.equal(result.recommendations.length, 3); });
+test('normaliza URL removendo fragmento', () => { assert.equal(normalizeUrl('https://empresa.test/pagina#secao'), 'https://empresa.test/pagina'); });
+test('serializa somente payloads estruturados e preserva status', () => { const result = parseRow({ id: 1, status: 'completed', seo_payload: '{"titlePresent":true}', performance_payload: '{"status":"unavailable","score":null}', gaps_payload: '[]', recommendations_payload: '[]' }); assert.equal(result.status, 'completed'); assert.equal(result.seo.titlePresent, true); assert.equal(result.performance.score, null); });

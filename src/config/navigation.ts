@@ -21,6 +21,7 @@ import {
   Smartphone,
   ReceiptText,
   Search,
+  ScanSearch,
   Send,
   Settings,
   SlidersHorizontal,
@@ -54,6 +55,7 @@ export const navigationItems: NavigationItem[] = [
       { label: "Disparar", icon: Send, path: "/comercial/disparar", requiredPermissions: ["can_access_crm"] },
       { label: "Automações", icon: Workflow, path: "/comercial/automacoes", requiredPermissions: ["can_access_crm"] },
       { label: "Agenda", icon: CalendarDays, path: "/comercial/agenda", requiredPermissions: ["can_access_crm"] },
+      { label: "Diagnóstico", icon: ScanSearch, path: "/comercial/diagnostico", requiredPermissions: ["can_access_crm"] },
     ],
   },
   {

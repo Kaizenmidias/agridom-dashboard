@@ -61,6 +61,7 @@ const conversationsRouter = require('./routes/conversations');
 const agentsRouter = require('./routes/agents');
 const aiRouter = require('./routes/ai');
 const broadcastCampaignsRouter = require('./routes/broadcast-campaigns');
+const websiteDiagnosticsRouter = require('./routes/website-diagnostics');
 
 
 app.locals.query = query;
@@ -83,6 +84,7 @@ app.use('/api/conversations', conversationsRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/broadcast-campaigns', broadcastCampaignsRouter);
+app.use('/api/website-diagnostics', websiteDiagnosticsRouter);
 
 
 // Rota de teste

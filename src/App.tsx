@@ -28,6 +28,7 @@ import {
 import { BroadcastPage, NewBroadcastPage, BroadcastDetailPage } from "./pages/commercial/BroadcastPage";
 import { ChatsPage } from "./pages/commercial/ChatsPage";
 import { ConnectedNumbersPage } from "./pages/commercial/ConnectedNumbersPage";
+import { WebsiteDiagnosticsPage, WebsiteDiagnosticDetailPage } from "./pages/commercial/WebsiteDiagnosticsPage";
 import { AgentDetailPage } from "./pages/ai/AgentDetailPage";
 import { AssistantsPage, ContentsPage, NewAgentPage, PromptsPage } from "./pages/ai/AiPlaceholders";
 import { AgentsManagementPage as AgentsPage } from "./pages/ai/AgentsManagementPage";
@@ -76,6 +77,8 @@ const routes = [
   { path: "/comercial/automacoes/runs", element: <AutomationRunsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/automacoes/:automationId", element: <AutomationDetailPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/agenda", element: <AgendaPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/diagnostico", element: <WebsiteDiagnosticsPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/diagnostico/:id", element: <WebsiteDiagnosticDetailPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/kanban", element: <Navigate to="/comercial/pipeline" replace />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/produtos", element: <Navigate to="/comercial/leads" replace />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/histórico", element: <Navigate to="/comercial/chats" replace />, protected: true, restrictedForRicardo: false },
