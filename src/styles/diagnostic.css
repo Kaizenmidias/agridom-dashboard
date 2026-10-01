@@ -1,0 +1,5 @@
+@media (min-width: 1280px) {
+  .diagnostic-indicators-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
