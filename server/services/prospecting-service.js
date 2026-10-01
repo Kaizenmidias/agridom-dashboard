@@ -4,6 +4,7 @@ const { normalizeIntegrationMetadata } = require('./integration-metadata');
 const { createOrFindProspect } = require('./prospect-service');
 const { dispatchDomainEvent } = require('./domain-events');
 const { scheduleWebsiteEnrichment } = require('./website-enrichment-service');
+const { schedulePageSpeedAnalysis } = require('./pagespeed-performance');
 
 const MIN_PROSPECTING_REQUESTED_QUANTITY = 1;
 const MAX_PROSPECTING_REQUESTED_QUANTITY = 100;
@@ -181,6 +182,11 @@ async function processCandidates(connection, job, parameters, items) {
       );
       await connection.commit();
       if (candidateResult.created && candidateResult.website) {
+        try {
+          await schedulePageSpeedAnalysis({ connection: getPool(), prospectId: candidateResult.prospectId, ownerUserId: job.created_by, website: candidateResult.website, strategy: 'mobile' });
+        } catch (error) {
+          console.error('[PageSpeed] scheduling failed', { prospect_id: candidateResult.prospectId, classification: String(error?.code || 'UNEXPECTED').replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80) || 'UNEXPECTED' });
+        }
         await scheduleWebsiteEnrichment({ connection, prospectId: candidateResult.prospectId, ownerUserId: job.created_by, website: candidateResult.website });
       }
       if (candidateResult.membershipCreated) {
