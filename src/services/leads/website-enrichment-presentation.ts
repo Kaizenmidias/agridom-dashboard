@@ -18,6 +18,12 @@ export const securityHeaders = (diagnostic: WebsiteEnrichmentDiagnostic) => {
   return [["Content Security Policy", headers.contentSecurityPolicy], ["X-Content-Type-Options", headers.xContentTypeOptions], ["Referrer Policy", headers.referrerPolicy], ["Strict Transport Security", headers.strictTransportSecurity]] as Array<[string, string | null | undefined]>;
 };
 
+export const securityBooleanLabel = (kind: "https" | "mixedContent", value: boolean | null | undefined) => {
+  if (value === undefined || value === null) return "Informação indisponível";
+  if (kind === "https") return value ? "HTTPS detectado" : "HTTPS não detectado nas páginas analisadas";
+  return value ? "Conteúdo misto identificado nas páginas analisadas" : "Nenhum conteúdo misto identificado nas páginas analisadas";
+};
+
 export const buildCommercialSummary = (diagnostic: WebsiteEnrichmentDiagnostic) => {
   const technologies = technologyLabels(diagnostic.technology);
   const marketing = [
@@ -27,19 +33,24 @@ export const buildCommercialSummary = (diagnostic: WebsiteEnrichmentDiagnostic) 
     ["Instagram", diagnostic.marketing?.instagram],
     ["formulário de contato", diagnostic.marketing?.contactForm],
   ].filter(([, value]) => value === true).map(([label]) => label as string);
-  const seo = [
-    diagnostic.seo?.titlePresent,
-    diagnostic.seo?.metaDescriptionPresent,
-    diagnostic.seo?.canonical,
-    diagnostic.seo?.openGraph,
-    diagnostic.seo?.structuredData,
-  ];
+  const seo = [["título", diagnostic.seo?.titlePresent], ["meta descrição", diagnostic.seo?.metaDescriptionPresent], ["canonical", diagnostic.seo?.canonical], ["Open Graph", diagnostic.seo?.openGraph], ["dados estruturados", diagnostic.seo?.structuredData]] as const;
+  const seoPresent = seo.filter(([, value]) => value === true).map(([label]) => label);
+  const opportunities = commercialOpportunities(diagnostic);
   const paragraphs: string[] = [];
-  if (technologies.length || marketing.length) {
-    paragraphs.push(`O site apresenta ${technologies.length ? `uma estrutura com ${technologies.join(", ")}` : "recursos digitais analisados"}${marketing.length ? ` e sinais de presença comercial, como ${marketing.join(", ")}` : ""}.`);
+  const positives: string[] = [];
+  if (technologies.length) positives.push(`uma base digital com ${technologies.join(", ")}`);
+  if (marketing.length) positives.push(`recursos de acompanhamento e conversão, como ${marketing.join(", ")}`);
+  if (seoPresent.length) positives.push(`fundamentos de SEO observados, como ${seoPresent.join(", ")}`);
+  if (positives.length) paragraphs.push(`A análise identificou ${positives.join(" e ")}.`);
+  if (opportunities.length) {
+    const findings: string[] = [];
+    if (opportunities.includes("Avaliar configuração do Meta Pixel")) findings.push("o Meta Pixel não foi identificado nas páginas analisadas");
+    if (opportunities.includes("Otimizar textos alternativos das imagens")) findings.push("foram encontradas imagens sem texto alternativo");
+    if (opportunities.includes("Revisar configurações adicionais de segurança")) findings.push("algumas configurações adicionais de segurança podem ser revisadas");
+    paragraphs.push(`Há oportunidades claras de evolução: ${findings.join("; ")}. Esses pontos podem contribuir para aprimorar a mensuração, a acessibilidade e a robustez técnica do site.`);
+  } else if (positives.length) {
+    paragraphs.push("Não foram destacadas oportunidades adicionais com os sinais disponíveis nesta análise.");
   }
-  if (seo.some((value) => value === true)) paragraphs.push("A análise identificou parte dos fundamentos de SEO avaliados nas páginas analisadas.");
-  if (diagnostic.security?.https === true && diagnostic.security?.mixedContent === false) paragraphs.push("Na camada de segurança observada, HTTPS foi identificado e não foi encontrado conteúdo misto nas páginas analisadas.");
   if (!paragraphs.length) paragraphs.push("A análise reuniu sinais técnicos e comerciais do site para apoiar uma avaliação inicial do lead.");
   return paragraphs;
 };
