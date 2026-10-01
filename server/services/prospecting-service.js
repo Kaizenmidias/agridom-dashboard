@@ -3,6 +3,7 @@ const { decryptSecret } = require('./integration-crypto');
 const { normalizeIntegrationMetadata } = require('./integration-metadata');
 const { createOrFindProspect } = require('./prospect-service');
 const { dispatchDomainEvent } = require('./domain-events');
+const { scheduleWebsiteEnrichment } = require('./website-enrichment-service');
 
 const MIN_PROSPECTING_REQUESTED_QUANTITY = 1;
 const MAX_PROSPECTING_REQUESTED_QUANTITY = 100;
@@ -158,7 +159,7 @@ async function persistCandidate(connection, job, item, counters) {
     const [membership] = await connection.execute('INSERT IGNORE INTO lead_folder_members (folder_id, prospect_id) VALUES (?, ?)', [job.destination_folder_id, result.prospect.id]);
     membershipCreated = Number(membership.affectedRows || 0) > 0;
   }
-  return { row, membershipCreated, prospectId: result.prospect.id };
+  return { row, membershipCreated, prospectId: result.prospect.id, created: result.created, website: result.prospect.website || row.website };
 }
 
 async function processCandidates(connection, job, parameters, items) {
@@ -179,6 +180,9 @@ async function processCandidates(connection, job, parameters, items) {
         [counters.processedCount, counters.foundCount, counters.duplicateCount, counters.invalidCount, job.id],
       );
       await connection.commit();
+      if (candidateResult.created && candidateResult.website) {
+        await scheduleWebsiteEnrichment({ connection, prospectId: candidateResult.prospectId, ownerUserId: job.created_by, website: candidateResult.website });
+      }
       if (candidateResult.membershipCreated) {
         await dispatchDomainEvent({
           type: 'lead.added_to_folder',

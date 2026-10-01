@@ -7,6 +7,7 @@ const { DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, processEve
 const { processPendingWhatsAppEvents } = require('./services/whatsapp-service');
 const { processBroadcastBatch, workerId: broadcastWorkerId } = require('./services/broadcast-campaign-worker');
 const { processProspectingBatch } = require('./services/prospecting-service');
+const { processWebsiteEnrichmentBatch } = require('./services/website-enrichment-service');
 
 const positiveInt = (value, fallback, max) => {
   const number = Number(value);
@@ -44,7 +45,10 @@ async function startWorker(options = {}) {
         let prospecting = 0;
         try { prospecting = await processProspectingBatch(Math.min(batchSize, 2)); }
         catch (error) { console.error('[Prospecting] worker cycle failed:', { code: error?.code || 'UNEXPECTED', message: String(error?.message || '').slice(0, 240) }); }
-        return events + jobs + whatsappEvents + broadcasts + prospecting;
+        let enrichments = 0;
+        try { enrichments = await processWebsiteEnrichmentBatch({ limit: 1, workerId: currentWorkerId }); }
+        catch (error) { console.error('[Enrichment] worker cycle failed:', { code: error?.code || 'UNEXPECTED', message: String(error?.message || '').slice(0, 240) }); }
+        return events + jobs + whatsappEvents + broadcasts + prospecting + enrichments;
       })();
       const workCount = await currentCycle;
       if (!workCount && !stopping) await sleep(pollMs);
