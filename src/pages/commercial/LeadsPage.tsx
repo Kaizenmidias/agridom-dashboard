@@ -223,6 +223,23 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString("pt-BR");
 }
 
+function formatLastContact(value?: string | null) {
+  if (!value) return "Nunca contatado";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Nunca contatado";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+    .format(date)
+    .replace(", ", " às ");
+}
+
 function getLeadPersonName(lead: Lead) {
   return lead.contactName || lead.companyName || "Lead sem nome";
 }
@@ -1399,7 +1416,7 @@ export default function LeadsPage() {
                               {lead.assignedTo || "Sem responsável"}
                             </TableCell>
                             <TableCell>
-                              {formatDate(lead.lastContactAt)}
+                              {formatLastContact(lead.lastContactAt)}
                             </TableCell>
                             <TableCell>
                               <DropdownMenu>
