@@ -149,6 +149,20 @@ async function recordPageSpeedFailure({ connection = getPool(), job, error, kind
 
 function classifyPageSpeedError(error) {
   const code = String(error?.code || '');
+  const known = {
+    PAGESPEED_INVALID_REQUEST: 'invalid_url',
+    PAGESPEED_URL_BLOCKED: 'invalid_url',
+    PAGESPEED_UNAUTHORIZED: 'configuration',
+    PAGESPEED_AUTH_FAILED: 'configuration',
+    PAGESPEED_FORBIDDEN: 'configuration',
+    PAGESPEED_QUOTA: 'quota',
+    PAGESPEED_PROVIDER_ERROR: 'transient',
+    PAGESPEED_NETWORK_ERROR: 'transient',
+    PAGESPEED_TIMEOUT: 'transient',
+    PAGESPEED_INVALID_RESPONSE: 'invalid_response',
+    PAGESPEED_LIGHTHOUSE_RUNTIME_ERROR: 'invalid_response',
+  };
+  if (known[code]) return known[code];
   if (/TIMEOUT|ETIMEDOUT|ECONNRESET|EAI_AGAIN/.test(code)) return 'transient';
   if (/QUOTA|RATE_LIMIT/.test(code)) return 'quota';
   if (/KEY|AUTH|CONFIG/.test(code)) return 'configuration';
