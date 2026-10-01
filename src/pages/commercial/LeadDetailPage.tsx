@@ -25,11 +25,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
-import { getLeadWebsiteEnrichment, getLeads, updateLeadDetails } from "@/services/leads/lead-service";
+import { getLeadWebsiteEnrichment, getLeadWebsitePerformance, getLeads, updateLeadDetails } from "@/services/leads/lead-service";
 import { commercialEntitiesAPI, type UserOption } from "@/services/commercial-entities";
 import type { Lead, LeadLabel } from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
 import type { LeadWebsiteEnrichmentResponse, WebsiteEnrichmentDiagnostic } from "@/types/website-enrichment";
+import type { LeadWebsitePerformanceResponse } from "@/types/pagespeed-performance";
+import { formatPageSpeedCls, formatPageSpeedDate, formatPageSpeedMs, formatPageSpeedScore, pageSpeedFieldMessage, pageSpeedFieldSourceLabel, pageSpeedLabMetrics, pageSpeedStatusLabel, pageSpeedStatusMessage } from "@/services/leads/pagespeed-performance-presentation";
 import { booleanLabel, buildCommercialSummary, cleanOpportunities, commercialOpportunities, friendlyOpportunity, headerLabel, imageAltLabel, isKnownStatus, pagesAnalyzedLabel, securityBooleanLabel, securityHeaders, statusLabel, technologyLabels, websiteAvailable } from "@/services/leads/website-enrichment-presentation";
 
 const sourceLabels: Record<string, string> = {
@@ -84,6 +86,9 @@ export default function LeadDetailPage() {
   const [websiteEnrichment, setWebsiteEnrichment] = useState<LeadWebsiteEnrichmentResponse | null>(null);
   const [enrichmentLoading, setEnrichmentLoading] = useState(false);
   const [enrichmentError, setEnrichmentError] = useState(false);
+  const [websitePerformance, setWebsitePerformance] = useState<LeadWebsitePerformanceResponse | null>(null);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
+  const [performanceError, setPerformanceError] = useState(false);
 
   const createActivity = async () => {
     if (!lead || !activityTitle.trim()) return;
@@ -166,6 +171,28 @@ export default function LeadDetailPage() {
       if (active) setEnrichmentError(true);
     }).finally(() => {
       if (active) setEnrichmentLoading(false);
+    });
+    return () => { active = false; };
+  }, [lead?.id]);
+
+  useEffect(() => {
+    if (!lead?.id) return;
+    if (!websiteAvailable(lead.website)) {
+      setWebsitePerformance(null);
+      setPerformanceError(false);
+      setPerformanceLoading(false);
+      return;
+    }
+    let active = true;
+    setWebsitePerformance(null);
+    setPerformanceLoading(true);
+    setPerformanceError(false);
+    void getLeadWebsitePerformance(lead.id).then((payload) => {
+      if (active) setWebsitePerformance(payload);
+    }).catch(() => {
+      if (active) setPerformanceError(true);
+    }).finally(() => {
+      if (active) setPerformanceLoading(false);
     });
     return () => { active = false; };
   }, [lead?.id]);
@@ -301,6 +328,9 @@ export default function LeadDetailPage() {
             response={websiteEnrichment}
             loading={enrichmentLoading}
             error={enrichmentError}
+            performance={websitePerformance}
+            performanceLoading={performanceLoading}
+            performanceError={performanceError}
           />
 
           <Card className="rounded-lg shadow-none">
@@ -440,7 +470,7 @@ export default function LeadDetailPage() {
   );
 }
 
-function WebsiteEnrichmentCard({ website, response, loading, error }: { website?: string | null; response: LeadWebsiteEnrichmentResponse | null; loading: boolean; error: boolean }) {
+function WebsiteEnrichmentCard({ website, response, loading, error, performance, performanceLoading, performanceError }: { website?: string | null; response: LeadWebsiteEnrichmentResponse | null; loading: boolean; error: boolean; performance: LeadWebsitePerformanceResponse | null; performanceLoading: boolean; performanceError: boolean }) {
   const enrichment = response?.enrichment;
   const diagnostic = enrichment?.diagnostic;
   const status = enrichment?.status;
@@ -452,7 +482,7 @@ function WebsiteEnrichmentCard({ website, response, loading, error }: { website?
         {status ? <Badge variant="outline">{statusLabel(status)}</Badge> : null}
       </CardHeader>
       <CardContent>
-        {loading ? <EnrichmentMessage><Loader2 className="h-4 w-4 animate-spin" />Carregando pré-diagnóstico...</EnrichmentMessage> : error ? <EnrichmentMessage>Não foi possível carregar o pré-diagnóstico no momento.</EnrichmentMessage> : !websiteAvailable(website) ? <EnrichmentMessage>Este lead ainda não possui um site cadastrado para análise.</EnrichmentMessage> : !enrichment ? <EnrichmentMessage>Este site ainda não possui um pré-diagnóstico disponível.</EnrichmentMessage> : !knownStatus ? <EnrichmentMessage>Status do pré-diagnóstico indisponível.</EnrichmentMessage> : status === "pending" ? <EnrichmentMessage>Pré-diagnóstico aguardando processamento.</EnrichmentMessage> : status === "processing" ? <EnrichmentMessage>Pré-diagnóstico em andamento.</EnrichmentMessage> : status === "failed" ? <EnrichmentMessage>Não foi possível concluir o pré-diagnóstico deste site.</EnrichmentMessage> : !diagnostic ? <EnrichmentMessage>{status === "partial" ? "Análise parcialmente concluída, mas não há dados disponíveis para exibição." : "O pré-diagnóstico foi concluído, mas não há dados disponíveis para exibição."}</EnrichmentMessage> : <div className="space-y-5">
+        <>{loading ? <EnrichmentMessage><Loader2 className="h-4 w-4 animate-spin" />Carregando pré-diagnóstico...</EnrichmentMessage> : error ? <EnrichmentMessage>Não foi possível carregar o pré-diagnóstico no momento.</EnrichmentMessage> : !websiteAvailable(website) ? <EnrichmentMessage>Este lead ainda não possui um site cadastrado para análise.</EnrichmentMessage> : !enrichment ? <EnrichmentMessage>Este site ainda não possui um pré-diagnóstico disponível.</EnrichmentMessage> : !knownStatus ? <EnrichmentMessage>Status do pré-diagnóstico indisponível.</EnrichmentMessage> : status === "pending" ? <EnrichmentMessage>Pré-diagnóstico aguardando processamento.</EnrichmentMessage> : status === "processing" ? <EnrichmentMessage>Pré-diagnóstico em andamento.</EnrichmentMessage> : status === "failed" ? <EnrichmentMessage>Não foi possível concluir o pré-diagnóstico deste site.</EnrichmentMessage> : !diagnostic ? <EnrichmentMessage>{status === "partial" ? "Análise parcialmente concluída, mas não há dados disponíveis para exibição." : "O pré-diagnóstico foi concluído, mas não há dados disponíveis para exibição."}</EnrichmentMessage> : <div className="space-y-5">
           {status === "partial" ? <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-muted-foreground">Análise parcialmente concluída.</p> : null}
           <DiagnosticGroup title="Resumo do site"><div className="space-y-2 text-sm leading-6 text-muted-foreground">{buildCommercialSummary(diagnostic).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div></DiagnosticGroup>
           <DiagnosticGroup title="Principais oportunidades">{commercialOpportunities(diagnostic).length ? <div className="grid gap-2 sm:grid-cols-2">{commercialOpportunities(diagnostic).map((item) => <div key={item} className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm"><span aria-hidden="true" className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />{item}</div>)}</div> : <p className="text-sm text-muted-foreground">Nenhuma oportunidade adicional foi destacada nesta análise.</p>}</DiagnosticGroup>
@@ -463,10 +493,16 @@ function WebsiteEnrichmentCard({ website, response, loading, error }: { website?
           <DiagnosticGroup title="Segurança"><SecurityGrid diagnostic={diagnostic} /></DiagnosticGroup>
           {cleanOpportunities(diagnostic.opportunities).length ? <DiagnosticGroup title="Oportunidades identificadas"><ul className="list-disc space-y-1 pl-5 text-sm">{cleanOpportunities(diagnostic.opportunities).map((item) => <li key={item}>{friendlyOpportunity(item)}</li>)}</ul></DiagnosticGroup> : null}
           {pagesAnalyzedLabel(diagnostic.pagesAnalyzed) ? <p className="border-t pt-3 text-xs text-muted-foreground">{pagesAnalyzedLabel(diagnostic.pagesAnalyzed)}</p> : null}
-        </div>}
+        </div>}<PageSpeedSection website={website} performance={performance?.performance || null} loading={performanceLoading} error={performanceError} /></>
       </CardContent>
     </Card>
   );
+}
+
+function PageSpeedSection({ website, performance, loading, error }: { website?: string | null; performance: LeadWebsitePerformanceResponse["performance"]; loading: boolean; error: boolean }) {
+  const message = pageSpeedStatusMessage(performance?.status);
+  const analyzedAt = formatPageSpeedDate(performance?.analyzedAt);
+  return <DiagnosticGroup title="Performance"><div className="space-y-3 rounded-md border bg-muted/10 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-medium">Performance do site</p><p className="text-xs text-muted-foreground">PageSpeed / Lighthouse</p></div>{performance?.status ? <Badge variant="outline">{pageSpeedStatusLabel(performance.status)}</Badge> : null}</div>{loading ? <EnrichmentMessage><Loader2 className="h-4 w-4 animate-spin" />Carregando análise de performance...</EnrichmentMessage> : error ? <EnrichmentMessage>Não foi possível carregar a performance do site no momento.</EnrichmentMessage> : !websiteAvailable(website) ? <EnrichmentMessage>Este lead não possui um site cadastrado para análise.</EnrichmentMessage> : !performance ? <EnrichmentMessage>Ainda não há análise de performance disponível.</EnrichmentMessage> : message ? <EnrichmentMessage>{message}</EnrichmentMessage> : <div className="space-y-4"><div className="flex items-center gap-3"><span className={`text-2xl font-semibold ${performance.score === null ? "text-muted-foreground" : performance.score >= 90 ? "text-emerald-500" : performance.score >= 50 ? "text-amber-500" : "text-destructive"}`}>{formatPageSpeedScore(performance.score)}</span><span className="text-xs text-muted-foreground">Score mobile Lighthouse</span></div>{performance.lab && pageSpeedLabMetrics(performance.lab).length ? <div><p className="mb-2 text-xs font-medium text-muted-foreground">Métricas Lab</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{pageSpeedLabMetrics(performance.lab).map(([label, value]) => <div key={label} className="rounded-md border px-2 py-2"><p className="text-xs text-muted-foreground">{label}</p><p className="text-sm font-medium">{value}</p></div>)}</div></div> : null}<div><p className="mb-2 text-xs font-medium text-muted-foreground">Dados de usuários reais <span className="font-normal">(CrUX)</span></p>{performance.field?.available ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-3"><div className="rounded-md border px-2 py-2"><p className="text-xs text-muted-foreground">LCP</p><p className="text-sm font-medium">{formatPageSpeedMs(performance.field.lcpMs)}</p></div><div className="rounded-md border px-2 py-2"><p className="text-xs text-muted-foreground">INP</p><p className="text-sm font-medium">{formatPageSpeedMs(performance.field.inpMs)}</p></div><div className="rounded-md border px-2 py-2"><p className="text-xs text-muted-foreground">CLS</p><p className="text-sm font-medium">{formatPageSpeedCls(performance.field.cls)}</p></div><p className="col-span-full text-xs text-muted-foreground">{pageSpeedFieldSourceLabel(performance.field.source)}</p></div> : <p className="text-xs text-muted-foreground">{pageSpeedFieldMessage(performance.field)}</p>}</div>{analyzedAt ? <p className="text-xs text-muted-foreground">Analisado em {analyzedAt}</p> : null}</div>}</div></DiagnosticGroup>;
 }
 
 function EnrichmentMessage({ children }: { children: ReactNode }) { return <div className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-3 text-sm text-muted-foreground">{children}</div>; }

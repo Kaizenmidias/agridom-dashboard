@@ -5,6 +5,7 @@ const { getPool } = require('../config/database');
 const { dispatchDomainEvent, requestEventContext } = require('../services/domain-events');
 const { createOrFindProspect } = require('../services/prospect-service');
 const { normalizeDiagnostic } = require('../services/website-enrichment-response');
+const { publicPageSpeedResponse } = require('../services/pagespeed-response');
 
 const router = express.Router();
 const automationVersionsTable = ['automation', '_versions'].join('');
@@ -396,6 +397,22 @@ router.get('/prospects/:id/website-enrichment', async (req, res) => {
   } catch (error) {
     console.error('Erro ao carregar enriquecimento do lead:', error?.code || 'UNEXPECTED');
     res.status(500).json({ error: 'Nao foi possivel carregar o pre-diagnostico.' });
+  }
+});
+
+router.get('/prospects/:id/website-performance', async (req, res) => {
+  const prospectId = parseId(req.params.id);
+  if (!prospectId) return res.status(400).json({ error: 'ID do Lead invalido' });
+  try {
+    const result = await getQuery(req)(`SELECT p.id AS prospect_id, a.website_url, a.strategy, a.status, a.score, a.analyzed_at, a.refresh_after, a.lab_payload, a.field_payload, a.opportunities_payload
+      FROM prospects p LEFT JOIN lead_pagespeed_analyses a ON a.prospect_id = p.id AND a.strategy = 'mobile'
+      WHERE p.id = ? AND p.owner_user_id = ? LIMIT 1`, [prospectId, req.userId]);
+    const row = result.rows?.[0];
+    if (!row) return res.status(404).json({ error: 'Lead nao encontrado' });
+    res.json(publicPageSpeedResponse(row.prospect_id, row.status ? row : null));
+  } catch (error) {
+    console.error('Erro ao carregar performance do lead:', error?.code || 'UNEXPECTED');
+    res.status(500).json({ error: 'Nao foi possivel carregar a performance do site.' });
   }
 });
 

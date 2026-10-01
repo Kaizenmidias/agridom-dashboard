@@ -3,6 +3,7 @@ import { prospectToLead } from "@/services/leads/lead-adapter";
 import type { Prospect, ProspectContactHistory } from "@/types/database";
 import type { Lead } from "@/types/lead";
 import type { LeadWebsiteEnrichmentResponse } from "@/types/website-enrichment";
+import type { LeadWebsitePerformanceResponse } from "@/types/pagespeed-performance";
 
 export async function getLeads(): Promise<Lead[]> {
   const token = localStorage.getItem("token");
@@ -71,6 +72,15 @@ export async function getLeadWebsiteEnrichment(prospectId: string): Promise<Lead
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error("Não foi possível carregar o pré-diagnóstico no momento.");
   return payload as LeadWebsiteEnrichmentResponse;
+}
+
+export async function getLeadWebsitePerformance(prospectId: string): Promise<LeadWebsitePerformanceResponse> {
+  const token = localStorage.getItem("token");
+  if (!token) throw new Error("Usuário não autenticado");
+  const response = await fetch(buildApiUrl(`prospection/prospects/${encodeURIComponent(prospectId)}/website-performance`), { headers: { Authorization: `Bearer ${token}` } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error("Não foi possível carregar a performance do site no momento.");
+  return payload as LeadWebsitePerformanceResponse;
 }
 
 function getHeaders() {
