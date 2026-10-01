@@ -58,7 +58,8 @@ async function scheduleWebsiteEnrichment({ connection = getPool(), prospectId, o
   } catch (error) { console.error('[Enrichment] schedule failed:', { code: error?.code || 'UNEXPECTED', message: safeError(error) }); return { scheduled: false, status: 'failed' }; }
 }
 
-async function claimNextEnrichment({ connection = getPool(), workerId = 'website-enricher' } = {}) {
+async function claimNextEnrichment({ connection, workerId = 'website-enricher' } = {}) {
+  if (!connection) throw new Error('Uma conexão transacional é obrigatória para reservar o enriquecimento.');
   await connection.beginTransaction();
   try {
     await connection.execute(`UPDATE lead_website_enrichments SET status = 'failed', last_error = 'Limite de tentativas atingida apos job stale.', updated_at = CURRENT_TIMESTAMP WHERE status = 'processing' AND started_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE) AND attempt_count >= ?`, [MAX_ATTEMPTS]);
@@ -93,12 +94,18 @@ async function persistEnrichment({ connection = getPool(), job, result }) {
   return status;
 }
 
-async function processOneEnrichment({ connection = getPool(), workerId, crawl = crawlWebsite } = {}) {
-  const job = await claimNextEnrichment({ connection, workerId }); if (!job) return false;
-  try { const result = mergeResults(await crawl(job.website_url)); await persistEnrichment({ connection, job, result }); return true; }
-  catch (error) { const terminal = ['ENRICHMENT_INVALID_URL', 'ENRICHMENT_URL_BLOCKED', 'ENRICHMENT_SSRF_BLOCKED', 'ENRICHMENT_NON_HTML'].includes(error?.code) || job.attempt_count >= MAX_ATTEMPTS; await connection.execute(`UPDATE lead_website_enrichments SET status = ?, available_at = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE), last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [terminal ? 'failed' : 'pending', safeError(error), job.id]); return true; }
+async function processOneEnrichment({ connection, workerId, crawl = crawlWebsite } = {}) {
+  const pool = getPool();
+  const claimConnection = connection || await pool.getConnection();
+  let job;
+  try { job = await claimNextEnrichment({ connection: claimConnection, workerId }); }
+  finally { if (!connection) claimConnection.release(); }
+  if (!job) return false;
+  const persistenceConnection = connection || pool;
+  try { const result = mergeResults(await crawl(job.website_url)); await persistEnrichment({ connection: persistenceConnection, job, result }); return true; }
+  catch (error) { const terminal = ['ENRICHMENT_INVALID_URL', 'ENRICHMENT_URL_BLOCKED', 'ENRICHMENT_SSRF_BLOCKED', 'ENRICHMENT_NON_HTML'].includes(error?.code) || job.attempt_count >= MAX_ATTEMPTS; await persistenceConnection.execute(`UPDATE lead_website_enrichments SET status = ?, available_at = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE), last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [terminal ? 'failed' : 'pending', safeError(error), job.id]); return true; }
 }
 
-async function processWebsiteEnrichmentBatch({ limit = 1, connection = getPool(), workerId } = {}) { let processed = 0; while (processed < Math.min(Number(limit) || 1, 2) && await processOneEnrichment({ connection, workerId })) processed += 1; return processed; }
+async function processWebsiteEnrichmentBatch({ limit = 1, connection, workerId } = {}) { let processed = 0; while (processed < Math.min(Number(limit) || 1, 2) && await processOneEnrichment({ connection, workerId })) processed += 1; return processed; }
 
-module.exports = { MAX_ATTEMPTS, MAX_PAGES, crawlWebsite, mergeResults, normalizePageUrl, persistEnrichment, processOneEnrichment, processWebsiteEnrichmentBatch, scheduleWebsiteEnrichment, websiteUrl };
+module.exports = { MAX_ATTEMPTS, MAX_PAGES, claimNextEnrichment, crawlWebsite, mergeResults, normalizePageUrl, persistEnrichment, processOneEnrichment, processWebsiteEnrichmentBatch, scheduleWebsiteEnrichment, websiteUrl };

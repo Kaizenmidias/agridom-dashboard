@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { parsePage } = require('../services/website-enrichment-parser');
 const { validateUrl, fetchHtml } = require('../services/website-enrichment-ssrf');
-const { crawlWebsite, mergeResults, normalizePageUrl, persistEnrichment, websiteUrl } = require('../services/website-enrichment-service');
+const { claimNextEnrichment, crawlWebsite, mergeResults, normalizePageUrl, persistEnrichment, websiteUrl } = require('../services/website-enrichment-service');
 const enrichmentServiceSource = require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/website-enrichment-service.js'), 'utf8');
 
 const html = `<!doctype html><html><head><title>Empresa</title><meta name="description" content="Descricao"><meta name="viewport" content="width=device-width"><link rel="canonical" href="https://empresa.test/"><script type="application/ld+json">{"@type":"Organization","name":"Empresa Teste","email":"contato@empresa.test","telephone":"+55 11 99999-0000","address":{"streetAddress":"Rua A, 10","addressLocality":"Sao Paulo","addressRegion":"SP"}}</script><script src="https://www.googletagmanager.com/gtag/js"></script></head><body><h1>Empresa</h1><a href="mailto:financeiro@empresa.test">Email</a><a href="tel:+5511999990000">Telefone</a><a href="https://instagram.com/empresa">Instagram</a><a href="https://linkedin.com/company/empresa">LinkedIn</a><img src="a.jpg"><img src="b.jpg" alt="Produto"></body></html>`;
@@ -76,6 +76,28 @@ test('claim trata processing stale com limite de cinco minutos e sem resetar ten
   assert.match(enrichmentServiceSource, /status = 'processing'.*INTERVAL 5 MINUTE/);
   assert.match(enrichmentServiceSource, /attempt_count >= \?/);
   assert.match(enrichmentServiceSource, /attempt_count < \?/);
+});
+
+test('claim usa a interface nativa de uma conexão mysql transacional', async () => {
+  const calls = [];
+  const connection = {
+    beginTransaction: async () => calls.push('begin'),
+    commit: async () => calls.push('commit'),
+    rollback: async () => calls.push('rollback'),
+    execute: async (sql, params) => {
+      calls.push({ sql, params });
+      if (sql.startsWith('SELECT')) return [[{ id: 42, prospect_id: 8, attempt_count: 0, website_url: 'https://empresa.test' }], {}];
+      return [{ affectedRows: 1 }, {}];
+    },
+  };
+  const job = await claimNextEnrichment({ connection, workerId: 'test-worker' });
+  assert.equal(job.id, 42);
+  assert.equal(job.attempt_count, 1);
+  assert.deepEqual(calls.filter((call) => typeof call === 'string'), ['begin', 'commit']);
+  assert.match(calls.find((call) => typeof call !== 'string' && call.sql.startsWith('SELECT')).sql, /FOR UPDATE/);
+  const processingUpdate = calls.find((call) => typeof call !== 'string' && call.sql.includes("SET status = 'processing'"));
+  assert.match(processingUpdate.sql, /attempt_count = attempt_count \+ 1/);
+  assert.match(processingUpdate.sql, /started_at = CURRENT_TIMESTAMP/);
 });
 
 test('analysis_report inválido não é persistido por merge inseguro', () => {
