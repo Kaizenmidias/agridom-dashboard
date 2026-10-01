@@ -96,7 +96,7 @@ export function prospectToLead(prospect: Prospect): Lead {
     assignedTo: prospect.assigned_user_name || null,
     assignedUserId: prospect.assigned_user_id || null,
     googleMapsUrl: prospect.google_maps_url,
-    lastContactAt: prospect.last_contact_date,
+    lastContactAt: prospect.last_contact_at ?? prospect.last_contact_date ?? null,
     createdAt: prospect.created_at,
     updatedAt: prospect.updated_at,
     metadata: {

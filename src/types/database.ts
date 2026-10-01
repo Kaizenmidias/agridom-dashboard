@@ -283,6 +283,7 @@ export interface Prospect {
     crmSentAt?: string | null;
   } | null;
   last_contact_date?: string | null;
+  last_contact_at?: string | null;
   status: ProspectStatus;
   created_at: string;
   updated_at: string;
