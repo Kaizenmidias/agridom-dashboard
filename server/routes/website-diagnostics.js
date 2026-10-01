@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess } = require('../middleware/commercial-access');
 const { analyzeDiagnostic, normalizeUrl } = require('../services/website-diagnostic-service');
+const { createPerformanceJob, getPerformanceJob } = require('../services/lighthouse-performance');
 const router = express.Router();
 const MAX_CONCURRENT = 2;
 const activeUsers = new Set();
@@ -16,5 +17,18 @@ router.post('/analyze', async (req, res) => {
   try { const result = await analyzeDiagnostic({ url: req.body.url }); return res.json({ status: 'completed', result }); }
   catch (error) { const response = publicError(error); return res.status(response.status).json({ code: response.code, error: response.error }); }
   finally { activeCount -= 1; activeUsers.delete(userKey); }
+});
+router.post('/performance', (req, res) => {
+  const created = createPerformanceJob({ ownerUserId: req.userId, url: req.body?.url, strategy: req.body?.strategy || 'mobile' });
+  if (created.error) {
+    const status = ['LIGHTHOUSE_BUSY', 'LIGHTHOUSE_RATE_LIMITED'].includes(created.error) ? 429 : 400;
+    return res.status(status).json({ code: created.error, error: status === 429 ? 'JÃ¡ existe uma mediÃ§Ã£o de performance em andamento ou muito recente.' : 'Informe uma URL pÃºblica vÃ¡lida e use a estratÃ©gia mobile.' });
+  }
+  return res.status(202).json(created.job);
+});
+router.get('/performance/:token', (req, res) => {
+  const job = getPerformanceJob({ token: req.params.token, ownerUserId: req.userId });
+  if (!job) return res.status(404).json({ code: 'LIGHTHOUSE_JOB_NOT_FOUND', error: 'MediÃ§Ã£o nÃ£o encontrada ou expirada.' });
+  return res.json(job);
 });
 module.exports = router;
