@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   CalendarDays,
+  CheckCircle2,
   Edit,
   FileText,
   Globe,
+  Loader2,
   Linkedin,
   Mail,
   MapPin,
@@ -23,10 +25,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { LEAD_SECTORS, formatBRLInput } from "@/constants/lead-options";
-import { getLeads, updateLeadDetails } from "@/services/leads/lead-service";
+import { getLeadWebsiteEnrichment, getLeads, updateLeadDetails } from "@/services/leads/lead-service";
 import { commercialEntitiesAPI, type UserOption } from "@/services/commercial-entities";
 import type { Lead, LeadLabel } from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
+import type { LeadWebsiteEnrichmentResponse, WebsiteEnrichmentDiagnostic } from "@/types/website-enrichment";
+import { booleanLabel, cleanOpportunities, friendlyOpportunity, headerLabel, imageAltLabel, isKnownStatus, pagesAnalyzedLabel, securityHeaders, statusLabel, technologyLabels, websiteAvailable } from "@/services/leads/website-enrichment-presentation";
 
 const sourceLabels: Record<string, string> = {
   google_maps: "Google Maps",
@@ -77,6 +81,9 @@ export default function LeadDetailPage() {
   const [activityType, setActivityType] = useState<"task" | "call" | "follow_up" | "activity">("task");
   const [activityAssignee, setActivityAssignee] = useState("unassigned");
   const [activityDueAt, setActivityDueAt] = useState("");
+  const [websiteEnrichment, setWebsiteEnrichment] = useState<LeadWebsiteEnrichmentResponse | null>(null);
+  const [enrichmentLoading, setEnrichmentLoading] = useState(false);
+  const [enrichmentError, setEnrichmentError] = useState(false);
 
   const createActivity = async () => {
     if (!lead || !activityTitle.trim()) return;
@@ -141,6 +148,27 @@ export default function LeadDetailPage() {
 
     void loadLead();
   }, [leadSlug]);
+
+  useEffect(() => {
+    if (!lead?.id) return;
+    if (!websiteAvailable(lead.website)) {
+      setWebsiteEnrichment(null);
+      setEnrichmentError(false);
+      setEnrichmentLoading(false);
+      return;
+    }
+    let active = true;
+    setEnrichmentLoading(true);
+    setEnrichmentError(false);
+    void getLeadWebsiteEnrichment(lead.id).then((payload) => {
+      if (active) setWebsiteEnrichment(payload);
+    }).catch(() => {
+      if (active) setEnrichmentError(true);
+    }).finally(() => {
+      if (active) setEnrichmentLoading(false);
+    });
+    return () => { active = false; };
+  }, [lead?.id]);
 
   const documents = useMemo(() => lead?.metadata?.documents || [], [lead]);
 
@@ -267,6 +295,13 @@ export default function LeadDetailPage() {
               <Info icon={Users} label="Responsável" value={lead.assignedTo || "Sem responsável"} />
             </CardContent>
           </Card>
+
+          <WebsiteEnrichmentCard
+            website={lead.website}
+            response={websiteEnrichment}
+            loading={enrichmentLoading}
+            error={enrichmentError}
+          />
 
           <Card className="rounded-lg shadow-none">
             <CardHeader><CardTitle className="text-base">Dados comerciais</CardTitle></CardHeader>
@@ -404,6 +439,38 @@ export default function LeadDetailPage() {
     </div>
   );
 }
+
+function WebsiteEnrichmentCard({ website, response, loading, error }: { website?: string | null; response: LeadWebsiteEnrichmentResponse | null; loading: boolean; error: boolean }) {
+  const enrichment = response?.enrichment;
+  const diagnostic = enrichment?.diagnostic;
+  const status = enrichment?.status;
+  const knownStatus = isKnownStatus(status);
+  return (
+    <Card className="rounded-lg shadow-none">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div><CardTitle className="text-base">Resumo Comercial</CardTitle><p className="mt-1 text-sm text-muted-foreground">Pré-diagnóstico do site</p></div>
+        {status ? <Badge variant="outline">{statusLabel(status)}</Badge> : null}
+      </CardHeader>
+      <CardContent>
+        {loading ? <EnrichmentMessage><Loader2 className="h-4 w-4 animate-spin" />Carregando pré-diagnóstico...</EnrichmentMessage> : error ? <EnrichmentMessage>Não foi possível carregar o pré-diagnóstico no momento.</EnrichmentMessage> : !websiteAvailable(website) ? <EnrichmentMessage>Este lead ainda não possui um site cadastrado para análise.</EnrichmentMessage> : !enrichment ? <EnrichmentMessage>Este site ainda não possui um pré-diagnóstico disponível.</EnrichmentMessage> : !knownStatus ? <EnrichmentMessage>Status do pré-diagnóstico indisponível.</EnrichmentMessage> : status === "pending" ? <EnrichmentMessage>Pré-diagnóstico aguardando processamento.</EnrichmentMessage> : status === "processing" ? <EnrichmentMessage>Pré-diagnóstico em andamento.</EnrichmentMessage> : status === "failed" ? <EnrichmentMessage>Não foi possível concluir o pré-diagnóstico deste site.</EnrichmentMessage> : !diagnostic ? <EnrichmentMessage>{status === "partial" ? "Análise parcialmente concluída, mas não há dados disponíveis para exibição." : "O pré-diagnóstico foi concluído, mas não há dados disponíveis para exibição."}</EnrichmentMessage> : <div className="space-y-5">
+          {status === "partial" ? <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-muted-foreground">Análise parcialmente concluída.</p> : null}
+          <DiagnosticGroup title="Tecnologia"><DetectedList values={technologyLabels(diagnostic.technology)} empty="Nenhuma das tecnologias monitoradas foi detectada nas páginas analisadas." /></DiagnosticGroup>
+          <DiagnosticGroup title="Marketing"><BooleanGrid values={[['Google Analytics', diagnostic.marketing?.googleAnalytics], ['Google Tag Manager', diagnostic.marketing?.googleTagManager], ['WhatsApp', diagnostic.marketing?.whatsapp], ['Instagram', diagnostic.marketing?.instagram], ['LinkedIn', diagnostic.marketing?.linkedin], ['Meta Pixel', diagnostic.marketing?.metaPixel]]} /></DiagnosticGroup>
+          <DiagnosticGroup title="SEO"><BooleanGrid values={[['Título', diagnostic.seo?.titlePresent], ['Meta descrição', diagnostic.seo?.metaDescriptionPresent], ['Canonical', diagnostic.seo?.canonical], ['Dados estruturados', diagnostic.seo?.structuredData], ['Open Graph', diagnostic.seo?.openGraph]]} /><p className="mt-3 text-sm text-muted-foreground">{imageAltLabel(diagnostic.seo?.imagesWithoutAlt)}</p></DiagnosticGroup>
+          <DiagnosticGroup title="Experiência e conversão"><BooleanGrid values={[['Compatibilidade mobile', diagnostic.mobile?.viewport], ['Formulário de contato', diagnostic.marketing?.contactForm], ['Telefone clicável', diagnostic.marketing?.clickablePhone], ['E-mail clicável', diagnostic.marketing?.clickableEmail]]} /></DiagnosticGroup>
+          <DiagnosticGroup title="Segurança"><p className="mb-3 text-sm">{booleanLabel(diagnostic.security?.https) === 'Informação indisponível' ? 'Informação indisponível' : booleanLabel(diagnostic.security?.https) === 'Detectado' ? 'HTTPS detectado' : 'HTTPS não detectado nas páginas analisadas'} · {diagnostic.security?.mixedContent === true ? 'Conteúdo misto identificado nas páginas analisadas' : diagnostic.security?.mixedContent === false ? 'Nenhum conteúdo misto identificado nas páginas analisadas' : 'Informação indisponível'}</p><BooleanGrid values={securityHeaders(diagnostic)} headers /></DiagnosticGroup>
+          {cleanOpportunities(diagnostic.opportunities).length ? <DiagnosticGroup title="Oportunidades identificadas"><ul className="list-disc space-y-1 pl-5 text-sm">{cleanOpportunities(diagnostic.opportunities).map((item) => <li key={item}>{friendlyOpportunity(item)}</li>)}</ul></DiagnosticGroup> : null}
+          {pagesAnalyzedLabel(diagnostic.pagesAnalyzed) ? <p className="border-t pt-3 text-xs text-muted-foreground">{pagesAnalyzedLabel(diagnostic.pagesAnalyzed)}</p> : null}
+        </div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EnrichmentMessage({ children }: { children: ReactNode }) { return <div className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-3 text-sm text-muted-foreground">{children}</div>; }
+function DiagnosticGroup({ title, children }: { title: string; children: ReactNode }) { return <section><h3 className="mb-2 text-sm font-semibold">{title}</h3>{children}</section>; }
+function BooleanGrid({ values, headers = false }: { values: Array<[string, boolean | null | undefined] | [string, string | null | undefined]>; headers?: boolean }) { return <div className="grid gap-2 sm:grid-cols-2">{values.map(([label, value]) => <div key={label} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"><span>{label}</span><span className="text-right text-xs text-muted-foreground">{headers ? headerLabel(value as string | null | undefined) : booleanLabel(value as boolean | null | undefined)}</span></div>)}</div>; }
+function DetectedList({ values, empty }: { values: string[]; empty: string }) { return values.length ? <div className="flex flex-wrap gap-2">{values.map((value) => <Badge key={value} variant="secondary"><CheckCircle2 className="mr-1 h-3.5 w-3.5" />{value}</Badge>)}</div> : <p className="text-sm text-muted-foreground">{empty}</p>; }
 
 function Info({ icon: Icon, label, value }: { icon: ComponentType<{ className?: string }>; label: string; value: string }) {
   return (

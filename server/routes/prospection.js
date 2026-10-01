@@ -4,6 +4,7 @@ const { requireCommercialAccess } = require('../middleware/commercial-access');
 const { getPool } = require('../config/database');
 const { dispatchDomainEvent, requestEventContext } = require('../services/domain-events');
 const { createOrFindProspect } = require('../services/prospect-service');
+const { normalizeDiagnostic } = require('../services/website-enrichment-response');
 
 const router = express.Router();
 const automationVersionsTable = ['automation', '_versions'].join('');
@@ -375,6 +376,26 @@ router.post('/prospects', async (req, res) => {
     res.status(500).json({ error: 'Erro interno do servidor' });
   } finally {
     if (connection) connection.release();
+  }
+});
+
+router.get('/prospects/:id/website-enrichment', async (req, res) => {
+  const prospectId = parseId(req.params.id);
+  if (!prospectId) return res.status(400).json({ error: 'ID do Lead invalido' });
+  try {
+    const result = await getQuery(req)(`SELECT p.id AS prospect_id, p.website, e.website_url, e.status, e.started_at, e.completed_at, e.diagnostic_payload
+      FROM prospects p LEFT JOIN lead_website_enrichments e ON e.prospect_id = p.id
+      WHERE p.id = ? AND p.owner_user_id = ? LIMIT 1`, [prospectId, req.userId]);
+    const row = result.rows?.[0];
+    if (!row) return res.status(404).json({ error: 'Lead nao encontrado' });
+    const diagnostic = normalizeDiagnostic(row.diagnostic_payload);
+    res.json({
+      prospectId: Number(row.prospect_id),
+      enrichment: row.status ? { websiteUrl: row.website_url || row.website || null, status: row.status, startedAt: row.started_at, completedAt: row.completed_at, diagnostic } : null,
+    });
+  } catch (error) {
+    console.error('Erro ao carregar enriquecimento do lead:', error?.code || 'UNEXPECTED');
+    res.status(500).json({ error: 'Nao foi possivel carregar o pre-diagnostico.' });
   }
 });
 

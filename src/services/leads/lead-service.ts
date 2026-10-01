@@ -2,6 +2,7 @@ import { buildApiUrl } from "@/config/api";
 import { prospectToLead } from "@/services/leads/lead-adapter";
 import type { Prospect, ProspectContactHistory } from "@/types/database";
 import type { Lead } from "@/types/lead";
+import type { LeadWebsiteEnrichmentResponse } from "@/types/website-enrichment";
 
 export async function getLeads(): Promise<Lead[]> {
   const token = localStorage.getItem("token");
@@ -61,6 +62,15 @@ export async function getLeads(): Promise<Lead[]> {
       })),
     ],
   }));
+}
+
+export async function getLeadWebsiteEnrichment(prospectId: string): Promise<LeadWebsiteEnrichmentResponse> {
+  const token = localStorage.getItem("token");
+  if (!token) throw new Error("Usuário não autenticado");
+  const response = await fetch(buildApiUrl(`prospection/prospects/${encodeURIComponent(prospectId)}/website-enrichment`), { headers: { Authorization: `Bearer ${token}` } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error("Não foi possível carregar o pré-diagnóstico no momento.");
+  return payload as LeadWebsiteEnrichmentResponse;
 }
 
 function getHeaders() {
