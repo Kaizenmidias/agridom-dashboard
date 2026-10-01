@@ -1,0 +1,42 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const { MAX_ATTEMPTS, acquirePageSpeedAnalysis, normalizePageSpeedResponse, normalizeScore, normalizeWebsiteUrl, persistPageSpeedAnalysis, recordPageSpeedFailure, sanitizePageSpeedError, schedulePageSpeedAnalysis } = require('../services/pagespeed-performance');
+
+const validFixture = { lighthouseResult: { categories: { performance: { score: 0.82 } }, audits: {
+  'first-contentful-paint': { numericValue: 2000 }, 'largest-contentful-paint': { numericValue: 4100 }, 'cumulative-layout-shift': { numericValue: 0.06 }, 'speed-index': { numericValue: 3800 }, 'total-blocking-time': { numericValue: 420 }, 'server-response-time': { numericValue: 800 },
+  'unused-javascript': { title: 'Reduce unused JavaScript', description: 'Reduce unused scripts.', details: { overallSavingsMs: 1200, overallSavingsBytes: 180000 } }, 'unknown-audit': { title: 'Ignore me', numericValue: 999 },
+} }, field: { available: true, source: 'url', lcpMs: 2800, inpMs: 180, cls: 0.04 } };
+
+test('normalizes the raw Lighthouse score strictly from 0 to 1', () => { assert.equal(normalizeScore(0.82), 82); assert.equal(normalizeScore(0), 0); assert.equal(normalizeScore(1), 100); assert.equal(normalizeScore(1.2), null); assert.equal(normalizeScore(50), null); assert.equal(normalizeScore('0.82'), null); assert.equal(normalizeScore(Number.NaN), null); assert.equal(normalizeScore(Infinity), null); });
+test('normalizes lab metrics, URL field data and whitelisted opportunities only', () => { const result = normalizePageSpeedResponse(validFixture); assert.equal(result.status, 'completed'); assert.equal(result.score, 82); assert.deepEqual(result.lab, { fcpMs: 2000, lcpMs: 4100, cls: 0.06, speedIndexMs: 3800, tbtMs: 420, ttfbMs: 800 }); assert.equal(result.field.source, 'url'); assert.equal(result.opportunities.length, 0); });
+test('missing field data is valid and does not become partial', () => { const result = normalizePageSpeedResponse({ lighthouseResult: { categories: { performance: { score: 0 } }, audits: { 'largest-contentful-paint': { numericValue: 1000 } } } }); assert.equal(result.status, 'completed'); assert.deepEqual(result.field, { available: false, source: null, lcpMs: null, inpMs: null, cls: null }); });
+test('internal field contract accepts URL and origin only', () => { assert.equal(normalizePageSpeedResponse({ score: 0.5, field: { available: true, source: 'origin', lcpMs: 100, inpMs: 20, cls: 0 } }).field.source, 'origin'); assert.equal(normalizePageSpeedResponse({ score: 0.5, field: { available: true, source: 'other', lcpMs: 100 } }).field.available, false); });
+test('malformed and runtime-error payloads fail without inventing metrics', () => { assert.equal(normalizePageSpeedResponse(null).status, 'failed'); assert.equal(normalizePageSpeedResponse({ runtimeError: { code: 'FAILED' } }).status, 'failed'); assert.equal(normalizePageSpeedResponse({ lighthouseResult: { categories: {}, audits: {} } }).lab, null); });
+test('website validation is syntactic and rejects unsupported schemes', () => { assert.equal(normalizeWebsiteUrl('example.com'), 'https://example.com/'); assert.equal(normalizeWebsiteUrl('ftp://example.com'), null); assert.equal(normalizeWebsiteUrl('javascript:alert(1)'), null); });
+
+test('schedule validates ownership inputs, deduplicates and respects valid cache', async () => {
+  const calls = [];
+  const connection = { execute: async (sql) => { calls.push(sql); return sql.includes('FROM lead_pagespeed_analyses') ? [[], []] : sql.includes('FROM prospects') ? [[{ id: 4, owner_user_id: 2 }], []] : [{ affectedRows: 1, insertId: 9 }, []]; }, beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {} };
+  assert.deepEqual(await schedulePageSpeedAnalysis({ connection, prospectId: 4, ownerUserId: 2, website: 'https://empresa.test', strategy: 'desktop' }), { scheduled: false, reason: 'invalid_strategy' });
+  assert.deepEqual(await schedulePageSpeedAnalysis({ connection, prospectId: 4, ownerUserId: 2, website: 'https://empresa.test' }), { scheduled: true, status: 'pending', id: 9 });
+  assert.equal(calls.length, 3);
+  const cached = { execute: async (sql) => [sql.includes('FROM lead_pagespeed_analyses') ? [{ id: 9, status: 'completed', refresh_after: new Date(Date.now() + 1000) }] : [{ id: 4, owner_user_id: 2 }], []], beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {} };
+  assert.deepEqual(await schedulePageSpeedAnalysis({ connection: cached, prospectId: 4, ownerUserId: 2, website: 'https://empresa.test' }), { scheduled: false, reason: 'cache_valid', id: 9 });
+});
+
+test('scheduler does not reset processing jobs or valid snapshots', async () => { const connection = { execute: async (sql) => sql.includes('FROM prospects') ? [[{ id: 4, owner_user_id: 2 }], []] : [[{ id: 9, status: 'processing', refresh_after: new Date(Date.now() - 1000) }], []], beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {} }; assert.deepEqual(await schedulePageSpeedAnalysis({ connection, prospectId: 4, ownerUserId: 2, website: 'https://empresa.test' }), { scheduled: false, reason: 'already_queued', id: 9 }); });
+
+test('acquire uses transaction lock and persist stores normalized payload only', async () => {
+  const calls = [];
+  const connection = { beginTransaction: async () => calls.push('begin'), rollback: async () => calls.push('rollback'), commit: async () => calls.push('commit'), execute: async (sql) => { calls.push(sql); return sql.startsWith('SELECT') ? [[{ id: 12, attempt_count: 0 }], []] : [[], []]; } };
+  const job = await acquirePageSpeedAnalysis({ connection });
+  assert.equal(job.id, 12);
+  assert.deepEqual(calls.slice(0, 3), ['begin', calls[1], calls[2]]);
+  assert.equal(calls.includes('commit'), true);
+  const status = await persistPageSpeedAnalysis({ connection, job, normalized: normalizePageSpeedResponse(validFixture) });
+  assert.equal(status, 'completed');
+  assert.equal(calls.some((value) => String(value).includes('UPDATE lead_pagespeed_analyses SET status')), true);
+});
+
+test('failure retries transient errors with deterministic backoff and preserves snapshot columns', async () => { const calls = []; const connection = { execute: async (sql, params) => { calls.push([sql, params]); return [[], []]; } }; const result = await recordPageSpeedFailure({ connection, job: { id: 12, attempt_count: 1 }, error: new Error('Bearer secret-token'), kind: 'transient' }); assert.equal(result.status, 'pending'); assert.equal(result.delayMinutes, 5); assert.match(result.lastError, /\[redacted\]/); assert.equal(calls[0][0].includes('score ='), false); const terminal = await recordPageSpeedFailure({ connection, job: { id: 12, attempt_count: MAX_ATTEMPTS }, error: new Error('quota'), kind: 'quota' }); assert.equal(terminal.status, 'failed'); });
+test('error sanitizer limits content and removes credential-like values', () => { const value = sanitizePageSpeedError(new Error('Authorization: Bearer abc token=xyz https://user:pass@example.com/path'), 'configuration'); assert.ok(value.length <= 500); assert.equal(value.includes('abc'), false); assert.equal(value.includes('user:pass'), false); });
