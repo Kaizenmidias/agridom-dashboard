@@ -17,3 +17,39 @@ export const securityHeaders = (diagnostic: WebsiteEnrichmentDiagnostic) => {
   const headers = diagnostic.security?.headers || {};
   return [["Content Security Policy", headers.contentSecurityPolicy], ["X-Content-Type-Options", headers.xContentTypeOptions], ["Referrer Policy", headers.referrerPolicy], ["Strict Transport Security", headers.strictTransportSecurity]] as Array<[string, string | null | undefined]>;
 };
+
+export const buildCommercialSummary = (diagnostic: WebsiteEnrichmentDiagnostic) => {
+  const technologies = technologyLabels(diagnostic.technology);
+  const marketing = [
+    ["Google Analytics", diagnostic.marketing?.googleAnalytics],
+    ["Google Tag Manager", diagnostic.marketing?.googleTagManager],
+    ["WhatsApp", diagnostic.marketing?.whatsapp],
+    ["Instagram", diagnostic.marketing?.instagram],
+    ["formulário de contato", diagnostic.marketing?.contactForm],
+  ].filter(([, value]) => value === true).map(([label]) => label as string);
+  const seo = [
+    diagnostic.seo?.titlePresent,
+    diagnostic.seo?.metaDescriptionPresent,
+    diagnostic.seo?.canonical,
+    diagnostic.seo?.openGraph,
+    diagnostic.seo?.structuredData,
+  ];
+  const paragraphs: string[] = [];
+  if (technologies.length || marketing.length) {
+    paragraphs.push(`O site apresenta ${technologies.length ? `uma estrutura com ${technologies.join(", ")}` : "recursos digitais analisados"}${marketing.length ? ` e sinais de presença comercial, como ${marketing.join(", ")}` : ""}.`);
+  }
+  if (seo.some((value) => value === true)) paragraphs.push("A análise identificou parte dos fundamentos de SEO avaliados nas páginas analisadas.");
+  if (diagnostic.security?.https === true && diagnostic.security?.mixedContent === false) paragraphs.push("Na camada de segurança observada, HTTPS foi identificado e não foi encontrado conteúdo misto nas páginas analisadas.");
+  if (!paragraphs.length) paragraphs.push("A análise reuniu sinais técnicos e comerciais do site para apoiar uma avaliação inicial do lead.");
+  return paragraphs;
+};
+
+export const commercialOpportunities = (diagnostic: WebsiteEnrichmentDiagnostic) => {
+  const opportunities: string[] = [];
+  const items = cleanOpportunities(diagnostic.opportunities);
+  if (items.some((item) => /meta pixel/i.test(item))) opportunities.push("Avaliar configuração do Meta Pixel");
+  if (typeof diagnostic.seo?.imagesWithoutAlt === "number" && diagnostic.seo.imagesWithoutAlt > 0) opportunities.push("Otimizar textos alternativos das imagens");
+  const headers = diagnostic.security?.headers;
+  if (headers && [headers.contentSecurityPolicy, headers.xContentTypeOptions, headers.referrerPolicy, headers.strictTransportSecurity].some((value) => value === null)) opportunities.push("Revisar configurações adicionais de segurança");
+  return [...new Set(opportunities)];
+};
