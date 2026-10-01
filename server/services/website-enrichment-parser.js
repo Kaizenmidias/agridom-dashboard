@@ -1,7 +1,13 @@
 const decode = (value) => String(value || '').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const attr = (tag, name) => { const match = String(tag).match(new RegExp(`${name}\\s*=\\s*["']([^"']+)["']`, 'i')); return match ? match[1].trim() : null; };
 const first = (html, expression) => { const match = String(html).match(expression); return match ? decode(match[1]) : null; };
-const validEmail = (value) => { const email = String(value || '').toLowerCase().trim(); return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !/example|placeholder|test@|w3\.org|schema\.org/.test(email) ? email : null; };
+const ASSET_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'ico', 'css', 'js', 'json', 'xml', 'woff', 'woff2', 'ttf', 'eot', 'map', 'pdf', 'zip', 'doc', 'docx', 'xls', 'xlsx']);
+const validEmail = (value) => {
+  const email = String(value || '').toLowerCase().trim();
+  const match = email.match(/^[^\s@]+@([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$/i);
+  if (!match || /example|placeholder|test@|w3\.org|schema\.org/.test(email)) return null;
+  return ASSET_EXTENSIONS.has(match[1].split('.').pop()) ? null : email;
+};
 const cleanInstagram = (value) => { try { const url = new URL(value, 'https://example.invalid'); return /(^|\.)instagram\.com$/i.test(url.hostname) && !/\/(share|intent|p|reel|stories)(\/|$)/i.test(url.pathname) ? `https://www.instagram.com/${url.pathname.split('/').filter(Boolean)[0]}/` : null; } catch { return null; } };
 const cleanLinkedin = (value) => { try { const url = new URL(value, 'https://example.invalid'); return /(^|\.)linkedin\.com$/i.test(url.hostname) && /^\/company\/[^/]+/i.test(url.pathname) ? `https://www.linkedin.com${url.pathname.replace(/\/$/, '')}/` : null; } catch { return null; } };
 const phone = (value) => { const raw = String(value || '').replace(/\D/g, ''); return raw.length >= 10 && raw.length <= 15 ? String(value).trim() : null; };
@@ -15,7 +21,10 @@ function parsePage(html, pageUrl, options = {}) {
   const organization = jsonLd.find((item) => item && typeof item === 'object' && ['Organization', 'LocalBusiness', 'Corporation'].some((type) => String(item['@type'] || '').includes(type))) || {};
   const text = decode(source.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' '));
   const hrefs = links(source).map((href) => { try { return new URL(href, pageUrl).toString(); } catch { return null; } }).filter(Boolean);
-  const emails = [...source.matchAll(/(?:mailto:)?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi)].map((match) => validEmail(match[1])).filter(Boolean);
+  const mailtoEmails = [...source.matchAll(/mailto:([^"'?#\s]+)/gi)].map((match) => validEmail(decode(match[1]))).filter(Boolean);
+  const structuredEmails = jsonLd.flatMap((item) => item && typeof item === 'object' ? [validEmail(item.email)] : []).filter(Boolean);
+  const textEmails = [...source.matchAll(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi)].map((match) => validEmail(match[1])).filter(Boolean);
+  const emails = [...new Set([...mailtoEmails, ...structuredEmails, ...textEmails])];
   const instagram = hrefs.map(cleanInstagram).find(Boolean) || null;
   const linkedin = hrefs.map(cleanLinkedin).find(Boolean) || null;
   const address = organization.address && typeof organization.address === 'object' ? [organization.address.streetAddress, organization.address.addressLocality, organization.address.addressRegion, organization.address.postalCode].filter(Boolean).join(', ') : null;

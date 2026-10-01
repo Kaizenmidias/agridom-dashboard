@@ -9,7 +9,7 @@ const html = `<!doctype html><html><head><title>Empresa</title><meta name="descr
 
 test('extrai dados públicos e sinais objetivos da página', () => {
   const result = parsePage(html, 'https://empresa.test/');
-  assert.equal(result.fields.email, 'contato@empresa.test');
+  assert.equal(result.fields.email, 'financeiro@empresa.test');
   assert.equal(result.fields.instagram, 'https://www.instagram.com/empresa/');
   assert.equal(result.fields.linkedin, 'https://www.linkedin.com/company/empresa/');
   assert.equal(result.fields.phone, '+5511999990000');
@@ -176,4 +176,30 @@ test('timeout individual aborta mock pendente e streaming excedente é rejeitado
 
 test('não depende de Apify nem de serviços externos', () => {
   assert.equal(typeof parsePage, 'function');
+});
+
+test('persistencia preserva campos do Prospect que ja possuem valor', async () => {
+  const calls = [];
+  const connection = { execute: async (sql, params) => { calls.push({ sql, params }); return [[], {}]; } };
+  await persistEnrichment({ connection, job: { id: 7, prospect_id: 19, email: 'existente@empresa.com', phone: '5511999999999', address: 'Endereco existente', instagram: null, business_name: 'Empresa', analysis_report: null }, result: { fields: { email: 'novo@empresa.com', phone: '5511888888888', address: 'Novo endereco', instagram: 'https://www.instagram.com/empresa/' }, diagnostic: { pagesAnalyzed: 1, opportunities: [], partialError: null } } });
+  const prospectUpdate = calls.find((call) => call.sql.startsWith('UPDATE prospects'));
+  assert.match(prospectUpdate.sql, /instagram = \?/);
+  assert.doesNotMatch(prospectUpdate.sql, /email = \?|phone = \?|address = \?/);
+});
+
+test('rejeita assets como email e aceita dominios comerciais reais', () => {
+  assert.equal(parsePage('<p>service-img-02@2x.jpg banner@2x.png logo@3x.webp</p>', 'https://empresa.test').fields.email, null);
+  assert.equal(parsePage('<p>contato@empresa.com.br financeiro@empresa.com suporte@empresa.digital</p>', 'https://empresa.test').fields.email, 'contato@empresa.com.br');
+});
+
+test('mantem email mailto e JSON-LD validos', () => {
+  assert.equal(parsePage('<a href="mailto:financeiro@empresa.com">Email</a>', 'https://empresa.test').fields.email, 'financeiro@empresa.com');
+  assert.equal(parsePage('<script type="application/ld+json">{"@type":"Organization","email":"contato@empresa.com.br"}</script>', 'https://empresa.test').fields.email, 'contato@empresa.com.br');
+});
+
+test('consolida oportunidades e preserva a semantica SEO da primeira pagina', () => {
+  const page = (imagesWithoutAlt, opportunities) => ({ fields: {}, diagnostic: { technology: {}, seo: { imagesWithoutAlt }, marketing: {}, mobile: {}, security: { headers: {} }, performance: {}, opportunities } });
+  const result = mergeResults([page(10, ['Meta Pixel nao detectado', '10 imagens sem atributo alt']), page(2, ['Meta Pixel nao detectado', '2 imagens sem atributo alt']), page(5, ['Meta Pixel nao detectado', '5 imagens sem atributo alt'])]);
+  assert.equal(result.diagnostic.seo.imagesWithoutAlt, 10);
+  assert.deepEqual(result.diagnostic.opportunities, ['Meta Pixel nao detectado', '10 imagens sem atributo alt']);
 });

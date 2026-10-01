@@ -48,6 +48,7 @@ async function crawlWebsite(url, options = {}) {
 function mergeResults(pages) {
   const merged = { email: null, instagram: null, linkedin: null, address: null, phone: null, businessName: null };
   for (const page of pages) for (const key of Object.keys(merged)) if (!merged[key] && page.fields[key]) merged[key] = page.fields[key];
+  const imageOpportunity = pages[0]?.diagnostic?.opportunities?.find((opportunity) => /^\d+ imagens sem atributo alt$/i.test(opportunity));
   const diagnostic = pages.reduce((result, page) => ({
     technology: { ...result.technology, ...page.diagnostic.technology },
     seo: result.seo || page.diagnostic.seo,
@@ -55,9 +56,10 @@ function mergeResults(pages) {
     mobile: result.mobile || page.diagnostic.mobile,
     security: { ...result.security, ...page.diagnostic.security, headers: { ...result.security.headers, ...page.diagnostic.security.headers } },
     performance: { ...(result.performance || {}), responseTimeMs: result.performance?.responseTimeMs == null ? page.diagnostic.performance.responseTimeMs : result.performance.responseTimeMs, htmlSizeBytes: (result.performance?.htmlSizeBytes || 0) + page.diagnostic.performance.htmlSizeBytes, scriptCount: (result.performance?.scriptCount || 0) + page.diagnostic.performance.scriptCount, stylesheetCount: (result.performance?.stylesheetCount || 0) + page.diagnostic.performance.stylesheetCount, imageCount: (result.performance?.imageCount || 0) + page.diagnostic.performance.imageCount },
-    opportunities: [...new Set([...(result.opportunities || []), ...page.diagnostic.opportunities])],
+    opportunities: [...new Set([...(result.opportunities || []), ...page.diagnostic.opportunities.filter((opportunity) => !/^\d+ imagens sem atributo alt$/i.test(opportunity))])],
   }), { technology: {}, seo: null, marketing: {}, mobile: null, security: { headers: {} }, performance: {}, opportunities: [] });
-  return { fields: merged, diagnostic: { ...diagnostic, pagesAnalyzed: pages.length, partialError: pages.partialError ? { code: pages.partialError.code || 'ENRICHMENT_PARTIAL', message: safeError(pages.partialError) } : null } };
+  if (imageOpportunity) diagnostic.opportunities.push(imageOpportunity);
+  return { fields: merged, diagnostic: { ...diagnostic, opportunities: [...new Set(diagnostic.opportunities)], pagesAnalyzed: pages.length, partialError: pages.partialError ? { code: pages.partialError.code || 'ENRICHMENT_PARTIAL', message: safeError(pages.partialError) } : null } };
 }
 
 async function scheduleWebsiteEnrichment({ connection = getPool(), prospectId, ownerUserId, website }) {
