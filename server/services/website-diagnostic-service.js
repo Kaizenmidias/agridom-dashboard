@@ -7,10 +7,25 @@ const { buildDiagnosticResult } = require('./website-diagnostic-rules');
 const MAX_ATTEMPTS = 2;
 const safeError = (error) => String(error?.code || 'DIAGNOSTIC_ERROR').replace(/[^A-Z0-9_]/gi, '').slice(0, 80) || 'DIAGNOSTIC_ERROR';
 const normalizeUrl = (value) => { const url = new URL(websiteUrl(value)); url.hash = ''; return url.toString(); };
-async function inspectAuxiliary(normalizedUrl) {
-  const base = new URL(normalizedUrl); const inspect = async (path) => { try { const result = await fetchHtml(new URL(path, base).toString(), { allowNonHtml: true, maxBytes: 64 * 1024, timeoutMs: 3000 }); return { status: 'detected', evidence: result.html.slice(0, 500) }; } catch (error) { return ['ENRICHMENT_HTTP_ERROR', 'ENRICHMENT_NON_HTML'].includes(error?.code) ? { status: 'not_detected' } : { status: 'unavailable' }; } };
-  const robots = await inspect('/robots.txt'); const sitemap = await inspect('/sitemap.xml');
+async function inspectAuxiliary(normalizedUrl, timeoutMs = 2000) {
+  const base = new URL(normalizedUrl); const inspect = async (path) => { try { const result = await fetchHtml(new URL(path, base).toString(), { allowNonHtml: true, maxBytes: 64 * 1024, timeoutMs }); return { status: 'detected', evidence: result.html.slice(0, 500) }; } catch (error) { return ['ENRICHMENT_HTTP_ERROR', 'ENRICHMENT_NON_HTML'].includes(error?.code) ? { status: 'not_detected' } : { status: 'unavailable' }; } };
+  const [robots, sitemap] = await Promise.all([inspect('/robots.txt'), inspect('/sitemap.xml')]);
   return { robots: { status: robots.status, sitemapReference: robots.evidence ? /sitemap:/i.test(robots.evidence) : false }, sitemap: { status: sitemap.status } };
+}
+
+const DIAGNOSTIC_TIMEOUT_MS = 22000;
+async function analyzeDiagnostic({ url, crawl = crawlWebsite, fetchAuxiliary = inspectAuxiliary, validate = validateUrl, timeoutMs = DIAGNOSTIC_TIMEOUT_MS } = {}) {
+  const normalizedUrl = normalizeUrl(url);
+  const startedAt = Date.now();
+  const timeout = new Promise((_resolve, reject) => setTimeout(() => reject(Object.assign(new Error('A análise excedeu o tempo limite.'), { code: 'DIAGNOSTIC_TIMEOUT' })), timeoutMs));
+  const work = (async () => {
+    await validate(normalizedUrl);
+    const merged = mergeResults(await crawl(normalizedUrl, { maxPages: 5, timeoutMs: 5000, totalTimeoutMs: 16000 }));
+    if (!merged.diagnostic?.pagesAnalyzed) throw Object.assign(new Error('Nenhum conteúdo analisável foi encontrado.'), { code: 'DIAGNOSTIC_NO_RESULT' });
+    merged.diagnostic.infrastructure = await fetchAuxiliary(normalizedUrl, Math.max(1000, DIAGNOSTIC_TIMEOUT_MS - (Date.now() - startedAt)));
+    return buildDiagnosticResult(merged, { domain: new URL(normalizedUrl).hostname });
+  })();
+  return Promise.race([work, timeout]);
 }
 
 async function createDiagnostic({ connection = getPool(), ownerUserId, prospectId = null, url }) {
@@ -51,4 +66,4 @@ async function processOneDiagnostic({ connection, workerId, crawl = crawlWebsite
 }
 async function processWebsiteDiagnosticBatch({ limit = 1, connection, workerId } = {}) { let count = 0; while (count < Math.min(Number(limit) || 1, 1) && await processOneDiagnostic({ connection, workerId })) count += 1; return count; }
 
-module.exports = { MAX_ATTEMPTS, createDiagnostic, getDiagnostic, listDiagnostics, claimNextDiagnostic, processOneDiagnostic, processWebsiteDiagnosticBatch, normalizeUrl, parseRow };
+module.exports = { DIAGNOSTIC_TIMEOUT_MS, MAX_ATTEMPTS, analyzeDiagnostic, createDiagnostic, getDiagnostic, listDiagnostics, claimNextDiagnostic, processOneDiagnostic, processWebsiteDiagnosticBatch, normalizeUrl, parseRow };
