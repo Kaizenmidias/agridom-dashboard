@@ -6,6 +6,13 @@ const https = require('node:https');
 const MAX_REDIRECTS = 3;
 const BLOCKED_HOSTS = new Set(['localhost', 'metadata.google.internal', 'metadata.google.internal.']);
 
+function createPinnedLookup(validated) {
+  return (_hostname, options, callback) => {
+    if (options?.all) callback(null, [{ address: validated.address, family: validated.family }]);
+    else callback(null, validated.address, validated.family);
+  };
+}
+
 function ipv4Blocked(ip) {
   const parts = ip.split('.').map(Number);
   if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) return true;
@@ -46,8 +53,9 @@ async function fetchHtml(value, options = {}) {
     const url = validated.url;
     const requestStarted = Date.now();
     const client = url.protocol === 'https:' ? https : http;
-    const response = options.request ? await Promise.race([options.request({ url, validated, timeoutMs }), new Promise((_resolve, reject) => setTimeout(() => reject(Object.assign(new Error('Tempo limite excedido.'), { code: 'ENRICHMENT_TIMEOUT' })), timeoutMs))]) : await new Promise((resolveResponse, reject) => {
-      const request = client.request(url, { method: 'GET', lookup: (_hostname, _options, callback) => callback(null, validated.address, validated.family), servername: url.hostname, rejectUnauthorized: true, headers: { 'user-agent': 'KaizenCRM-Enricher/1.0', accept: 'text/html,application/xhtml+xml' } }, resolveResponse);
+    const requestOptions = { method: 'GET', lookup: createPinnedLookup(validated), servername: url.hostname, rejectUnauthorized: true, headers: { host: url.hostname, 'user-agent': 'KaizenCRM-Enricher/1.0', accept: 'text/html,application/xhtml+xml' } };
+    const response = options.request ? await Promise.race([options.request({ url, validated, timeoutMs, requestOptions }), new Promise((_resolve, reject) => setTimeout(() => reject(Object.assign(new Error('Tempo limite excedido.'), { code: 'ENRICHMENT_TIMEOUT' })), timeoutMs))]) : await new Promise((resolveResponse, reject) => {
+      const request = (options.requestClient || client).request(url, requestOptions, resolveResponse);
       request.setTimeout(timeoutMs, () => { request.destroy(Object.assign(new Error('Tempo limite excedido.'), { code: 'ENRICHMENT_TIMEOUT' })); });
       request.on('error', reject);
       request.end();
@@ -67,4 +75,4 @@ async function fetchHtml(value, options = {}) {
   throw Object.assign(new Error('Limite de redirects excedido.'), { code: 'ENRICHMENT_REDIRECT_LIMIT' });
 }
 
-module.exports = { MAX_REDIRECTS, fetchHtml, isBlockedAddress, validateUrl };
+module.exports = { MAX_REDIRECTS, createPinnedLookup, fetchHtml, isBlockedAddress, validateUrl };

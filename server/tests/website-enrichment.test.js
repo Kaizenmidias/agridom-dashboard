@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { parsePage } = require('../services/website-enrichment-parser');
-const { validateUrl, fetchHtml } = require('../services/website-enrichment-ssrf');
+const { createPinnedLookup, validateUrl, fetchHtml } = require('../services/website-enrichment-ssrf');
 const { claimNextEnrichment, crawlWebsite, mergeResults, normalizePageUrl, persistEnrichment, websiteUrl } = require('../services/website-enrichment-service');
 const enrichmentServiceSource = require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/website-enrichment-service.js'), 'utf8');
 
@@ -67,9 +67,35 @@ test('normaliza website sem inventar protocolo duplicado', () => {
 });
 
 test('fixa o IP validado no transporte e preserva Host/SNI/TLS', () => {
-  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/website-enrichment-ssrf.js'), 'utf8'), /lookup:.*validated\.address/);
+  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/website-enrichment-ssrf.js'), 'utf8'), /createPinnedLookup\(validated\)/);
   assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/website-enrichment-ssrf.js'), 'utf8'), /servername: url\.hostname/);
   assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/website-enrichment-ssrf.js'), 'utf8'), /rejectUnauthorized: true/);
+});
+
+test('transporte HTTPS fixa IP, Host e SNI sem nova resolução DNS', async () => {
+  let resolveCalls = 0;
+  let captured;
+  const response = {
+    statusCode: 200,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+    async *[Symbol.asyncIterator]() { yield Buffer.from('<html><body>ok</body></html>'); },
+  };
+  const requestClient = { request: (url, requestOptions, onResponse) => {
+    captured = { url, requestOptions };
+    const lookupResults = [];
+    requestOptions.lookup('www.jlramos.com.br', { all: true }, (_error, addresses) => lookupResults.push(addresses));
+    requestOptions.lookup('www.jlramos.com.br', { all: false }, (_error, address, family) => lookupResults.push({ address, family }));
+    assert.deepEqual(lookupResults, [[{ address: '50.116.87.174', family: 4 }], { address: '50.116.87.174', family: 4 }]);
+    onResponse(response);
+    return { setTimeout() {}, on() {}, end() {} };
+  } };
+  const result = await fetchHtml('https://www.jlramos.com.br/', { resolve: async () => { resolveCalls += 1; return [{ address: '50.116.87.174', family: 4 }]; }, requestClient });
+  assert.equal(resolveCalls, 1);
+  assert.equal(captured.url.hostname, 'www.jlramos.com.br');
+  assert.equal(captured.requestOptions.headers.host, 'www.jlramos.com.br');
+  assert.equal(captured.requestOptions.servername, 'www.jlramos.com.br');
+  assert.equal(captured.requestOptions.rejectUnauthorized, true);
+  assert.equal(result.html, '<html><body>ok</body></html>');
 });
 
 test('claim trata processing stale com limite de cinco minutos e sem resetar tentativas', () => {
