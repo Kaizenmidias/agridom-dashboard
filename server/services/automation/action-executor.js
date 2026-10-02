@@ -1,6 +1,6 @@
 const { dispatchDomainEvent } = require('../domain-events');
 const { getPool } = require('../../config/database');
-const { getActionDefinition, isExecutable } = require('./action-registry');
+const { getActionDefinition, isExecutable, LEAD_REQUIRED_ACTIONS } = require('./action-registry');
 const { resolveConfig } = require('./variable-resolver');
 const { decryptSecret } = require('../integration-crypto');
 const { validateSmtpConfig, sendSmtp } = require('../email-provider');
@@ -25,10 +25,12 @@ async function executeAction(connection, actionType, rawConfig, context) {
   const definition = getActionDefinition(actionType);
   if (!definition) throw new Error(`UNKNOWN_ACTION_TYPE:${actionType}`);
   if (!isExecutable(actionType)) throw new Error(`ACTION_NOT_EXECUTABLE:${actionType}`);
-  const lead = await ownedLead(connection, context.leadId, context.ownerUserId);
-  if (!lead) throw new Error('LEAD_NOT_FOUND');
+  const requiresLead = LEAD_REQUIRED_ACTIONS.has(actionType);
+  if (requiresLead && (!Number.isSafeInteger(context.leadId) || context.leadId <= 0)) throw new Error('ACTION_REQUIRES_LEAD');
+  const lead = requiresLead ? await ownedLead(connection, context.leadId, context.ownerUserId) : null;
+  if (requiresLead && !lead) throw new Error('LEAD_NOT_FOUND');
   const [ownerRows] = await connection.execute('SELECT id, name, email FROM users WHERE id = ?', [context.ownerUserId]);
-  const [assigneeRows] = lead.assigned_user_id ? await connection.execute('SELECT id, name, email FROM users WHERE id = ?', [lead.assigned_user_id]) : [[]];
+  const [assigneeRows] = lead?.assigned_user_id ? await connection.execute('SELECT id, name, email FROM users WHERE id = ?', [lead.assigned_user_id]) : [[]];
   const [positionRows] = await connection.execute(
     `SELECT pd.name AS pipeline_name, ps.name AS stage_name
      FROM prospect_pipeline_positions pp
@@ -36,11 +38,11 @@ async function executeAction(connection, actionType, rawConfig, context) {
      JOIN pipeline_stages ps ON ps.id = pp.stage_id
      WHERE pp.prospect_id = ? AND pd.owner_user_id = ?
      ORDER BY pp.updated_at DESC LIMIT 1`,
-    [context.leadId, context.ownerUserId]
+    [context.leadId || 0, context.ownerUserId]
   );
   const position = positionRows[0] || {};
   const config = resolveConfig(rawConfig || {}, {
-    lead: { name: lead.business_name, first_name: String(lead.business_name || '').split(/\s+/)[0], company: lead.business_name, phone: lead.phone, email: lead.email },
+    lead: lead ? { name: lead.business_name, first_name: String(lead.business_name || '').split(/\s+/)[0], company: lead.business_name, phone: lead.phone, email: lead.email } : {},
     owner: ownerRows[0] || {},
     assignee: assigneeRows[0] || {},
     pipeline: { name: position.pipeline_name, stage: position.stage_name },

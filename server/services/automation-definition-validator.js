@@ -1,4 +1,5 @@
 const { ACTION_CATALOG, ACTION_TYPES, STEP_TYPES, TRIGGER_TYPES, UNCONFIGURED_TRIGGER } = require('./automation-catalog');
+const { LEAD_REQUIRED_ACTIONS } = require('./automation/action-registry');
 
 const SECRET_KEYS = new Set([
   'token',
@@ -15,6 +16,7 @@ const SECRET_KEYS = new Set([
 const ALLOWED_VARIABLES = new Set(['lead.name', 'lead.first_name', 'lead.company', 'lead.phone', 'lead.email', 'assignee.name', 'assignee.email', 'pipeline.name', 'pipeline.stage']);
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isPositiveId = (value) => Number.isSafeInteger(value) && value > 0;
 
 function error(path, code, message) {
   return { path, code, message };
@@ -97,6 +99,9 @@ function validateAutomationDefinition(input, options = {}) {
     if (definition.trigger.config !== undefined && !isPlainObject(definition.trigger.config)) {
       errors.push(error('trigger.config', 'INVALID_TRIGGER_CONFIG', 'Configuracao do trigger deve ser um objeto.'));
     }
+    if (definition.trigger.type === 'webhook.received' && !isPositiveId(definition.trigger.config?.webhookEndpointId)) {
+      errors.push(error('trigger.config.webhookEndpointId', 'MISSING_WEBHOOK_ENDPOINT', 'Selecione um endpoint de webhook valido.'));
+    }
     if (definition.trigger.type === 'lead.added_to_folder' && (!Number.isSafeInteger(Number(definition.trigger.config?.folderId)) || Number(definition.trigger.config.folderId) <= 0)) {
       errors.push(error('trigger.config.folderId', 'MISSING_FOLDER', 'Selecione a lista do gatilho.'));
     }
@@ -163,6 +168,12 @@ function validateAutomationDefinition(input, options = {}) {
       }
       if (options.requireSteps && step.type === 'condition' && (!['status', 'pipeline', 'pipeline_stage', 'assigned_user', 'origin', 'source', 'phone', 'email', 'website', 'label'].includes(step.config?.field) || !['equals', 'not_equals', 'contains', 'not_contains', 'is_empty', 'is_not_empty', 'has_label', 'does_not_have_label'].includes(step.config?.operator))) {
         errors.push(error(`${path}.config`, 'INVALID_CONDITION', 'Campo ou operador de condicao nao permitido.'));
+      }
+      if (definition.trigger?.type === 'webhook.received' && step.type === 'condition') {
+        errors.push(error(`${path}.type`, 'WEBHOOK_CONDITION_REQUIRES_LEAD', 'Condition baseada em Lead nao e compativel com webhook.received.'));
+      }
+      if (definition.trigger?.type === 'webhook.received' && step.type === 'action' && LEAD_REQUIRED_ACTIONS.has(step.config?.actionType)) {
+        errors.push(error(`${path}.config.actionType`, 'WEBHOOK_ACTION_REQUIRES_LEAD', 'Esta action exige um Lead e nao e compativel com webhook.received.'));
       }
 
       for (const field of ['next']) {

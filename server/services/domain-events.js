@@ -17,6 +17,7 @@ const EVENT_CONTRACTS = Object.freeze({
   'conversation.created': ['conversationId'],
   'message.received': ['conversationId', 'messageId'],
   'message.sent': ['conversationId', 'messageId'],
+  'webhook.received': [],
 });
 
 const FORBIDDEN_KEYS = new Set([

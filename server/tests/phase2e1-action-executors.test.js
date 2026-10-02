@@ -10,10 +10,11 @@ const { resolveTemplate } = require('../services/automation/variable-resolver');
 const engine = fs.readFileSync(path.join(__dirname, '../services/automation-engine.js'), 'utf8');
 const migration = fs.readFileSync(path.join(__dirname, '../../database/migrations/20260923_phase_2e1_action_executors.sql'), 'utf8');
 
-test('2E.1 marks internal actions and wait as executable, external actions as blocked', () => {
-  for (const id of ['lead.add_tag', 'lead.remove_tag', 'lead.assign_user', 'lead.update_status', 'lead.update_field', 'lead.move_pipeline_stage', 'activity.create', 'activity.create_task', 'activity.create_call', 'activity.create_follow_up', 'activity.complete', 'notification.create', 'wait.period']) {
+test('2E.1 marks internal actions as executable and wait action as deferred', () => {
+  for (const id of ['lead.add_tag', 'lead.remove_tag', 'lead.assign_user', 'lead.update_status', 'lead.update_field', 'lead.move_pipeline_stage', 'activity.create', 'activity.create_task', 'activity.create_call', 'activity.create_follow_up', 'activity.complete', 'notification.create']) {
     assert.equal(ACTION_CATALOG.find((item) => item.id === id)?.availability, 'available', id);
   }
+  assert.equal(ACTION_CATALOG.find((item) => item.id === 'wait.period')?.availability, 'coming_soon');
   assert.equal(ACTION_CATALOG.find((item) => item.id === 'whatsapp.send_message')?.availability, 'requires_integration');
 });
 

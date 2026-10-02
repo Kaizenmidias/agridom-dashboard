@@ -13,6 +13,7 @@ const TRIGGER_TYPES = Object.freeze([
   'conversation.created',
   'message.received',
   'message.sent',
+  'webhook.received',
 ]);
 const UNCONFIGURED_TRIGGER = '__unconfigured__';
 
@@ -69,7 +70,7 @@ const ACTION_CATALOG = Object.freeze([
   { id: 'activity.create_follow_up', name: 'Criar follow-up', category: 'crm', availability: 'available' },
   { id: 'activity.complete', name: 'Concluir atividade', category: 'crm', availability: 'available' },
   { id: 'notification.create', name: 'Criar notificacao interna', category: 'crm', availability: 'available' },
-  { id: 'wait.period', name: 'Aguardar periodo', category: 'time', availability: 'available' },
+  { id: 'wait.period', name: 'Aguardar periodo', category: 'time', availability: 'coming_soon' },
   { id: 'email.send', name: 'Enviar e-mail', category: 'communication', availability: 'available', requiredIntegration: 'email' },
   { id: 'whatsapp.send_message', name: 'Enviar mensagem no WhatsApp', category: 'communication', availability: 'requires_integration', requiredIntegration: 'whatsapp' },
   { id: 'whatsapp.send', name: 'Enviar mensagem no WhatsApp', category: 'communication', availability: 'available', requiredIntegration: 'whatsapp' },

@@ -52,13 +52,22 @@ async function matchAutomationsForEvent(connection, event) {
      FROM automations a
      JOIN automation_versions av ON av.id = a.active_version_id
        AND av.automation_id = a.id AND av.status = 'published'
+     LEFT JOIN automation_webhook_active wha
+       ON wha.automation_id = a.id
+     LEFT JOIN automation_webhook_endpoints whe
+       ON whe.id = wha.endpoint_id
+      AND whe.automation_id = wha.automation_id
+      AND whe.owner_user_id = a.owner_user_id
+      AND whe.enabled = 1
+      AND whe.revoked_at IS NULL
      WHERE a.status = 'active'
        AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.type')) = ?
        AND (? <> 'lead.added_to_folder' OR JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.folderId')) = JSON_UNQUOTE(JSON_EXTRACT(?, '$.folderId')))
        AND COALESCE(?, 0) < ${MAX_LINEAGE_DEPTH}
        AND (COALESCE(?, 0) = 0 OR a.id <> COALESCE(?, 0))
+       AND (? <> 'webhook.received' OR (? = 'webhook_endpoint' AND CAST(wha.endpoint_id AS CHAR) = ? AND wha.endpoint_id IS NOT NULL AND whe.id IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.webhookEndpointId')) = CAST(wha.endpoint_id AS CHAR)))
      ORDER BY a.id`,
-    [event.event_type, event.event_type, JSON.stringify(event.payload || {}), event.lineage_depth, event.source_automation_id, event.source_automation_id]
+    [event.event_type, event.event_type, JSON.stringify(event.payload || {}), event.lineage_depth, event.source_automation_id, event.source_automation_id, event.event_type, event.entity_type, event.entity_id]
   );
   return rows.map((row) => ({ ...row, automation_id: Number(row.automation_id), automation_version_id: Number(row.automation_version_id), definition: parseJson(row.definition) }));
 }
@@ -202,12 +211,39 @@ async function claimNextJob({ currentWorkerId, lockTimeoutMs = DEFAULT_LOCK_TIME
   } finally { connection.release(); }
 }
 
+function positiveEntityId(value) {
+  const text = String(value ?? '').trim();
+  if (!/^\d+$/.test(text)) throw new Error('INVALID_AUTOMATION_ENTITY_ID');
+  const id = Number(text);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error('INVALID_AUTOMATION_ENTITY_ID');
+  return id;
+}
+
+function buildAutomationContext(current, job, stepId, idempotencyKey) {
+  const context = {
+    runId: Number(job.automation_run_id),
+    automationId: Number(current.automation_id),
+    ownerUserId: Number(current.owner_user_id),
+    entityType: String(current.entity_type || ''),
+    entityId: String(current.entity_id || ''),
+    stepId,
+    correlationId: current.correlation_id,
+    causationId: current.event_uuid,
+    lineageDepth: Number(current.lineage_depth || 0) + 1,
+    idempotencyKey,
+  };
+  const entityId = positiveEntityId(current.entity_id);
+  if (context.entityType === 'lead') context.leadId = entityId;
+  if (context.entityType === 'webhook_endpoint') context.webhookEndpointId = entityId;
+  return context;
+}
+
 async function completeBootstrapJob(job, currentWorkerId) {
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
     const [rows] = await connection.execute(
-      `SELECT aj.*, ar.automation_id, ar.automation_version_id, ar.event_id, ar.entity_id, ar.status AS run_status,
+      `SELECT aj.*, ar.automation_id, ar.automation_version_id, ar.event_id, ar.entity_type, ar.entity_id, ar.status AS run_status,
               ar.current_step_key, ar.correlation_id, av.definition, ae.event_uuid, ae.lineage_depth,
               a.owner_user_id
        FROM automation_jobs aj
@@ -258,7 +294,7 @@ async function completeBootstrapJob(job, currentWorkerId) {
        ON DUPLICATE KEY UPDATE status = 'running', attempt = ?, input = ?, started_at = COALESCE(started_at, UTC_TIMESTAMP()), error_code = NULL, error_message = NULL`,
       [job.automation_run_id, step.id, step.type, attempt, JSON.stringify({ node: step.id, type: step.type }), attempt, JSON.stringify({ node: step.id, type: step.type })]
     );
-    const context = { runId: Number(job.automation_run_id), automationId: Number(current.automation_id), ownerUserId: Number(current.owner_user_id), leadId: Number(current.entity_id), stepId: step.id, correlationId: current.correlation_id, causationId: current.event_uuid, lineageDepth: Number(current.lineage_depth || 0) + 1, idempotencyKey: nextJobKey(step.id) };
+    const context = buildAutomationContext(current, job, step.id, nextJobKey(step.id));
     let nextStep = step.next || null;
     let output = {};
     let status = 'completed';
@@ -360,4 +396,4 @@ async function processJobBatch(options = {}) {
   return processed;
 }
 
-module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, claimNextJob, completeBootstrapJob, createRunAndJob, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, reserveWhatsAppSlot, workerId };
+module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, buildAutomationContext, claimNextJob, completeBootstrapJob, createRunAndJob, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, reserveWhatsAppSlot, workerId };
