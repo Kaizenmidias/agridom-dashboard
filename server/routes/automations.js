@@ -4,6 +4,12 @@ const { requireCommercialAccess, requireCommercialAdmin } = require('../middlewa
 const { UNCONFIGURED_TRIGGER } = require('../services/automation-catalog');
 const { dryRunAutomation } = require('../services/automation/dry-run');
 const {
+  createWebhookEndpoint,
+  getWebhookEndpoint,
+  regenerateWebhookEndpoint,
+  revokeWebhookEndpoint,
+} = require('../services/automation-webhook-repository');
+const {
   AutomationError,
   createAutomation,
   listAutomations,
@@ -78,6 +84,49 @@ automationsRouter.post('/', requireCommercialAdmin, async (req, res) => {
     res.status(201).json(automation);
   } catch (error) {
     handleError(res, error, 'Nao foi possivel criar a automacao.');
+  }
+});
+
+automationsRouter.get('/:id/webhook-endpoint', async (req, res) => {
+  const automationId = parseId(req.params.id);
+  if (!automationId) return res.status(400).json({ error: 'ID da automacao invalido.' });
+  try {
+    const endpoint = await getWebhookEndpoint(req.userId, automationId);
+    if (endpoint.exists === false) return res.json(endpoint);
+    res.json(endpoint);
+  } catch (error) {
+    handleError(res, error, 'Nao foi possivel carregar o endpoint de webhook.');
+  }
+});
+
+automationsRouter.post('/:id/webhook-endpoint', requireCommercialAdmin, async (req, res) => {
+  const automationId = parseId(req.params.id);
+  if (!automationId) return res.status(400).json({ error: 'ID da automacao invalido.' });
+  try {
+    const result = await createWebhookEndpoint(req.userId, automationId);
+    res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    handleError(res, error, 'Nao foi possivel criar o endpoint de webhook.');
+  }
+});
+
+automationsRouter.post('/:id/webhook-endpoint/regenerate', requireCommercialAdmin, async (req, res) => {
+  const automationId = parseId(req.params.id);
+  if (!automationId) return res.status(400).json({ error: 'ID da automacao invalido.' });
+  try {
+    res.json(await regenerateWebhookEndpoint(req.userId, automationId));
+  } catch (error) {
+    handleError(res, error, 'Nao foi possivel regenerar o endpoint de webhook.');
+  }
+});
+
+automationsRouter.delete('/:id/webhook-endpoint', requireCommercialAdmin, async (req, res) => {
+  const automationId = parseId(req.params.id);
+  if (!automationId) return res.status(400).json({ error: 'ID da automacao invalido.' });
+  try {
+    res.json(await revokeWebhookEndpoint(req.userId, automationId));
+  } catch (error) {
+    handleError(res, error, 'Nao foi possivel revogar o endpoint de webhook.');
   }
 });
 
