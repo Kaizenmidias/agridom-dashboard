@@ -14,6 +14,52 @@ const googleFixture = { lighthouseResult: { categories: { performance: { score: 
 test('normalizes the raw Lighthouse score strictly from 0 to 1', () => { assert.equal(normalizeScore(0.82), 82); assert.equal(normalizeScore(0), 0); assert.equal(normalizeScore(1), 100); assert.equal(normalizeScore(1.2), null); assert.equal(normalizeScore(50), null); assert.equal(normalizeScore('0.82'), null); assert.equal(normalizeScore(Number.NaN), null); assert.equal(normalizeScore(Infinity), null); });
 test('normalizes lab metrics, URL field data and supported opportunities only', () => { const result = normalizePageSpeedResponse(validFixture); assert.equal(result.status, 'completed'); assert.equal(result.score, 82); assert.deepEqual(result.lab, { fcpMs: 2000, lcpMs: 4100, cls: 0.06, speedIndexMs: 3800, tbtMs: 420, ttfbMs: 800 }); assert.equal(result.field.source, 'url'); assert.equal(result.opportunities.length, 1); assert.equal(result.opportunities[0].id, 'unused-javascript'); assert.equal(result.opportunities[0].severity, 'high'); assert.deepEqual(result.opportunities[0].affectedMetrics, ['TBT', 'LCP']); });
 
+test('normalizes the observed Phase 3 audits with controlled recommendations and safe evidence', () => {
+  const audits = {
+    'render-blocking-insight': { score: 0, displayValue: 'Est savings of 1,710 ms', details: { type: 'table', overallSavingsMs: 1710 } },
+    'lcp-discovery-insight': { score: 0, details: { type: 'list', items: [{ url: 'https://private.example/hero.jpg' }] } },
+    'network-dependency-tree-insight': { score: 0, details: { type: 'list', items: [{ url: 'https://private.example/app.js' }] } },
+    'mainthread-work-breakdown': { score: 0, displayValue: '3.9 s', details: { type: 'table' } },
+    'total-byte-weight': { score: 0.5, displayValue: 'Total size was 4,455 KiB', details: { type: 'table' } },
+    'unminified-css': { score: 0.5, displayValue: 'Est savings of 3 KiB', details: { type: 'table', overallSavingsBytes: 3072 } },
+    'unsized-images': { score: 0.5, details: { type: 'table' } },
+    'unused-javascript': { score: 0, details: { overallSavingsMs: 1200, overallSavingsBytes: 1000 } },
+    'unused-css-rules': { score: 0, details: { overallSavingsBytes: 74000 } },
+  };
+  const result = normalizePageSpeedResponse({ lighthouseResult: { categories: { performance: { score: 0.57 } }, audits } });
+  const byId = Object.fromEntries(result.opportunities.map((item) => [item.id, item]));
+  assert.equal(byId['render-blocking-insight'].title, 'Recursos bloqueando a renderização');
+  assert.equal(byId['render-blocking-insight'].savingsMs, 1710);
+  assert.equal(byId['lcp-discovery-insight'].affectedMetrics[0], 'LCP');
+  assert.doesNotMatch(byId['lcp-discovery-insight'].recommendation, /imagem|preload/i);
+  assert.equal(byId['mainthread-work-breakdown'].displayValue, '3.9 s');
+  assert.equal(byId['mainthread-work-breakdown'].savingsMs, null);
+  assert.equal(byId['total-byte-weight'].savingsBytes, null);
+  assert.match(byId['unsized-images'].recommendation, /largura e altura/);
+  assert.doesNotMatch(byId['unsized-images'].recommendation, /WebP|compress/i);
+  assert.equal(byId['unminified-css'].savingsBytes, 3072);
+  assert.equal(result.score, 57);
+});
+
+test('does not create false opportunities for passed, not applicable or unscored audits', () => {
+  const result = normalizePageSpeedResponse({ lighthouseResult: { categories: { performance: { score: 1 } }, audits: {
+    'unsized-images': { score: 1, displayValue: 'No issues found' },
+    'unused-css-rules': { scoreDisplayMode: 'notApplicable', score: 0, details: { overallSavingsBytes: 1000 } },
+    'unused-javascript': { score: null, displayValue: 'Informational only' },
+    'long-tasks': { score: 1, scoreDisplayMode: 'informative', displayValue: '16 long tasks found' },
+  } } });
+  assert.deepEqual(result.opportunities, []);
+  assert.equal(result.score, 100);
+});
+
+test('deduplicates modern render blocking audit against its legacy equivalent', () => {
+  const result = normalizePageSpeedResponse({ lighthouseResult: { categories: { performance: { score: 0.5 } }, audits: {
+    'render-blocking-resources': { score: 0, details: { overallSavingsMs: 900 } },
+    'render-blocking-insight': { score: 0, details: { overallSavingsMs: 1200 } },
+  } } });
+  assert.deepEqual(result.opportunities.map((item) => item.id), ['render-blocking-insight']);
+});
+
 test('normalizes Lighthouse text without exposing markdown links or HTML', () => { const result = normalizePageSpeedResponse({ lighthouseResult: { categories: { performance: { score: 0.7 } }, audits: { 'unused-javascript': { score: 0.4, title: 'Reduce unused JavaScript', description: 'Reduce scripts. [Learn more](https://example.com/docs)<b>unsafe</b>', details: { headings: [{ text: '[Details](https://example.com/details)' }] } } } } }); assert.equal(result.opportunities[0].description, 'Reduce scripts. Learn moreunsafe'); assert.equal(result.opportunities[0].evidence, 'Details'); assert.doesNotMatch(result.opportunities[0].description, /https?:\/\//); assert.doesNotMatch(result.opportunities[0].description, /<|>/); });
 
 test('summarizes all audits safely, sorted and bounded', () => { const summary = summarizeAuditMetadata({ zeta: { score: 0.4, displayValue: '[bad](https://private.example)', details: { type: 'opportunity', overallSavingsMs: 300, items: [{ url: 'https://private.example/script.js', html: '<script>' }] } }, alpha: { scoreDisplayMode: 'informative', displayValue: { unsafe: true }, details: { type: 'table' } } }); assert.equal(summary.auditCount, 2); assert.equal(summary.reportedAuditCount, 2); assert.equal(summary.truncated, false); assert.deepEqual(summary.audits.map((audit) => audit.id), ['alpha', 'zeta']); assert.equal(summary.audits[0].displayValue, null); assert.equal(summary.audits[1].displayValue, 'bad'); assert.doesNotMatch(JSON.stringify(summary), /private|secret|<script>|items/); });

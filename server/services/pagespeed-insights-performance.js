@@ -3,6 +3,7 @@ const { normalizeUrl } = require('./website-diagnostic-service');
 const { validateUrl } = require('./website-enrichment-ssrf');
 const { runGooglePageSpeed } = require('./pagespeed-google-provider');
 const { requestPageSpeed } = require('./pagespeed-google-transport');
+const { normalizePageSpeedResponse } = require('./pagespeed-performance');
 
 const TTL_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -12,27 +13,15 @@ const jobs = new Map();
 const lastStartedByUser = new Map();
 let activeCount = 0;
 
-const finite = (value) => typeof value === 'number' && Number.isFinite(value) ? value : null;
-const nonNegative = (value) => { const number = finite(value); return number != null && number >= 0 ? number : null; };
-const text = (value) => typeof value === 'string' && value.trim() ? value.trim().replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/gi, '$1').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').slice(0, 500) : null;
-const audit = (audits, id) => audits?.[id] && typeof audits[id] === 'object' ? audits[id] : null;
-const auditMetric = (audits, id) => nonNegative(audit(audits, id)?.numericValue);
 const safeErrorCode = (value) => String(value || 'PAGESPEED_REQUEST_FAILED').replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80) || 'PAGESPEED_REQUEST_FAILED';
-const AUDIT_CATALOG = { 'render-blocking-resources': ['renderização', ['FCP', 'LCP'], 'Adie recursos não essenciais e mantenha o CSS crítico disponível para a primeira renderização.'], 'unused-javascript': ['javascript', ['TBT', 'LCP'], 'Reduza JavaScript não utilizado e carregue scripts não essenciais somente quando necessário.'], 'unused-css-rules': ['css', ['FCP', 'LCP'], 'Remova CSS não utilizado e evite folhas de estilo desnecessárias no carregamento inicial.'], 'uses-optimized-images': ['imagens', ['LCP'], 'Comprima imagens e utilize dimensões e formatos próximos ao uso real.'], 'uses-responsive-images': ['imagens', ['LCP'], 'Entregue imagens responsivas dimensionadas para o viewport.'], 'uses-text-compression': ['rede', ['FCP', 'LCP'], 'Habilite compressão de texto para reduzir o payload transferido.'], 'uses-long-cache-ttl': ['cache', ['FCP', 'LCP'], 'Configure cache de longa duração para arquivos estáticos versionados.'], 'font-display': ['fontes', ['FCP', 'LCP'], 'Configure font-display para reduzir bloqueios durante o carregamento das fontes.'] };
-const auditIsProblematic = (value) => value?.scoreDisplayMode !== 'informative' && (value?.score == null || value.score < 0.9 || nonNegative(value?.details?.overallSavingsMs) > 0 || nonNegative(value?.details?.overallSavingsBytes) > 0);
 
 function normalizePageSpeedInsightsResult(payload, strategy = 'mobile') {
   if (strategy !== 'mobile') throw Object.assign(new Error('Only mobile PageSpeed analysis is currently supported.'), { code: 'PAGESPEED_STRATEGY_INVALID' });
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return failedPerformance('PAGESPEED_INVALID_RESPONSE', strategy);
   if (payload.runtimeError) return failedPerformance('PAGESPEED_INVALID_RESPONSE', strategy);
-  const audits = payload.audits || {};
-  const categories = payload.categories || {};
-  const lab = { fcpMs: auditMetric(audits, 'first-contentful-paint'), lcpMs: auditMetric(audits, 'largest-contentful-paint'), cls: nonNegative(auditMetric(audits, 'cumulative-layout-shift')), speedIndexMs: auditMetric(audits, 'speed-index'), tbtMs: auditMetric(audits, 'total-blocking-time'), ttfbMs: auditMetric(audits, 'server-response-time') };
-  const score = finite(categories.performance?.score) == null ? null : Math.round(categories.performance.score * 100);
-  const opportunities = [...new Map(Object.entries(audits).filter(([id, value]) => AUDIT_CATALOG[id] && auditIsProblematic(value)).map(([id, value]) => { const [category, affectedMetrics, recommendation] = AUDIT_CATALOG[id]; const scoreValue = finite(value.score); const savingsMs = nonNegative(value.details?.overallSavingsMs); const savingsBytes = nonNegative(value.details?.overallSavingsBytes); const severity = scoreValue != null && scoreValue < 0.5 || (savingsMs != null && savingsMs >= 1000) ? 'high' : scoreValue != null && scoreValue < 0.9 || (savingsMs != null && savingsMs > 0) || (savingsBytes != null && savingsBytes > 0) ? 'medium' : 'recommended'; return [id, { id, auditId: id, title: text(value.title) || id, description: text(value.description), category, affectedMetrics, recommendation, severity, score: scoreValue, displayValue: text(value.displayValue), evidence: text(value.details?.headings?.[0]?.text), savingsMs, savingsBytes }]; })).values()].sort((a, b) => ({ high: 0, medium: 1, recommended: 2 }[a.severity] - { high: 0, medium: 1, recommended: 2 }[b.severity] || (b.savingsMs || 0) - (a.savingsMs || 0) || (b.savingsBytes || 0) - (a.savingsBytes || 0) || a.auditId.localeCompare(b.auditId))).slice(0, 12);
-  const hasLab = Object.values(lab).some((value) => value !== null);
-  if (!hasLab && score === null) return failedPerformance('PAGESPEED_INVALID_RESPONSE', strategy);
-  return { status: 'completed', score, strategy, source: 'pagespeed_insights', analyzedAt: new Date().toISOString(), lab, field: null, opportunities, errorCode: null };
+  const normalized = normalizePageSpeedResponse({ lighthouseResult: { categories: payload.categories || {}, audits: payload.audits || {} }, field: null }, strategy);
+  if (normalized.status !== 'completed') return failedPerformance('PAGESPEED_INVALID_RESPONSE', strategy);
+  return { ...normalized, source: 'pagespeed_insights', analyzedAt: new Date().toISOString(), field: null, errorCode: null };
 }
 
 function failedPerformance(errorCode, strategy = 'mobile') { return { status: 'failed', score: null, strategy, source: null, analyzedAt: null, lab: null, field: null, opportunities: [], errorCode: safeErrorCode(errorCode) }; }

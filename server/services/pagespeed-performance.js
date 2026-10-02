@@ -6,11 +6,18 @@ const MAX_ATTEMPTS = 2;
 const CACHE_DAYS = 14;
 const RETRY_DELAY_MINUTES = 5;
 const MAX_OPPORTUNITIES = 12;
-// Deliberately empty until versioned provider fixtures confirm the exact audit contract.
+// Catalog of supported Lighthouse audits with controlled CRM presentation metadata.
 const AUDIT_CATALOG = {
-  'render-blocking-resources': { category: 'renderização', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Adie recursos não essenciais e mantenha o CSS crítico disponível para a primeira renderização.' },
-  'unused-javascript': { category: 'javascript', affectedMetrics: ['TBT', 'LCP'], recommendation: 'Reduza JavaScript não utilizado e carregue scripts não essenciais somente quando necessário.' },
-  'unused-css-rules': { category: 'css', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Remova CSS não utilizado e evite folhas de estilo desnecessárias no carregamento inicial.' },
+  'render-blocking-resources': { title: 'Recursos bloqueando a renderização', category: 'renderização', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Adie recursos não essenciais e mantenha o CSS crítico disponível para a primeira renderização.' },
+  'render-blocking-insight': { title: 'Recursos bloqueando a renderização', category: 'rendering', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Reduza recursos que bloqueiam a renderização inicial. Priorize o CSS essencial e adie recursos não críticos quando tecnicamente possível.' },
+  'lcp-discovery-insight': { title: 'Descoberta do conteúdo principal pode ser melhorada', category: 'lcp', affectedMetrics: ['LCP'], recommendation: 'Revise como o recurso responsável pelo maior conteúdo visível é descoberto e priorizado durante o carregamento inicial.' },
+  'network-dependency-tree-insight': { title: 'Dependências de rede podem atrasar o carregamento', category: 'network', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Reduza cadeias críticas de dependências e carregamentos desnecessariamente sequenciais no início da página.' },
+  'mainthread-work-breakdown': { title: 'Trabalho excessivo na thread principal', category: 'javascript', affectedMetrics: ['TBT', 'LCP'], recommendation: 'Reduza o trabalho executado na thread principal, especialmente tarefas de JavaScript e processamento que atrasam a interatividade e a renderização.' },
+  'total-byte-weight': { title: 'Página transfere muitos dados', category: 'payload', affectedMetrics: ['FCP', 'LCP', 'Speed Index'], recommendation: 'Reduza o volume total transferido no carregamento inicial, priorizando recursos realmente necessários e otimizando arquivos pesados.' },
+  'unminified-css': { title: 'CSS pode ser minificado', category: 'css', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Minifique os arquivos CSS entregues em produção para reduzir dados transferidos.' },
+  'unsized-images': { title: 'Imagens sem dimensões definidas', category: 'images', affectedMetrics: ['CLS'], recommendation: 'Defina largura e altura apropriadas para as imagens para reservar espaço antes do carregamento e reduzir mudanças inesperadas de layout.' },
+  'unused-javascript': { title: 'JavaScript não utilizado', category: 'javascript', affectedMetrics: ['TBT', 'LCP'], recommendation: 'Reduza JavaScript não utilizado e carregue scripts não essenciais somente quando necessário.' },
+  'unused-css-rules': { title: 'CSS não utilizado', category: 'css', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Remova CSS não utilizado e evite folhas de estilo desnecessárias no carregamento inicial.' },
   'uses-optimized-images': { category: 'imagens', affectedMetrics: ['LCP'], recommendation: 'Comprima imagens e utilize dimensões e formatos próximos ao uso real.' },
   'uses-responsive-images': { category: 'imagens', affectedMetrics: ['LCP'], recommendation: 'Entregue imagens responsivas dimensionadas para o viewport.' },
   'uses-text-compression': { category: 'rede', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Habilite compressão de texto para reduzir o payload transferido.' },
@@ -29,7 +36,15 @@ function summarizeAuditMetadata(audits) {
   return { auditCount: normalized.length, reportedAuditCount: Math.min(normalized.length, maxAudits), truncated: normalized.length > maxAudits, audits: normalized.slice(0, maxAudits) };
 }
 const auditSeverity = (audit) => { const score = finiteNumber(audit?.score); const savingsMs = nonNegative(audit?.details?.overallSavingsMs); const savingsBytes = nonNegative(audit?.details?.overallSavingsBytes); return (score != null && score < 0.5) || (savingsMs != null && savingsMs >= 1000) ? 'high' : (score != null && score < 0.9) || (savingsMs != null && savingsMs > 0) || (savingsBytes != null && savingsBytes > 0) ? 'medium' : 'recommended'; };
-const auditIsProblematic = (audit) => audit?.scoreDisplayMode !== 'informative' && (audit?.score == null || audit.score < 0.9 || nonNegative(audit?.details?.overallSavingsMs) > 0 || nonNegative(audit?.details?.overallSavingsBytes) > 0);
+const auditIsProblematic = (audit) => {
+  if (!audit || audit.scoreDisplayMode === 'informative' || audit.scoreDisplayMode === 'notApplicable') return false;
+  const score = finiteNumber(audit.score);
+  const savingsMs = nonNegative(audit.details?.overallSavingsMs);
+  const savingsBytes = nonNegative(audit.details?.overallSavingsBytes);
+  if (score === 1) return false;
+  if (score === null) return savingsMs > 0 || savingsBytes > 0;
+  return score < 0.9 || savingsMs > 0 || savingsBytes > 0;
+};
 
 function normalizeScore(value) {
   const number = finiteNumber(value);
@@ -63,22 +78,22 @@ function normalizeField(field) {
 function normalizeOpportunities(audits) {
   if (!audits || typeof audits !== 'object') return [];
   const items = Object.entries(audits).filter(([id, value]) => AUDIT_CATALOG[id] && auditIsProblematic(value)).map(([id, value]) => ({
+    ...AUDIT_CATALOG[id],
     id,
     auditId: id,
-    title: text(value?.title) || id,
-    description: text(value?.description),
-    category: AUDIT_CATALOG[id].category,
+    title: AUDIT_CATALOG[id].title || text(value?.title) || id,
+    description: AUDIT_CATALOG[id].description || text(value?.description),
     severity: auditSeverity(value),
     score: finiteNumber(value?.score),
     displayValue: text(value?.displayValue),
-    affectedMetrics: AUDIT_CATALOG[id].affectedMetrics,
-    recommendation: AUDIT_CATALOG[id].recommendation,
-    evidence: text(value?.details?.headings?.[0]?.text),
+    evidence: text(value?.details?.headings?.[0]?.text) || text(value?.displayValue),
     savingsMs: nonNegative(value?.details?.overallSavingsMs),
     savingsBytes: nonNegative(value?.details?.overallSavingsBytes),
   }));
+  const hasModernRenderBlocking = items.some((item) => item.auditId === 'render-blocking-insight');
+  const deduplicatedItems = hasModernRenderBlocking ? items.filter((item) => item.auditId !== 'render-blocking-resources') : items;
   const severityRank = { high: 0, medium: 1, recommended: 2 };
-  return [...new Map(items.map((item) => [item.auditId, item])).values()].sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (b.savingsMs || 0) - (a.savingsMs || 0) || (b.savingsBytes || 0) - (a.savingsBytes || 0) || a.auditId.localeCompare(b.auditId)).slice(0, MAX_OPPORTUNITIES);
+  return [...new Map(deduplicatedItems.map((item) => [item.auditId, item])).values()].sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (b.savingsMs || 0) - (a.savingsMs || 0) || (b.savingsBytes || 0) - (a.savingsBytes || 0) || a.auditId.localeCompare(b.auditId)).slice(0, MAX_OPPORTUNITIES);
 }
 
 function normalizePageSpeedResponse(payload, strategy = 'mobile') {
