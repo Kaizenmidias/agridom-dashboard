@@ -219,7 +219,7 @@ function positiveEntityId(value) {
   return id;
 }
 
-function buildAutomationContext(current, job, stepId, idempotencyKey) {
+function buildAutomationContext(current, job, stepId, idempotencyKey, eventPayload) {
   const context = {
     runId: Number(job.automation_run_id),
     automationId: Number(current.automation_id),
@@ -235,6 +235,16 @@ function buildAutomationContext(current, job, stepId, idempotencyKey) {
   const entityId = positiveEntityId(current.entity_id);
   if (context.entityType === 'lead') context.leadId = entityId;
   if (context.entityType === 'webhook_endpoint') context.webhookEndpointId = entityId;
+  if (context.entityType === 'webhook_endpoint' && current.event_type === 'webhook.received') {
+    const webhook = eventPayload?.webhook;
+    if (webhook && typeof webhook === 'object') {
+      context.webhook = {
+        ...(Object.prototype.hasOwnProperty.call(webhook, 'body') ? { body: webhook.body } : {}),
+        ...(Object.prototype.hasOwnProperty.call(webhook, 'contentType') ? { contentType: webhook.contentType } : {}),
+        ...(Object.prototype.hasOwnProperty.call(webhook, 'receivedAt') ? { receivedAt: webhook.receivedAt } : {}),
+      };
+    }
+  }
   return context;
 }
 
@@ -244,7 +254,7 @@ async function completeBootstrapJob(job, currentWorkerId) {
     await connection.beginTransaction();
     const [rows] = await connection.execute(
       `SELECT aj.*, ar.automation_id, ar.automation_version_id, ar.event_id, ar.entity_type, ar.entity_id, ar.status AS run_status,
-              ar.current_step_key, ar.correlation_id, av.definition, ae.event_uuid, ae.lineage_depth,
+              ar.current_step_key, ar.correlation_id, av.definition, ae.event_uuid, ae.event_type, ae.payload, ae.lineage_depth,
               a.owner_user_id
        FROM automation_jobs aj
        JOIN automation_runs ar ON ar.id = aj.automation_run_id
@@ -294,7 +304,7 @@ async function completeBootstrapJob(job, currentWorkerId) {
        ON DUPLICATE KEY UPDATE status = 'running', attempt = ?, input = ?, started_at = COALESCE(started_at, UTC_TIMESTAMP()), error_code = NULL, error_message = NULL`,
       [job.automation_run_id, step.id, step.type, attempt, JSON.stringify({ node: step.id, type: step.type }), attempt, JSON.stringify({ node: step.id, type: step.type })]
     );
-    const context = buildAutomationContext(current, job, step.id, nextJobKey(step.id));
+    const context = buildAutomationContext(current, job, step.id, nextJobKey(step.id), parseJson(current.payload, {}));
     let nextStep = step.next || null;
     let output = {};
     let status = 'completed';

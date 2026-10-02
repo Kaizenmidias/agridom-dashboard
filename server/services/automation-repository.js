@@ -2,6 +2,26 @@ const { getPool } = require('../config/database');
 const { validateAutomationDefinition } = require('./automation-definition-validator');
 const { UNCONFIGURED_TRIGGER } = require('./automation-catalog');
 
+async function validateWebhookEndpoint(connection, automationId, ownerUserId, endpointId) {
+  const [rows] = await connection.execute(
+    `SELECT e.id
+     FROM automation_webhook_endpoints e
+     JOIN automation_webhook_active active
+       ON active.automation_id = e.automation_id AND active.endpoint_id = e.id
+     WHERE e.id = ? AND e.automation_id = ? AND e.owner_user_id = ?
+       AND e.enabled = 1 AND e.revoked_at IS NULL
+     LIMIT 1`,
+    [endpointId, automationId, ownerUserId]
+  );
+  if (!rows[0]) throw new AutomationError(409, 'O endpoint de webhook nao esta ativo para esta automacao.');
+}
+
+async function validateDefinitionWebhookEndpoint(connection, automation, definition) {
+  if (definition?.trigger?.type === 'webhook.received') {
+    await validateWebhookEndpoint(connection, automation.id, automation.owner_user_id, definition.trigger.config.webhookEndpointId);
+  }
+}
+
 class AutomationError extends Error {
   constructor(status, message, details = []) {
     super(message);
@@ -51,7 +71,7 @@ async function writeAudit(connection, automationId, userId, action, metadata = {
 }
 
 async function createAutomation({ ownerUserId, userId, name, description, triggerType, definition }) {
-  const validation = validateAutomationDefinition(definition, { requireSteps: false, allowUnconfiguredTrigger: true });
+  const validation = validateAutomationDefinition(definition, { requireSteps: false, allowUnconfiguredTrigger: true, allowIncompleteWebhookTrigger: true });
   if (!validation.valid) throw new AutomationError(400, 'Definition invalida.', validation.errors);
   const definitionTrigger = validation.definition.trigger?.type || UNCONFIGURED_TRIGGER;
   if (triggerType !== undefined && definitionTrigger !== triggerType) {
@@ -172,7 +192,7 @@ async function updateAutomation(userId, automationId, values) {
 }
 
 async function createVersion(userId, automationId, definition) {
-  const validation = validateAutomationDefinition(definition, { requireSteps: false, allowUnconfiguredTrigger: true });
+  const validation = validateAutomationDefinition(definition, { requireSteps: false, allowUnconfiguredTrigger: true, allowIncompleteWebhookTrigger: true });
   if (!validation.valid) throw new AutomationError(400, 'Definition invalida.', validation.errors);
 
   return withTransaction(async (connection) => {
@@ -199,7 +219,7 @@ async function createVersion(userId, automationId, definition) {
 }
 
 async function updateDraftVersion(userId, automationId, versionId, definition) {
-  const validation = validateAutomationDefinition(definition, { requireSteps: false, allowUnconfiguredTrigger: true });
+  const validation = validateAutomationDefinition(definition, { requireSteps: false, allowUnconfiguredTrigger: true, allowIncompleteWebhookTrigger: true });
   if (!validation.valid) throw new AutomationError(400, 'Definition invalida.', validation.errors);
 
   return withTransaction(async (connection) => {
@@ -232,6 +252,7 @@ async function publishVersion(userId, automationId, versionId) {
     if (version.status !== 'draft') throw new AutomationError(409, 'Somente rascunhos podem ser publicados.');
     const validation = validateAutomationDefinition(version.definition, { requireSteps: true, requireExecutableActions: true });
     if (!validation.valid) throw new AutomationError(400, 'Definition invalida para publicacao.', validation.errors);
+    await validateDefinitionWebhookEndpoint(connection, automation, validation.definition);
     const definitionTrigger = validation.definition.trigger?.type;
 
     await connection.execute("UPDATE automation_versions SET status = 'superseded' WHERE automation_id = ? AND status = 'published'", [automationId]);
@@ -271,6 +292,7 @@ async function transitionAutomation(userId, automationId, transition) {
       if (!validation.valid || !validation.definition?.trigger?.type || validation.definition.trigger.type === UNCONFIGURED_TRIGGER) {
         throw new AutomationError(409, 'A versao ativa possui uma definition invalida para execucao.', validation.errors);
       }
+      await validateDefinitionWebhookEndpoint(connection, automation, validation.definition);
       await connection.execute("UPDATE automations SET status = 'active', trigger_type = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [validation.definition.trigger.type, userId, automationId]);
       await writeAudit(connection, automationId, userId, 'automation.activated', { versionId: automation.active_version_id });
       return { ...automation, status: 'active' };

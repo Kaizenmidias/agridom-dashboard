@@ -47,6 +47,7 @@ async function executeAction(connection, actionType, rawConfig, context) {
     assignee: assigneeRows[0] || {},
     pipeline: { name: position.pipeline_name, stage: position.stage_name },
     stage: { name: position.stage_name },
+    webhook: context.webhook,
   });
 
   if (actionType === 'lead.add_tag' || actionType === 'lead.remove_tag') {

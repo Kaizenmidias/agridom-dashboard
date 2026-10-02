@@ -43,22 +43,28 @@ function findSecretKey(value, path = '') {
   return null;
 }
 
-function findInvalidVariable(value, path = '') {
+function findInvalidVariable(value, triggerType, path = '') {
   if (Array.isArray(value)) {
     for (let index = 0; index < value.length; index += 1) {
-      const found = findInvalidVariable(value[index], `${path}[${index}]`);
+      const found = findInvalidVariable(value[index], triggerType, `${path}[${index}]`);
       if (found) return found;
     }
     return null;
   }
   if (typeof value === 'string') {
     const matches = value.matchAll(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g);
-    for (const match of matches) if (!ALLOWED_VARIABLES.has(match[1])) return error(path, 'UNKNOWN_VARIABLE', `Variavel nao permitida: ${match[1]}.`);
+    for (const match of matches) {
+      const variable = match[1];
+      const webhookPath = variable === 'webhook.body' || variable.startsWith('webhook.body.');
+      const segments = variable.split('.').slice(2);
+      const validWebhookPath = triggerType === 'webhook.received' && webhookPath && segments.length <= 8 && segments.every((segment) => segment && !/^\d+$/.test(segment) && !['__proto__', 'prototype', 'constructor'].includes(segment));
+      if (!ALLOWED_VARIABLES.has(variable) && !validWebhookPath) return error(path, 'UNKNOWN_VARIABLE', `Variavel nao permitida: ${variable}.`);
+    }
     return null;
   }
   if (!isPlainObject(value)) return null;
   for (const [key, child] of Object.entries(value)) {
-    const found = findInvalidVariable(child, path ? `${path}.${key}` : key);
+    const found = findInvalidVariable(child, triggerType, path ? `${path}.${key}` : key);
     if (found) return found;
   }
   return null;
@@ -82,7 +88,7 @@ function validateAutomationDefinition(input, options = {}) {
 
   const secretError = findSecretKey(definition);
   if (secretError) errors.push(secretError);
-  const invalidVariable = findInvalidVariable(definition);
+  const invalidVariable = findInvalidVariable(definition, definition.trigger?.type);
   if (invalidVariable) errors.push(invalidVariable);
 
   if (definition.schemaVersion !== 1) {
@@ -99,7 +105,7 @@ function validateAutomationDefinition(input, options = {}) {
     if (definition.trigger.config !== undefined && !isPlainObject(definition.trigger.config)) {
       errors.push(error('trigger.config', 'INVALID_TRIGGER_CONFIG', 'Configuracao do trigger deve ser um objeto.'));
     }
-    if (definition.trigger.type === 'webhook.received' && !isPositiveId(definition.trigger.config?.webhookEndpointId)) {
+    if (definition.trigger.type === 'webhook.received' && !isPositiveId(definition.trigger.config?.webhookEndpointId) && options.allowIncompleteWebhookTrigger !== true) {
       errors.push(error('trigger.config.webhookEndpointId', 'MISSING_WEBHOOK_ENDPOINT', 'Selecione um endpoint de webhook valido.'));
     }
     if (definition.trigger.type === 'lead.added_to_folder' && (!Number.isSafeInteger(Number(definition.trigger.config?.folderId)) || Number(definition.trigger.config.folderId) <= 0)) {

@@ -235,10 +235,11 @@ test('B.2 preserva automacoes Lead e protecoes de lineage', () => {
   assert.match(engine, /MAX_LINEAGE_DEPTH/);
 });
 
-test('B.2 nao adiciona payload webhook nem endpoint publico', () => {
+test('B.2 preserva endpoint publico fechado e B.3A adiciona payload somente no resolver seguro', () => {
   const resolver = fs.readFileSync(path.join(__dirname, '..', 'services', 'automation', 'variable-resolver.js'), 'utf8');
   const routes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'automations.js'), 'utf8');
-  assert.doesNotMatch(resolver, /webhook\.body/);
+  assert.match(resolver, /webhook\.body/);
+  assert.match(resolver, /hasOwnProperty\.call/);
   assert.doesNotMatch(routes, /webhooks\/automations\/:token/);
 });
 
