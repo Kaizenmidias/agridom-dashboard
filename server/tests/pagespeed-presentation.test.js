@@ -24,6 +24,16 @@ test('PageSpeed presentation distinguishes CrUX sources and unavailable data', (
   assert.match(source, /formatPageSpeedCls\(lab\.cls\)/);
 });
 
+test('PageSpeed metric help has one source of truth for explanations and thresholds', () => {
+  for (const key of ['fcp', 'lcp', 'cls', 'speedIndex', 'tbt', 'ttfb']) {
+    assert.match(source, new RegExp(`${key}: \\{`));
+    assert.match(source, new RegExp(`${key}[\\s\\S]*healthyReference`));
+  }
+  assert.match(source, /pageSpeedMetricTone/);
+  assert.match(source, /threshold: 0\.1/);
+  assert.match(source, /unit: "cls"/);
+});
+
 test('PageSpeed date formatter rejects empty and invalid dates without exposing Invalid Date', () => {
   assert.match(source, /if \(!value \|\| typeof value !== "string"\) return null/);
   assert.match(source, /return Number\.isNaN\(date\.getTime\(\)\) \? null/);

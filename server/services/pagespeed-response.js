@@ -35,7 +35,14 @@ function normalizeScore(value) { return typeof value === 'number' && Number.isIn
 
 function normalizeOpportunities(value) {
   const parsed = Array.isArray(value) ? value : (() => { try { return typeof value === 'string' ? JSON.parse(value) : null; } catch { return null; } })();
-  return Array.isArray(parsed) ? [] : [];
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((item) => item && typeof item === 'object' && typeof item.id === 'string').slice(0, 12).map((item) => ({
+    id: item.id.slice(0, 120),
+    title: typeof item.title === 'string' && item.title.trim() ? item.title.trim().slice(0, 500) : item.id.slice(0, 120),
+    description: typeof item.description === 'string' ? item.description.trim().slice(0, 1000) : null,
+    savingsMs: finiteNonNegative(item.savingsMs),
+    savingsBytes: finiteNonNegative(item.savingsBytes),
+  }));
 }
 
 function publicPageSpeedPerformance(row) {
