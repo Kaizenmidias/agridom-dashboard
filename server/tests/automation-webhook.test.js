@@ -151,6 +151,19 @@ test('B.1A GET retorna somente metadata e regeneração mantém ID e troca hash'
   }
 });
 
+test('B.1A GET aceita o contrato de resultado do wrapper do banco quando o endpoint nao existe', async () => {
+  const db = fakeDatabase();
+  const pool = getPool();
+  const originalExecute = pool.execute;
+  pool.execute = async () => ({ rows: [] });
+  try {
+    assert.deepEqual(await getWebhookEndpoint(7, 4), { exists: false });
+  } finally {
+    pool.execute = originalExecute;
+    db.restore();
+  }
+});
+
 test('B.1A revoga endpoint sem alterar a automação e impede regeneração', async () => {
   const db = fakeDatabase();
   try {

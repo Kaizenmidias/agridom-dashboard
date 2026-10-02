@@ -86,7 +86,7 @@ async function createWebhookEndpoint(userId, automationId) {
 }
 
 async function getWebhookEndpoint(userId, automationId) {
-  const [rows] = await getPool().execute(
+  const result = await getPool().execute(
     `SELECT e.id, e.automation_id, e.enabled, e.revoked_at, e.created_at, e.updated_at
      FROM automation_webhook_endpoints e
      JOIN automations a ON a.id = e.automation_id
@@ -94,6 +94,7 @@ async function getWebhookEndpoint(userId, automationId) {
      ORDER BY e.id DESC LIMIT 1`,
     [automationId, userId]
   );
+  const rows = Array.isArray(result) ? result[0] : result?.rows || [];
   return rows[0] ? safeEndpoint(rows[0]) : { exists: false };
 }
 

@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useParams } from "react-router-dom";
+import { triggerConfigForType, triggerTypeFromDefinition } from "@/services/automations-trigger-config.mjs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,6 +103,7 @@ import {
   type AutomationVersion,
   type AutomationWebhookEndpoint,
 } from "@/services/automations";
+
 
 type BuilderType = "trigger" | "condition" | "wait" | "action" | "finish";
 export type BuilderNode = {
@@ -289,14 +291,8 @@ export function builderToDefinition(
   return {
     schemaVersion: 1,
     trigger: {
-      type: String(
-        triggerType || String(trigger?.config.triggerType || UNCONFIGURED_TRIGGER),
-      ),
-      config: Object.fromEntries(
-        Object.entries(trigger?.config || {}).filter(
-          ([key]) => key !== "triggerType",
-        ),
-      ),
+      type: String(trigger?.config.triggerType || triggerType || UNCONFIGURED_TRIGGER),
+      config: triggerConfigForType(String(trigger?.config.triggerType || triggerType || UNCONFIGURED_TRIGGER), trigger?.config),
     },
     steps: nodes
       .filter((node) => node.type !== "trigger")
@@ -323,6 +319,7 @@ const flowNodeTypes = { kaizen: KaizenFlowNode };
 
 function flowDefinition(definition: AutomationDefinition, canonicalTriggerType?: string): { nodes: FlowNode[]; edges: Edge[] } {
   const steps = Array.isArray(definition.steps) ? definition.steps : [];
+  const effectiveTriggerType = triggerTypeFromDefinition(definition, canonicalTriggerType);
   const legacyTriggerNext = (definition.trigger as AutomationDefinition["trigger"] & { next?: string | null }).next || (!Object.prototype.hasOwnProperty.call(definition, "layout") ? steps[0]?.id : null);
   if (!steps.length) return { nodes: [], edges: [] };
   const layout = (definition as AutomationDefinition & { layout?: { nodes?: Record<string, { x?: number; y?: number }> } }).layout?.nodes || {};
@@ -334,8 +331,8 @@ function flowDefinition(definition: AutomationDefinition, canonicalTriggerType?:
       data: {
         id: "trigger_1",
         type: "trigger",
-        label: triggerLabel(canonicalTriggerType || definition.trigger.type),
-        config: { ...definition.trigger.config, triggerType: canonicalTriggerType || definition.trigger.type },
+        label: triggerLabel(effectiveTriggerType),
+        config: { triggerType: effectiveTriggerType, ...triggerConfigForType(effectiveTriggerType, definition.trigger.config) },
         next: legacyTriggerNext || null,
         x: layout.trigger_1?.x ?? 80,
         y: layout.trigger_1?.y ?? 220,
@@ -402,8 +399,8 @@ function definitionFromFlow(nodes: FlowNode[], edges: Edge[], triggerType: strin
   return {
     schemaVersion: 1,
     trigger: {
-      type: String(triggerType || trigger?.data.config.triggerType || UNCONFIGURED_TRIGGER),
-      config: Object.fromEntries(Object.entries(trigger?.data.config || {}).filter(([key]) => key !== "triggerType" && key !== "folderName")),
+      type: String(trigger?.data.config.triggerType || triggerType || UNCONFIGURED_TRIGGER),
+      config: triggerConfigForType(String(trigger?.data.config.triggerType || triggerType || UNCONFIGURED_TRIGGER), trigger?.data.config),
       next: trigger ? edges.find((edge) => edge.source === trigger.id && edge.sourceHandle !== "yes" && edge.sourceHandle !== "no")?.target || null : null,
     },
     steps,
@@ -1404,7 +1401,7 @@ function NodeInspector({
           <Select
             value={String(node.config.triggerType || "__unconfigured__")}
             disabled={inspectorReadOnly}
-            onValueChange={(value) => updateNode({ config: value === "lead.added_to_folder" ? { triggerType: value } : { triggerType: value, folderId: undefined, folderName: undefined } })}
+            onValueChange={(value) => updateNode({ config: { triggerType: value, ...triggerConfigForType(value, node.config) } })}
           >
             <SelectTrigger>
               <SelectValue />

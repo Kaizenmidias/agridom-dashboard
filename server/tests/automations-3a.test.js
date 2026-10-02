@@ -95,7 +95,7 @@ test('AUTOMATIONS-3A define o evento de lead adicionado a lista e o emitem somen
   assert.match(builder, /folderName/);
   assert.match(builder, /Lista não selecionada/);
   assert.match(builder, /Selecione a lista do gatilho/);
-  assert.match(builder, /key !== "folderName"/);
+  assert.match(builder, /triggerConfigForType/);
   assert.match(builder, /seconds.*segundos/);
   assert.match(builder, /Cadência/);
   assert.match(page, /UNCONFIGURED_TRIGGER = "__unconfigured__"/);
@@ -234,11 +234,11 @@ test('AUTOMATIONS-3A mantém o trigger canônico no round-trip do Builder', () =
   assert.equal(definition.trigger.config.folderId, 5);
   assert.equal(definition.steps[0].config.actionType, 'whatsapp.send');
   assert.match(builder, /flowDefinition\(definition, props\.triggerType\)/);
-  assert.match(builder, /type: String\(triggerType \|\| trigger\?\.data\.config\.triggerType \|\| UNCONFIGURED_TRIGGER/);
+  assert.match(builder, /type: String\(trigger\?\.data\.config\.triggerType \|\| triggerType \|\| UNCONFIGURED_TRIGGER/);
   assert.doesNotMatch(builder, /triggerType \|\| trigger\?\.config\.triggerType \|\| "lead\.created"/);
   assert.doesNotMatch(builder, /trigger\?\.data\.config\.triggerType \|\| "lead\.created"/);
   assert.match(builder, /Gatilho não configurado/);
-  assert.match(builder, /key !== "folderName"/);
+  assert.match(builder, /triggerConfigForType/);
   assert.match(catalog, /id: "whatsapp\.send",\s+name: "Disparo WhatsApp"/);
 });
 
