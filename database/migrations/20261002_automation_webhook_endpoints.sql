@@ -11,11 +11,20 @@ CREATE TABLE IF NOT EXISTS automation_webhook_endpoints (
   revoked_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  active_automation_id BIGINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN revoked_at IS NULL THEN automation_id ELSE NULL END) STORED,
   PRIMARY KEY (id),
   UNIQUE KEY uq_automation_webhook_token_hash (token_hash),
-  UNIQUE KEY uq_automation_webhook_active_automation (active_automation_id),
+  UNIQUE KEY uq_automation_webhook_automation_id (automation_id, id),
+  KEY idx_automation_webhook_automation_state (automation_id, revoked_at, id),
   KEY idx_automation_webhook_owner (owner_user_id, enabled),
   CONSTRAINT fk_automation_webhook_automation FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE,
   CONSTRAINT fk_automation_webhook_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS automation_webhook_active (
+  automation_id BIGINT UNSIGNED NOT NULL,
+  endpoint_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (automation_id),
+  UNIQUE KEY uq_automation_webhook_active_endpoint (endpoint_id),
+  CONSTRAINT fk_automation_webhook_active_endpoint FOREIGN KEY (automation_id, endpoint_id) REFERENCES automation_webhook_endpoints(automation_id, id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

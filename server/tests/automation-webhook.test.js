@@ -17,6 +17,7 @@ function fakeDatabase() {
   const state = {
     automation: { id: 4, owner_user_id: 7, status: 'draft' },
     endpoints: [],
+    activeEndpointId: null,
     nextId: 20,
     forceDuplicate: false,
     forceInsertError: false,
@@ -33,8 +34,8 @@ function fakeDatabase() {
     async execute(sql, params = []) {
       state.params.push({ sql, params });
       if (sql.includes('FROM automations WHERE id = ? AND owner_user_id = ?')) return [state.automation.owner_user_id === Number(params[1]) ? [state.automation] : []];
-      if (sql.includes('FROM automation_webhook_endpoints') && sql.includes('revoked_at IS NULL')) {
-        const endpoint = state.endpoints.find((item) => !item.revoked_at);
+      if (sql.includes('JOIN automation_webhook_active') && sql.includes('revoked_at IS NULL')) {
+        const endpoint = state.endpoints.find((item) => item.id === state.activeEndpointId && !item.revoked_at);
         return [endpoint ? [{ ...endpoint }] : []];
       }
       if (sql.startsWith('SELECT e.id, e.automation_id')) {
@@ -52,6 +53,15 @@ function fakeDatabase() {
         state.endpoints.push(endpoint);
         return [{ insertId: endpoint.id }];
       }
+      if (sql.startsWith('INSERT INTO automation_webhook_active')) {
+        if (state.activeEndpointId !== null) {
+          const error = new Error('Duplicate active automation');
+          error.code = 'ER_DUP_ENTRY';
+          throw error;
+        }
+        state.activeEndpointId = Number(params[1]);
+        return [{ affectedRows: 1 }];
+      }
       if (sql.startsWith('UPDATE automation_webhook_endpoints SET token_hash')) {
         if (state.forceUpdateError) throw new Error('update failed with secret token');
         const endpoint = state.endpoints.find((item) => item.id === Number(params[1]));
@@ -63,6 +73,10 @@ function fakeDatabase() {
         const endpoint = state.endpoints.find((item) => item.id === Number(params[0]));
         endpoint.enabled = 0;
         endpoint.revoked_at = '2026-10-02 12:00:00';
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.startsWith('DELETE FROM automation_webhook_active')) {
+        state.activeEndpointId = null;
         return [{ affectedRows: 1 }];
       }
       throw new Error(`Unexpected webhook SQL: ${sql}`);
@@ -183,6 +197,7 @@ test('B.1A permite novo endpoint depois da revogacao e preserva o historico', as
     assert.ok(db.state.endpoints[0].revoked_at);
     assert.equal(db.state.endpoints[1].enabled, 1);
     assert.equal(db.state.endpoints[1].revoked_at, null);
+    assert.equal(db.state.activeEndpointId, second.endpoint.id);
   } finally {
     db.restore();
   }
@@ -251,14 +266,19 @@ test('B.1A migration remove endpoint ao excluir automacao por CASCADE', () => {
   const migration = fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'migrations', '20261002_automation_webhook_endpoints.sql'), 'utf8');
   assert.match(migration, /FOREIGN KEY \(automation_id\) REFERENCES automations\(id\) ON DELETE CASCADE/);
   assert.doesNotMatch(migration, /FOREIGN KEY \(automation_id\)[^\n]+ON DELETE RESTRICT/);
-  assert.match(migration, /UNIQUE KEY uq_automation_webhook_active_automation/);
-  assert.match(migration, /CASE WHEN revoked_at IS NULL THEN automation_id ELSE NULL END/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS automation_webhook_active/);
+  assert.match(migration, /PRIMARY KEY \(automation_id\)/);
+  assert.match(migration, /UNIQUE KEY uq_automation_webhook_active_endpoint/);
+  assert.match(migration, /UNIQUE KEY uq_automation_webhook_automation_id \(automation_id, id\)/);
+  assert.match(migration, /FOREIGN KEY \(automation_id, endpoint_id\) REFERENCES automation_webhook_endpoints\(automation_id, id\) ON DELETE CASCADE/);
+  assert.doesNotMatch(migration, /fk_automation_webhook_active_automation/);
+  assert.doesNotMatch(migration, /GENERATED ALWAYS|active_automation_id/);
 });
 
 test('B.1A serializa ownership e endpoint ativo com locks transacionais', () => {
   const repository = fs.readFileSync(path.join(__dirname, '..', 'services', 'automation-webhook-repository.js'), 'utf8');
   assert.match(repository, /FROM automations WHERE id = \? AND owner_user_id = \? FOR UPDATE/);
-  assert.match(repository, /revoked_at IS NULL[\s\S]*FOR UPDATE/);
+  assert.match(repository, /JOIN automation_webhook_active[\s\S]*revoked_at IS NULL[\s\S]*FOR UPDATE/);
 });
 
 test('B.1A mantém somente rotas administrativas e não cria endpoint inbound público', () => {

@@ -40,8 +40,9 @@ async function ownedAutomation(connection, userId, automationId) {
 async function currentEndpoint(connection, automationId, lock = false) {
   const [rows] = await connection.execute(
     `SELECT id, automation_id, owner_user_id, enabled, revoked_at, created_at, updated_at
-     FROM automation_webhook_endpoints
-     WHERE automation_id = ? AND revoked_at IS NULL
+     FROM automation_webhook_endpoints e
+     JOIN automation_webhook_active a ON a.endpoint_id = e.id
+     WHERE a.automation_id = ? AND e.revoked_at IS NULL
      LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
     [automationId]
   );
@@ -71,6 +72,15 @@ async function createWebhookEndpoint(userId, automationId) {
       throw new AutomationError(500, 'Nao foi possivel criar o endpoint de webhook.');
     }
     const endpoint = { id: Number(result.insertId), automation_id: automationId, enabled: 1, revoked_at: null };
+    try {
+      await connection.execute(
+        'INSERT INTO automation_webhook_active (automation_id, endpoint_id) VALUES (?, ?)',
+        [automationId, endpoint.id]
+      );
+    } catch (error) {
+      if (error?.code === 'ER_DUP_ENTRY') throw new AutomationError(409, 'Endpoint de webhook ja existe.');
+      throw new AutomationError(500, 'Nao foi possivel criar o endpoint de webhook.');
+    }
     return { created: true, endpoint: safeEndpoint(endpoint), token };
   });
 }
@@ -116,6 +126,10 @@ async function revokeWebhookEndpoint(userId, automationId) {
     await connection.execute(
       'UPDATE automation_webhook_endpoints SET enabled = 0, revoked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [endpoint.id]
+    );
+    await connection.execute(
+      'DELETE FROM automation_webhook_active WHERE automation_id = ? AND endpoint_id = ?',
+      [automationId, endpoint.id]
     );
     return { revoked: true };
   });
