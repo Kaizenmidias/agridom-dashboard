@@ -21,7 +21,13 @@ const AUDIT_CATALOG = {
 const finiteNumber = (value) => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const nonNegative = (value) => { const number = finiteNumber(value); return number != null && number >= 0 ? number : null; };
 const metric = (value) => nonNegative(value);
-const text = (value) => typeof value === 'string' && value.trim() ? value.trim().slice(0, 500) : null;
+const text = (value) => typeof value === 'string' && value.trim() ? value.trim().replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/gi, '$1').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').slice(0, 500) : null;
+function summarizeAuditMetadata(audits) {
+  const entries = audits && typeof audits === 'object' && !Array.isArray(audits) ? Object.entries(audits) : [];
+  const normalized = entries.map(([id, value]) => ({ id: String(id).slice(0, 120), score: finiteNumber(value?.score), scoreDisplayMode: text(value?.scoreDisplayMode), displayValue: text(value?.displayValue), hasDetails: Boolean(value?.details && typeof value.details === 'object' && !Array.isArray(value.details)), detailsType: text(value?.details?.type), hasOverallSavingsMs: nonNegative(value?.details?.overallSavingsMs) !== null, hasOverallSavingsBytes: nonNegative(value?.details?.overallSavingsBytes) !== null })).sort((a, b) => a.id.localeCompare(b.id));
+  const maxAudits = 250;
+  return { auditCount: normalized.length, reportedAuditCount: Math.min(normalized.length, maxAudits), truncated: normalized.length > maxAudits, audits: normalized.slice(0, maxAudits) };
+}
 const auditSeverity = (audit) => { const score = finiteNumber(audit?.score); const savingsMs = nonNegative(audit?.details?.overallSavingsMs); const savingsBytes = nonNegative(audit?.details?.overallSavingsBytes); return (score != null && score < 0.5) || (savingsMs != null && savingsMs >= 1000) ? 'high' : (score != null && score < 0.9) || (savingsMs != null && savingsMs > 0) || (savingsBytes != null && savingsBytes > 0) ? 'medium' : 'recommended'; };
 const auditIsProblematic = (audit) => audit?.scoreDisplayMode !== 'informative' && (audit?.score == null || audit.score < 0.9 || nonNegative(audit?.details?.overallSavingsMs) > 0 || nonNegative(audit?.details?.overallSavingsBytes) > 0);
 
@@ -191,4 +197,4 @@ function classifyPageSpeedError(error) {
   return 'invalid_response';
 }
 
-module.exports = { CACHE_DAYS, MAX_ATTEMPTS, acquirePageSpeedAnalysis, classifyPageSpeedError, normalizePageSpeedResponse, normalizeScore, normalizeWebsiteUrl, persistPageSpeedAnalysis, recordPageSpeedFailure, sanitizePageSpeedError, schedulePageSpeedAnalysis };
+module.exports = { CACHE_DAYS, MAX_ATTEMPTS, acquirePageSpeedAnalysis, classifyPageSpeedError, normalizePageSpeedResponse, normalizeScore, normalizeWebsiteUrl, persistPageSpeedAnalysis, recordPageSpeedFailure, sanitizePageSpeedError, schedulePageSpeedAnalysis, summarizeAuditMetadata };

@@ -53,3 +53,10 @@ test('diagnostics keeps Performance exclusive and preserves mixed-content semant
   assert.doesNotMatch(diagnosticsSource, /label="Performance".*Analisar performance/);
   assert.match(diagnosticsSource, /label="Conteúdo misto" value=\{security\.mixedContent\} negative/);
 });
+
+test('diagnostics removes the not-measured limitation after completed Performance', () => {
+  assert.match(diagnosticsSource, /\["pending", "processing", "completed"\]\.includes\(performanceState\?\.status/);
+  assert.match(diagnosticsSource, /Diagnóstico do Lighthouse/);
+  assert.match(diagnosticsSource, /<span className="font-semibold">Evidência:<\/span>/);
+  assert.doesNotMatch(diagnosticsSource, /dangerouslySetInnerHTML/);
+});

@@ -1,10 +1,12 @@
 const net = require('node:net');
 const { isBlockedAddress, validateUrl } = require('./website-enrichment-ssrf');
 const { adaptGooglePageSpeedResponse } = require('./pagespeed-google-adapter');
+const { summarizeAuditMetadata } = require('./pagespeed-performance');
 
 const GOOGLE_ENDPOINT = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 const PAGE_SPEED_TIMEOUT_MS = 90_000;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
+const defaultAuditLogger = process.env.NODE_ENV === 'production' ? console.info : null;
 
 const errorWith = (code, classification, message, statusCode = null, providerCode = null) => Object.assign(new Error(message), { code, classification, statusCode, providerCode });
 const safeProviderCode = (value) => String(value || '').replace(/[^A-Z0-9_.:-]/gi, '').slice(0, 80) || null;
@@ -30,7 +32,7 @@ function providerErrorFrom(error) {
   return errorWith('PAGESPEED_NETWORK_ERROR', 'transient', 'PageSpeed request failed.');
 }
 
-async function runGooglePageSpeed({ url, strategy = 'mobile', apiKey, transport, resolve } = {}) {
+async function runGooglePageSpeed({ url, strategy = 'mobile', apiKey, transport, resolve, auditLogger = defaultAuditLogger } = {}) {
   if (strategy !== 'mobile') throw errorWith('PAGESPEED_STRATEGY_INVALID', 'invalid_response', 'Only mobile PageSpeed analysis is supported.');
   if (typeof apiKey !== 'string' || !apiKey.trim()) throw errorWith('PAGESPEED_API_KEY_MISSING', 'configuration', 'PageSpeed API key is not configured.');
   if (typeof transport !== 'function') throw errorWith('PAGESPEED_TRANSPORT_REQUIRED', 'configuration', 'PageSpeed transport must be injected.');
@@ -62,6 +64,8 @@ async function runGooglePageSpeed({ url, strategy = 'mobile', apiKey, transport,
   }
   let payload;
   try { payload = JSON.parse(body || ''); } catch { throw errorWith('PAGESPEED_INVALID_RESPONSE', 'invalid_response', 'PageSpeed response was not valid JSON.', statusCode); }
+  const audits = payload?.lighthouseResult?.audits || {};
+  if (typeof auditLogger === 'function') auditLogger('[PAGESPEED_AUDIT_SUMMARY]', summarizeAuditMetadata(audits));
   try {
     const normalized = adaptGooglePageSpeedResponse(payload, strategy);
     if (!normalized || normalized.status === 'failed') throw errorWith('PAGESPEED_INVALID_RESPONSE', 'invalid_response', 'PageSpeed response contained no usable result.', statusCode);

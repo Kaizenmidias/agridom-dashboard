@@ -14,7 +14,7 @@ let activeCount = 0;
 
 const finite = (value) => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const nonNegative = (value) => { const number = finite(value); return number != null && number >= 0 ? number : null; };
-const text = (value) => typeof value === 'string' && value.trim() ? value.trim().slice(0, 500) : null;
+const text = (value) => typeof value === 'string' && value.trim() ? value.trim().replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/gi, '$1').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').slice(0, 500) : null;
 const audit = (audits, id) => audits?.[id] && typeof audits[id] === 'object' ? audits[id] : null;
 const auditMetric = (audits, id) => nonNegative(audit(audits, id)?.numericValue);
 const safeErrorCode = (value) => String(value || 'PAGESPEED_REQUEST_FAILED').replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80) || 'PAGESPEED_REQUEST_FAILED';
