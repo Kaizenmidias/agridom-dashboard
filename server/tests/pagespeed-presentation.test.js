@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'services', 'leads', 'pagespeed-performance-presentation.ts'), 'utf8');
 const detailSource = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'pages', 'commercial', 'LeadDetailPage.tsx'), 'utf8');
+const diagnosticsSource = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'pages', 'commercial', 'WebsiteDiagnosticsPage.tsx'), 'utf8');
 
 test('PageSpeed presentation handles statuses, score and metric nullability', () => {
   assert.match(source, /unknown:\s*"Indisponível"/);
@@ -44,4 +45,11 @@ test('Lead detail keeps PageSpeed independent and clears stale performance state
   assert.match(detailSource, /setWebsitePerformance\(null\);\s*setPerformanceLoading\(true\)/);
   assert.match(detailSource, /\}<PageSpeedSection website=\{website\}/);
   assert.match(detailSource, /if \(active\) setWebsitePerformance\(payload\)/);
+});
+
+test('diagnostics keeps Performance exclusive and preserves mixed-content semantics', () => {
+  assert.match(diagnosticsSource, /PerformanceSection/);
+  assert.match(diagnosticsSource, /sm:grid-cols-2 lg:grid-cols-4/);
+  assert.doesNotMatch(diagnosticsSource, /label="Performance".*Analisar performance/);
+  assert.match(diagnosticsSource, /label="Conteúdo misto" value=\{security\.mixedContent\} negative/);
 });

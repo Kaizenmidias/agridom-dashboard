@@ -7,12 +7,23 @@ const CACHE_DAYS = 14;
 const RETRY_DELAY_MINUTES = 5;
 const MAX_OPPORTUNITIES = 12;
 // Deliberately empty until versioned provider fixtures confirm the exact audit contract.
-const OPPORTUNITY_IDS = new Set();
+const AUDIT_CATALOG = {
+  'render-blocking-resources': { category: 'renderização', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Adie recursos não essenciais e mantenha o CSS crítico disponível para a primeira renderização.' },
+  'unused-javascript': { category: 'javascript', affectedMetrics: ['TBT', 'LCP'], recommendation: 'Reduza JavaScript não utilizado e carregue scripts não essenciais somente quando necessário.' },
+  'unused-css-rules': { category: 'css', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Remova CSS não utilizado e evite folhas de estilo desnecessárias no carregamento inicial.' },
+  'uses-optimized-images': { category: 'imagens', affectedMetrics: ['LCP'], recommendation: 'Comprima imagens e utilize dimensões e formatos próximos ao uso real.' },
+  'uses-responsive-images': { category: 'imagens', affectedMetrics: ['LCP'], recommendation: 'Entregue imagens responsivas dimensionadas para o viewport.' },
+  'uses-text-compression': { category: 'rede', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Habilite compressão de texto para reduzir o payload transferido.' },
+  'uses-long-cache-ttl': { category: 'cache', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Configure cache de longa duração para arquivos estáticos versionados.' },
+  'font-display': { category: 'fontes', affectedMetrics: ['FCP', 'LCP'], recommendation: 'Configure font-display para reduzir bloqueios durante o carregamento das fontes.' },
+};
 
 const finiteNumber = (value) => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const nonNegative = (value) => { const number = finiteNumber(value); return number != null && number >= 0 ? number : null; };
 const metric = (value) => nonNegative(value);
 const text = (value) => typeof value === 'string' && value.trim() ? value.trim().slice(0, 500) : null;
+const auditSeverity = (audit) => { const score = finiteNumber(audit?.score); const savingsMs = nonNegative(audit?.details?.overallSavingsMs); const savingsBytes = nonNegative(audit?.details?.overallSavingsBytes); return (score != null && score < 0.5) || (savingsMs != null && savingsMs >= 1000) ? 'high' : (score != null && score < 0.9) || (savingsMs != null && savingsMs > 0) || (savingsBytes != null && savingsBytes > 0) ? 'medium' : 'recommended'; };
+const auditIsProblematic = (audit) => audit?.scoreDisplayMode !== 'informative' && (audit?.score == null || audit.score < 0.9 || nonNegative(audit?.details?.overallSavingsMs) > 0 || nonNegative(audit?.details?.overallSavingsBytes) > 0);
 
 function normalizeScore(value) {
   const number = finiteNumber(value);
@@ -45,13 +56,23 @@ function normalizeField(field) {
 
 function normalizeOpportunities(audits) {
   if (!audits || typeof audits !== 'object') return [];
-  return Object.entries(audits).filter(([id]) => OPPORTUNITY_IDS.has(id)).slice(0, MAX_OPPORTUNITIES).map(([id, value]) => ({
+  const items = Object.entries(audits).filter(([id, value]) => AUDIT_CATALOG[id] && auditIsProblematic(value)).map(([id, value]) => ({
     id,
+    auditId: id,
     title: text(value?.title) || id,
     description: text(value?.description),
+    category: AUDIT_CATALOG[id].category,
+    severity: auditSeverity(value),
+    score: finiteNumber(value?.score),
+    displayValue: text(value?.displayValue),
+    affectedMetrics: AUDIT_CATALOG[id].affectedMetrics,
+    recommendation: AUDIT_CATALOG[id].recommendation,
+    evidence: text(value?.details?.headings?.[0]?.text),
     savingsMs: nonNegative(value?.details?.overallSavingsMs),
     savingsBytes: nonNegative(value?.details?.overallSavingsBytes),
   }));
+  const severityRank = { high: 0, medium: 1, recommended: 2 };
+  return [...new Map(items.map((item) => [item.auditId, item])).values()].sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (b.savingsMs || 0) - (a.savingsMs || 0) || (b.savingsBytes || 0) - (a.savingsBytes || 0) || a.auditId.localeCompare(b.auditId)).slice(0, MAX_OPPORTUNITIES);
 }
 
 function normalizePageSpeedResponse(payload, strategy = 'mobile') {
