@@ -44,6 +44,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -74,6 +85,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   ACTION_CATALOG,
+  actionRequiresLead,
   AVAILABILITY_LABELS,
   CATEGORY_LABELS,
   type ActionCatalogItem,
@@ -88,6 +100,7 @@ import {
   automationsAPI,
   type AutomationDefinition,
   type AutomationVersion,
+  type AutomationWebhookEndpoint,
 } from "@/services/automations";
 
 type BuilderType = "trigger" | "condition" | "wait" | "action" | "finish";
@@ -100,7 +113,20 @@ export type BuilderNode = {
   y: number;
   next?: string | null;
   branches?: { yes?: string | null; no?: string | null };
+  compatibilityError?: string;
+  readOnly?: boolean;
 };
+
+function markWebhookCompatibility(nodes: BuilderNode[]) {
+  const webhook = nodes.some((node) => node.type === "trigger" && String(node.config.triggerType) === "webhook.received");
+  if (!webhook) return nodes.map(({ compatibilityError: _ignored, ...node }) => node);
+  return nodes.map((node) => {
+    if (node.type === "condition") return { ...node, compatibilityError: "Este tipo de condição ainda não pode ser usado com o gatilho Webhook." };
+    if (node.type === "action" && actionRequiresLead(String(node.config.actionType))) return { ...node, compatibilityError: "Esta ação precisa de um Lead e não pode ser usada com o gatilho Webhook." };
+    const { compatibilityError: _ignored, ...clean } = node;
+    return clean;
+  });
+}
 
 const triggers: Record<string, string> = {
   "lead.added_to_folder": "Novo lead na lista",
@@ -114,6 +140,7 @@ const triggers: Record<string, string> = {
   "lead.converted": "Lead convertido",
   "activity.created": "Atividade criada",
   "activity.completed": "Atividade concluida",
+  "webhook.received": "Webhook",
 };
 const UNCONFIGURED_TRIGGER = "__unconfigured__";
 const triggerLabel = (value: string) =>
@@ -349,6 +376,8 @@ function flowDefinition(definition: AutomationDefinition, canonicalTriggerType?:
       addFlowEdge(node.id, node.data.branches?.no, "no");
     }
   });
+  const compatible = markWebhookCompatibility(nodes.map((node) => node.data));
+  nodes.forEach((node, index) => { node.data = { ...node.data, compatibilityError: compatible[index].compatibilityError }; });
   return { nodes, edges };
 }
 
@@ -401,7 +430,7 @@ function KaizenFlowNode({ data, selected }: NodeProps<FlowNode>) {
             ? `${String(data.config.accountName || (data.config.accountId ? `Conta #${data.config.accountId}` : "Conta não selecionada"))} · Cadência: ${String(data.config.cadenceValue || 1)} ${String(data.config.cadenceUnit || "minutes").replace("seconds", "segundos").replace("minutes", "minutos").replace("hours", "horas").replace("days", "dias")}`
             : action?.description || "Configure esta ação"
           : "Fim deste caminho";
-  const incomplete = (data.type === "trigger" && String(data.config.triggerType) === "lead.added_to_folder" && !Number(data.config.folderId)) || (data.type === "action" && ["lead.add_tag", "lead.remove_tag"].includes(String(data.config.actionType)) && !data.config.labelId);
+  const incomplete = Boolean(data.compatibilityError) || (data.type === "trigger" && String(data.config.triggerType) === "lead.added_to_folder" && !Number(data.config.folderId)) || (data.type === "action" && ["lead.add_tag", "lead.remove_tag"].includes(String(data.config.actionType)) && !data.config.labelId);
   return (
     <div className={`group relative w-[264px] rounded-xl border bg-[#181A1F] p-4 text-[#F4F5F7] shadow-xl transition hover:-translate-y-0.5 hover:shadow-2xl ${meta.color} ${selected ? "ring-2 ring-[#B7FF3C] ring-offset-2 ring-offset-[#0E1013]" : ""}`}>
       {data.type !== "trigger" ? <Handle type="target" position={Position.Left} id="input" className="!h-3 !w-3 !border-2 !border-[#0A0A0A] !bg-[#B7FF3C]" /> : null}
@@ -415,7 +444,7 @@ function KaizenFlowNode({ data, selected }: NodeProps<FlowNode>) {
       {data.type === "condition" ? <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]"><span className="text-emerald-300">SIM</span><span className="text-red-300">NÃO</span></div> : null}
       {data.type === "action" ? <p className="mt-2 truncate text-xs text-[#9CA3AF]">{String(data.config.actionType || "Ação interna")}</p> : null}
       <p className="mt-3 min-h-8 text-xs leading-4 text-[#A9B0B8]">{summary}</p>
-      {incomplete ? <p className="mt-3 flex items-center gap-1.5 text-[11px] text-[#FFD21F]"><Settings2 className="h-3.5 w-3.5" />Configuração necessária</p> : null}
+      {data.compatibilityError ? <p className="mt-3 flex items-start gap-1.5 text-[11px] text-[#FFD21F]"><Settings2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />{data.compatibilityError}</p> : incomplete ? <p className="mt-3 flex items-center gap-1.5 text-[11px] text-[#FFD21F]"><Settings2 className="h-3.5 w-3.5" />Configuração necessária</p> : null}
       {data.type === "trigger" || data.type === "action" || data.type === "wait" ? <Handle type="source" position={Position.Right} id="output" className="!h-4 !w-4 !border-2 !border-[#0A0A0A] !bg-[#B7FF3C] opacity-70 transition group-hover:opacity-100" /> : null}
       {data.type === "condition" ? <><span className="absolute -right-12 top-[34%] text-[10px] font-semibold text-emerald-300">SIM</span><Handle type="source" position={Position.Right} id="yes" style={{ top: "36%" }} className="!h-4 !w-4 !border-2 !border-[#0A0A0A] !bg-[#6FD6B5] opacity-70 transition group-hover:opacity-100" /><span className="absolute -right-12 top-[68%] text-[10px] font-semibold text-red-300">NÃO</span><Handle type="source" position={Position.Right} id="no" style={{ top: "70%" }} className="!h-4 !w-4 !border-2 !border-[#0A0A0A] !bg-[#DC3035] opacity-70 transition group-hover:opacity-100" /></> : null}
     </div>
@@ -451,7 +480,9 @@ function FreeformAutomationBuilder(props: {
   const history = useRef<Array<{ nodes: FlowNode[]; edges: Edge[] }>>([]);
   const future = useRef<Array<{ nodes: FlowNode[]; edges: Edge[] }>>([]);
   const { screenToFlowPosition, fitView } = useReactFlow();
-
+  useEffect(() => {
+    setNodes((current) => current.map((node) => node.data.readOnly === props.readOnly ? node : { ...node, data: { ...node.data, readOnly: props.readOnly } }));
+  }, [props.readOnly]);
   useEffect(() => {
     void Promise.all([commercialEntitiesAPI.getPipelines(), commercialEntitiesAPI.getLabels(), commercialEntitiesAPI.getUsers()]).then(([pipelineData, labelData, userData]) => {
       setPipelines(pipelineData.pipelines); setStages(pipelineData.stages); setLabels(labelData.labels); setUsers(userData.users);
@@ -481,7 +512,11 @@ function FreeformAutomationBuilder(props: {
       ? { ...patch, config: { ...patch.config, cadenceValue: 1, cadenceUnit: "minutes" } }
       : patch;
     setDirty(true);
-    setNodes((current) => current.map((node) => node.id === selectedId ? { ...node, data: { ...node.data, ...dataPatch } } : node));
+    setNodes((current) => {
+      const updated = current.map((node) => node.id === selectedId ? { ...node, data: { ...node.data, ...dataPatch } } : node);
+      const compatible = markWebhookCompatibility(updated.map((node) => node.data));
+      return updated.map((node, index) => ({ ...node, data: compatible[index] }));
+    });
   };
   const updateConfig = (key: string, value: unknown) => updateSelected({ config: { ...(selected?.data.config || {}), [key]: value }, label: key === "actionType" ? ACTION_CATALOG.find((item) => item.id === String(value))?.name || "Executar ação" : selected?.data.label });
   const validConnection = (connection: Connection, ignoredEdgeId?: string) => {
@@ -498,6 +533,8 @@ function FreeformAutomationBuilder(props: {
   const handleEdgesChange = (changes: Parameters<typeof onEdgesChange>[0]) => { if (changes.some((change) => change.type === "remove") && !props.readOnly) remember(); onEdgesChange(changes); };
   const addNodeAt = (kind: string, position: { x: number; y: number }, actionId?: string) => {
     if (props.readOnly) return;
+    if (kind === "condition" && nodes.some((node) => node.data.type === "trigger" && String(node.data.config.triggerType) === "webhook.received")) { toast.error("Condições para dados de Webhook serão adicionadas em uma próxima etapa."); return; }
+    if (kind === "action" && actionId && nodes.some((node) => node.data.type === "trigger" && String(node.data.config.triggerType) === "webhook.received") && actionRequiresLead(actionId)) { toast.error("Esta ação precisa de um Lead. O gatilho Webhook ainda não cria ou vincula um Lead."); return; }
     const type = kind === "trigger" ? "trigger" : kind === "condition" ? "condition" : kind === "wait" ? "wait" : "action";
     if (type === "trigger" && nodes.some((node) => node.data.type === "trigger")) { toast.error("Esta automação já possui um gatilho."); return; }
     const id = `${type}_${Date.now()}`; const config = type === "trigger" ? { triggerType: actionId || props.triggerType || UNCONFIGURED_TRIGGER } : type === "action" ? defaultActionConfig(actionId) : defaultConfig(type);
@@ -526,7 +563,7 @@ function FreeformAutomationBuilder(props: {
       toast.error(error instanceof Error ? error.message : "Não foi possível testar o fluxo.");
     }
   };
-  const toolButton = (label: string, kind: string, actionId?: string) => <button type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/kaizen-node", kind); if (actionId) event.dataTransfer.setData("application/kaizen-action", actionId); }} onClick={() => addTool(kind, actionId)} className="flex w-full items-center gap-2 rounded-md border border-white/10 bg-[#0A0A0A]/60 px-2.5 py-2 text-left text-xs transition hover:border-[#B7FF3C]/70 hover:bg-[#B7FF3C]/10"><span className="rounded bg-[#181A1F] p-1 text-[#B7FF3C]">{kind === "condition" ? <GitBranch className="h-3.5 w-3.5" /> : kind === "wait" ? <Clock3 className="h-3.5 w-3.5" /> : <Activity className="h-3.5 w-3.5" />}</span><span className="min-w-0 flex-1 truncate">{label}</span><span className="text-[10px] text-[#7E8792]">{kind === "action" ? "ação" : kind}</span></button>;
+  const toolButton = (label: string, kind: string, actionId?: string) => { const disabled = kind === "condition" && nodes.some((node) => node.data.type === "trigger" && String(node.data.config.triggerType) === "webhook.received"); return <button type="button" draggable={!disabled} disabled={disabled} title={disabled ? "Condições para dados de Webhook serão adicionadas em uma próxima etapa." : undefined} onDragStart={(event) => { event.dataTransfer.setData("application/kaizen-node", kind); if (actionId) event.dataTransfer.setData("application/kaizen-action", actionId); }} onClick={() => addTool(kind, actionId)} className="flex w-full items-center gap-2 rounded-md border border-white/10 bg-[#0A0A0A]/60 px-2.5 py-2 text-left text-xs transition hover:border-[#B7FF3C]/70 hover:bg-[#B7FF3C]/10 disabled:cursor-not-allowed disabled:opacity-50"><span className="rounded bg-[#181A1F] p-1 text-[#B7FF3C]">{kind === "condition" ? <GitBranch className="h-3.5 w-3.5" /> : kind === "wait" ? <Clock3 className="h-3.5 w-3.5" /> : <Activity className="h-3.5 w-3.5" />}</span><span className="min-w-0 flex-1 truncate">{label}</span><span className="text-[10px] text-[#7E8792]">{kind === "action" ? "ação" : kind}</span></button>; };
   return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#0A0A0A]">
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#181A1F] px-4 py-3"><div className="flex min-w-0 items-center gap-3">{props.onBack ? <Button size="sm" variant="ghost" title="Voltar para automações" onClick={requestBack}><ChevronLeft className="mr-1 h-4 w-4" />Automações</Button> : null}<div className="min-w-0 border-l border-white/10 pl-3"><p className="truncate text-sm font-semibold">{props.title || "Automação"}</p><span className="text-[11px] text-[#9CA3AF]">{props.draft ? (dirty ? "Alterações não salvas" : "Salvo") : "Somente leitura"}</span></div><Badge variant="outline" className="border-[#B7FF3C]/60 text-[#B7FF3C]">{props.draft ? (dirty ? "Alterações não salvas" : "Rascunho") : "Somente leitura"}</Badge></div><div className="flex items-center gap-1"><Button size="sm" variant="ghost" onClick={() => void testFlow()} disabled={props.readOnly}><Check className="mr-1 h-4 w-4" />Testar</Button><Button size="sm" variant="ghost" onClick={organize} disabled={props.readOnly}><LayoutDashboard className="mr-1 h-4 w-4" />Organizar</Button><Button size="sm" variant="ghost" onClick={() => void save()} disabled={props.readOnly || saving}><Save className="mr-1 h-4 w-4" />{saving ? "Salvando..." : "Salvar"}</Button>{props.onPublish ? <Button size="sm" onClick={() => void publishCurrent()} disabled={props.readOnly || saving}>Publicar</Button> : null}</div></div>
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row-reverse"><aside className="w-full shrink-0 border-b border-white/10 bg-[#181A1F] lg:w-[290px] lg:border-b-0 lg:border-l"><div className="flex items-center justify-between border-b border-white/10 px-4 py-3"><span className="text-sm font-semibold">{selected ? "Configuração do node" : "Ações"}</span>{selected ? <Button size="sm" variant="ghost" onClick={() => setSelectedId(null)}>Voltar</Button> : null}</div>{selected ? <div className="max-h-[630px] overflow-y-auto p-4"><NodeInspector node={selected.data} updateConfig={updateConfig} updateNode={updateSelected} triggers={triggers} actions={actions} labels={labels} users={users} pipelines={pipelines} stages={stages} /><div className="mt-4 flex gap-2"><Button size="sm" variant="outline" onClick={duplicateSelected}>Duplicar</Button><Button size="sm" variant="outline" onClick={disconnectSelected}>Desconectar</Button><Button size="sm" variant="ghost" onClick={deleteSelected}>Excluir</Button></div></div> : <div className="max-h-[630px] overflow-y-auto p-3"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar ação..." className="mb-3" /><details open><summary className="mb-2 cursor-pointer text-xs font-semibold uppercase tracking-wide text-[#B7FF3C]">Gatilhos</summary><div className="space-y-1">{Object.entries(triggers).map(([id, label]) => toolButton(label, "trigger", id))}</div></details><details open className="mt-4"><summary className="mb-2 cursor-pointer text-xs font-semibold uppercase tracking-wide text-[#B7FF3C]">Lógica</summary><div className="space-y-1">{toolButton("Condição", "condition")}{toolButton("Aguardar", "wait")}</div></details><details open className="mt-4"><summary className="mb-2 cursor-pointer text-xs font-semibold uppercase tracking-wide text-[#B7FF3C]">Ações</summary><div className="space-y-1">{matches.map((item) => toolButton(item.name, "action", item.id))}</div></details></div>}</aside><main className="relative min-h-[620px] min-w-0 flex-1 bg-[#0E1013]" onDrop={onDrop} onDragOver={(event) => event.preventDefault()}><ReactFlow nodes={nodes} edges={edges} nodeTypes={flowNodeTypes} onNodesChange={onNodesChange} onEdgesChange={handleEdgesChange} onConnect={onConnect} onReconnect={onReconnect} onNodeClick={(_event, node) => { setSelectedId(node.id); setSelectedEdgeId(null); }} onEdgeClick={(_event, edge) => { if (props.readOnly) return; remember(); setEdges((current) => current.filter((item) => item.id !== edge.id)); setSelectedEdgeId(null); setSelectedId(null); }} onPaneClick={() => { setSelectedId(null); setSelectedEdgeId(null); }} onNodeDragStart={() => remember()} fitView deleteKeyCode={null} nodesDraggable={!props.readOnly} nodesConnectable={!props.readOnly} edgesFocusable><Background color="#2A2D33" gap={24} size={1} /><Controls className="!border-white/10 !bg-[#181A1F]" /><MiniMap pannable zoomable className="!bg-[#181A1F]" nodeColor={(node) => node.data.type === "condition" ? "#A63DA5" : node.data.type === "trigger" ? "#B7FF3C" : "#4D6EDB"} /></ReactFlow>{!nodes.length ? <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="text-center"><p className="text-lg font-semibold text-[#F4F5F7]">Canvas vazio</p><p className="mt-1 text-sm text-[#9CA3AF]">Arraste um bloco da biblioteca para começar.</p></div></div> : null}<div className="absolute left-3 top-3 z-10 flex gap-1 rounded-md border border-white/10 bg-[#181A1F]/90 p-1"><Button size="icon" variant="ghost" title="Ajustar visão" onClick={() => fitView({ padding: 0.2 })}><Square className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Organizar nós" onClick={organize}><LayoutDashboard className="h-4 w-4" /></Button></div></main></div>
@@ -668,6 +705,8 @@ function LegacyAutomationBuilder({
     setPickerOpen(true);
   };
   const chooseAction = (item: ActionCatalogItem) => {
+    const webhookFlow = nodes.some((node) => node.data.type === "trigger" && String(node.data.config.triggerType) === "webhook.received");
+    if (webhookFlow && actionRequiresLead(item.id)) { toast.error("Esta ação precisa de um Lead. O gatilho Webhook ainda não cria ou vincula um Lead."); return; }
     if (item.id === "wait.period") addNode("wait", pickerAfter);
     else if (
       [
@@ -1137,6 +1176,7 @@ function LegacyAutomationBuilder({
           onQueryChange={setPickerQuery}
           onOpenChange={setPickerOpen}
           onChoose={chooseAction}
+          webhookFlow={nodes.some((node) => node.data.type === "trigger" && String(node.data.config.triggerType) === "webhook.received")}
         />
       </div>
     </div>
@@ -1149,12 +1189,14 @@ function ActionPicker({
   onQueryChange,
   onOpenChange,
   onChoose,
+  webhookFlow,
 }: {
   open: boolean;
   query: string;
   onQueryChange: (value: string) => void;
   onOpenChange: (open: boolean) => void;
   onChoose: (item: ActionCatalogItem) => void;
+  webhookFlow: boolean;
 }) {
   const normalized = query.trim().toLowerCase();
   const matches = ACTION_CATALOG.filter((item) =>
@@ -1198,7 +1240,8 @@ function ActionPicker({
                   const Icon = item.icon;
                   const disabled =
                     item.availability !== "available" &&
-                    item.availability !== "coming_soon";
+                    item.availability !== "coming_soon" ||
+                    (webhookFlow && actionRequiresLead(item.id));
                   return (
                     <button
                       key={item.id}
@@ -1217,6 +1260,7 @@ function ActionPicker({
                         <span className="mt-1 block text-xs text-muted-foreground">
                           {item.description}
                         </span>
+                        {webhookFlow && actionRequiresLead(item.id) ? <span className="mt-1 block text-xs text-amber-200">Esta ação precisa de um Lead. O gatilho Webhook ainda não cria ou vincula um Lead.</span> : null}
                         <Badge
                           variant="outline"
                           className={`mt-2 text-[10px] ${item.availability === "requires_integration" ? "border-amber-400/50 text-amber-300" : item.availability === "coming_soon" ? "border-muted-foreground/40 text-muted-foreground" : "border-primary/50 text-primary"}`}
@@ -1244,16 +1288,55 @@ function ActionPicker({
   );
 }
 
+function WebhookConfiguration({
+  endpoint,
+  rawToken,
+  loading,
+  busy,
+  error,
+  onCreate,
+  onRegenerate,
+  onCopy,
+  readOnly,
+}: {
+  endpoint: AutomationWebhookEndpoint | null;
+  rawToken: string | null;
+  loading: boolean;
+  busy: boolean;
+  error: string | null;
+  onCreate: () => void;
+  onRegenerate: () => void;
+  onCopy: () => void;
+  readOnly?: boolean;
+}) {
+  const publicUrl = `${window.location.origin}/api/webhooks/automations`;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  if (loading) return <p className="rounded-md border border-border p-3 text-xs text-muted-foreground">Carregando endpoint...</p>;
+  return <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+    <div><p className="text-sm font-semibold">Configuração do Webhook</p><p className="mt-1 text-xs text-muted-foreground">Recebe dados enviados por sistemas externos.</p></div>
+    {error ? <p className="text-xs text-red-300">{error}</p> : null}
+    {!endpoint ? <><p className="text-xs text-amber-200">Webhook ainda não configurado.</p><Button size="sm" onClick={onCreate} disabled={busy || readOnly}><Plus className="mr-1 h-3.5 w-3.5" />Criar endpoint</Button></> : <>
+      <p className="text-xs text-emerald-300">Endpoint configurado · #{endpoint.id}</p>
+      <div className="space-y-1 rounded border border-border bg-background/40 p-2 text-[11px]"><p><strong>Método:</strong> POST</p><p className="break-all"><strong>URL:</strong> {publicUrl}</p><p><strong>Content-Type:</strong> application/json</p><p><strong>Header:</strong> X-Webhook-Token</p></div>
+      {rawToken ? <div className="space-y-2 rounded border border-primary/40 bg-primary/10 p-2"><p className="text-xs font-semibold">Token do webhook</p><p className="text-[11px] text-amber-200">Copie este token agora. Por segurança, ele não poderá ser visualizado novamente depois que você sair ou recarregar esta página.</p><div className="flex gap-2"><Input readOnly value={rawToken} className="font-mono text-xs" /><Button size="sm" variant="outline" onClick={onCopy}><Copy className="mr-1 h-3.5 w-3.5" />Copiar token</Button></div></div> : <p className="text-xs text-muted-foreground">O token não pode ser exibido novamente. Se você não possui mais o token, gere um novo.</p>}
+      <Button size="sm" variant="outline" onClick={() => setConfirmOpen(true)} disabled={busy || readOnly}><RefreshCw className="mr-1 h-3.5 w-3.5" />{busy ? "Regenerando..." : "Regenerar token"}</Button>
+    </>}
+    <div className="space-y-1 border-t border-border pt-2 text-xs text-muted-foreground"><p>Os dados recebidos podem ser usados nos próximos passos com variáveis.</p><code className="block">&#123;&#123;webhook.body.name&#125;&#125;</code><code className="block">&#123;&#123;webhook.body.email&#125;&#125;</code><p>O nome deve corresponder ao JSON enviado. Índices de arrays não são suportados.</p></div>
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Regenerar token do webhook?</AlertDialogTitle><AlertDialogDescription>Gerar um novo token invalidará imediatamente o token atual. Integrações que ainda usam o token anterior deixarão de funcionar.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { setConfirmOpen(false); onRegenerate(); }}>Regenerar token</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+  </div>;
+}
+
 function NodeInspector({
   node,
-  updateConfig,
-  updateNode,
+  updateConfig: updateConfigExternal,
+  updateNode: updateNodeExternal,
   triggers,
   actions,
   labels,
   users,
   pipelines,
   stages,
+  readOnly = false,
 }: {
   node: BuilderNode;
   updateConfig: (key: string, value: unknown) => void;
@@ -1264,12 +1347,42 @@ function NodeInspector({
   users: UserOption[];
   pipelines: PipelineDefinition[];
   stages: PipelineStage[];
+  readOnly?: boolean;
 }) {
   const [whatsappAccounts, setWhatsappAccounts] = useState<WhatsAppAccount[]>([]);
   const [leadFolders, setLeadFolders] = useState<LeadFolder[]>([]);
   const [leadFoldersLoading, setLeadFoldersLoading] = useState(false);
   const [leadFoldersError, setLeadFoldersError] = useState(false);
+  const inspectorReadOnly = readOnly || Boolean(node.readOnly);
+  const updateConfig = (key: string, value: unknown) => { if (!inspectorReadOnly) updateConfigExternal(key, value); };
+  const updateNode = (patch: Partial<BuilderNode>) => { if (!inspectorReadOnly) updateNodeExternal(patch); };
   const actionType = String(node.config.actionType || "lead.add_tag");
+  const { automationId: routeAutomationId } = useParams();
+  const automationId = Number(routeAutomationId);
+  const isWebhookTrigger = node.type === "trigger" && String(node.config.triggerType) === "webhook.received";
+  const [endpoint, setEndpoint] = useState<AutomationWebhookEndpoint | null>(null);
+  const [rawToken, setRawToken] = useState<string | null>(null);
+  const [endpointLoading, setEndpointLoading] = useState(false);
+  const [endpointBusy, setEndpointBusy] = useState(false);
+  const [endpointError, setEndpointError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isWebhookTrigger || !Number.isSafeInteger(automationId) || automationId <= 0) return;
+    setEndpointLoading(true); setEndpointError(null);
+    void automationsAPI.getWebhookEndpoint(automationId).then((result) => setEndpoint(result.exists === false ? null : result)).catch(() => setEndpointError("Não foi possível carregar o endpoint.")).finally(() => setEndpointLoading(false));
+  }, [automationId, isWebhookTrigger]);
+  const createEndpoint = async () => {
+    setEndpointBusy(true); setEndpointError(null);
+    try { const result = await automationsAPI.createWebhookEndpoint(automationId); setEndpoint(result.endpoint); setRawToken(result.token); updateNode({ config: { ...node.config, webhookEndpointId: result.endpoint.id } }); }
+    catch (error) { setEndpointError(error instanceof Error ? error.message : "Não foi possível criar o endpoint."); }
+    finally { setEndpointBusy(false); }
+  };
+  const regenerateEndpoint = async () => {
+    setEndpointBusy(true); setEndpointError(null);
+    try { const result = await automationsAPI.regenerateWebhookEndpoint(automationId); setEndpoint(result.endpoint); setRawToken(result.token); }
+    catch (error) { setEndpointError(error instanceof Error ? error.message : "Não foi possível regenerar o token."); }
+    finally { setEndpointBusy(false); }
+  };
+  const copyToken = async () => { if (!rawToken) return; try { await navigator.clipboard.writeText(rawToken); toast.success("Token copiado."); } catch { toast.error("Não foi possível copiar o token."); } };
   useEffect(() => {
     if (actionType !== "whatsapp.send") return;
     void whatsappAPI.listAccounts().then((result) => setWhatsappAccounts(result.accounts.filter((account) => account.status === "connected"))).catch(() => setWhatsappAccounts([]));
@@ -1290,6 +1403,7 @@ function NodeInspector({
         <FieldLabel label="Evento">
           <Select
             value={String(node.config.triggerType || "__unconfigured__")}
+            disabled={inspectorReadOnly}
             onValueChange={(value) => updateNode({ config: value === "lead.added_to_folder" ? { triggerType: value } : { triggerType: value, folderId: undefined, folderName: undefined } })}
           >
             <SelectTrigger>
@@ -1305,6 +1419,7 @@ function NodeInspector({
             </SelectContent>
          </Select>
         </FieldLabel>
+        {isWebhookTrigger ? <WebhookConfiguration endpoint={endpoint} rawToken={rawToken} loading={endpointLoading} busy={endpointBusy} error={endpointError} onCreate={() => void createEndpoint()} onRegenerate={() => void regenerateEndpoint()} onCopy={() => void copyToken()} readOnly={inspectorReadOnly} /> : null}
         {String(node.config.triggerType) === "lead.added_to_folder" ? (
           <FieldLabel label="Lista">
             <Select value={String(node.config.folderId || "")} onValueChange={(value) => { const folder = leadFolders.find((item) => item.id === Number(value)); updateNode({ config: { ...node.config, folderId: Number(value), folderName: folder?.name } }); }}>

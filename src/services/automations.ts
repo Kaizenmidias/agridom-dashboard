@@ -64,6 +64,22 @@ export type AutomationRun = {
   correlation_id?: string | null;
 };
 
+export type AutomationWebhookEndpoint = {
+  id: number;
+  automationId: number;
+  enabled: boolean;
+  revoked: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  exists?: boolean;
+};
+
+export type AutomationWebhookResult = {
+  endpoint: AutomationWebhookEndpoint;
+  token: string | null;
+  created?: boolean;
+};
+
 function headers() {
   const token = localStorage.getItem("token");
   if (!token) throw new Error("Usuário não autenticado.");
@@ -109,4 +125,7 @@ export const automationsAPI = {
   allRuns: (page = 1) => requestAt<{ runs: AutomationRun[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }>("automation-runs", `?page=${page}&page_size=25`),
   getRun: (id: number) => requestAt<AutomationRun & { steps: unknown[]; jobs: unknown[] }>("automation-runs", `/${id}`),
   dryRun: (id: number, leadId: number, definition: AutomationDefinition) => request<{ dryRun: boolean; leadId: number; steps: unknown[]; writes: number; externalMessages: number }>(`/${id}/dry-run`, { method: "POST", body: JSON.stringify({ lead_id: leadId, definition }) }),
+  getWebhookEndpoint: (id: number) => request<AutomationWebhookEndpoint>(`/${id}/webhook-endpoint`),
+  createWebhookEndpoint: (id: number) => request<AutomationWebhookResult>(`/${id}/webhook-endpoint`, { method: "POST" }),
+  regenerateWebhookEndpoint: (id: number) => request<AutomationWebhookResult>(`/${id}/webhook-endpoint/regenerate`, { method: "POST" }),
 };

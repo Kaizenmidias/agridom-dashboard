@@ -41,6 +41,18 @@ export type ActionCatalogItem = {
   configSchema?: Record<string, unknown>;
 };
 
+const LEAD_REQUIRED_ACTIONS = new Set([
+  "lead.update_status", "lead.assign_user", "lead.remove_assignee", "lead.update_field",
+  "lead.add_note", "lead.add_tag", "lead.remove_tag", "lead.move_pipeline_stage",
+  "activity.create", "activity.create_task", "activity.create_call", "activity.create_follow_up",
+  "activity.complete", "notification.create", "email.send", "whatsapp.send",
+  "whatsapp.send_message", "whatsapp.send_template",
+]);
+
+export function actionRequiresLead(actionId: string) {
+  return LEAD_REQUIRED_ACTIONS.has(actionId);
+}
+
 export const ACTION_CATALOG: ActionCatalogItem[] = [
   {
     id: "lead.add_tag",
