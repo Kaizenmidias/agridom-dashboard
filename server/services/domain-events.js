@@ -108,7 +108,7 @@ async function dispatchDomainEvent(input, options = {}) {
         [eventUuid, idempotencyKey, input.type, validated.entityType, validated.entityId, actorUserId, JSON.stringify(validated.payload), correlationId, causationId, occurredAt.toISOString().slice(0, 19).replace('T', ' '), input.sourceAutomationId || null, Number(input.lineageDepth || 0)]
       );
       const [rows] = await connection.execute('SELECT * FROM automation_events WHERE id = ?', [result.insertId]);
-      console.info('Domain event persisted:', { type: input.type, event_uuid: eventUuid, entity_type: validated.entityType, entity_id: validated.entityId });
+      if (!options.suppressLog) console.info('Domain event persisted:', { type: input.type, event_uuid: eventUuid, entity_type: validated.entityType, entity_id: validated.entityId });
       return parseEvent(rows[0]);
     } catch (error) {
       if (error?.code === 'ER_DUP_ENTRY' && idempotencyKey) {

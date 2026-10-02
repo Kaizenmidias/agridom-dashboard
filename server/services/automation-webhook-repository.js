@@ -97,6 +97,19 @@ async function getWebhookEndpoint(userId, automationId) {
   return rows[0] ? safeEndpoint(rows[0]) : { exists: false };
 }
 
+async function findInboundEndpoint(connection, hash) {
+  const [rows] = await connection.execute(
+    `SELECT e.id, e.automation_id, e.owner_user_id, e.enabled, e.revoked_at, a.status AS automation_status
+     FROM automation_webhook_endpoints e
+     JOIN automation_webhook_active aa ON aa.endpoint_id = e.id AND aa.automation_id = e.automation_id
+     JOIN automations a ON a.id = e.automation_id AND a.owner_user_id = e.owner_user_id
+     WHERE e.token_hash = ? AND e.enabled = 1 AND e.revoked_at IS NULL AND a.status = 'active'
+     LIMIT 1`,
+    [hash]
+  );
+  return rows[0] || null;
+}
+
 async function regenerateWebhookEndpoint(userId, automationId) {
   return withTransaction(async (connection) => {
     const automation = await ownedAutomation(connection, userId, automationId);
@@ -135,4 +148,4 @@ async function revokeWebhookEndpoint(userId, automationId) {
   });
 }
 
-module.exports = { tokenHash, generateToken, safeEndpoint, createWebhookEndpoint, getWebhookEndpoint, regenerateWebhookEndpoint, revokeWebhookEndpoint };
+module.exports = { tokenHash, generateToken, safeEndpoint, createWebhookEndpoint, getWebhookEndpoint, findInboundEndpoint, regenerateWebhookEndpoint, revokeWebhookEndpoint };

@@ -30,10 +30,12 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Webhook-Token']
 };
 
 app.use(cors(corsOptions));
+const { automationWebhooksRouter } = require('./routes/automation-webhooks');
+app.use('/api/webhooks/automations', automationWebhooksRouter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
