@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { adaptGooglePageSpeedResponse } = require('../services/pagespeed-google-adapter');
 const { GOOGLE_ENDPOINT, MAX_RESPONSE_BYTES, PAGE_SPEED_TIMEOUT_MS, runGooglePageSpeed } = require('../services/pagespeed-google-provider');
+assert.equal(PAGE_SPEED_TIMEOUT_MS, 90_000);
 const { MAX_ATTEMPTS, acquirePageSpeedAnalysis, classifyPageSpeedError, normalizePageSpeedResponse, normalizeScore, normalizeWebsiteUrl, persistPageSpeedAnalysis, recordPageSpeedFailure, sanitizePageSpeedError, schedulePageSpeedAnalysis } = require('../services/pagespeed-performance');
 
 const validFixture = { lighthouseResult: { categories: { performance: { score: 0.82 } }, audits: {

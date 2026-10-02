@@ -3,7 +3,7 @@ const { isBlockedAddress, validateUrl } = require('./website-enrichment-ssrf');
 const { adaptGooglePageSpeedResponse } = require('./pagespeed-google-adapter');
 
 const GOOGLE_ENDPOINT = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
-const PAGE_SPEED_TIMEOUT_MS = 30000;
+const PAGE_SPEED_TIMEOUT_MS = 90_000;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 const errorWith = (code, classification, message, statusCode = null, providerCode = null) => Object.assign(new Error(message), { code, classification, statusCode, providerCode });
