@@ -1,5 +1,6 @@
 const { getPool } = require('../config/database');
 const { validateAutomationDefinition } = require('./automation-definition-validator');
+const { UNCONFIGURED_TRIGGER } = require('./automation-catalog');
 
 class AutomationError extends Error {
   constructor(status, message, details = []) {
@@ -50,9 +51,10 @@ async function writeAudit(connection, automationId, userId, action, metadata = {
 }
 
 async function createAutomation({ ownerUserId, userId, name, description, triggerType, definition }) {
-  const validation = validateAutomationDefinition(definition, { requireSteps: false });
+  const validation = validateAutomationDefinition(definition, { requireSteps: false, allowUnconfiguredTrigger: true });
   if (!validation.valid) throw new AutomationError(400, 'Definition invalida.', validation.errors);
-  if (validation.definition.trigger?.type !== triggerType) {
+  const definitionTrigger = validation.definition.trigger?.type || UNCONFIGURED_TRIGGER;
+  if (triggerType !== undefined && definitionTrigger !== triggerType) {
     throw new AutomationError(400, 'Trigger da definition deve ser igual ao trigger_type da automacao.');
   }
   if (String(name || '').trim().length > 150) throw new AutomationError(400, 'Nome da automacao deve ter no maximo 150 caracteres.');
@@ -61,7 +63,7 @@ async function createAutomation({ ownerUserId, userId, name, description, trigge
     const [automationResult] = await connection.execute(
       `INSERT INTO automations (owner_user_id, name, description, status, trigger_type, created_by, updated_by)
        VALUES (?, ?, ?, 'draft', ?, ?, ?)`,
-      [ownerUserId, name, description || null, triggerType, userId, userId]
+      [ownerUserId, name, description || null, definitionTrigger, userId, userId]
     );
     const automationId = automationResult.insertId;
     const [versionResult] = await connection.execute(
@@ -170,16 +172,14 @@ async function updateAutomation(userId, automationId, values) {
 }
 
 async function createVersion(userId, automationId, definition) {
-  const validation = validateAutomationDefinition(definition, { requireSteps: false });
+  const validation = validateAutomationDefinition(definition, { requireSteps: false, allowUnconfiguredTrigger: true });
   if (!validation.valid) throw new AutomationError(400, 'Definition invalida.', validation.errors);
 
   return withTransaction(async (connection) => {
     const automation = await ownedAutomation(connection, automationId, userId, true);
     if (!automation) throw new AutomationError(404, 'Automacao nao encontrada.');
     if (automation.status === 'archived') throw new AutomationError(409, 'Automacao arquivada nao aceita novas versoes.');
-    if (validation.definition.trigger?.type !== automation.trigger_type) {
-      throw new AutomationError(400, 'Trigger da definition deve ser igual ao trigger_type da automacao.');
-    }
+    const definitionTrigger = validation.definition.trigger?.type || UNCONFIGURED_TRIGGER;
     const [drafts] = await connection.execute(
       "SELECT id, version_number FROM automation_versions WHERE automation_id = ? AND status = 'draft' LIMIT 1 FOR UPDATE",
       [automationId]
@@ -192,23 +192,21 @@ async function createVersion(userId, automationId, definition) {
        VALUES (?, ?, 'draft', ?, ?)`,
       [automationId, nextVersion, JSON.stringify(validation.definition), userId]
     );
-    await connection.execute('UPDATE automations SET updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [userId, automationId]);
+    await connection.execute('UPDATE automations SET trigger_type = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [definitionTrigger, userId, automationId]);
     await writeAudit(connection, automationId, userId, 'automation.version_created', { versionId: versionResult.insertId, versionNumber: nextVersion });
     return { id: Number(versionResult.insertId), automationId: Number(automationId), versionNumber: nextVersion, status: 'draft', definition: validation.definition };
   });
 }
 
 async function updateDraftVersion(userId, automationId, versionId, definition) {
-  const validation = validateAutomationDefinition(definition, { requireSteps: false });
+  const validation = validateAutomationDefinition(definition, { requireSteps: false, allowUnconfiguredTrigger: true });
   if (!validation.valid) throw new AutomationError(400, 'Definition invalida.', validation.errors);
 
   return withTransaction(async (connection) => {
     const automation = await ownedAutomation(connection, automationId, userId, true);
     if (!automation) throw new AutomationError(404, 'Automacao nao encontrada.');
     if (automation.status === 'archived') throw new AutomationError(409, 'Automacao arquivada nao aceita edicao.');
-    if (validation.definition.trigger?.type !== automation.trigger_type) {
-      throw new AutomationError(400, 'Trigger da definition deve ser igual ao trigger_type da automacao.');
-    }
+    const definitionTrigger = validation.definition.trigger?.type || UNCONFIGURED_TRIGGER;
     const [versions] = await connection.execute(
       "SELECT id, version_number, status FROM automation_versions WHERE id = ? AND automation_id = ? FOR UPDATE",
       [versionId, automationId]
@@ -217,7 +215,7 @@ async function updateDraftVersion(userId, automationId, versionId, definition) {
     if (!version) throw new AutomationError(404, 'Versao nao encontrada.');
     if (version.status !== 'draft') throw new AutomationError(409, 'Somente rascunhos podem ser editados.');
     await connection.execute('UPDATE automation_versions SET definition = ? WHERE id = ?', [JSON.stringify(validation.definition), versionId]);
-    await connection.execute('UPDATE automations SET updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [userId, automationId]);
+    await connection.execute('UPDATE automations SET trigger_type = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [definitionTrigger, userId, automationId]);
     await writeAudit(connection, automationId, userId, 'automation.version_updated', { versionId: Number(versionId), versionNumber: version.version_number });
     return { id: Number(versionId), automationId: Number(automationId), versionNumber: version.version_number, status: 'draft', definition: validation.definition };
   });
@@ -234,13 +232,11 @@ async function publishVersion(userId, automationId, versionId) {
     if (version.status !== 'draft') throw new AutomationError(409, 'Somente rascunhos podem ser publicados.');
     const validation = validateAutomationDefinition(version.definition, { requireSteps: true, requireExecutableActions: true });
     if (!validation.valid) throw new AutomationError(400, 'Definition invalida para publicacao.', validation.errors);
-    if (validation.definition.trigger?.type !== automation.trigger_type) {
-      throw new AutomationError(400, 'Trigger da definition deve ser igual ao trigger_type da automacao.');
-    }
+    const definitionTrigger = validation.definition.trigger?.type;
 
     await connection.execute("UPDATE automation_versions SET status = 'superseded' WHERE automation_id = ? AND status = 'published'", [automationId]);
     await connection.execute("UPDATE automation_versions SET status = 'published', published_at = CURRENT_TIMESTAMP WHERE id = ?", [versionId]);
-    await connection.execute("UPDATE automations SET active_version_id = ?, status = 'active', updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [versionId, userId, automationId]);
+    await connection.execute("UPDATE automations SET active_version_id = ?, trigger_type = ?, status = 'active', updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [versionId, definitionTrigger, userId, automationId]);
     await writeAudit(connection, automationId, userId, 'automation.published', { versionId: Number(versionId), versionNumber: version.version_number });
     return { ...automation, active_version_id: Number(versionId), active_version_number: version.version_number, status: 'active' };
   });
@@ -263,7 +259,19 @@ async function transitionAutomation(userId, automationId, transition) {
       if (automation.status === 'active') return automation;
       if (automation.status === 'archived') throw new AutomationError(409, 'Automacao arquivada nao pode ser ativada.');
       if (!automation.active_version_id || !automation.active_version_number) throw new AutomationError(409, 'A automacao precisa de uma versao publicada para ser ativada.');
-      await connection.execute("UPDATE automations SET status = 'active', updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [userId, automationId]);
+      const [versions] = await connection.execute(
+        "SELECT * FROM automation_versions WHERE id = ? AND automation_id = ? FOR UPDATE",
+        [automation.active_version_id, automationId]
+      );
+      const activeVersion = versions[0];
+      if (!activeVersion || activeVersion.status !== 'published' || Number(activeVersion.version_number) !== Number(automation.active_version_number)) {
+        throw new AutomationError(409, 'A automacao precisa de uma versao publicada e consistente para ser ativada.');
+      }
+      const validation = validateAutomationDefinition(activeVersion.definition, { requireSteps: true, requireExecutableActions: true });
+      if (!validation.valid || !validation.definition?.trigger?.type || validation.definition.trigger.type === UNCONFIGURED_TRIGGER) {
+        throw new AutomationError(409, 'A versao ativa possui uma definition invalida para execucao.', validation.errors);
+      }
+      await connection.execute("UPDATE automations SET status = 'active', trigger_type = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [validation.definition.trigger.type, userId, automationId]);
       await writeAudit(connection, automationId, userId, 'automation.activated', { versionId: automation.active_version_id });
       return { ...automation, status: 'active' };
     }

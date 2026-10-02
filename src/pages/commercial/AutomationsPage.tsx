@@ -30,13 +30,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -50,7 +43,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { AutomationBuilder } from "@/components/automations/AutomationBuilder";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
-import { leadFoldersAPI, type LeadFolder } from "@/api/lead-folders";
 import {
   automationsAPI,
   type AutomationDefinition,
@@ -88,9 +80,10 @@ const STATUS_CLASS: Record<AutomationStatus, string> = {
   archived: "border-red-400/50 text-red-300",
 };
 
-const DEFAULT_DEFINITION = (trigger: string, folderId?: number): AutomationDefinition => ({
+const UNCONFIGURED_TRIGGER = "__unconfigured__";
+const DEFAULT_DEFINITION = (): AutomationDefinition => ({
   schemaVersion: 1,
-  trigger: { type: trigger, config: trigger === "lead.added_to_folder" && folderId ? { folderId } : {} },
+  trigger: { type: UNCONFIGURED_TRIGGER, config: {}, next: null },
   steps: [],
 });
 
@@ -138,23 +131,8 @@ export function AutomationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [triggerType, setTriggerType] = useState("lead.created");
-  const [folderId, setFolderId] = useState<number | null>(null);
-  const [folders, setFolders] = useState<LeadFolder[]>([]);
-  const [foldersLoading, setFoldersLoading] = useState(false);
-  const [foldersError, setFoldersError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AutomationSummary | null>(null);
-
-  useEffect(() => {
-    if (!createOpen || triggerType !== "lead.added_to_folder") return;
-    setFoldersLoading(true);
-    setFoldersError(false);
-    void leadFoldersAPI.list()
-      .then((result) => setFolders(result.folders))
-      .catch(() => { setFolders([]); setFoldersError(true); })
-      .finally(() => setFoldersLoading(false));
-  }, [createOpen, triggerType]);
 
   const load = async () => {
     setLoading(true);
@@ -218,22 +196,16 @@ export function AutomationsPage() {
 
   const create = async () => {
     if (!name.trim()) return;
-    if (triggerType === "lead.added_to_folder" && !folderId) {
-      toast.error("Selecione a lista que iniciará esta automação.");
-      return;
-    }
     setSaving(true);
     try {
       const automation = await automationsAPI.create({
         name: name.trim(),
         description: description.trim(),
-        trigger_type: triggerType,
-        definition: DEFAULT_DEFINITION(triggerType, folderId || undefined),
+        definition: DEFAULT_DEFINITION(),
       });
       setCreateOpen(false);
       setName("");
       setDescription("");
-      setFolderId(null);
       navigate(`/comercial/automacoes/${automation.id}`);
     } catch (createError) {
       toast.error(
@@ -349,8 +321,9 @@ export function AutomationsPage() {
                           </TableCell>
                           <TableCell>{statusBadge(item.status)}</TableCell>
                           <TableCell>
-                            {TRIGGER_LABELS[item.trigger_type] ||
-                              item.trigger_type}
+                            {item.trigger_type === UNCONFIGURED_TRIGGER
+                              ? "Gatilho não configurado"
+                              : TRIGGER_LABELS[item.trigger_type] || item.trigger_type}
                           </TableCell>
                           <TableCell>
                             {item.active_version_number
@@ -447,32 +420,6 @@ export function AutomationsPage() {
                 placeholder="Objetivo do fluxo"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Quando</Label>
-              <Select value={triggerType} onValueChange={(value) => { setTriggerType(value); if (value !== "lead.added_to_folder") setFolderId(null); }}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {triggerType === "lead.added_to_folder" ? (
-              <div className="space-y-2">
-                <Label>Lista</Label>
-                <Select value={folderId ? String(folderId) : ""} onValueChange={(value) => setFolderId(Number(value))} disabled={foldersLoading || foldersError || folders.length === 0}>
-                  <SelectTrigger><SelectValue placeholder={foldersLoading ? "Carregando listas..." : foldersError ? "Não foi possível carregar as listas." : "Selecione uma lista"} /></SelectTrigger>
-                  <SelectContent>{folders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}</SelectContent>
-                </Select>
-                {!foldersLoading && !foldersError && folders.length === 0 ? <p className="text-xs text-muted-foreground">Nenhuma lista encontrada. Crie uma lista em Leads primeiro.</p> : null}
-                {foldersError ? <p className="text-xs text-destructive">Não foi possível carregar as listas.</p> : null}
-              </div>
-            ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
@@ -480,7 +427,7 @@ export function AutomationsPage() {
             </Button>
             <Button
               onClick={() => void create()}
-              disabled={!name.trim() || saving || (triggerType === "lead.added_to_folder" && (!folderId || foldersLoading || foldersError || folders.length === 0))}
+              disabled={!name.trim() || saving}
             >
               <Plus className="mr-2 h-4 w-4" />
               Criar
@@ -882,8 +829,9 @@ export function AutomationDetailPage() {
               <div>
                 <p className="text-xs text-muted-foreground">Trigger</p>
                 <p className="font-medium">
-                  {TRIGGER_LABELS[automation.trigger_type] ||
-                    automation.trigger_type}
+                  {automation.trigger_type === UNCONFIGURED_TRIGGER
+                    ? "Gatilho não configurado"
+                    : TRIGGER_LABELS[automation.trigger_type] || automation.trigger_type}
                 </p>
               </div>
               <div>

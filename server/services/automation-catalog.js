@@ -14,6 +14,7 @@ const TRIGGER_TYPES = Object.freeze([
   'message.received',
   'message.sent',
 ]);
+const UNCONFIGURED_TRIGGER = '__unconfigured__';
 
 const STEP_TYPES = Object.freeze(['condition', 'wait', 'action', 'finish']);
 
@@ -91,6 +92,7 @@ const isSupported = (catalog, value) => catalog.includes(value);
 
 module.exports = {
   TRIGGER_TYPES,
+  UNCONFIGURED_TRIGGER,
   STEP_TYPES,
   ACTION_TYPES,
   ACTION_CATALOG,

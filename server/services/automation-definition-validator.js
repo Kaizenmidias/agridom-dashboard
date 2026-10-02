@@ -1,4 +1,4 @@
-const { ACTION_CATALOG, ACTION_TYPES, STEP_TYPES, TRIGGER_TYPES } = require('./automation-catalog');
+const { ACTION_CATALOG, ACTION_TYPES, STEP_TYPES, TRIGGER_TYPES, UNCONFIGURED_TRIGGER } = require('./automation-catalog');
 
 const SECRET_KEYS = new Set([
   'token',
@@ -90,7 +90,8 @@ function validateAutomationDefinition(input, options = {}) {
   if (!isPlainObject(definition.trigger)) {
     errors.push(error('trigger', 'INVALID_TRIGGER', 'Trigger deve ser um objeto.'));
   } else {
-    if (!TRIGGER_TYPES.includes(definition.trigger.type)) {
+    const unconfiguredAllowed = options.allowUnconfiguredTrigger === true && definition.trigger.type === UNCONFIGURED_TRIGGER;
+    if (!TRIGGER_TYPES.includes(definition.trigger.type) && !unconfiguredAllowed) {
       errors.push(error('trigger.type', 'UNKNOWN_TRIGGER', 'Tipo de trigger nao reconhecido.'));
     }
     if (definition.trigger.config !== undefined && !isPlainObject(definition.trigger.config)) {

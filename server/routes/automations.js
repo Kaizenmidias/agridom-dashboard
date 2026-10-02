@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { requireCommercialAccess, requireCommercialAdmin } = require('../middleware/commercial-access');
-const { TRIGGER_TYPES } = require('../services/automation-catalog');
+const { UNCONFIGURED_TRIGGER } = require('../services/automation-catalog');
 const { dryRunAutomation } = require('../services/automation/dry-run');
 const {
   AutomationError,
@@ -40,9 +40,9 @@ const handleError = (res, error, fallback = 'Nao foi possivel concluir a operaca
   return res.status(500).json({ error: fallback });
 };
 
-const defaultDefinition = (triggerType) => ({
+const defaultDefinition = () => ({
   schemaVersion: 1,
-  trigger: { type: triggerType, config: {} },
+  trigger: { type: UNCONFIGURED_TRIGGER, config: {}, next: null },
   steps: [],
 });
 
@@ -66,16 +66,13 @@ automationsRouter.get('/', async (req, res) => {
 automationsRouter.post('/', requireCommercialAdmin, async (req, res) => {
   try {
     const name = String(req.body?.name || '').trim();
-    const triggerType = String(req.body?.trigger_type || '').trim();
     if (!name) return res.status(400).json({ error: 'Nome da automacao e obrigatorio.' });
-    if (!TRIGGER_TYPES.includes(triggerType)) return res.status(400).json({ error: 'Trigger nao reconhecido.' });
     const result = await createAutomation({
       ownerUserId: req.userId,
       userId: req.userId,
       name,
       description: req.body?.description,
-      triggerType,
-      definition: req.body?.definition || defaultDefinition(triggerType),
+      definition: req.body?.definition || defaultDefinition(),
     });
     const automation = await getAutomation(req.userId, result.automationId);
     res.status(201).json(automation);

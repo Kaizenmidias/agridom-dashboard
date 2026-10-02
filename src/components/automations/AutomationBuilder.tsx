@@ -115,6 +115,9 @@ const triggers: Record<string, string> = {
   "activity.created": "Atividade criada",
   "activity.completed": "Atividade concluida",
 };
+const UNCONFIGURED_TRIGGER = "__unconfigured__";
+const triggerLabel = (value: string) =>
+  value === UNCONFIGURED_TRIGGER ? "Gatilho não configurado" : triggers[value] || "Gatilho não configurado";
 const actions: Record<string, string> = {
   "lead.update_status": "Atualizar status",
   "lead.move_pipeline_stage": "Mover para etapa",
@@ -186,7 +189,7 @@ export function definitionToBuilder(
     {
       id: "trigger_1",
       type: "trigger",
-      label: triggers[definition.trigger.type] || definition.trigger.type,
+      label: triggerLabel(definition.trigger.type),
       config: {
         ...definition.trigger.config,
         triggerType: definition.trigger.type,
@@ -260,7 +263,7 @@ export function builderToDefinition(
     schemaVersion: 1,
     trigger: {
       type: String(
-        triggerType || trigger?.config.triggerType || "lead.created",
+        triggerType || String(trigger?.config.triggerType || UNCONFIGURED_TRIGGER),
       ),
       config: Object.fromEntries(
         Object.entries(trigger?.config || {}).filter(
@@ -304,7 +307,7 @@ function flowDefinition(definition: AutomationDefinition, canonicalTriggerType?:
       data: {
         id: "trigger_1",
         type: "trigger",
-        label: triggers[canonicalTriggerType || definition.trigger.type] || canonicalTriggerType || definition.trigger.type,
+        label: triggerLabel(canonicalTriggerType || definition.trigger.type),
         config: { ...definition.trigger.config, triggerType: canonicalTriggerType || definition.trigger.type },
         next: legacyTriggerNext || null,
         x: layout.trigger_1?.x ?? 80,
@@ -370,7 +373,7 @@ function definitionFromFlow(nodes: FlowNode[], edges: Edge[], triggerType: strin
   return {
     schemaVersion: 1,
     trigger: {
-      type: String(triggerType || trigger?.data.config.triggerType || "lead.created"),
+      type: String(triggerType || trigger?.data.config.triggerType || UNCONFIGURED_TRIGGER),
       config: Object.fromEntries(Object.entries(trigger?.data.config || {}).filter(([key]) => key !== "triggerType" && key !== "folderName")),
       next: trigger ? edges.find((edge) => edge.source === trigger.id && edge.sourceHandle !== "yes" && edge.sourceHandle !== "no")?.target || null : null,
     },
@@ -497,8 +500,8 @@ function FreeformAutomationBuilder(props: {
     if (props.readOnly) return;
     const type = kind === "trigger" ? "trigger" : kind === "condition" ? "condition" : kind === "wait" ? "wait" : "action";
     if (type === "trigger" && nodes.some((node) => node.data.type === "trigger")) { toast.error("Esta automação já possui um gatilho."); return; }
-    const id = `${type}_${Date.now()}`; const config = type === "trigger" ? { triggerType: actionId || props.triggerType } : type === "action" ? defaultActionConfig(actionId) : defaultConfig(type);
-    remember(); setDirty(true); setNodes((current) => current.concat({ id, type: "kaizen", position, data: { id, type, label: type === "trigger" ? triggers[String(config.triggerType)] || String(config.triggerType) : actionId ? ACTION_CATALOG.find((item) => item.id === actionId)?.name || "Executar ação" : nodeMeta[type].title, config, x: position.x, y: position.y } }));
+    const id = `${type}_${Date.now()}`; const config = type === "trigger" ? { triggerType: actionId || props.triggerType || UNCONFIGURED_TRIGGER } : type === "action" ? defaultActionConfig(actionId) : defaultConfig(type);
+    remember(); setDirty(true); setNodes((current) => current.concat({ id, type: "kaizen", position, data: { id, type, label: type === "trigger" ? triggerLabel(String(config.triggerType)) : actionId ? ACTION_CATALOG.find((item) => item.id === actionId)?.name || "Executar ação" : nodeMeta[type].title, config, x: position.x, y: position.y } }));
     setSelectedId(id);
   };
   const addTool = (kind: string, actionId?: string) => addNodeAt(kind, screenToFlowPosition({ x: 500, y: 280 }), actionId);
@@ -556,7 +559,7 @@ function LegacyAutomationBuilder({
       draft?.definition ||
         active?.definition || {
           schemaVersion: 1,
-          trigger: { type: triggerType, config: {} },
+          trigger: { type: triggerType || UNCONFIGURED_TRIGGER, config: {} },
           steps: [],
         },
     ),
@@ -1286,13 +1289,14 @@ function NodeInspector({
         </h3>
         <FieldLabel label="Evento">
           <Select
-            value={String(node.config.triggerType || "lead.created")}
+            value={String(node.config.triggerType || "__unconfigured__")}
             onValueChange={(value) => updateNode({ config: value === "lead.added_to_folder" ? { triggerType: value } : { triggerType: value, folderId: undefined, folderName: undefined } })}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              {String(node.config.triggerType) === "__unconfigured__" ? <SelectItem value="__unconfigured__" disabled>Gatilho não configurado</SelectItem> : null}
               {Object.entries(triggers).map(([value, label]) => (
                 <SelectItem key={value} value={value}>
                   {label}
