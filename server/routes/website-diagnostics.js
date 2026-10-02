@@ -21,8 +21,9 @@ router.post('/analyze', async (req, res) => {
 router.post('/performance', (req, res) => {
   const created = createPerformanceJob({ ownerUserId: req.userId, url: req.body?.url, strategy: req.body?.strategy || 'mobile' });
   if (created.error) {
-    const status = ['PAGESPEED_BUSY', 'PAGESPEED_RATE_LIMIT'].includes(created.error) ? 429 : 400;
-    return res.status(status).json({ code: created.error, error: status === 429 ? 'JÃƒÂ¡ existe uma mediÃƒÂ§ÃƒÂ£o de performance em andamento ou muito recente.' : 'Informe uma URL pÃƒÂºblica vÃƒÂ¡lida e use a estratÃƒÂ©gia mobile.' });
+    const status = ['PERFORMANCE_BUSY', 'PERFORMANCE_RATE_LIMIT'].includes(created.error) ? 429 : 400;
+    const error = created.error === 'PERFORMANCE_RATE_LIMIT' ? 'VocÃƒÂª realizou uma anÃƒÂ¡lise de performance recentemente. Aguarde alguns minutos para tentar novamente.' : created.error === 'PERFORMANCE_BUSY' ? 'JÃƒÂ¡ existe uma anÃƒÂ¡lise de performance em andamento. Tente novamente em instantes.' : 'Informe uma URL pÃƒÂºblica vÃƒÂ¡lida e use a estratÃƒÂ©gia mobile.';
+    return res.status(status).json({ code: created.error, error, ...(created.retryAfterSeconds ? { retryAfterSeconds: created.retryAfterSeconds } : {}) });
   }
   return res.status(202).json(created.job);
 });

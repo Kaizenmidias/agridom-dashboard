@@ -54,8 +54,11 @@ function createPerformanceJob({ ownerUserId, url, strategy = 'mobile', executor 
   if (strategy !== 'mobile') return { error: 'PAGESPEED_STRATEGY_INVALID' };
   let normalized; try { normalized = normalizeUrl(url); } catch { return { error: 'PAGESPEED_INVALID_URL' }; }
   const userKey = String(ownerUserId);
-  if (lastStartedByUser.has(userKey)) return { error: 'PAGESPEED_RATE_LIMIT' };
-  if (activeCount >= MAX_CONCURRENT) return { error: 'PAGESPEED_BUSY' };
+  const existing = [...jobs.values()].find((job) => job.ownerUserId === Number(ownerUserId) && job.url === normalized && ['pending', 'processing'].includes(job.status));
+  if (existing) return { job: publicJob(existing), reused: true };
+  const lastStarted = lastStartedByUser.get(userKey);
+  if (lastStarted) return { error: 'PERFORMANCE_RATE_LIMIT', retryAfterSeconds: Math.max(1, Math.ceil((lastStarted + RATE_LIMIT_MS - now) / 1000)) };
+  if (activeCount >= MAX_CONCURRENT) return { error: 'PERFORMANCE_BUSY' };
   const token = crypto.randomBytes(32).toString('hex');
   const job = { token, ownerUserId: Number(ownerUserId), url: normalized, strategy, status: 'pending', createdAt: new Date(now).toISOString(), expiresAt: now + TTL_MS, result: null, errorCode: null };
   jobs.set(token, job); lastStartedByUser.set(userKey, now); activeCount += 1;
