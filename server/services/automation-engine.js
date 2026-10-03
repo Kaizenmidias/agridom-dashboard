@@ -9,7 +9,9 @@ const DEFAULT_BATCH_SIZE = 25;
 const DEFAULT_POLL_MS = 1000;
 const DEFAULT_LOCK_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_EVENT_ATTEMPTS = 3;
-const BACKOFF_MS = [5000, 30000, 120000];
+const DEFAULT_MAX_JOB_ATTEMPTS = 8;
+const RECOVERY_BATCH_LIMIT = 20;
+const BACKOFF_MS = [5000, 30000, 120000, 300000, 900000, 1800000, 3600000, 7200000];
 const MAX_LINEAGE_DEPTH = 10;
 const LEGACY_BOOTSTRAP_MARKER = 'bootstrap/no-op';
 
@@ -26,6 +28,9 @@ const parseJson = (value, fallback = {}) => {
 const workerId = (provided) => provided || `${os.hostname()}:${process.pid}:${crypto.randomUUID()}`;
 const lockSeconds = (value) => Math.max(1, Math.ceil(positiveInt(value, DEFAULT_LOCK_TIMEOUT_MS, 24 * 60 * 60 * 1000) / 1000));
 const safeError = (error) => `ENGINE_ERROR:${String(error?.code || 'UNEXPECTED').replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80) || 'UNEXPECTED'}`;
+const PERMANENT_ERROR_CODES = new Set(['INVALID_WAIT', 'WHATSAPP_ACCOUNT_REQUIRED', 'WHATSAPP_ACCOUNT_NOT_CONNECTED', 'WHATSAPP_NOT_CONFIGURED', 'INVALID_WHATSAPP_MESSAGE', 'RECIPIENT_PHONE_INVALID', 'RECIPIENT_PHONE_MISSING', 'MEDIA_TYPE_NOT_SUPPORTED']);
+const isKnownTransientError = (value) => /EVOLUTION_UNAVAILABLE|EVOLUTION_TIMEOUT|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|HTTP_(408|429|5\d\d)/i.test(String(value || ''));
+const isKnownPermanentError = (value) => PERMANENT_ERROR_CODES.has(String(value || '').replace(/^ENGINE_ERROR:/, '').toUpperCase()) || /HTTP_4(?!08|29)\d|EVOLUTION_AUTH_FAILED|EVOLUTION_REQUEST_FAILED|INVALID_.*|_NOT_CONFIGURED|_REQUIRED|RECIPIENT_PHONE_INVALID/i.test(String(value || ''));
 const cadenceSeconds = (config = {}) => {
   const amount = Number(config.cadenceAmount ?? config.cadenceValue ?? config.cadence ?? 0);
   const unit = String(config.cadenceUnit || 'minutes');
@@ -86,7 +91,7 @@ async function createRunAndJob(connection, event, match) {
   const [jobResult] = await connection.execute(
     `INSERT INTO automation_jobs
       (automation_run_id, job_type, status, execute_at, available_at, attempts, max_attempts, idempotency_key)
-     VALUES (?, 'engine.bootstrap', 'pending', UTC_TIMESTAMP(), UTC_TIMESTAMP(), 0, 3, ?)
+     VALUES (?, 'engine.bootstrap', 'pending', UTC_TIMESTAMP(), UTC_TIMESTAMP(), 0, 8, ?)
      ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
     [runId, jobKey]
   );
@@ -291,9 +296,9 @@ async function completeBootstrapJob(job, currentWorkerId) {
       );
       await connection.execute(
         `INSERT INTO automation_jobs (automation_run_id, run_step_id, job_type, status, execute_at, available_at, attempts, max_attempts, idempotency_key)
-         VALUES (?, (SELECT id FROM automation_run_steps WHERE automation_run_id = ? AND step_key = ? LIMIT 1), 'engine.step', 'pending', COALESCE(?, UTC_TIMESTAMP()), COALESCE(?, UTC_TIMESTAMP()), 0, 3, ?)
+         VALUES (?, (SELECT id FROM automation_run_steps WHERE automation_run_id = ? AND step_key = ? LIMIT 1), 'engine.step', 'pending', COALESCE(?, UTC_TIMESTAMP()), COALESCE(?, UTC_TIMESTAMP()), 0, 8, ?)
          ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-        [job.automation_run_id, job.automation_run_id, stepId, executeAt, executeAt, nextJobKey(stepId)]
+      [job.automation_run_id, job.automation_run_id, stepId, executeAt, executeAt, nextJobKey(stepId)]
       );
     };
     const [existingSteps] = await connection.execute('SELECT * FROM automation_run_steps WHERE automation_run_id = ? AND step_key = ? FOR UPDATE', [job.automation_run_id, step.id]);
@@ -375,7 +380,7 @@ async function failJob(job, currentWorkerId, error) {
     const current = rows[0];
     if (!current) { await connection.rollback(); return; }
     const attempts = Number(current.attempts);
-    const terminal = error?.retryable === false || attempts >= Number(current.max_attempts);
+    const terminal = error?.retryable === false || PERMANENT_ERROR_CODES.has(String(error?.code || '').toUpperCase()) || attempts >= Number(current.max_attempts);
     const delay = BACKOFF_MS[Math.min(Math.max(attempts - 1, 0), BACKOFF_MS.length - 1)];
     await connection.execute(
       `UPDATE automation_jobs SET status = ?, available_at = ${terminal ? 'available_at' : `DATE_ADD(UTC_TIMESTAMP(), INTERVAL ${Math.ceil(delay / 1000)} SECOND)`}, locked_at = NULL, locked_by = NULL, last_error = ?${terminal ? ', failed_at = UTC_TIMESTAMP()' : ''} WHERE id = ?`,
@@ -393,6 +398,15 @@ async function failJob(job, currentWorkerId, error) {
 async function processJobBatch(options = {}) {
   const count = positiveInt(options.batchSize, DEFAULT_BATCH_SIZE, 100);
   let processed = 0;
+  const recoveryConnection = await getPool().getConnection();
+  try {
+    await recoveryConnection.beginTransaction();
+    await recoverAutomationJobs({ connection: recoveryConnection, limit: RECOVERY_BATCH_LIMIT, apply: true });
+    await recoveryConnection.commit();
+  } catch (error) {
+    await recoveryConnection.rollback();
+    console.error('Automation recovery failed:', safeError(error));
+  } finally { recoveryConnection.release(); }
   for (let index = 0; index < count; index += 1) {
     try {
       const job = await claimNextJob(options);
@@ -406,4 +420,32 @@ async function processJobBatch(options = {}) {
   return processed;
 }
 
-module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, buildAutomationContext, claimNextJob, completeBootstrapJob, createRunAndJob, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, reserveWhatsAppSlot, workerId };
+async function recoverAutomationJobs({ connection, limit = RECOVERY_BATCH_LIMIT, apply = true } = {}) {
+  if (!connection) throw new Error('RECOVERY_CONNECTION_REQUIRED');
+  const max = Math.min(RECOVERY_BATCH_LIMIT, positiveInt(limit, RECOVERY_BATCH_LIMIT, RECOVERY_BATCH_LIMIT));
+  const [rows] = await connection.execute(
+    `SELECT aj.id, aj.automation_run_id, aj.attempts, aj.max_attempts, aj.last_error, aj.status,
+            ar.status AS run_status, ars.id AS run_step_id
+       FROM automation_jobs aj
+       JOIN automation_runs ar ON ar.id = aj.automation_run_id
+       LEFT JOIN automation_run_steps ars ON ars.id = aj.run_step_id
+      WHERE aj.status = 'failed' AND ar.status IN ('failed', 'queued')
+        AND aj.attempts < aj.max_attempts
+        AND (aj.last_error LIKE '%EVOLUTION_UNAVAILABLE%'
+          OR aj.last_error LIKE '%EVOLUTION_TIMEOUT%'
+          OR aj.last_error LIKE '%ETIMEDOUT%'
+          OR aj.last_error LIKE '%ECONNRESET%'
+          OR aj.last_error LIKE '%ECONNREFUSED%'
+          OR aj.last_error LIKE '%EAI_AGAIN%')
+      ORDER BY aj.failed_at, aj.id LIMIT ?`, [max]);
+  const decisions = rows.map((row) => ({ ...row, eligible: isKnownTransientError(row.last_error) && !isKnownPermanentError(row.last_error), reason: 'known_transient_error' }));
+  if (!apply || !decisions.length) return decisions;
+  for (const row of decisions.filter((item) => item.eligible)) {
+    await connection.execute("UPDATE automation_jobs SET status = 'pending', available_at = LEAST(available_at, UTC_TIMESTAMP()), failed_at = NULL, locked_at = NULL, locked_by = NULL WHERE id = ? AND status = 'failed'", [row.id]);
+    await connection.execute("UPDATE automation_runs SET status = 'queued', error_code = NULL, error_message = NULL WHERE id = ? AND status = 'failed'", [row.automation_run_id]);
+    if (row.run_step_id) await connection.execute("UPDATE automation_run_steps SET status = 'queued', error_code = NULL, error_message = NULL WHERE id = ? AND status = 'failed'", [row.run_step_id]);
+  }
+  return decisions;
+}
+
+module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, DEFAULT_MAX_JOB_ATTEMPTS, RECOVERY_BATCH_LIMIT, buildAutomationContext, claimNextJob, completeBootstrapJob, createRunAndJob, isKnownTransientError, isKnownPermanentError, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, recoverAutomationJobs, reserveWhatsAppSlot, workerId };

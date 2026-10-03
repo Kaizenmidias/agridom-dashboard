@@ -41,7 +41,7 @@ test('run and bootstrap job creation is idempotent at the database boundary', as
 });
 
 test('retry policy is finite and worker is a background process without an HTTP listener', () => {
-  assert.deepEqual(BACKOFF_MS, [5000, 30000, 120000]);
+  assert.deepEqual(BACKOFF_MS, [5000, 30000, 120000, 300000, 900000, 1800000, 3600000, 7200000]);
   assert.match(engine, /FOR UPDATE SKIP LOCKED/);
   assert.match(engine, /max_attempts/);
   assert.match(engine, /automation_run_steps/);
