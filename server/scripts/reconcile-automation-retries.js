@@ -1,3 +1,7 @@
+const path = require('node:path');
+const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
+require('dotenv').config({ path: path.join(__dirname, '..', envFile) });
+
 const { getPool, closeConnection } = require('../config/database');
 const { recoverAutomationJobs, RECOVERY_BATCH_LIMIT } = require('../services/automation-engine');
 

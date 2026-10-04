@@ -425,7 +425,8 @@ async function recoverAutomationJobs({ connection, limit = RECOVERY_BATCH_LIMIT,
   const max = Math.min(RECOVERY_BATCH_LIMIT, positiveInt(limit, RECOVERY_BATCH_LIMIT, RECOVERY_BATCH_LIMIT));
   const [rows] = await connection.execute(
     `SELECT aj.id, aj.automation_run_id, aj.attempts, aj.max_attempts, aj.last_error, aj.status,
-            ar.status AS run_status, ars.id AS run_step_id
+            ar.status AS run_status, ars.id AS run_step_id, ar.automation_id,
+            ar.entity_type, ar.entity_id, ar.error_code, ar.error_message
        FROM automation_jobs aj
        JOIN automation_runs ar ON ar.id = aj.automation_run_id
        LEFT JOIN automation_run_steps ars ON ars.id = aj.run_step_id
@@ -438,14 +439,88 @@ async function recoverAutomationJobs({ connection, limit = RECOVERY_BATCH_LIMIT,
           OR aj.last_error LIKE '%ECONNREFUSED%'
           OR aj.last_error LIKE '%EAI_AGAIN%')
       ORDER BY aj.failed_at, aj.id LIMIT ?`, [max]);
-  const decisions = rows.map((row) => ({ ...row, eligible: isKnownTransientError(row.last_error) && !isKnownPermanentError(row.last_error), reason: 'known_transient_error' }));
+  const existingDecisions = rows.map((row) => ({ ...row, recoveryType: 'existing_job', eligible: isKnownTransientError(`${row.error_code || ''} ${row.error_message || ''} ${row.last_error || ''}`) && !isKnownPermanentError(`${row.error_code || ''} ${row.error_message || ''}`), reason: 'known_transient_error' }));
+  const remaining = Math.max(0, max - existingDecisions.length);
+  const missingDecisions = remaining ? await findMissingStepJobs(connection, remaining) : [];
+  const decisions = [...existingDecisions, ...missingDecisions];
   if (!apply || !decisions.length) return decisions;
   for (const row of decisions.filter((item) => item.eligible)) {
+    if (row.recoveryType === 'missing_step_job') {
+      await reconstructMissingStepJob(connection, row);
+      continue;
+    }
     await connection.execute("UPDATE automation_jobs SET status = 'pending', available_at = LEAST(available_at, UTC_TIMESTAMP()), failed_at = NULL, locked_at = NULL, locked_by = NULL WHERE id = ? AND status = 'failed'", [row.id]);
     await connection.execute("UPDATE automation_runs SET status = 'queued', error_code = NULL, error_message = NULL WHERE id = ? AND status = 'failed'", [row.automation_run_id]);
     if (row.run_step_id) await connection.execute("UPDATE automation_run_steps SET status = 'queued', error_code = NULL, error_message = NULL WHERE id = ? AND status = 'failed'", [row.run_step_id]);
   }
   return decisions;
+}
+
+const stepIdempotencyKey = (runId, stepKey) => `run:${Number(runId)}:step:${String(stepKey)}`;
+
+function stepResumeAt(step) {
+  const output = parseJson(step.output, {});
+  const candidate = output?.resume_at || output?.cadence?.scheduled_at;
+  if (!candidate) return null;
+  const date = new Date(candidate);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+async function findMissingStepJobs(connection, limit) {
+  const [candidates] = await connection.execute(
+    `SELECT ar.id AS automation_run_id, ar.automation_id, ar.entity_type, ar.entity_id,
+            ar.current_step_key, ar.error_code, ar.error_message, av.definition,
+            ars.id AS run_step_id, ars.step_key, ars.step_type, ars.status AS step_status, ars.output
+       FROM automation_runs ar
+       JOIN automation_versions av ON av.id = ar.automation_version_id
+       JOIN automation_run_steps ars ON ars.automation_run_id = ar.id AND ars.step_key = ar.current_step_key
+      WHERE ar.status = 'failed'
+        AND ar.current_step_key IS NOT NULL
+        AND (ar.error_code LIKE '%EVOLUTION_UNAVAILABLE%' OR ar.error_code LIKE '%EVOLUTION_TIMEOUT%'
+          OR ar.error_code LIKE '%ETIMEDOUT%' OR ar.error_code LIKE '%ECONNRESET%'
+          OR ar.error_code LIKE '%ECONNREFUSED%' OR ar.error_code LIKE '%EAI_AGAIN%'
+          OR ar.error_message LIKE '%EVOLUTION_UNAVAILABLE%' OR ar.error_message LIKE '%EVOLUTION_TIMEOUT%'
+          OR ar.error_message LIKE '%ETIMEDOUT%' OR ar.error_message LIKE '%ECONNRESET%'
+          OR ar.error_message LIKE '%ECONNREFUSED%' OR ar.error_message LIKE '%EAI_AGAIN%')
+        AND ars.status IN ('queued', 'waiting')
+        AND NOT EXISTS (SELECT 1 FROM automation_jobs aj WHERE aj.automation_run_id = ar.id AND aj.run_step_id = ars.id)
+      ORDER BY ar.updated_at, ar.id LIMIT ? FOR UPDATE`, [limit]);
+  const decisions = [];
+  for (const row of candidates) {
+    const definition = parseJson(row.definition, {});
+    const step = Array.isArray(definition.steps) ? definition.steps.find((item) => item.id === row.step_key) : null;
+    const base = { ...row, id: null, jobId: null, runId: Number(row.automation_run_id), stepId: Number(row.run_step_id), recoveryType: 'missing_step_job', automationId: Number(row.automation_id), entityType: row.entity_type, entityId: row.entity_id, errorCode: row.error_code || 'ENGINE_ERROR', idempotencyKey: stepIdempotencyKey(row.automation_run_id, row.step_key) };
+    if (!step || !['action', 'wait', 'finish'].includes(step.type)) {
+      decisions.push({ ...base, eligible: false, reason: 'unknown_or_invalid_step' });
+      continue;
+    }
+    const [messageRows] = await connection.execute(
+      `SELECT id, status FROM communication_messages
+        WHERE automation_id = ? AND automation_run_id = ? AND automation_step_id = ?
+        FOR UPDATE`,
+      [row.automation_id, row.automation_run_id, row.step_key]
+    );
+    if (messageRows.some((message) => message.status === 'sent')) {
+      decisions.push({ ...base, eligible: false, reason: 'communication_already_sent' });
+    } else if (messageRows.length) {
+      decisions.push({ ...base, eligible: false, reason: 'communication_state_ambiguous' });
+    } else {
+      decisions.push({ ...base, eligible: isKnownTransientError(`${row.error_code || ''} ${row.error_message || ''}`) && !isKnownPermanentError(`${row.error_code || ''} ${row.error_message || ''}`), reason: 'missing_step_job' , step, executeAt: step.type === 'wait' ? stepResumeAt(row) : null });
+    }
+  }
+  return decisions;
+}
+
+async function reconstructMissingStepJob(connection, row) {
+  const executeAt = row.executeAt || null;
+  await connection.execute(
+    `INSERT INTO automation_jobs (automation_run_id, run_step_id, job_type, status, execute_at, available_at, attempts, max_attempts, idempotency_key)
+     VALUES (?, ?, 'engine.step', 'pending', COALESCE(?, UTC_TIMESTAMP()), COALESCE(?, UTC_TIMESTAMP()), 0, 8, ?)
+     ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+    [row.automation_run_id, row.run_step_id, executeAt, executeAt, row.idempotencyKey]
+  );
+  await connection.execute("UPDATE automation_run_steps SET status = 'queued', error_code = NULL, error_message = NULL, finished_at = NULL WHERE id = ? AND status IN ('queued', 'waiting')", [row.run_step_id]);
+  await connection.execute("UPDATE automation_runs SET status = 'queued', error_code = NULL, error_message = NULL WHERE id = ? AND status = 'failed'", [row.automation_run_id]);
 }
 
 module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, DEFAULT_MAX_JOB_ATTEMPTS, RECOVERY_BATCH_LIMIT, buildAutomationContext, claimNextJob, completeBootstrapJob, createRunAndJob, isKnownTransientError, isKnownPermanentError, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, recoverAutomationJobs, reserveWhatsAppSlot, workerId };
