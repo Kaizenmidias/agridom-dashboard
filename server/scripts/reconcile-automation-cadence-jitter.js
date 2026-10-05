@@ -39,12 +39,12 @@ async function loadCandidate(connection, jobId, automationId, accountId, lock = 
   const [rows] = await connection.execute(
     `SELECT aj.id AS job_id, aj.automation_run_id, aj.job_type, aj.status AS job_status,
             aj.attempts, aj.max_attempts, aj.execute_at, aj.available_at, aj.last_error,
-            ar.id AS run_id, ar.automation_id, ar.entity_id, ar.status AS run_status,
+            ar.id AS run_id, ar.automation_id, ar.entity_id, ar.status AS run_status, ar.current_step_key,
             ars.id AS step_id, ars.step_key, ars.status AS step_status, ars.output,
             av.definition
        FROM automation_jobs aj
        JOIN automation_runs ar ON ar.id = aj.automation_run_id
-       LEFT JOIN automation_run_steps ars ON ars.id = aj.run_step_id
+       LEFT JOIN automation_run_steps ars ON ars.automation_run_id = aj.automation_run_id AND ars.step_key = ar.current_step_key
        LEFT JOIN automation_versions av ON av.id = ar.automation_version_id
       WHERE aj.id = ? AND ar.automation_id = ?${suffix}`,
     [jobId, automationId]
