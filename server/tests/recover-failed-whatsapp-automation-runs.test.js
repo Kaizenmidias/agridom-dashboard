@@ -8,7 +8,7 @@ const recovery = require(scriptPath);
 const source = fs.readFileSync(scriptPath, 'utf8');
 
 const row = (overrides = {}) => ({ run_id: 50, entity_id: 14, run_status: 'failed', job_status: 'failed', error_code: 'EVOLUTION_UNAVAILABLE', last_error: 'ENGINE_ERROR:EVOLUTION_UNAVAILABLE', current_step_key: 'send', ...overrides });
-const safeState = (overrides = {}) => ({ activeJobs: [], recoveryJobs: [], runMessages: {}, leadMessages: {}, step: { id: 501, step_key: 'send', step_type: 'action' }, recoveryKey: 'run:50:step:send', ...overrides });
+const safeState = (overrides = {}) => ({ jobs: [], activeJobs: [], runMessages: {}, leadMessages: {}, step: { id: 501, step_key: 'send', step_type: 'action' }, recoveryKey: 'run:50:step:send:recovery:1', generation: 1, ...overrides });
 
 test('recovery requires automation filter, defaults to dry-run and bounds limit', () => {
   assert.deepEqual(recovery.parseArgs(['--automation-id=15']), { automationId: 15, limit: 25, apply: false });
@@ -40,7 +40,17 @@ test('sent, delivered, read, provider id and external id block recovery', () => 
 test('pending or processing job blocks duplicate recovery', () => {
   assert.equal(recovery.classify(row(), safeState({ activeJobs: [{ id: 1, status: 'pending' }] })).classification, 'already_pending');
   assert.equal(recovery.classify(row(), safeState({ activeJobs: [{ id: 2, status: 'processing' }] })).classification, 'already_pending');
-  assert.equal(recovery.classify(row(), safeState({ recoveryJobs: [{ id: 3, status: 'pending' }] })).classification, 'already_pending');
+  assert.equal(recovery.classify(row(), safeState({ activeJobs: [{ id: 3, status: 'pending' }] })).classification, 'already_pending');
+});
+
+test('failed and cancelled recovery history does not block the next deterministic generation', () => {
+  const state = safeState({ jobs: [
+    { id: 10, status: 'failed', idempotency_key: 'run:50:step:send' },
+    { id: 11, status: 'failed', idempotency_key: 'run:50:step:send:recovery:1' },
+    { id: 12, status: 'cancelled', idempotency_key: 'run:50:step:send:recovery:2' },
+  ], recoveryKey: 'run:50:step:send:recovery:3', generation: 3 });
+  assert.equal(recovery.classify(row(), state).classification, 'eligible');
+  assert.equal(state.recoveryKey, 'run:50:step:send:recovery:3');
 });
 
 test('recovery works by run and ignores duplicate failed history', () => {
@@ -56,7 +66,7 @@ test('dry-run audits only read queries and changes nothing', async () => {
       queries.push(sql);
       if (sql.includes('SELECT ar.id AS run_id')) return [[row()]];
       if (sql.includes('status IN (\'pending\', \'processing\')')) return [[]];
-      if (sql.includes('idempotency_key = ?')) return [[]];
+      if (sql.includes('SELECT id, status, idempotency_key, run_step_id')) return [[]];
       if (sql.includes('FROM communication_messages WHERE automation_run_id')) return [[{}]];
       if (sql.includes("WHERE lead_id = ?")) return [[{}]];
       if (sql.includes('FROM automation_run_steps')) return [[{ id: 501, step_key: 'send', step_type: 'action' }]];
@@ -79,7 +89,7 @@ test('apply creates one pending engine step and remains idempotent on a second r
     execute: async (sql, params = []) => {
       if (sql.includes('SELECT ar.id AS run_id')) return [[row()]];
       if (sql.includes('status IN (\'pending\', \'processing\')')) return [[]];
-      if (sql.includes('idempotency_key = ?')) return [recoveryExists ? [{ id: 600, status: 'pending' }] : []];
+      if (sql.includes('SELECT id, status, idempotency_key, run_step_id')) return [recoveryExists ? [{ id: 600, status: 'pending', idempotency_key: 'run:50:step:send:recovery:1' }] : []];
       if (sql.includes('FROM communication_messages WHERE automation_run_id')) return [[{}]];
       if (sql.includes("WHERE lead_id = ?")) return [[{}]];
       if (sql.includes('FROM automation_run_steps')) return [[{ id: 501, step_key: 'send', step_type: 'action' }]];

@@ -30,6 +30,17 @@ function decision(row, reason, classification) {
   return { runId: Number(row.run_id), leadId: row.entity_id == null ? null : Number(row.entity_id), errorCode: safeErrorCode(row), classification, reason };
 }
 
+function nextRecoveryGeneration(runId, stepKey, jobs = []) {
+  const prefix = `run:${Number(runId)}:step:${String(stepKey)}:recovery:`;
+  const generations = jobs.map((job) => {
+    const key = String(job.idempotency_key || '');
+    if (!key.startsWith(prefix)) return 0;
+    const generation = Number(key.slice(prefix.length));
+    return Number.isSafeInteger(generation) && generation > 0 ? generation : 0;
+  });
+  return Math.max(0, ...generations) + 1;
+}
+
 async function loadFailedRuns(connection, automationId, limit) {
   const [rows] = await connection.execute(
     `SELECT ar.id AS run_id, ar.automation_id, ar.entity_id, ar.current_step_key,
@@ -47,15 +58,10 @@ async function loadFailedRuns(connection, automationId, limit) {
 
 async function loadSafetyState(connection, row, lock = false) {
   const suffix = lock ? ' FOR UPDATE' : '';
-  const [activeJobs] = await connection.execute(
-    `SELECT id, status, idempotency_key FROM automation_jobs
-      WHERE automation_run_id = ? AND status IN ('pending', 'processing')${suffix}`,
+  const [jobs] = await connection.execute(
+    `SELECT id, status, idempotency_key, run_step_id FROM automation_jobs
+      WHERE automation_run_id = ?${suffix}`,
     [row.run_id]
-  );
-  const recoveryKey = `run:${Number(row.run_id)}:step:${String(row.current_step_key || '')}`;
-  const [recoveryJobs] = await connection.execute(
-    `SELECT id, status FROM automation_jobs WHERE idempotency_key = ? LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
-    [recoveryKey]
   );
   const [runMessages] = await connection.execute(
     `SELECT COUNT(*) AS total,
@@ -75,14 +81,16 @@ async function loadSafetyState(connection, row, lock = false) {
       WHERE automation_run_id = ? AND step_key = ?${lock ? ' FOR UPDATE' : ''}`,
     [row.run_id, row.current_step_key]
   );
-  return { activeJobs, recoveryJobs, runMessages: runMessages[0] || {}, leadMessages: leadMessages[0] || {}, step: steps[0] || null, recoveryKey };
+  const activeJobs = jobs.filter((job) => ['pending', 'processing'].includes(String(job.status)));
+  const generation = nextRecoveryGeneration(row.run_id, row.current_step_key, jobs);
+  const recoveryKey = `run:${Number(row.run_id)}:step:${String(row.current_step_key)}:recovery:${generation}`;
+  return { jobs, activeJobs, runMessages: runMessages[0] || {}, leadMessages: leadMessages[0] || {}, step: steps[0] || null, recoveryKey, generation };
 }
 
 function classify(row, state) {
   if (row.run_status !== 'failed' || row.job_status !== 'failed') return decision(row, 'invalid_state', 'invalid_state');
   if (safeErrorCode(row) !== ALLOWED_ERROR) return decision(row, 'EVOLUTION_REQUEST_FAILED is ambiguous or error is not allowed', 'ambiguous');
   if (state.activeJobs.length) return decision(row, 'active job already exists', 'already_pending');
-  if (state.recoveryJobs.length) return decision(row, 'recovery idempotency key already exists', 'already_pending');
   if (Number(state.runMessages.confirmed || 0) > 0 || Number(state.leadMessages.confirmed || 0) > 0) return decision(row, 'confirmed outbound communication exists', 'already_sent');
   if (Number(state.runMessages.identified || 0) > 0 || Number(state.leadMessages.identified || 0) > 0) return decision(row, 'communication has provider or external identifier', 'already_sent');
   if (!row.current_step_key || !state.step || !['action', 'wait', 'finish'].includes(String(state.step.step_type))) return decision(row, 'current resumable step is missing or invalid', 'invalid_state');
