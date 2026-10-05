@@ -286,16 +286,17 @@ test('cadence reuses a future persisted slot only when the queue confirms it', a
   assert.equal(updates, 0);
 });
 
-function cadenceEngineFixture(scheduledAtByJob, nextAvailableAt) {
+function cadenceEngineFixture(scheduledAtByJob, nextAvailableAt, { automationId = 9, accountId = 1 } = {}) {
   const state = {
     cadence: new Date(nextAvailableAt),
     jobs: new Map(Object.entries(scheduledAtByJob).map(([id, scheduledAt]) => [Number(id), { id: Number(id), output: { cadence: { scheduled_at: scheduledAt } }, status: 'processing' }])),
     sends: [],
+    attempts: new Map(Object.keys(scheduledAtByJob).map((id) => [Number(id), 0])),
   };
   const definition = {
     schemaVersion: 1,
     trigger: { type: 'lead.created', config: {} },
-    steps: [{ id: 'send', type: 'action', config: { actionType: 'whatsapp.send', accountId: 1, recipient: '{{lead.phone}}', message: 'Ola', cadenceValue: 10, cadenceUnit: 'minutes' }, next: null }],
+    steps: [{ id: 'send', type: 'action', config: { actionType: 'whatsapp.send', accountId, recipient: '{{lead.phone}}', message: 'Ola', cadenceValue: 10, cadenceUnit: 'minutes' }, next: null }],
   };
   const connection = {
     beginTransaction: async () => {},
@@ -311,7 +312,7 @@ function cadenceEngineFixture(scheduledAtByJob, nextAvailableAt) {
           : Number(params.at(-1));
       if (/SELECT aj\.\*, ar\.automation_id/.test(sql)) {
         const job = state.jobs.get(jobId);
-        return [[{ id: job.id, automation_run_id: job.id + 100, automation_id: 9, automation_version_id: 19, entity_type: 'lead', entity_id: String(job.id), owner_user_id: 1, current_step_key: 'send', correlation_id: `corr-${job.id}`, definition: JSON.stringify(definition), event_uuid: `event-${job.id}`, lineage_depth: 0, run_status: 'queued', payload: '{}' }]];
+        return [[{ id: job.id, automation_run_id: job.id + 100, automation_id: automationId, automation_version_id: 19, entity_type: 'lead', entity_id: String(job.id), owner_user_id: 1, current_step_key: 'send', correlation_id: `corr-${job.id}`, definition: JSON.stringify(definition), event_uuid: `event-${job.id}`, lineage_depth: 0, run_status: 'queued', payload: '{}' }]];
       }
       if (/SELECT \* FROM automation_run_steps/.test(sql)) return [[{ output: JSON.stringify(state.jobs.get(jobId).output) }]];
       if (/UNIX_TIMESTAMP\(next_available_at\)/.test(sql)) return [[{ next_available_epoch: Math.floor(state.cadence.getTime() / 1000) }]];
@@ -326,6 +327,11 @@ function cadenceEngineFixture(scheduledAtByJob, nextAvailableAt) {
         const job = state.jobs.get(Number(params.at(-1)));
         job.status = 'pending';
         job.executeAt = new Date(params[0]);
+        return [{ affectedRows: 1 }];
+      }
+      if (/UPDATE automation_jobs SET attempts =/.test(sql)) {
+        const job = state.jobs.get(Number(params[0]));
+        state.attempts.set(job.id, Math.max(0, state.attempts.get(job.id) - 1));
         return [{ affectedRows: 1 }];
       }
       if (/UPDATE automation_run_steps SET status = \?/.test(sql)) return [{ affectedRows: 1 }];
@@ -354,6 +360,57 @@ test('automation whatsapp cadence does not burst expired jobs after worker downt
   assert.equal(fixture.state.jobs.get(2).executeAt.toISOString(), '2026-09-29T15:10:00.000Z');
   assert.equal(fixture.state.jobs.get(3).executeAt.toISOString(), '2026-09-29T15:20:00.000Z');
   assert.equal(fixture.state.jobs.get(4).executeAt.toISOString(), '2026-09-29T15:30:00.000Z');
+});
+
+test('automation whatsapp cadence serializes 31 overdue jobs after worker downtime', async () => {
+  const scheduledAtByJob = Object.fromEntries(Array.from({ length: 31 }, (_, index) => [
+    index + 1,
+    new Date(Date.UTC(2026, 8, 29, 13, index)).toISOString(),
+  ]));
+  const fixture = cadenceEngineFixture(scheduledAtByJob, '2026-09-29T14:50:00Z', { automationId: 15, accountId: 1 });
+  const now = '2026-09-29T15:00:00Z';
+
+  for (const id of Object.keys(scheduledAtByJob).map(Number)) {
+    await completeBootstrapJob({ id, automation_run_id: id + 100 }, `cadence-15-${id}`, {
+      pool: fixture.pool,
+      now: () => new Date(now).getTime(),
+      executeAction: async () => { fixture.state.sends.push(id); return { idempotent: false }; },
+    });
+  }
+
+  assert.deepEqual(fixture.state.sends, [1]);
+  for (let id = 2; id <= 31; id += 1) {
+    const expected = new Date(Date.UTC(2026, 8, 29, 15, (id - 1) * 10));
+    assert.equal(fixture.state.jobs.get(id).executeAt.toISOString(), expected.toISOString());
+  }
+  assert.equal(fixture.state.cadence.toISOString(), '2026-09-29T20:10:00.000Z');
+});
+
+test('automation whatsapp cadence accepts a 618ms worker delay without re-reserving the slot', async () => {
+  const fixture = cadenceEngineFixture({ 1: '2026-10-05T20:53:04.000Z' }, '2026-10-05T20:53:04Z', { automationId: 15, accountId: 1 });
+  const result = await completeBootstrapJob({ id: 1, automation_run_id: 101 }, 'cadence-boundary', {
+    pool: fixture.pool,
+    now: () => new Date('2026-10-05T20:53:04.618Z').getTime(),
+    executeAction: async () => { fixture.state.sends.push(1); return { idempotent: false }; },
+  });
+
+  assert.equal(result.completed, true);
+  assert.deepEqual(fixture.state.sends, [1]);
+  assert.equal(fixture.state.jobs.get(1).executeAt, undefined);
+  assert.equal(fixture.state.cadence.toISOString(), '2026-10-05T20:53:04.000Z');
+});
+
+test('automation cadence rescheduling does not consume a job attempt', async () => {
+  const fixture = cadenceEngineFixture({ 1: '2026-10-05T20:53:04.000Z' }, '2026-10-05T21:03:04Z', { automationId: 15, accountId: 1 });
+  fixture.state.attempts.set(1, 6);
+  await completeBootstrapJob({ id: 1, automation_run_id: 101 }, 'cadence-attempt', {
+    pool: fixture.pool,
+    now: () => new Date('2026-10-05T21:00:00.000Z').getTime(),
+    executeAction: async () => { throw new Error('provider must not be called'); },
+  });
+
+  assert.equal(fixture.state.attempts.get(1), 5);
+  assert.equal(fixture.state.jobs.get(1).executeAt.toISOString(), '2026-10-05T21:03:04.000Z');
 });
 
 test('automation whatsapp cadence reuses the same future slot when a job is reprocessed', async () => {

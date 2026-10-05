@@ -7,6 +7,7 @@ const { evaluateCondition } = require('./automation/condition-evaluator');
 
 const DEFAULT_BATCH_SIZE = 25;
 const DEFAULT_POLL_MS = 1000;
+const CADENCE_LATE_TOLERANCE_MS = DEFAULT_POLL_MS * 2;
 const DEFAULT_LOCK_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_EVENT_ATTEMPTS = 3;
 const DEFAULT_MAX_JOB_ATTEMPTS = 8;
@@ -73,9 +74,16 @@ async function reserveWhatsAppSlot(connection, automationId, accountId, config, 
   const [rows] = await connection.execute('SELECT UNIX_TIMESTAMP(next_available_at) AS next_available_epoch FROM automation_whatsapp_cadence WHERE automation_id = ? AND communication_account_id = ? FOR UPDATE', [automationId, accountId]);
   const stored = rows[0]?.next_available_epoch != null ? new Date(Number(rows[0].next_available_epoch) * 1000) : null;
   const preferredIsFuture = preferredSlot && preferredSlot > now;
+  const preferredIsWithinLateTolerance = preferredSlot
+    && preferredSlot <= now
+    && now.getTime() - preferredSlot.getTime() <= CADENCE_LATE_TOLERANCE_MS;
   const preferredNext = preferredIsFuture ? new Date(preferredSlot.getTime() + seconds * 1000) : null;
   if (preferredIsFuture && stored && stored >= preferredNext) {
     console.info('cadence_slot_reused_future', { automation_id: Number(automationId), communication_account_id: Number(accountId), scheduled_at: preferredSlot.toISOString() });
+    return preferredSlot;
+  }
+  if (preferredIsWithinLateTolerance) {
+    console.info('cadence_slot_within_late_tolerance', { automation_id: Number(automationId), communication_account_id: Number(accountId), scheduled_at: preferredSlot.toISOString(), now: now.toISOString(), tolerance_ms: CADENCE_LATE_TOLERANCE_MS });
     return preferredSlot;
   }
   if (preferredSlot && preferredSlot <= now) {
@@ -387,6 +395,8 @@ async function completeBootstrapJob(job, currentWorkerId, dependencies = {}) {
           await connection.execute("UPDATE automation_run_steps SET status = 'queued', output = ?, finished_at = NULL WHERE automation_run_id = ? AND step_key = ?", [JSON.stringify({ cadence: { scheduled_at: scheduledAt } }), job.automation_run_id, step.id]);
           await connection.execute("UPDATE automation_runs SET status = 'queued', current_step_key = ? WHERE id = ?", [step.id, job.automation_run_id]);
           await connection.execute("UPDATE automation_jobs SET status = 'pending', execute_at = ?, available_at = ?, locked_at = NULL, locked_by = NULL WHERE id = ?", [slot, slot, job.id]);
+          await connection.execute("UPDATE automation_jobs SET attempts = GREATEST(attempts - 1, 0) WHERE id = ? AND status = 'pending'", [job.id]);
+          await connection.execute("UPDATE automation_run_steps SET attempt = GREATEST(attempt - 1, 0) WHERE automation_run_id = ? AND step_key = ? AND status = 'queued'", [job.automation_run_id, step.id]);
           await connection.commit();
           return { completed: true, scheduled: true, jobId: Number(job.id), runId: Number(job.automation_run_id), scheduledAt };
         }
@@ -573,4 +583,4 @@ async function reconstructMissingStepJob(connection, row) {
   await connection.execute("UPDATE automation_runs SET status = 'queued', error_code = NULL, error_message = NULL WHERE id = ? AND status = 'failed'", [row.automation_run_id]);
 }
 
-module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, DEFAULT_MAX_JOB_ATTEMPTS, RECOVERY_BATCH_LIMIT, automationErrorDiagnostics, buildAutomationContext, claimNextJob, completeBootstrapJob, createRunAndJob, isKnownTransientError, isKnownPermanentError, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, recoverAutomationJobs, reserveWhatsAppSlot, workerId };
+module.exports = { BACKOFF_MS, CADENCE_LATE_TOLERANCE_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, DEFAULT_MAX_JOB_ATTEMPTS, RECOVERY_BATCH_LIMIT, automationErrorDiagnostics, buildAutomationContext, claimNextJob, completeBootstrapJob, createRunAndJob, isKnownTransientError, isKnownPermanentError, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, recoverAutomationJobs, reserveWhatsAppSlot, workerId };
