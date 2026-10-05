@@ -28,6 +28,21 @@ const parseJson = (value, fallback = {}) => {
 const workerId = (provided) => provided || `${os.hostname()}:${process.pid}:${crypto.randomUUID()}`;
 const lockSeconds = (value) => Math.max(1, Math.ceil(positiveInt(value, DEFAULT_LOCK_TIMEOUT_MS, 24 * 60 * 60 * 1000) / 1000));
 const safeError = (error) => `ENGINE_ERROR:${String(error?.code || 'UNEXPECTED').replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80) || 'UNEXPECTED'}`;
+const automationErrorDiagnostics = (error, job = {}) => ({
+  errorCode: String(error?.code || 'UNEXPECTED').slice(0, 100),
+  retryable: error?.retryable === true,
+  stage: error?.stage || null,
+  providerStatus: Number.isInteger(error?.providerStatus) ? error.providerStatus : null,
+  providerDetail: error?.providerDetail || null,
+  providerErrorCode: error?.providerErrorCode || null,
+  providerCode: error?.providerCode || null,
+  providerErrorType: error?.providerErrorType || null,
+  providerMessage: error?.providerMessage || null,
+  operation: error?.operation || null,
+  providerRequestShape: error?.providerRequestShape || null,
+  jobId: job?.id == null ? null : Number(job.id),
+  runId: job?.automation_run_id == null ? null : Number(job.automation_run_id),
+});
 const PERMANENT_ERROR_CODES = new Set(['INVALID_WAIT', 'WHATSAPP_ACCOUNT_REQUIRED', 'WHATSAPP_ACCOUNT_NOT_CONNECTED', 'WHATSAPP_NOT_CONFIGURED', 'INVALID_WHATSAPP_MESSAGE', 'RECIPIENT_PHONE_INVALID', 'RECIPIENT_PHONE_MISSING', 'MEDIA_TYPE_NOT_SUPPORTED']);
 const isKnownTransientError = (value) => /EVOLUTION_UNAVAILABLE|EVOLUTION_TIMEOUT|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|HTTP_(408|429|5\d\d)/i.test(String(value || ''));
 const isKnownPermanentError = (value) => PERMANENT_ERROR_CODES.has(String(value || '').replace(/^ENGINE_ERROR:/, '').toUpperCase()) || /HTTP_4(?!08|29)\d|EVOLUTION_AUTH_FAILED|EVOLUTION_REQUEST_FAILED|INVALID_.*|_NOT_CONFIGURED|_REQUIRED|RECIPIENT_PHONE_INVALID/i.test(String(value || ''));
@@ -414,7 +429,7 @@ async function processJobBatch(options = {}) {
       await completeBootstrapJob(job, options.currentWorkerId);
       processed += 1;
     } catch (error) {
-      console.error('Automation job processing failed:', safeError(error));
+      console.error('Automation job processing failed:', automationErrorDiagnostics(error, job));
     }
   }
   return processed;
@@ -523,4 +538,4 @@ async function reconstructMissingStepJob(connection, row) {
   await connection.execute("UPDATE automation_runs SET status = 'queued', error_code = NULL, error_message = NULL WHERE id = ? AND status = 'failed'", [row.automation_run_id]);
 }
 
-module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, DEFAULT_MAX_JOB_ATTEMPTS, RECOVERY_BATCH_LIMIT, buildAutomationContext, claimNextJob, completeBootstrapJob, createRunAndJob, isKnownTransientError, isKnownPermanentError, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, recoverAutomationJobs, reserveWhatsAppSlot, workerId };
+module.exports = { BACKOFF_MS, DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, DEFAULT_MAX_JOB_ATTEMPTS, RECOVERY_BATCH_LIMIT, automationErrorDiagnostics, buildAutomationContext, claimNextJob, completeBootstrapJob, createRunAndJob, isKnownTransientError, isKnownPermanentError, matchAutomationsForEvent, processEventBatch, processJobBatch, processOneEvent, recoverAutomationJobs, reserveWhatsAppSlot, workerId };

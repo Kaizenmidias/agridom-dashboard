@@ -2,7 +2,33 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { BACKOFF_MS, RECOVERY_BATCH_LIMIT, isKnownPermanentError, isKnownTransientError, recoverAutomationJobs } = require('../services/automation-engine');
+const { BACKOFF_MS, RECOVERY_BATCH_LIMIT, automationErrorDiagnostics, isKnownPermanentError, isKnownTransientError, recoverAutomationJobs } = require('../services/automation-engine');
+
+test('diagnostico do provider preserva somente metadados seguros', () => {
+  const diagnostics = automationErrorDiagnostics({
+    code: 'EVOLUTION_UNAVAILABLE', retryable: true, stage: 'request', providerStatus: 503,
+    providerDetail: 'ECONNREFUSED', providerErrorCode: 'SERVICE_UNAVAILABLE', providerCode: '503',
+    providerErrorType: 'server', providerMessage: 'service unavailable', operation: 'POST /message/send',
+    providerRequestShape: { payloadKeys: ['number', 'text'], numberLength: 13, textLength: 8 },
+    apiKey: 'secret-key', recipient: '5511999999999', message: 'conteudo privado',
+  }, { id: 91, automation_run_id: 77 });
+  assert.equal(diagnostics.errorCode, 'EVOLUTION_UNAVAILABLE');
+  assert.equal(diagnostics.providerStatus, 503);
+  assert.equal(diagnostics.providerDetail, 'ECONNREFUSED');
+  assert.equal(diagnostics.jobId, 91);
+  assert.equal(diagnostics.runId, 77);
+  assert.doesNotMatch(JSON.stringify(diagnostics), /secret-key|5511999999999|conteudo privado/i);
+  assert.equal(diagnostics.apiKey, undefined);
+  assert.equal(diagnostics.recipient, undefined);
+  assert.equal(diagnostics.message, undefined);
+});
+
+test('diagnostico preserva detalhe seguro de falha ECONNREFUSED sem alterar classificacao', () => {
+  const diagnostics = automationErrorDiagnostics({ code: 'EVOLUTION_UNAVAILABLE', retryable: true, providerDetail: 'ECONNREFUSED' }, { id: 1, automation_run_id: 2 });
+  assert.equal(isKnownTransientError(diagnostics.errorCode), true);
+  assert.equal(diagnostics.providerDetail, 'ECONNREFUSED');
+  assert.equal(diagnostics.retryable, true);
+});
 
 test('recovery classifica falhas transitorias e permanentes conhecidas', () => {
   for (const code of ['EVOLUTION_UNAVAILABLE', 'EVOLUTION_TIMEOUT', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED']) assert.equal(isKnownTransientError(`ENGINE_ERROR:${code}`), true);
