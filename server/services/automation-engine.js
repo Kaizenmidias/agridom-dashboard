@@ -52,17 +52,39 @@ const cadenceSeconds = (config = {}) => {
   if (!Number.isInteger(amount) || amount <= 0) return 0;
   return amount * (unit === 'days' ? 86400 : unit === 'hours' ? 3600 : unit === 'seconds' ? 1 : 60);
 };
+const parseCadenceDate = (value) => {
+  if (value instanceof Date) return value;
+  const text = String(value || '').trim();
+  const utcText = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(text)
+    ? `${text.replace(' ', 'T')}Z`
+    : text;
+  const date = new Date(utcText);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
 
-async function reserveWhatsAppSlot(connection, automationId, accountId, config, now = new Date()) {
+async function reserveWhatsAppSlot(connection, automationId, accountId, config, nowOrOptions = new Date()) {
+  const options = nowOrOptions instanceof Date ? { now: nowOrOptions } : (nowOrOptions || {});
+  const now = options.now instanceof Date ? options.now : new Date();
+  const preferredSlot = options.preferredSlot instanceof Date && !Number.isNaN(options.preferredSlot.getTime()) ? options.preferredSlot : null;
   const seconds = cadenceSeconds(config);
   if (!seconds) return now;
   // Create the unique queue row before locking it. FOR UPDATE cannot lock a missing row.
   await connection.execute('INSERT IGNORE INTO automation_whatsapp_cadence (automation_id, communication_account_id, next_available_at) VALUES (?, ?, ?)', [automationId, accountId, now]);
   const [rows] = await connection.execute('SELECT UNIX_TIMESTAMP(next_available_at) AS next_available_epoch FROM automation_whatsapp_cadence WHERE automation_id = ? AND communication_account_id = ? FOR UPDATE', [automationId, accountId]);
   const stored = rows[0]?.next_available_epoch != null ? new Date(Number(rows[0].next_available_epoch) * 1000) : null;
+  const preferredIsFuture = preferredSlot && preferredSlot > now;
+  const preferredNext = preferredIsFuture ? new Date(preferredSlot.getTime() + seconds * 1000) : null;
+  if (preferredIsFuture && stored && stored >= preferredNext) {
+    console.info('cadence_slot_reused_future', { automation_id: Number(automationId), communication_account_id: Number(accountId), scheduled_at: preferredSlot.toISOString() });
+    return preferredSlot;
+  }
+  if (preferredSlot && preferredSlot <= now) {
+    console.info('cadence_slot_expired', { automation_id: Number(automationId), communication_account_id: Number(accountId), scheduled_at: preferredSlot.toISOString(), now: now.toISOString() });
+  }
   const slot = stored && stored > now ? stored : now;
   const next = new Date(slot.getTime() + seconds * 1000);
   await connection.execute('UPDATE automation_whatsapp_cadence SET next_available_at = ?, updated_at = CURRENT_TIMESTAMP WHERE automation_id = ? AND communication_account_id = ?', [next, automationId, accountId]);
+  console.info('cadence_slot_reserved', { automation_id: Number(automationId), communication_account_id: Number(accountId), scheduled_at: slot.toISOString(), next_available_at: next.toISOString() });
   return slot;
 }
 
@@ -268,8 +290,11 @@ function buildAutomationContext(current, job, stepId, idempotencyKey, eventPaylo
   return context;
 }
 
-async function completeBootstrapJob(job, currentWorkerId) {
-  const connection = await getPool().getConnection();
+async function completeBootstrapJob(job, currentWorkerId, dependencies = {}) {
+  const pool = dependencies.pool || getPool();
+  const runAction = dependencies.executeAction || executeAction;
+  const currentTime = typeof dependencies.now === 'function' ? dependencies.now() : Date.now();
+  const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     const [rows] = await connection.execute(
@@ -351,9 +376,13 @@ async function completeBootstrapJob(job, currentWorkerId) {
         const accountId = Number(step.config?.accountId || 0);
         if (!Number.isSafeInteger(accountId) || accountId <= 0) throw new Error('WHATSAPP_ACCOUNT_REQUIRED');
         const previousOutput = parseJson(existingSteps[0]?.output, {});
-        const persistedSlot = previousOutput.cadence?.scheduled_at ? new Date(previousOutput.cadence.scheduled_at) : null;
-        const slot = persistedSlot && !Number.isNaN(persistedSlot.getTime()) ? persistedSlot : await reserveWhatsAppSlot(connection, current.automation_id, accountId, step.config);
-        if (slot.getTime() > Date.now()) {
+        const persistedSlot = parseCadenceDate(previousOutput.cadence?.scheduled_at);
+        const validPersistedSlot = persistedSlot;
+        const slot = await reserveWhatsAppSlot(connection, current.automation_id, accountId, step.config, { now: new Date(currentTime), preferredSlot: validPersistedSlot });
+        if (validPersistedSlot && slot.getTime() !== validPersistedSlot.getTime()) {
+          console.info('cadence_job_rescheduled', { automation_id: Number(current.automation_id), communication_account_id: accountId, run_id: Number(job.automation_run_id), job_id: Number(job.id), previous_scheduled_at: validPersistedSlot.toISOString(), scheduled_at: slot.toISOString() });
+        }
+        if (slot.getTime() > currentTime) {
           const scheduledAt = slot.toISOString().slice(0, 19).replace('T', ' ');
           await connection.execute("UPDATE automation_run_steps SET status = 'queued', output = ?, finished_at = NULL WHERE automation_run_id = ? AND step_key = ?", [JSON.stringify({ cadence: { scheduled_at: scheduledAt } }), job.automation_run_id, step.id]);
           await connection.execute("UPDATE automation_runs SET status = 'queued', current_step_key = ? WHERE id = ?", [step.id, job.automation_run_id]);
@@ -362,7 +391,13 @@ async function completeBootstrapJob(job, currentWorkerId) {
           return { completed: true, scheduled: true, jobId: Number(job.id), runId: Number(job.automation_run_id), scheduledAt };
         }
       }
-      output = await executeAction(connection, step.config.actionType, step.config, context);
+      if (['whatsapp.send', 'whatsapp.send_message'].includes(String(step.config?.actionType))) {
+        console.info('whatsapp_send_started', { automation_id: Number(current.automation_id), run_id: Number(job.automation_run_id), job_id: Number(job.id), communication_account_id: Number(step.config?.accountId) });
+      }
+      output = await runAction(connection, step.config.actionType, step.config, context);
+      if (output?.idempotent === true) {
+        console.info('whatsapp_send_skipped_idempotent', { automation_id: Number(current.automation_id), run_id: Number(job.automation_run_id), job_id: Number(job.id), communication_account_id: Number(step.config?.accountId) });
+      }
     } else if (step.type === 'finish') {
       nextStep = null;
       output = { finished: true };

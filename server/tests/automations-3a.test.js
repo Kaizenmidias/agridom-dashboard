@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { EVENT_CONTRACTS, validateEventInput } = require('../services/domain-events');
-const { matchAutomationsForEvent, reserveWhatsAppSlot } = require('../services/automation-engine');
+const { matchAutomationsForEvent, reserveWhatsAppSlot, completeBootstrapJob } = require('../services/automation-engine');
 const { validateAutomationDefinition } = require('../services/automation-definition-validator');
 const { UNCONFIGURED_TRIGGER } = require('../services/automation-catalog');
 const automationRepository = require('../services/automation-repository');
@@ -253,6 +253,139 @@ test('AUTOMATIONS-3A reserva slots de cadência serialmente sob lock', async () 
   assert.equal(slot.toISOString(), '2026-09-29T10:01:00.000Z');
   assert.match(calls[1].sql, /FOR UPDATE/);
   assert.equal(calls[2].params[0].toISOString(), '2026-09-29T10:02:00.000Z');
+});
+
+test('cadence reconciles an expired persisted slot without a burst', async () => {
+  let stored = new Date('2026-09-29T14:50:00Z');
+  const slots = [];
+  const connection = { execute: async (sql, params) => {
+    if (sql.includes('UNIX_TIMESTAMP(next_available_at)')) return [[{ next_available_epoch: Math.floor(stored.getTime() / 1000) }]];
+    if (sql.startsWith('UPDATE automation_whatsapp_cadence')) { stored = params[0]; slots.push(stored); }
+    return [{ affectedRows: 1 }];
+  } };
+  const now = new Date('2026-09-29T15:00:00Z');
+  const config = { cadenceValue: 10, cadenceUnit: 'minutes' };
+  const first = await reserveWhatsAppSlot(connection, 4, 1, config, { now, preferredSlot: new Date('2026-09-29T13:36:00Z') });
+  const second = await reserveWhatsAppSlot(connection, 4, 1, config, { now, preferredSlot: new Date('2026-09-29T13:46:00Z') });
+  assert.equal(first.toISOString(), '2026-09-29T15:00:00.000Z');
+  assert.equal(second.toISOString(), '2026-09-29T15:10:00.000Z');
+  assert.deepEqual(slots.map((slot) => slot.toISOString()), ['2026-09-29T15:10:00.000Z', '2026-09-29T15:20:00.000Z']);
+});
+
+test('cadence reuses a future persisted slot only when the queue confirms it', async () => {
+  let updates = 0;
+  const connection = { execute: async (sql) => {
+    if (sql.includes('UNIX_TIMESTAMP(next_available_at)')) return [[{ next_available_epoch: Math.floor(new Date('2026-09-29T15:20:00Z').getTime() / 1000) }]];
+    if (sql.startsWith('UPDATE automation_whatsapp_cadence')) updates += 1;
+    return [{ affectedRows: 1 }];
+  } };
+  const slot = await reserveWhatsAppSlot(connection, 4, 1, { cadenceValue: 10, cadenceUnit: 'minutes' }, {
+    now: new Date('2026-09-29T15:00:00Z'), preferredSlot: new Date('2026-09-29T15:10:00Z'),
+  });
+  assert.equal(slot.toISOString(), '2026-09-29T15:10:00.000Z');
+  assert.equal(updates, 0);
+});
+
+function cadenceEngineFixture(scheduledAtByJob, nextAvailableAt) {
+  const state = {
+    cadence: new Date(nextAvailableAt),
+    jobs: new Map(Object.entries(scheduledAtByJob).map(([id, scheduledAt]) => [Number(id), { id: Number(id), output: { cadence: { scheduled_at: scheduledAt } }, status: 'processing' }])),
+    sends: [],
+  };
+  const definition = {
+    schemaVersion: 1,
+    trigger: { type: 'lead.created', config: {} },
+    steps: [{ id: 'send', type: 'action', config: { actionType: 'whatsapp.send', accountId: 1, recipient: '{{lead.phone}}', message: 'Ola', cadenceValue: 10, cadenceUnit: 'minutes' }, next: null }],
+  };
+  const connection = {
+    beginTransaction: async () => {},
+    commit: async () => {},
+    rollback: async () => {},
+    release: () => {},
+    execute: async (query, params = []) => {
+      const sql = String(query);
+      const jobId = /SELECT aj\.\*, ar\.automation_id/.test(sql)
+        ? Number(params[0])
+        : /SELECT \* FROM automation_run_steps/.test(sql)
+          ? Number(params[0]) - 100
+          : Number(params.at(-1));
+      if (/SELECT aj\.\*, ar\.automation_id/.test(sql)) {
+        const job = state.jobs.get(jobId);
+        return [[{ id: job.id, automation_run_id: job.id + 100, automation_id: 9, automation_version_id: 19, entity_type: 'lead', entity_id: String(job.id), owner_user_id: 1, current_step_key: 'send', correlation_id: `corr-${job.id}`, definition: JSON.stringify(definition), event_uuid: `event-${job.id}`, lineage_depth: 0, run_status: 'queued', payload: '{}' }]];
+      }
+      if (/SELECT \* FROM automation_run_steps/.test(sql)) return [[{ output: JSON.stringify(state.jobs.get(jobId).output) }]];
+      if (/UNIX_TIMESTAMP\(next_available_at\)/.test(sql)) return [[{ next_available_epoch: Math.floor(state.cadence.getTime() / 1000) }]];
+      if (/UPDATE automation_whatsapp_cadence SET/.test(sql)) { state.cadence = new Date(params[0]); return [{ affectedRows: 1 }]; }
+      if (/UPDATE automation_run_steps SET status = 'queued'/.test(sql)) {
+        const job = [...state.jobs.values()].find((item) => item.id + 100 === Number(params[1]));
+        job.output = JSON.parse(params[0]);
+        job.status = 'pending';
+        return [{ affectedRows: 1 }];
+      }
+      if (/UPDATE automation_jobs SET status = 'pending'/.test(sql)) {
+        const job = state.jobs.get(Number(params.at(-1)));
+        job.status = 'pending';
+        job.executeAt = new Date(params[0]);
+        return [{ affectedRows: 1 }];
+      }
+      if (/UPDATE automation_run_steps SET status = \?/.test(sql)) return [{ affectedRows: 1 }];
+      return [{ affectedRows: 1 }];
+    },
+  };
+  return { state, pool: { getConnection: async () => connection }, definition };
+}
+
+test('automation whatsapp cadence does not burst expired jobs after worker downtime', async () => {
+  const fixture = cadenceEngineFixture({
+      1: '2026-09-29T13:36:00Z',
+      2: '2026-09-29T13:46:00Z',
+      3: '2026-09-29T13:56:00Z',
+      4: '2026-09-29T14:06:00Z',
+  }, '2026-09-29T14:50:00Z');
+  for (const id of [1, 2, 3, 4]) {
+      const job = { id, automation_run_id: id + 100 };
+      await completeBootstrapJob(job, `cadence-${id}`, {
+        pool: fixture.pool,
+        now: () => new Date('2026-09-29T15:00:00Z').getTime(),
+        executeAction: async () => { fixture.state.sends.push(id); return { idempotent: false }; },
+      });
+  }
+  assert.deepEqual(fixture.state.sends, [1]);
+  assert.equal(fixture.state.jobs.get(2).executeAt.toISOString(), '2026-09-29T15:10:00.000Z');
+  assert.equal(fixture.state.jobs.get(3).executeAt.toISOString(), '2026-09-29T15:20:00.000Z');
+  assert.equal(fixture.state.jobs.get(4).executeAt.toISOString(), '2026-09-29T15:30:00.000Z');
+});
+
+test('automation whatsapp cadence reuses the same future slot when a job is reprocessed', async () => {
+  const fixture = cadenceEngineFixture({ 1: '2026-09-29T13:36:00Z' }, '2026-09-29T14:10:00Z');
+  const job = { id: 1, automation_run_id: 101 };
+  let calls = 0;
+  await completeBootstrapJob(job, 'cadence-reprocess', { pool: fixture.pool, now: () => new Date('2026-09-29T14:00:00Z').getTime(), executeAction: async () => { calls += 1; return {}; } });
+  const firstSlot = fixture.state.jobs.get(1).executeAt.toISOString();
+  const queueAfterFirst = fixture.state.cadence.toISOString();
+  await completeBootstrapJob(job, 'cadence-reprocess', { pool: fixture.pool, now: () => new Date('2026-09-29T14:00:00Z').getTime(), executeAction: async () => { calls += 1; return {}; } });
+  assert.equal(firstSlot, '2026-09-29T14:10:00.000Z');
+  assert.equal(fixture.state.jobs.get(1).executeAt.toISOString(), firstSlot);
+  assert.equal(fixture.state.cadence.toISOString(), queueAfterFirst);
+  assert.equal(calls, 0);
+});
+
+test('automation whatsapp cadence preserves the existing idempotency skip before the provider', async () => {
+  const fixture = cadenceEngineFixture({ 1: '2026-09-29T13:36:00Z' }, '2026-09-29T14:00:00Z');
+  let providerCalls = 0;
+  const result = await completeBootstrapJob({ id: 1, automation_run_id: 101 }, 'cadence-idempotency', {
+    pool: fixture.pool,
+    now: () => new Date('2026-09-29T15:00:00Z').getTime(),
+    executeAction: async (_connection, _actionType, _config, context) => {
+      assert.equal(context.idempotencyKey, 'run:101:step:send');
+      const alreadySent = true;
+      if (alreadySent) return { idempotent: true };
+      providerCalls += 1;
+      return { idempotent: false };
+    },
+  });
+  assert.equal(result.completed, true);
+  assert.equal(providerCalls, 0);
 });
 
 test('AUTOMATIONS-3A inicializa a fila antes do FOR UPDATE para eliminar a corrida da primeira reserva', () => {
