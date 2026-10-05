@@ -6,7 +6,6 @@ const { extractInbound } = require('../services/whatsapp-service');
 const { hasWebhookSecret, readWebhookSecret } = require('../services/whatsapp-webhook-auth');
 
 const router = express.Router();
-const hit = new Map();
 const sanitizeWebhookData = (value, depth = 0) => {
   if (depth > 8 || value == null) return value;
   if (typeof value === 'string') return value.length > 2000 ? value.slice(0, 2000) : value;
@@ -15,10 +14,6 @@ const sanitizeWebhookData = (value, depth = 0) => {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !['base64', 'jpegThumbnail', 'thumbnail'].includes(key)).map(([key, item]) => [key, sanitizeWebhookData(item, depth + 1)]));
 };
 router.post('/evolution', async (req, res) => {
-  const ip = req.ip || 'unknown';
-  const now = Date.now();
-  if (now - (hit.get(ip) || 0) < 100) return res.status(429).json({ error: 'Webhook temporariamente limitado.' });
-  hit.set(ip, now);
   const payload = req.body && typeof req.body === 'object' ? req.body : null;
   if (!payload) return res.status(400).json({ error: 'Payload JSON invalido.' });
   const instance = String(payload.instance || payload.data?.instance || payload.data?.instanceName || '').trim();

@@ -81,6 +81,16 @@ function providerError(message, code, retryable = false, cause) {
   return error;
 }
 
+const messageId = (data) => data?.key?.id || data?.message?.key?.id || data?.id || null;
+
+function requireMessageId(data) {
+  const externalMessageId = typeof messageId(data) === "string" ? messageId(data).trim() : "";
+  if (!externalMessageId) {
+    throw providerError("A Evolution retornou uma resposta de mensagem invalida.", "EVOLUTION_INVALID_RESPONSE", false, { response: { data } });
+  }
+  return externalMessageId;
+}
+
 function validateBaseUrl(value) {
   let url;
   try {
@@ -127,11 +137,12 @@ class EvolutionWhatsAppProvider {
       Math.max(Number(config.timeout || 15000), 3000),
       30000,
     );
+    this.httpRequest = config.httpRequest || axios;
   }
 
   async request(method, path, data) {
     try {
-      const response = await axios({
+      const response = await this.httpRequest({
         method,
         url: `${this.baseUrl}${path}`,
         data,
@@ -153,7 +164,7 @@ class EvolutionWhatsAppProvider {
             ? "EVOLUTION_AUTH_FAILED"
             : retryable
               ? "EVOLUTION_UNAVAILABLE"
-              : "EVOLUTION_REQUEST_FAILED",
+              : "EVOLUTION_HTTP_REJECTED",
           retryable,
           response,
         );
@@ -161,16 +172,20 @@ class EvolutionWhatsAppProvider {
       return response.data || {};
     } catch (cause) {
       if (cause?.publicMessage) throw cause;
-      const retryable = [
-        "ECONNABORTED",
-        "ETIMEDOUT",
-        "ECONNRESET",
-        "ECONNREFUSED",
-        "EAI_AGAIN",
-      ].includes(String(cause?.code));
+      const transportCode = String(cause?.code || "");
+      const retryable = ["EAI_AGAIN"].includes(transportCode);
+      const code = transportCode === "ECONNABORTED" || transportCode === "ETIMEDOUT"
+        ? "EVOLUTION_TIMEOUT"
+        : transportCode === "ECONNRESET"
+          ? "EVOLUTION_CONNECTION_RESET"
+          : transportCode === "ECONNREFUSED"
+            ? "EVOLUTION_CONNECTION_REFUSED"
+            : retryable
+              ? "EVOLUTION_UNAVAILABLE"
+              : "EVOLUTION_REQUEST_FAILED";
       throw providerError(
         "Nao foi possivel acessar a Evolution API.",
-        retryable ? "EVOLUTION_UNAVAILABLE" : "EVOLUTION_REQUEST_FAILED",
+        code,
         retryable,
         cause,
       );
@@ -254,8 +269,7 @@ class EvolutionWhatsAppProvider {
       },
     );
     return {
-      externalMessageId:
-        data.key?.id || data.message?.key?.id || data.id || null,
+      externalMessageId: requireMessageId(data),
       status: "sent",
       raw: data,
     };
@@ -279,8 +293,7 @@ class EvolutionWhatsAppProvider {
       },
     );
     return {
-      externalMessageId:
-        data.key?.id || data.message?.key?.id || data.id || null,
+      externalMessageId: requireMessageId(data),
       status: "sent",
       raw: data,
     };
@@ -293,8 +306,7 @@ class EvolutionWhatsAppProvider {
       { number, audio, encoding: true, quoted: quoted || undefined },
     );
     return {
-      externalMessageId:
-        data.key?.id || data.message?.key?.id || data.id || null,
+      externalMessageId: requireMessageId(data),
       status: "sent",
       raw: data,
     };

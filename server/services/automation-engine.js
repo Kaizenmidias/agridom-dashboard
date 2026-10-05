@@ -45,8 +45,8 @@ const automationErrorDiagnostics = (error, job = {}) => ({
   runId: job?.automation_run_id == null ? null : Number(job.automation_run_id),
 });
 const PERMANENT_ERROR_CODES = new Set(['INVALID_WAIT', 'WHATSAPP_ACCOUNT_REQUIRED', 'WHATSAPP_ACCOUNT_NOT_CONNECTED', 'WHATSAPP_NOT_CONFIGURED', 'INVALID_WHATSAPP_MESSAGE', 'RECIPIENT_PHONE_INVALID', 'RECIPIENT_PHONE_MISSING', 'MEDIA_TYPE_NOT_SUPPORTED']);
-const isKnownTransientError = (value) => /EVOLUTION_UNAVAILABLE|EVOLUTION_TIMEOUT|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|HTTP_(408|429|5\d\d)/i.test(String(value || ''));
-const isKnownPermanentError = (value) => PERMANENT_ERROR_CODES.has(String(value || '').replace(/^ENGINE_ERROR:/, '').toUpperCase()) || /HTTP_4(?!08|29)\d|EVOLUTION_AUTH_FAILED|EVOLUTION_REQUEST_FAILED|INVALID_.*|_NOT_CONFIGURED|_REQUIRED|RECIPIENT_PHONE_INVALID/i.test(String(value || ''));
+const isKnownTransientError = (value) => /EVOLUTION_UNAVAILABLE|EVOLUTION_CONNECTION_REFUSED|EAI_AGAIN|HTTP_(408|429|5\d\d)/i.test(String(value || ''));
+const isKnownPermanentError = (value) => PERMANENT_ERROR_CODES.has(String(value || '').replace(/^ENGINE_ERROR:/, '').toUpperCase()) || /HTTP_4(?!08|29)\d|EVOLUTION_AUTH_FAILED|EVOLUTION_TIMEOUT|EVOLUTION_CONNECTION_RESET|EVOLUTION_HTTP_REJECTED|EVOLUTION_REQUEST_FAILED|EVOLUTION_INVALID_RESPONSE|INVALID_.*|_NOT_CONFIGURED|_REQUIRED|RECIPIENT_PHONE_INVALID/i.test(String(value || ''));
 const cadenceSeconds = (config = {}) => {
   const amount = Number(config.cadenceAmount ?? config.cadenceValue ?? config.cadence ?? 0);
   const unit = String(config.cadenceUnit || 'minutes');
@@ -493,10 +493,7 @@ async function recoverAutomationJobs({ connection, limit = RECOVERY_BATCH_LIMIT,
       WHERE aj.status = 'failed' AND ar.status IN ('failed', 'queued')
         AND aj.attempts < aj.max_attempts
         AND (aj.last_error LIKE '%EVOLUTION_UNAVAILABLE%'
-          OR aj.last_error LIKE '%EVOLUTION_TIMEOUT%'
-          OR aj.last_error LIKE '%ETIMEDOUT%'
-          OR aj.last_error LIKE '%ECONNRESET%'
-          OR aj.last_error LIKE '%ECONNREFUSED%'
+          OR aj.last_error LIKE '%EVOLUTION_CONNECTION_REFUSED%'
           OR aj.last_error LIKE '%EAI_AGAIN%')
       ORDER BY aj.failed_at, aj.id LIMIT ?`, [max]);
   const existingDecisions = rows.map((row) => ({ ...row, recoveryType: 'existing_job', eligible: isKnownTransientError(`${row.error_code || ''} ${row.error_message || ''} ${row.last_error || ''}`) && !isKnownPermanentError(`${row.error_code || ''} ${row.error_message || ''}`), reason: 'known_transient_error' }));

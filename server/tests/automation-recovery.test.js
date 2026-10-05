@@ -30,8 +30,12 @@ test('diagnostico preserva detalhe seguro de falha ECONNREFUSED sem alterar clas
   assert.equal(diagnostics.retryable, true);
 });
 
-test('recovery classifica falhas transitorias e permanentes conhecidas', () => {
-  for (const code of ['EVOLUTION_UNAVAILABLE', 'EVOLUTION_TIMEOUT', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED']) assert.equal(isKnownTransientError(`ENGINE_ERROR:${code}`), true);
+test('recovery nao reabre resultados ambiguos ou rejeitados', () => {
+  for (const code of ['EVOLUTION_UNAVAILABLE', 'EVOLUTION_CONNECTION_REFUSED', 'EAI_AGAIN']) assert.equal(isKnownTransientError(`ENGINE_ERROR:${code}`), true);
+  for (const code of ['EVOLUTION_TIMEOUT', 'EVOLUTION_CONNECTION_RESET', 'EVOLUTION_HTTP_REJECTED', 'EVOLUTION_INVALID_RESPONSE', 'EVOLUTION_REQUEST_FAILED']) {
+    assert.equal(isKnownTransientError(`ENGINE_ERROR:${code}`), false);
+    assert.equal(isKnownPermanentError(code), true);
+  }
   for (const code of ['HTTP_400', 'HTTP_401', 'HTTP_403', 'EVOLUTION_AUTH_FAILED', 'INVALID_WAIT', 'WHATSAPP_ACCOUNT_REQUIRED']) assert.equal(isKnownPermanentError(code), true);
   assert.equal(isKnownPermanentError('ER_NO_SUCH_TABLE'), false);
 });
