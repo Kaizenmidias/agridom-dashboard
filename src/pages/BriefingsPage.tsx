@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Calendar, User, MoreVertical, GripVertical, Edit, Trash2, Mail, MessageSquare, Paperclip, Share2 } from "lucide-react"
+import { Search, Plus, Calendar, User, MoreVertical, GripVertical, Edit, Trash2, Mail, MessageSquare, Paperclip, Share2, DollarSign } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format, isPast, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -46,6 +46,7 @@ export default function BriefingsPage() {
   const [loading, setLoading] = useState(true)
   const [selectedBriefing, setSelectedBriefing] = useState<Briefing | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [draggedBriefing, setDraggedBriefing] = useState<Briefing | null>(null)
 
   useEffect(() => {
     loadBriefings()
@@ -101,6 +102,7 @@ export default function BriefingsPage() {
 
   const filteredBriefings = briefings.filter(briefing =>
     (briefing.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (briefing.project_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (briefing.client_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (briefing.client || '').toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -249,7 +251,7 @@ export default function BriefingsPage() {
       <div className="flex-1 overflow-x-auto px-6 pb-6">
         <div className="flex gap-4 h-full min-w-max">
           {KANBAN_COLUMNS.map((column) => (
-            <div key={column.id} className="w-[280px] flex flex-col bg-[#161b22] rounded-xl h-full max-h-full">
+            <div key={column.id} className="w-[280px] flex flex-col bg-[#161b22] rounded-xl h-full max-h-full" onDragOver={(event) => event.preventDefault()} onDrop={() => draggedBriefing && void handleMoveBriefing(draggedBriefing.id, column.id as Briefing['status'])}>
               {/* Column Header */}
               <div className="p-3 flex items-center justify-between group">
                 <h3 className="font-semibold text-sm px-2 text-gray-300 truncate">
@@ -280,6 +282,9 @@ export default function BriefingsPage() {
                 {getBriefingsByStatus(column.id).map((briefing) => (
                   <Card
                     key={briefing.id}
+                    draggable
+                    onDragStart={() => setDraggedBriefing(briefing)}
+                    onDragEnd={() => setDraggedBriefing(null)}
                     className="bg-[#21262d] border-none shadow-sm hover:ring-1 hover:ring-blue-500/50 transition-all cursor-pointer group"
                     onClick={() => openDetails(briefing)}
                   >
@@ -293,8 +298,11 @@ export default function BriefingsPage() {
                         </h4>
                         
                         <div className="flex items-center gap-2 text-gray-400 text-[11px]">
-                          <span className="truncate">{briefing.client || briefing.client_name || 'Sem cliente'}</span>
+                          <User className="h-3 w-3" />
+                          <span className="truncate">{briefing.project_client || briefing.client || briefing.client_name || 'Sem cliente'}</span>
                         </div>
+                        {briefing.project_name && <div className="text-[10px] text-gray-500 truncate">Projeto: {briefing.project_name}</div>}
+                        {briefing.project_value != null && <div className="flex items-center gap-1 text-xs font-semibold text-blue-300"><DollarSign className="h-3 w-3" />{Number(briefing.project_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>}
                       </div>
 
                       <div className="flex items-center justify-between pt-1">
@@ -410,4 +418,3 @@ export default function BriefingsPage() {
     </div>
   )
 }
-

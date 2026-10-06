@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS company_access (
 
 CREATE TABLE IF NOT EXISTS briefings (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  project_id BIGINT UNSIGNED NULL,
   user_id BIGINT UNSIGNED NOT NULL,
   title VARCHAR(255) NOT NULL,
   client VARCHAR(255) NULL,
@@ -120,8 +121,10 @@ CREATE TABLE IF NOT EXISTS briefings (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_briefings_project (project_id),
   KEY idx_briefings_user_status (user_id, status),
-  CONSTRAINT fk_briefings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  CONSTRAINT fk_briefings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_briefings_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS codes (

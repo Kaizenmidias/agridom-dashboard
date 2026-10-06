@@ -87,6 +87,10 @@ export interface Project {
   start_date: string;
   end_date?: string;
   user_id: number;
+  client?: string;
+  project_type?: string;
+  delivery_date?: string | null;
+  completion_date?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -165,6 +169,13 @@ export interface InsertCode {
 // Tipos de briefings
 export interface Briefing {
   id: string;
+  project_id?: number | null;
+  project_name?: string | null;
+  project_client?: string | null;
+  project_client_name?: string | null;
+  project_value?: number | null;
+  paid_value?: number | null;
+  project_status?: Project['status'] | null;
   title: string;
   content: string;
   subject?: string;
@@ -182,6 +193,7 @@ export interface Briefing {
 }
 
 export interface InsertBriefing {
+  project_id?: number;
   title: string;
   content: string;
   subject?: string;

@@ -2,10 +2,24 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { calculateTotalMonthlyExpenses } = require('../utils/billing-calculations');
+const { getPool } = require('../config/database');
 
 const router = express.Router();
 
 const getQuery = (req) => req.app.locals.query;
+
+const requireModuleAccess = (field) => async (req, res, next) => {
+  try {
+    const result = await getQuery(req)(`SELECT role, ${field} FROM users WHERE id = ? AND is_active = 1 LIMIT 1`, [req.userId]);
+    const user = result.rows?.[0];
+    const isAdmin = ['admin', 'administrator', 'administrador'].includes(String(user?.role || '').toLowerCase());
+    if (!user || (!isAdmin && !user[field])) return res.status(403).json({ error: 'Sem permissao para este modulo' });
+    next();
+  } catch (error) {
+    console.error('Erro ao validar permissao do modulo:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+};
 
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers.authorization || '';
@@ -113,9 +127,9 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
 });
 
 // Projects
-router.get('/projects', authenticateToken, async (req, res) => {
+router.get('/projects', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
   try {
-    const result = await getQuery(req)('SELECT * FROM projects WHERE user_id = ? ORDER BY created_at DESC', [req.userId]);
+    const result = await getQuery(req)('SELECT * FROM projects ORDER BY created_at DESC');
     res.json(result.rows || []);
   } catch (error) {
     console.error('Erro ao buscar projetos:', error);
@@ -123,25 +137,36 @@ router.get('/projects', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/projects', authenticateToken, async (req, res) => {
+router.post('/projects', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
+  let connection;
   try {
     const { name, client, client_name, project_type, status, description, project_value, paid_value, delivery_date, completion_date } = req.body;
     if (!name) return res.status(400).json({ error: 'Nome do projeto e obrigatorio' });
-    const query = getQuery(req);
-    const inserted = await query(
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    const [inserted] = await connection.execute(
       `INSERT INTO projects (user_id, name, client, project_type, status, description, project_value, paid_value, delivery_date, completion_date, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [req.userId, name, client || client_name || null, project_type || 'website', status || 'active', description || null, project_value || 0, paid_value || 0, delivery_date || null, completion_date || null]
     );
-    const result = await query('SELECT * FROM projects WHERE id = ?', [inserted.insertId]);
-    res.status(201).json(result.rows[0]);
+    await connection.execute(
+      `INSERT INTO briefings (project_id, user_id, title, client, client_name, project_type, description, content, status, priority, deadline, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'medium', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [inserted.insertId, req.userId, name, client || client_name || null, client || client_name || null, project_type || 'website', description || null, description || null, delivery_date || null]
+    );
+    await connection.commit();
+    const [rows] = await getPool().execute('SELECT * FROM projects WHERE id = ?', [inserted.insertId]);
+    res.status(201).json(rows[0]);
   } catch (error) {
+    if (connection) await connection.rollback();
     console.error('Erro ao criar projeto:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
+  } finally {
+    connection?.release();
   }
 });
 
-router.put('/projects/:id', authenticateToken, async (req, res) => {
+router.put('/projects/:id', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
   try {
     const { name, client, client_name, project_type, status, description, project_value, paid_value, delivery_date, completion_date } = req.body;
     const query = getQuery(req);
@@ -157,10 +182,10 @@ router.put('/projects/:id', authenticateToken, async (req, res) => {
            delivery_date = COALESCE(?, delivery_date),
            completion_date = COALESCE(?, completion_date),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND user_id = ?`,
-      [name ?? null, client || client_name || null, project_type ?? null, status ?? null, description ?? null, project_value ?? null, paid_value ?? null, delivery_date ?? null, completion_date ?? null, req.params.id, req.userId]
+       WHERE id = ?`,
+      [name ?? null, client || client_name || null, project_type ?? null, status ?? null, description ?? null, project_value ?? null, paid_value ?? null, delivery_date ?? null, completion_date ?? null, req.params.id]
     );
-    const result = await query('SELECT * FROM projects WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    const result = await query('SELECT * FROM projects WHERE id = ?', [req.params.id]);
     if (!result.rows?.length) return res.status(404).json({ error: 'Projeto nao encontrado' });
     res.json(result.rows[0]);
   } catch (error) {
@@ -169,9 +194,9 @@ router.put('/projects/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.delete('/projects/:id', authenticateToken, async (req, res) => {
+router.delete('/projects/:id', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
   try {
-    await getQuery(req)('DELETE FROM projects WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    await getQuery(req)('DELETE FROM projects WHERE id = ?', [req.params.id]);
     res.json({ message: 'Projeto excluido com sucesso' });
   } catch (error) {
     console.error('Erro ao excluir projeto:', error);
@@ -304,9 +329,13 @@ router.delete('/company-access/:id', authenticateToken, async (req, res) => {
 });
 
 // Briefings
-router.get('/briefings', authenticateToken, async (req, res) => {
+router.get('/briefings', authenticateToken, requireModuleAccess('can_access_briefings'), async (req, res) => {
   try {
-    const result = await getQuery(req)('SELECT * FROM briefings WHERE user_id = ? ORDER BY created_at DESC', [req.userId]);
+    const result = await getQuery(req)(`SELECT b.*, p.name AS project_name, p.client AS project_client,
+       COALESCE(p.client, p.client_name) AS project_client_name, p.project_type AS project_type,
+       p.project_value, p.paid_value, p.status AS project_status, p.user_id AS project_owner_id
+       FROM briefings b LEFT JOIN projects p ON p.id = b.project_id
+       ORDER BY b.created_at DESC`);
     res.json(result.rows || []);
   } catch (error) {
     console.error('Erro ao buscar briefings:', error);
@@ -314,14 +343,14 @@ router.get('/briefings', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/briefings', authenticateToken, async (req, res) => {
+router.post('/briefings', authenticateToken, requireModuleAccess('can_access_briefings'), async (req, res) => {
   try {
     const { title, client, description, content, status, priority, deadline } = req.body;
     if (!title) return res.status(400).json({ error: 'Titulo e obrigatorio' });
     const inserted = await getQuery(req)(
-      `INSERT INTO briefings (title, client, description, content, status, priority, deadline, user_id, created_at, updated_at)
+      `INSERT INTO briefings (user_id, title, client, description, content, status, priority, deadline, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [title, client || null, description || null, content || description || null, status || 'pending', priority || 'medium', deadline || null, req.userId]
+      [req.userId, title, client || null, description || null, content || description || null, status || 'pending', priority || 'medium', deadline || null]
     );
     const result = await getQuery(req)('SELECT * FROM briefings WHERE id = ?', [inserted.insertId]);
     res.status(201).json(result.rows[0]);
@@ -331,7 +360,7 @@ router.post('/briefings', authenticateToken, async (req, res) => {
   }
 });
 
-router.put('/briefings/:id', authenticateToken, async (req, res) => {
+router.put('/briefings/:id', authenticateToken, requireModuleAccess('can_access_briefings'), async (req, res) => {
   try {
     const { title, client, description, content, status, priority, deadline } = req.body;
     const query = getQuery(req);
@@ -345,21 +374,21 @@ router.put('/briefings/:id', authenticateToken, async (req, res) => {
            priority = COALESCE(?, priority),
            deadline = COALESCE(?, deadline),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND user_id = ?`,
+       WHERE id = ? AND (project_id IS NOT NULL OR user_id = ?)`,
       [title ?? null, client ?? null, description ?? null, content ?? null, status ?? null, priority ?? null, deadline ?? null, req.params.id, req.userId]
     );
-    const result = await queryById(query, 'briefings', req.params.id, req.userId);
-    if (!result) return res.status(404).json({ error: 'Briefing nao encontrado' });
-    res.json(result);
+    const result = await query('SELECT * FROM briefings WHERE id = ? AND (project_id IS NOT NULL OR user_id = ?)', [req.params.id, req.userId]);
+    if (!result.rows?.length) return res.status(404).json({ error: 'Briefing nao encontrado' });
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Erro ao atualizar briefing:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
-router.delete('/briefings/:id', authenticateToken, async (req, res) => {
+router.delete('/briefings/:id', authenticateToken, requireModuleAccess('can_access_briefings'), async (req, res) => {
   try {
-    await getQuery(req)('DELETE FROM briefings WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    await getQuery(req)('DELETE FROM briefings WHERE id = ? AND (project_id IS NULL AND user_id = ?)', [req.params.id, req.userId]);
     res.json({ message: 'Briefing excluido com sucesso' });
   } catch (error) {
     console.error('Erro ao excluir briefing:', error);
