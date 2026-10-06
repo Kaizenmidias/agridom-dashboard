@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { actorInput, budgetReached, candidateBudget, processCandidates, targetReached } = require('../services/prospecting-service');
+const { actorInput, apifySearch, budgetReached, candidateBudget, processCandidates, targetReached } = require('../services/prospecting-service');
+const { encryptSecret } = require('../services/integration-crypto');
 
 function connectionMock({ failOn = null } = {}) {
   const calls = [];
@@ -43,6 +44,24 @@ test('candidateBudget dobra a meta e o payload Compass usa locationQuery', () =>
   assert.equal('location' in payload, false);
 });
 
+test('apifySearch devolve todos os itens do fetch mockado sem truncamento', async () => {
+  const items = Array.from({ length: 100 }, (_, index) => ({ title: `Lead ${index}` }));
+  let requestedUrl = '';
+  process.env.INTEGRATION_ENCRYPTION_KEY = 'offline-test-key';
+  const secret = encryptSecret({ token: 'offline-test-token' });
+  const result = await apifySearch(
+    { searchTerms: 'contabilidade', quantity: 50 },
+    { configuration_metadata: { googleMapsActorId: 'compass/crawler-google-places' }, secret_ciphertext: secret.ciphertext, secret_iv: secret.iv, secret_auth_tag: secret.authTag },
+    async (url) => {
+      requestedUrl = url;
+      return { ok: true, async json() { return items; } };
+    },
+  );
+  assert.equal(result.length, 100);
+  assert.match(requestedUrl, /run-sync-get-dataset-items\?token=/);
+  assert.doesNotMatch(requestedUrl, /limit=/);
+});
+
 test('processa novo, duplicado, inválido e preserva contadores/resultados', async () => {
   const db = connectionMock();
   const items = [candidate('Novo', '5511999990001'), candidate('Duplicado', '5511999990001'), candidate('SemTelefone', null)];
@@ -51,6 +70,9 @@ test('processa novo, duplicado, inválido e preserva contadores/resultados', asy
   assert.equal(result.foundCount, 1);
   assert.equal(result.duplicateCount, 1);
   assert.equal(result.invalidCount, 1);
+  assert.equal(result.providerItemCount, 3);
+  assert.equal(result.ratingFilteredCount, 3);
+  assert.equal(result.candidateCount, 3);
   assert.equal(db.prospects.size, 1);
   const resultInserts = db.calls.filter((call) => call.sql.includes('INSERT INTO prospecting_results'));
   assert.equal(resultInserts.length, 3);
@@ -58,6 +80,22 @@ test('processa novo, duplicado, inválido e preserva contadores/resultados', asy
   assert.equal(resultInserts[1].params[1], 1);
   assert.match(resultInserts[2].sql, /VALUES \(UUID\(\), \?, NULL/);
   assert.match(resultInserts[2].sql, /invalid_no_phone/);
+});
+
+test('telemetria separa provider, filtro de rating e candidate budget', async () => {
+  const makeItems = (count, score = 5) => Array.from({ length: count }, (_, index) => candidate(`Lead${index}`, `551199999${String(index).padStart(4, '0')}`)).map((item) => ({ ...item, totalScore: score }));
+  const all = await processCandidates(connectionMock(), { ...job, requested_quantity: 50 }, {}, makeItems(100));
+  assert.deepEqual({ provider: all.providerItemCount, filtered: all.ratingFilteredCount, candidates: all.candidateCount }, { provider: 100, filtered: 100, candidates: 100 });
+
+  const filtered = await processCandidates(connectionMock(), { ...job, requested_quantity: 50 }, { minimumRating: 4 }, [...makeItems(20, 5), ...makeItems(80, 3)]);
+  assert.deepEqual({ provider: filtered.providerItemCount, filtered: filtered.ratingFilteredCount, candidates: filtered.candidateCount, processed: filtered.processedCount }, { provider: 100, filtered: 20, candidates: 20, processed: 20 });
+
+  const short = await processCandidates(connectionMock(), { ...job, requested_quantity: 50 }, {}, makeItems(20));
+  assert.deepEqual({ provider: short.providerItemCount, filtered: short.ratingFilteredCount, candidates: short.candidateCount }, { provider: 20, filtered: 20, candidates: 20 });
+
+  const capped = await processCandidates(connectionMock(), { ...job, requested_quantity: 50 }, {}, makeItems(150));
+  assert.equal(capped.providerItemCount, 150);
+  assert.equal(capped.candidateCount, 100);
 });
 
 test('para ao atingir a meta de novos e não faz nova coleta', async () => {

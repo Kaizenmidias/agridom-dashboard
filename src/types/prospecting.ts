@@ -78,6 +78,9 @@ export interface ProspectingJob {
   searchParameters: Record<string, unknown>;
   requestedQuantity: number;
   processedCount: number;
+  providerItemCount: number;
+  ratingFilteredCount: number;
+  candidateCount: number;
   foundCount: number;
   duplicateCount: number;
   validCount: number;

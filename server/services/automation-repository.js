@@ -37,8 +37,8 @@ const parseJson = (value, fallback = {}) => {
 
 const auditMetadata = (metadata = {}) => JSON.stringify(metadata);
 
-async function withTransaction(work) {
-  const connection = await getPool().getConnection();
+async function withTransaction(work, pool = getPool()) {
+  const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     const result = await work(connection);
@@ -355,15 +355,61 @@ async function listAllRuns({ page = 1, pageSize = 25 } = {}) {
   const [rows] = await getPool().execute(
     `SELECT ar.id, ar.automation_id, ar.automation_version_id, ar.event_id, ar.entity_type, ar.entity_id,
             ar.status, ar.started_at, ar.finished_at, ar.correlation_id, ar.created_at, ar.updated_at,
-            a.name AS automation_name, av.version_number, ae.event_type
+            a.name AS automation_name, av.version_number, ae.event_type,
+            p.business_name AS lead_name, p.phone AS lead_phone
      FROM automation_runs ar
      JOIN automations a ON a.id = ar.automation_id
      JOIN automation_versions av ON av.id = ar.automation_version_id
      LEFT JOIN automation_events ae ON ae.id = ar.event_id
+     LEFT JOIN prospects p ON ar.entity_type = 'lead' AND p.id = ar.entity_id AND p.owner_user_id = a.owner_user_id
      ORDER BY ar.created_at DESC, ar.id DESC LIMIT ? OFFSET ?`,
     [safePageSize, offset]
   );
   return { runs: rows, pagination: { page: safePage, pageSize: safePageSize, total: Number(countRows[0]?.total || 0), totalPages: Math.ceil(Number(countRows[0]?.total || 0) / safePageSize) } };
+}
+
+async function retryRun(userId, runId, dependencies = {}) {
+  return withTransaction(async (connection) => {
+    const [runs] = await connection.execute(
+      `SELECT ar.*, a.owner_user_id
+       FROM automation_runs ar JOIN automations a ON a.id = ar.automation_id
+       WHERE ar.id = ? AND a.owner_user_id = ? FOR UPDATE`,
+      [runId, userId],
+    );
+    const run = runs[0];
+    if (!run) return null;
+    if (run.status !== 'failed') throw new AutomationError(409, 'Somente execucoes com falha podem ser repetidas.');
+    const [messages] = await connection.execute(
+      `SELECT id, status FROM communication_messages
+       WHERE automation_run_id = ? AND status NOT IN ('failed', 'cancelled')
+       LIMIT 1 FOR UPDATE`,
+      [runId],
+    );
+    if (messages[0]) throw new AutomationError(409, 'Esta execucao possui comunicacao em estado que impede um retry seguro.');
+    const [retryRuns] = await connection.execute(
+      `SELECT id, status FROM automation_runs
+       WHERE correlation_id LIKE ? ORDER BY id DESC FOR UPDATE`,
+      [`manual-retry:${runId}:%`],
+    );
+    const activeRetry = retryRuns.find((item) => ['queued', 'running', 'waiting'].includes(item.status));
+    if (activeRetry) throw new AutomationError(409, 'Esta execucao ja possui uma nova tentativa em andamento.');
+    const nextAttempt = retryRuns.length + 1;
+    const correlationId = `manual-retry:${runId}:${nextAttempt}`;
+    const [runResult] = await connection.execute(
+      `INSERT INTO automation_runs
+       (automation_id, automation_version_id, event_id, entity_type, entity_id, status, correlation_id, idempotency_key)
+       VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)`,
+      [run.automation_id, run.automation_version_id, run.event_id, run.entity_type, run.entity_id, correlationId, correlationId],
+    );
+    const newRunId = Number(runResult.insertId);
+    const [jobResult] = await connection.execute(
+      `INSERT INTO automation_jobs
+       (automation_run_id, job_type, status, execute_at, available_at, attempts, max_attempts, idempotency_key)
+       VALUES (?, 'engine.bootstrap', 'pending', UTC_TIMESTAMP(), UTC_TIMESTAMP(), 0, 8, ?)`,
+      [newRunId, `run:${newRunId}:bootstrap`],
+    );
+    return { runId: newRunId, jobId: Number(jobResult.insertId), retryOf: Number(runId), status: 'queued' };
+  }, dependencies.pool || getPool());
 }
 
 async function getRun(userId, runId) {
@@ -393,5 +439,6 @@ module.exports = {
   deleteAutomation,
   listRuns,
   listAllRuns,
+  retryRun,
   getRun,
 };

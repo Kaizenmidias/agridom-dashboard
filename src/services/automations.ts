@@ -62,6 +62,8 @@ export type AutomationRun = {
   automation_name?: string;
   version_number?: number;
   correlation_id?: string | null;
+  lead_name?: string | null;
+  lead_phone?: string | null;
 };
 
 export type AutomationWebhookEndpoint = {
@@ -124,6 +126,7 @@ export const automationsAPI = {
   runs: (id: number) => request<{ runs: AutomationRun[] }>(`/${id}/runs`),
   allRuns: (page = 1) => requestAt<{ runs: AutomationRun[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }>("automation-runs", `?page=${page}&page_size=25`),
   getRun: (id: number) => requestAt<AutomationRun & { steps: unknown[]; jobs: unknown[] }>("automation-runs", `/${id}`),
+  retryRun: (id: number) => requestAt<{ runId: number; jobId: number; retryOf: number; status: string }>("automation-runs", `/${id}/retry`, { method: "POST" }),
   dryRun: (id: number, leadId: number, definition: AutomationDefinition) => request<{ dryRun: boolean; leadId: number; steps: unknown[]; writes: number; externalMessages: number }>(`/${id}/dry-run`, { method: "POST", body: JSON.stringify({ lead_id: leadId, definition }) }),
   getWebhookEndpoint: (id: number) => request<AutomationWebhookEndpoint>(`/${id}/webhook-endpoint`),
   createWebhookEndpoint: (id: number) => request<AutomationWebhookResult>(`/${id}/webhook-endpoint`, { method: "POST" }),

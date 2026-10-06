@@ -23,6 +23,7 @@ const {
   deleteAutomation,
   listRuns,
   listAllRuns,
+  retryRun,
   getRun,
 } = require('../services/automation-repository');
 
@@ -282,6 +283,18 @@ automationRunsRouter.get('/:runId', async (req, res) => {
     res.json(run);
   } catch (error) {
     handleError(res, error, 'Nao foi possivel carregar a execucao.');
+  }
+});
+
+automationRunsRouter.post('/:runId/retry', requireCommercialAdmin, async (req, res) => {
+  const runId = parseId(req.params.runId);
+  if (!runId) return res.status(400).json({ error: 'ID da execucao invalido.' });
+  try {
+    const result = await retryRun(req.userId, runId);
+    if (!result) return res.status(404).json({ error: 'Execucao nao encontrada.' });
+    res.status(202).json(result);
+  } catch (error) {
+    handleError(res, error, 'Nao foi possivel solicitar uma nova tentativa.');
   }
 });
 

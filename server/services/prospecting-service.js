@@ -61,7 +61,7 @@ function budgetReached(processedCount, foundCount, requestedQuantity) {
   return processedCount >= candidateBudget(requestedQuantity) && foundCount < requestedQuantity;
 }
 
-async function apifySearch(parameters, config) {
+async function apifySearch(parameters, config, fetchImpl = fetch) {
   const token = decryptSecret(config)?.token;
   const metadata = normalizeIntegrationMetadata(config.configuration_metadata);
   const configuredActorId = String(metadata.googleMapsActorId || '').trim();
@@ -72,7 +72,7 @@ async function apifySearch(parameters, config) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetch(`https://api.apify.com/v2/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(actorInput(parameters)), signal: controller.signal });
+    const response = await fetchImpl(`https://api.apify.com/v2/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(actorInput(parameters)), signal: controller.signal });
     if (!response.ok) {
       const body = await response.text();
       let payload = {};
@@ -167,18 +167,25 @@ async function processCandidates(connection, job, parameters, items) {
   const requestedQuantity = Math.max(Number(job.requested_quantity) || 0, 0);
   const budget = candidateBudget(requestedQuantity);
   const minimumRating = parameters.minimumRating == null ? null : Number(parameters.minimumRating);
-  const candidates = items
-    .filter((candidate) => minimumRating == null || Number(candidate.totalScore ?? candidate.rating ?? 0) >= minimumRating)
-    .slice(0, budget);
+  const providerItemCount = items.length;
+  const ratingFilteredItems = items.filter((candidate) => minimumRating == null || Number(candidate.totalScore ?? candidate.rating ?? 0) >= minimumRating);
+  const ratingFilteredCount = ratingFilteredItems.length;
+  const candidates = ratingFilteredItems.slice(0, budget);
+  const candidateCount = candidates.length;
   const counters = { processedCount: 0, foundCount: 0, duplicateCount: 0, invalidCount: 0 };
+
+  await connection.execute(
+    `UPDATE prospecting_jobs SET provider_item_count = ?, rating_filtered_count = ?, candidate_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [providerItemCount, ratingFilteredCount, candidateCount, job.id],
+  );
 
   for (const item of candidates) {
     await connection.beginTransaction();
     try {
       const candidateResult = await persistCandidate(connection, job, item, counters);
       await connection.execute(
-        `UPDATE prospecting_jobs SET processed_count = ?, found_count = ?, duplicate_count = ?, invalid_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [counters.processedCount, counters.foundCount, counters.duplicateCount, counters.invalidCount, job.id],
+        `UPDATE prospecting_jobs SET provider_item_count = ?, rating_filtered_count = ?, candidate_count = ?, processed_count = ?, found_count = ?, duplicate_count = ?, invalid_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [providerItemCount, ratingFilteredCount, candidateCount, counters.processedCount, counters.foundCount, counters.duplicateCount, counters.invalidCount, job.id],
       );
       await connection.commit();
       if (candidateResult.created && candidateResult.website) {
@@ -207,6 +214,9 @@ async function processCandidates(connection, job, parameters, items) {
   }
   return {
     ...counters,
+    providerItemCount,
+    ratingFilteredCount,
+    candidateCount,
     targetReached: targetReached(counters.foundCount, requestedQuantity),
     budgetReached: budgetReached(counters.processedCount, counters.foundCount, requestedQuantity),
   };
@@ -239,7 +249,7 @@ async function processProspectingJob(jobId) {
     const items = await apifySearch({ ...parameters, quantity: job.requested_quantity }, configs[0]);
     const counters = await processCandidates(connection, job, parameters, items);
     await connection.beginTransaction();
-    await connection.execute('UPDATE prospecting_jobs SET status = \'completed\', processed_count = ?, found_count = ?, duplicate_count = ?, invalid_count = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [counters.processedCount, counters.foundCount, counters.duplicateCount, counters.invalidCount, jobId]);
+    await connection.execute('UPDATE prospecting_jobs SET status = \'completed\', provider_item_count = ?, rating_filtered_count = ?, candidate_count = ?, processed_count = ?, found_count = ?, duplicate_count = ?, invalid_count = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [counters.providerItemCount, counters.ratingFilteredCount, counters.candidateCount, counters.processedCount, counters.foundCount, counters.duplicateCount, counters.invalidCount, jobId]);
     await recordEvent(connection, jobId, 'job_completed', 'Busca concluida.');
     await connection.commit();
     console.info('[Prospecting] job completed', { jobId, resultCount: counters.foundCount });
@@ -256,4 +266,4 @@ async function processProspectingBatch(limit = 2) {
   return jobs.length;
 }
 
-module.exports = { actorInput, budgetReached, candidateBudget, MAX_CANDIDATE_BUDGET, MAX_PROSPECTING_REQUESTED_QUANTITY, MIN_PROSPECTING_REQUESTED_QUANTITY, normalize, processCandidates, processProspectingBatch, processProspectingJob, targetReached, validateRequestedQuantity };
+module.exports = { actorInput, apifySearch, budgetReached, candidateBudget, MAX_CANDIDATE_BUDGET, MAX_PROSPECTING_REQUESTED_QUANTITY, MIN_PROSPECTING_REQUESTED_QUANTITY, normalize, processCandidates, processProspectingBatch, processProspectingJob, targetReached, validateRequestedQuantity };
