@@ -19,7 +19,6 @@ import {
   Send,
   Trash2,
   UserRound,
-  Folder,
   X,
 } from "lucide-react";
 import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
@@ -289,6 +288,7 @@ function folderMatchesLead(
   customFolders: LeadFolder[] = [],
 ) {
   if (folderId === "todos-os-leads") return true;
+  if (folderId === "sem-lista") return !lead.folders?.length;
   if (folderId === "novos") return lead.status === "novo";
   if (folderId === "qualificados")
     return lead.status === "qualificado" || (lead.score || 0) >= 70;
@@ -309,6 +309,13 @@ function buildFolders(leads: Lead[], customFolders: LeadFolder[]) {
     {
       id: "todos-os-leads",
       name: "Todos os Leads",
+      icon: "folder",
+      isSystem: true,
+      createdAt: now,
+    },
+    {
+      id: "sem-lista",
+      name: "Sem Lista",
       icon: "folder",
       isSystem: true,
       createdAt: now,
@@ -431,6 +438,7 @@ export default function LeadsPage() {
   const [cityOptions, setCityOptions] = useState<string[]>([]);
   const [citiesLoading, setCitiesLoading] = useState(false);
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
 
   useEffect(() => {
     void commercialEntitiesAPI
@@ -545,7 +553,18 @@ export default function LeadsPage() {
         filters.scoreRange === "all" ||
         (filters.scoreRange === "low" && score <= 39) ||
         (filters.scoreRange === "medium" && score >= 40 && score <= 69) ||
-        (filters.scoreRange === "high" && score >= 70);
+          (filters.scoreRange === "high" && score >= 70);
+      const createdAt = new Date(lead.createdAt).getTime();
+      const now = Date.now();
+      const createdMatches =
+        filters.createdAt === "all" ||
+        (filters.createdAt === "today" && now - createdAt <= 24 * 60 * 60 * 1000) ||
+        (filters.createdAt === "7d" && now - createdAt <= 7 * 24 * 60 * 60 * 1000) ||
+        (filters.createdAt === "30d" && now - createdAt <= 30 * 24 * 60 * 60 * 1000);
+      const contactMatches =
+        filters.lastContactAt === "all" ||
+        (filters.lastContactAt === "contacted" && Boolean(lead.lastContactAt)) ||
+        (filters.lastContactAt === "never" && !lead.lastContactAt);
 
       return (
         folderMatchesLead(filters.folderId, lead, customFolders) &&
@@ -555,7 +574,9 @@ export default function LeadsPage() {
         (filters.status === "all" || lead.status === filters.status) &&
         (filters.source === "all" || lead.source === filters.source) &&
         (filters.city === "all" || lead.city === filters.city) &&
-        (filters.assignedTo === "all" || lead.assignedTo === filters.assignedTo)
+        (filters.assignedTo === "all" || lead.assignedTo === filters.assignedTo) &&
+        createdMatches &&
+        contactMatches
       );
     });
   }, [allLeads, customFolders, filters, query]);
@@ -668,6 +689,7 @@ export default function LeadsPage() {
           createdAt: new Date().toISOString(),
         })),
       );
+      await reload();
       setFolderMemberDialogOpen(false);
       setSelectedIds([]);
       toast.success("Lead(s) adicionados à pasta.");
@@ -744,7 +766,7 @@ export default function LeadsPage() {
 
   const handleDeleteFolder = async (folder: LeadFolder) => {
     if (!window.confirm(`Excluir a lista '${folder.name}'? Isso remove apenas a lista e seus vínculos, não os leads.`)) return;
-    try { await leadFoldersAPI.remove(Number(folder.id)); setCustomFolders((current) => current.filter((item) => item.id !== folder.id)); if (filters.folderId === folder.id) setFilters((current) => ({ ...current, folderId: "todos-os-leads" })); toast.success("Lista excluída."); }
+    try { await leadFoldersAPI.remove(Number(folder.id)); setCustomFolders((current) => current.filter((item) => item.id !== folder.id)); await reload(); if (filters.folderId === folder.id) setFilters((current) => ({ ...current, folderId: "todos-os-leads" })); toast.success("Lista excluída."); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível excluir a lista."); }
   };
 
@@ -1195,12 +1217,35 @@ export default function LeadsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start" onClick={() => setAdvancedFiltersOpen((current) => !current)} aria-expanded={advancedFiltersOpen}>
                 <Filter className="mr-2 h-4 w-4" />
+                {activeFilters > 0 ? `(${activeFilters}) ` : ""}
                 Filtros avançados
               </Button>
             </div>
           </div>
+
+          {advancedFiltersOpen ? (
+            <div className="grid gap-2 border-t border-border/70 bg-muted/20 p-3 md:grid-cols-2">
+              <Select value={filters.createdAt} onValueChange={(value) => updateFilter("createdAt", value)}>
+                <SelectTrigger><SelectValue placeholder="Data de criação" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Qualquer data de criação</SelectItem>
+                  <SelectItem value="today">Últimas 24 horas</SelectItem>
+                  <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                  <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filters.lastContactAt} onValueChange={(value) => updateFilter("lastContactAt", value)}>
+                <SelectTrigger><SelectValue placeholder="Último contato" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Qualquer contato</SelectItem>
+                  <SelectItem value="contacted">Já contatados</SelectItem>
+                  <SelectItem value="never">Nunca contatados</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           <div className="p-4 md:p-5">
             {selectedIds.length > 0 ? (

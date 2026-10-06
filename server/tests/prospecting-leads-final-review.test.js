@@ -8,6 +8,7 @@ const prospecting = fs.readFileSync(path.join(__dirname, '../services/prospectin
 const prospectService = require('../services/prospect-service');
 const prospectingPage = fs.readFileSync(path.join(__dirname, '../../src/pages/commercial/ProspectingPage.tsx'), 'utf8');
 const leadsPage = fs.readFileSync(path.join(__dirname, '../../src/pages/commercial/LeadsPage.tsx'), 'utf8');
+const leadAdapter = fs.readFileSync(path.join(__dirname, '../../src/services/leads/lead-adapter.ts'), 'utf8');
 
 test('PROSPECCAO reconhece somente email/email[0], sem enriquecimento inventado', () => {
   const { normalize } = require('../services/prospecting-service');
@@ -37,6 +38,17 @@ test('Leads usa listas reais com fallback e resumo de múltiplas listas', () => 
   assert.doesNotMatch(route, /JSON_ARRAYAGG\(JSON_OBJECT\([^)]*\)\s+ORDER BY/i);
   assert.match(route, /\.sort\(\(left, right\) => String\(left\.name/);
   assert.match(route, /f\.owner_user_id = \?/);
+  assert.match(leadAdapter, /folders: Array\.isArray\(prospect\.folders\)/);
+  assert.match(leadsPage, /folderId === "sem-lista"/);
+  assert.match(leadsPage, /name: "Sem Lista"/);
+});
+
+test('Filtros avancados abrem e aplicam data de criacao e ultimo contato', () => {
+  assert.match(leadsPage, /setAdvancedFiltersOpen/);
+  assert.match(leadsPage, /filters\.createdAt/);
+  assert.match(leadsPage, /filters\.lastContactAt/);
+  assert.match(leadsPage, /createdMatches/);
+  assert.match(leadsPage, /contactMatches/);
 });
 
 test('Bootstrap agrega listas e último contato em lote, com Chats reais e ownership', () => {

@@ -93,6 +93,9 @@ export function prospectToLead(prospect: Prospect): Lead {
     status: statusMap[prospect.status] || "novo",
     folderId: slugify(folderName),
     folderName,
+    folders: Array.isArray(prospect.folders)
+      ? prospect.folders.map((folder) => ({ id: String(folder.id), name: String(folder.name) }))
+      : [],
     assignedTo: prospect.assigned_user_name || null,
     assignedUserId: prospect.assigned_user_id || null,
     googleMapsUrl: prospect.google_maps_url,
