@@ -24,6 +24,7 @@ const {
   listRuns,
   listAllRuns,
   retryRun,
+  cancelRun,
   getRun,
 } = require('../services/automation-repository');
 
@@ -295,6 +296,18 @@ automationRunsRouter.post('/:runId/retry', requireCommercialAdmin, async (req, r
     res.status(202).json(result);
   } catch (error) {
     handleError(res, error, 'Nao foi possivel solicitar uma nova tentativa.');
+  }
+});
+
+automationRunsRouter.post('/:runId/cancel', requireCommercialAdmin, async (req, res) => {
+  const runId = parseId(req.params.runId);
+  if (!runId) return res.status(400).json({ error: 'ID da execucao invalido.' });
+  try {
+    const result = await cancelRun(req.userId, runId);
+    if (!result) return res.status(404).json({ error: 'Execucao nao encontrada.' });
+    res.json(result);
+  } catch (error) {
+    handleError(res, error, 'Nao foi possivel cancelar a execucao.');
   }
 });
 

@@ -26,7 +26,7 @@ function fakePool({ run = {}, messages = [], retryRuns = [] } = {}) {
 }
 
 test('retry cria nova execucao e job usando a configuracao original', async () => {
-  const pool = fakePool({ run: { id: 10, automation_id: 4, automation_version_id: 7, event_id: 2, entity_type: 'lead', entity_id: 81, status: 'failed' } });
+  const pool = fakePool({ run: { id: 10, automation_id: 4, automation_version_id: 7, event_id: 2, entity_type: 'lead', entity_id: 81, status: 'failed', error_code: 'EVOLUTION_UNAVAILABLE' } });
   const result = await retryRun(1, 10, { pool });
   assert.deepEqual(result, { runId: 900, jobId: 901, retryOf: 10, status: 'queued' });
   const runInsert = pool.calls.find((item) => /INSERT INTO automation_runs/.test(item.sql));

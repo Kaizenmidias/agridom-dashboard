@@ -354,9 +354,10 @@ async function listAllRuns({ page = 1, pageSize = 25 } = {}) {
   const [countRows] = await getPool().execute('SELECT COUNT(*) AS total FROM automation_runs');
   const [rows] = await getPool().execute(
     `SELECT ar.id, ar.automation_id, ar.automation_version_id, ar.event_id, ar.entity_type, ar.entity_id,
-            ar.status, ar.started_at, ar.finished_at, ar.correlation_id, ar.created_at, ar.updated_at,
+            ar.status, ar.error_code, ar.error_message, ar.started_at, ar.finished_at, ar.correlation_id, ar.created_at, ar.updated_at,
             a.name AS automation_name, av.version_number, ae.event_type,
-            p.business_name AS lead_name, p.phone AS lead_phone
+            p.business_name AS lead_name, p.phone AS lead_phone,
+            EXISTS (SELECT 1 FROM automation_jobs ajc WHERE ajc.automation_run_id = ar.id AND ajc.status = 'pending') AS has_pending_job
      FROM automation_runs ar
      JOIN automations a ON a.id = ar.automation_id
      JOIN automation_versions av ON av.id = ar.automation_version_id
@@ -365,8 +366,23 @@ async function listAllRuns({ page = 1, pageSize = 25 } = {}) {
      ORDER BY ar.created_at DESC, ar.id DESC LIMIT ? OFFSET ?`,
     [safePageSize, offset]
   );
-  return { runs: rows, pagination: { page: safePage, pageSize: safePageSize, total: Number(countRows[0]?.total || 0), totalPages: Math.ceil(Number(countRows[0]?.total || 0) / safePageSize) } };
+  return { runs: rows.map((run) => ({
+    ...run,
+    can_cancel: run.status === 'queued' && Boolean(Number(run.has_pending_job)),
+    can_retry: run.status === 'failed' && isSafeRetryFailure(run.error_code, run.error_message),
+    retry_block_reason: run.status === 'failed' && !isSafeRetryFailure(run.error_code, run.error_message)
+      ? 'A falha pode ter sido aceita pelo provedor e nao pode ser reenviada automaticamente.'
+      : null,
+  })), pagination: { page: safePage, pageSize: safePageSize, total: Number(countRows[0]?.total || 0), totalPages: Math.ceil(Number(countRows[0]?.total || 0) / safePageSize) } };
 }
+
+const AMBIGUOUS_RETRY_FAILURES = /EVOLUTION_REQUEST_FAILED|EVOLUTION_TIMEOUT|EVOLUTION_CONNECTION_RESET|EVOLUTION_HTTP_REJECTED|EVOLUTION_INVALID_RESPONSE/i;
+const isAmbiguousRetryFailure = (errorCode, errorMessage) => AMBIGUOUS_RETRY_FAILURES.test(`${errorCode || ''} ${errorMessage || ''}`);
+const SAFE_RETRY_FAILURES = /EVOLUTION_UNAVAILABLE|EVOLUTION_CONNECTION_REFUSED|EAI_AGAIN|HTTP[_ -]?(408|429|5\d\d)/i;
+const isSafeRetryFailure = (errorCode, errorMessage) => {
+  const value = `${errorCode || ''} ${errorMessage || ''}`;
+  return SAFE_RETRY_FAILURES.test(value) && !isAmbiguousRetryFailure(errorCode, errorMessage);
+};
 
 async function retryRun(userId, runId, dependencies = {}) {
   return withTransaction(async (connection) => {
@@ -379,6 +395,9 @@ async function retryRun(userId, runId, dependencies = {}) {
     const run = runs[0];
     if (!run) return null;
     if (run.status !== 'failed') throw new AutomationError(409, 'Somente execucoes com falha podem ser repetidas.');
+    if (!isSafeRetryFailure(run.error_code, run.error_message)) {
+      throw new AutomationError(409, 'Esta execucao nao pode ser reenviada porque o provedor pode ter aceitado a mensagem.');
+    }
     const [messages] = await connection.execute(
       `SELECT id, status FROM communication_messages
        WHERE automation_run_id = ? AND status NOT IN ('failed', 'cancelled')
@@ -412,6 +431,28 @@ async function retryRun(userId, runId, dependencies = {}) {
   }, dependencies.pool || getPool());
 }
 
+async function cancelRun(userId, runId, dependencies = {}) {
+  return withTransaction(async (connection) => {
+    const [runs] = await connection.execute(
+      `SELECT ar.id, ar.status AS run_status, aj.id AS job_id, aj.status AS job_status, aj.run_step_id
+       FROM automation_runs ar JOIN automations a ON a.id = ar.automation_id
+       LEFT JOIN automation_jobs aj ON aj.automation_run_id = ar.id AND aj.status = 'pending'
+       WHERE ar.id = ? AND a.owner_user_id = ? FOR UPDATE`,
+      [runId, userId],
+    );
+    const run = runs[0];
+    if (!run) return null;
+    if (run.run_status !== 'queued' || !run.job_id || run.job_status !== 'pending') {
+      throw new AutomationError(409, 'Somente execucoes ainda nao iniciadas podem ser canceladas.');
+    }
+    const [updated] = await connection.execute("UPDATE automation_jobs SET status = 'cancelled', completed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL WHERE id = ? AND status = 'pending'", [run.job_id]);
+    if (!updated.affectedRows) throw new AutomationError(409, 'A execucao ja foi reivindicada pelo worker.');
+    await connection.execute("UPDATE automation_run_steps SET status = 'cancelled', finished_at = UTC_TIMESTAMP() WHERE id = ? AND status = 'queued'", [run.run_step_id]);
+    await connection.execute("UPDATE automation_runs SET status = 'cancelled', finished_at = UTC_TIMESTAMP(), current_step_key = NULL WHERE id = ? AND status = 'queued'", [runId]);
+    return { runId: Number(runId), jobId: Number(run.job_id), status: 'cancelled' };
+  }, dependencies.pool || getPool());
+}
+
 async function getRun(userId, runId) {
   const [runs] = await getPool().execute(
     `SELECT ar.*, a.name AS automation_name
@@ -440,5 +481,6 @@ module.exports = {
   listRuns,
   listAllRuns,
   retryRun,
+  cancelRun,
   getRun,
 };
