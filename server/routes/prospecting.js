@@ -167,7 +167,9 @@ router.post('/jobs/:id/cancel', async (req, res) => {
 });
 
 router.get('/jobs/:id/results', async (req, res) => {
-  const result = await getQuery(req)(`SELECT pr.*
+  const result = await getQuery(req)(`SELECT pr.id, pr.job_id, pr.source, pr.company_name, pr.category, pr.address, pr.city, pr.state,
+    pr.phone, pr.email, pr.website, pr.instagram_url, pr.rating, pr.review_count, pr.duplicate_status,
+    pr.prospect_id, pr.imported_to_leads_at, p.business_name, p.status AS prospect_status
     FROM prospecting_results pr
     JOIN prospecting_jobs j ON j.id = pr.job_id
     JOIN prospects p ON p.id = pr.prospect_id

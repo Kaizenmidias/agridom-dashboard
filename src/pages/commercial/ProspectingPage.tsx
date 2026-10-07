@@ -72,6 +72,13 @@ const sourceConfig = {
 
 const stateOptions = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 const MAX_PROSPECTING_REQUESTED_QUANTITY = 100;
+const ACTIVE_PROSPECTING_STATUSES: ProspectingJob["status"][] = [
+  "queued",
+  "running",
+  "collecting",
+  "normalizing",
+  "validating",
+];
 
 function queryToSource(value: string | null): ProspectingSource {
   if (value === "cnpj") return "cnpj";
@@ -401,14 +408,27 @@ function ProspectingJobMetrics({ job }: { job: ProspectingJob | null }) {
   );
 }
 
+function ProspectingRunStatus({ job }: { job: ProspectingJob | null }) {
+  if (!job) return null;
+  const statusLabel: Record<string, string> = { queued: "Na fila", running: "Processando", collecting: "Coletando", normalizing: "Normalizando", validating: "Validando", completed: "Prospecção concluída", failed: "Prospecção com erro", cancelled: "Prospecção cancelada" };
+  const active = ["queued", "running", "collecting", "normalizing", "validating"].includes(job.status);
+  return <Alert className={cn("border", job.status === "completed" ? "border-emerald-200 bg-emerald-50" : job.status === "failed" ? "border-red-200 bg-red-50" : "border-blue-200 bg-blue-50")}>
+    {active ? <Loader2 className="h-4 w-4 animate-spin" /> : job.status === "completed" ? <CheckCircle2 className="h-4 w-4" /> : job.status === "failed" ? <XCircle className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+    <AlertTitle>{statusLabel[job.status] || job.status}</AlertTitle>
+    <AlertDescription>{job.status === "completed" ? `${job.foundCount} novo(s) lead(s) adicionado(s) ao CRM. ${job.duplicateCount} duplicado(s) ignorado(s).` : job.status === "failed" ? (job.errorMessage || "A execução não foi concluída.") : "Acompanhe o andamento nesta página; a atualização automática para ao finalizar."}</AlertDescription>
+  </Alert>;
+}
+
 function ProspectingResultsTable({
   results,
+  job,
   selectedIds,
   onToggle,
   onToggleAll,
   onImport,
 }: {
   results: ProspectingResult[];
+  job: ProspectingJob | null;
   selectedIds: string[];
   onToggle: (id: string) => void;
   onToggleAll: () => void;
@@ -441,7 +461,7 @@ function ProspectingResultsTable({
         {visibleResults.length === 0 ? (
           <div className="rounded-md border border-dashed p-8 text-center">
             <p className="font-medium">Nenhum resultado carregado</p>
-            <p className="text-sm text-muted-foreground">Execute uma consulta para visualizar os resultados normalizados.</p>
+            <p className="text-sm text-muted-foreground">{job?.status === "completed" ? job.foundCount > 0 ? "Esta execução não possui resultados detalhados disponíveis." : "A execução foi concluída sem novos leads." : "Execute uma consulta para visualizar os resultados normalizados."}</p>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-md border">
@@ -573,7 +593,7 @@ function ProspectingImportDialog({
   );
 }
 
-function ProspectingHistory({ items, onRefresh }: { items: ProspectingJob[]; onRefresh: () => void }) {
+function ProspectingHistory({ items, onRefresh, onViewJob }: { items: ProspectingJob[]; onRefresh: () => void; onViewJob: (id: string) => void }) {
   return (
     <Card className="rounded-lg border shadow-none">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -592,7 +612,7 @@ function ProspectingHistory({ items, onRefresh }: { items: ProspectingJob[]; onR
               <p className="text-muted-foreground">{new Date(item.createdAt).toLocaleString("pt-BR")} | {item.requestedQuantity} solicitados | {item.foundCount} encontrados</p>
             </div>
             <Badge className={getStatusBadge(item.status)}>{item.status}</Badge>
-            <Button variant="outline" size="sm">Ver resultados</Button>
+            <Button variant="outline" size="sm" onClick={() => onViewJob(item.id)}>Ver resultados</Button>
             <Button variant="outline" size="sm">Repetir busca</Button>
           </div>
         ))}
@@ -639,6 +659,7 @@ export default function ProspectingPage() {
     void loadInitialData();
   }, []);
 
+
   const handleSourceChange = (value: string) => {
     const nextSource = value as ProspectingSource;
     setSource(nextSource);
@@ -654,7 +675,7 @@ export default function ProspectingPage() {
   };
 
   useEffect(() => {
-    const active = history.find((item) => ['queued', 'running'].includes(item.status));
+    const active = history.find((item) => ACTIVE_PROSPECTING_STATUSES.includes(item.status));
     if (!active) return;
     let cancelled = false;
     const poll = async () => {
@@ -664,7 +685,7 @@ export default function ProspectingPage() {
         setJob(data.job);
         setEvents(data.events);
         if (data.job.status === 'completed') setResults((await prospectingAPI.getResults(active.id)).items);
-        else if (['queued', 'running'].includes(data.job.status)) window.setTimeout(poll, 2000);
+        else if (ACTIVE_PROSPECTING_STATUSES.includes(data.job.status)) window.setTimeout(poll, 2000);
       } catch { /* the next page load can recover the job again */ }
     };
     void poll();
@@ -804,9 +825,11 @@ export default function ProspectingPage() {
         </CardContent>
       </Card>
 
+      <ProspectingRunStatus job={job} />
       <ProspectingSummaryCards results={results} />
       <ProspectingJobMetrics job={job} />
-      <ProspectingResultsTable results={results} selectedIds={selectedIds} onToggle={toggleResult} onToggleAll={toggleAllResults} onImport={() => setImportOpen(true)} />
+      <ProspectingResultsTable job={job} results={results} selectedIds={selectedIds} onToggle={toggleResult} onToggleAll={toggleAllResults} onImport={() => setImportOpen(true)} />
+      <ProspectingHistory items={history} onRefresh={loadInitialData} onViewJob={(id) => void refreshJob(id)} />
 
       <ProspectingImportDialog open={importOpen} onOpenChange={setImportOpen} selectedCount={selectedIds.length} source={source} folders={leadFolders} onConfirm={importSelected} />
     </div>
