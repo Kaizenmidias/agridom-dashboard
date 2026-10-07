@@ -7,7 +7,7 @@ const route = fs.readFileSync(path.join(__dirname, '..', 'routes', 'prospecting.
 const service = fs.readFileSync(path.join(__dirname, '..', 'services', 'prospecting-service.js'), 'utf8');
 const page = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'pages', 'commercial', 'ProspectingPage.tsx'), 'utf8');
 
-test('job aceita lista opcional, valida ownership e persiste destination_folder_id', () => {
+test('job valida ownership e persiste destination_folder_id quando uma lista é selecionada', () => {
   assert.match(route, /destinationFolderId/);
   assert.match(route, /FROM lead_folders WHERE id = \? AND owner_user_id = \?/);
   assert.match(route, /destination_folder_id/);
@@ -28,11 +28,13 @@ test('evento de pasta ocorre depois do commit e somente para membership nova', (
   assert.match(service, /membershipCreated\) \{/);
 });
 
-test('frontend carrega listas existentes e envia Sem lista ou destinationFolderId', () => {
+test('frontend exige lista e envia destinationFolderId selecionado', () => {
   assert.match(page, /leadFoldersAPI\.list\(\)/);
-  assert.match(page, /<SelectItem value="none">Sem lista<\/SelectItem>/);
+  assert.doesNotMatch(page, /<SelectItem value="none">Sem lista<\/SelectItem>/);
   assert.match(page, /destinationFolderId/);
   assert.match(page, /destinationFolderId \}/);
+  assert.match(page, /destinationFolderId == null/);
+  assert.match(page, /Selecione uma lista/);
 });
 
 test('Fase 4 não adiciona chamada real de provider', () => {

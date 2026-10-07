@@ -185,7 +185,7 @@ function GoogleMapsSearchForm({
           </Select>
         </div>
       </div>
-      <Button disabled={running || !searchTerms.trim()} onClick={() => onSubmit({ source: "google_maps", searchTerms, quantity: Number(quantity), minimumRating: minimumRating === "any" ? null : Number(minimumRating), destinationFolderId })}>
+      <Button disabled={running || !searchTerms.trim() || destinationFolderId == null} onClick={() => onSubmit({ source: "google_maps", searchTerms, quantity: Number(quantity), minimumRating: minimumRating === "any" ? null : Number(minimumRating), destinationFolderId })}>
         {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Buscar empresas
       </Button>
     </div>
@@ -290,7 +290,7 @@ function CnpjSearchForm({
           </div>
         </div>
       </div>
-      <Button disabled={running || selectedCnaes.length === 0 || !state} onClick={() => onSubmit({ source: "cnpj", cnaeCodes: selectedCnaes.map((item) => item.code), state, city: city || null, quantity: Number(quantity), includeSecondaryActivity, destinationFolderId })}>
+      <Button disabled={running || selectedCnaes.length === 0 || !state || destinationFolderId == null} onClick={() => onSubmit({ source: "cnpj", cnaeCodes: selectedCnaes.map((item) => item.code), state, city: city || null, quantity: Number(quantity), includeSecondaryActivity, destinationFolderId })}>
         {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Buscar empresas
       </Button>
     </div>
@@ -316,7 +316,7 @@ function InstagramSearchForm({ onSubmit, running, destinationFolderId }: { onSub
         </Select>
         <p className="text-xs text-muted-foreground">Máximo: {MAX_PROSPECTING_REQUESTED_QUANTITY} novos leads por busca.</p>
       </div>
-      <Button disabled={running || !searchTerms.trim()} onClick={() => onSubmit({ source: "instagram", searchTerms, quantity: Number(quantity), destinationFolderId })}>
+      <Button disabled={running || !searchTerms.trim() || destinationFolderId == null} onClick={() => onSubmit({ source: "instagram", searchTerms, quantity: Number(quantity), destinationFolderId })}>
         {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Instagram className="mr-2 h-4 w-4" />}Buscar perfis
       </Button>
     </div>
@@ -693,6 +693,10 @@ export default function ProspectingPage() {
   }, [history]);
 
   const startSearch = async (payload: ProspectingSearchPayload) => {
+    if (destinationFolderId == null) {
+      toast({ title: "Selecione uma lista", description: "Escolha a lista de destino antes de iniciar a prospecção.", variant: "destructive" });
+      return;
+    }
     try {
       setRunning(true);
       setSelectedIds([]);
@@ -795,14 +799,14 @@ export default function ProspectingPage() {
         <CardContent>
           <Tabs value={source} onValueChange={handleSourceChange}>
             <div className="mb-4 max-w-md space-y-2">
-              <Label htmlFor="destination-folder">Lista de destino (opcional)</Label>
-              <Select value={destinationFolderId == null ? "none" : String(destinationFolderId)} onValueChange={(value) => setDestinationFolderId(value === "none" ? null : Number(value))}>
+              <Label htmlFor="destination-folder">Lista de destino</Label>
+              <Select value={destinationFolderId == null ? "" : String(destinationFolderId)} onValueChange={(value) => setDestinationFolderId(Number(value))}>
                 <SelectTrigger id="destination-folder"><SelectValue placeholder="Selecione uma lista..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Sem lista</SelectItem>
                   {leadFolders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">A prospecção será associada à lista selecionada e poderá acionar automações vinculadas a ela.</p>
               {leadFolders.length === 0 ? <p className="text-xs text-muted-foreground">Nenhuma lista encontrada. Você pode criar uma em Leads.</p> : null}
             </div>
             <TabsList className="grid w-full grid-cols-3">
