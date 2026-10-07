@@ -35,24 +35,47 @@ export type Campaign = {
   cancelled?: number;
   content_type?: string;
   text_content?: string;
+  channels?: Array<"whatsapp" | "email">;
+  channel?: "whatsapp" | "email" | "both";
+  email_provider_id?: number | null;
+  email_subject?: string | null;
+  email_body_text?: string | null;
+  idempotency_key?: string | null;
+};
+export type EmailAttachment = {
+  id: number;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at?: string;
 };
 export type Audience = {
   total: number;
   with_phone: number;
   without_phone: number;
   potentially_duplicate: number;
+  totalLeads?: number;
+  withWhatsApp?: number;
+  withEmail?: number;
+  withBoth?: number;
+  withoutAnyContact?: number;
   prospects: Array<{
     id: number;
     business_name: string;
     phone?: string;
     normalized_phone?: string;
     email?: string;
+    whatsappEligible?: boolean;
+    emailEligible?: boolean;
     status?: string;
     city?: string;
     state?: string;
   }>;
 };
 export const broadcastAPI = {
+  emailProviders: () => request<{ providers: Array<{ id: number; name?: string; from_email?: string; status: string }> }>("/email-providers"),
+  signature: () => request<{ signature: { id: number; html_content: string; text_content: string } | null }>("/email-signature"),
+  saveSignature: (html_content: string) => request<{ signature: { id: number; html_content: string; text_content: string } }>("/email-signature", { method: "PUT", body: JSON.stringify({ html_content }) }),
   list: () => request<{ campaigns: Campaign[] }>("/"),
   get: (id: number) =>
     request<{
@@ -70,10 +93,10 @@ export const broadcastAPI = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
-  content: (id: number, text_content: string) =>
+  content: (id: number, content: string | Record<string, unknown>) =>
     request<{ campaign: Campaign }>(`/${id}/content`, {
       method: "PUT",
-      body: JSON.stringify({ content_type: "text", text_content }),
+      body: JSON.stringify(typeof content === "string" ? { content_type: "text", text_content: content } : content),
     }),
   uploadMedia: async (
     id: number,
@@ -107,6 +130,17 @@ export const broadcastAPI = {
       };
     };
   },
+  emailAttachments: (id: number) => request<{ attachments: EmailAttachment[] }>(`/${id}/email-attachments`),
+  uploadEmailAttachment: async (id: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const token = localStorage.getItem("token");
+    const response = await fetch(buildApiUrl(`broadcast-campaigns/${id}/email-attachments`), { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || "Nao foi possivel anexar o arquivo.");
+    return payload as { attachment: EmailAttachment };
+  },
+  removeEmailAttachment: (id: number, attachmentId: number) => request<{ success: true }>(`/${id}/email-attachments/${attachmentId}`, { method: "DELETE" }),
   audience: (params: Record<string, string>) =>
     request<Audience>(`/audience/preview?${new URLSearchParams(params)}`),
   folders: () =>

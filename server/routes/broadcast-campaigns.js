@@ -8,6 +8,8 @@ const {
   materializeCampaign,
 } = require("../services/broadcast-campaign-worker");
 const { LIMITS, storeBuffer } = require("../services/chat-media");
+const { eligibility, summarizeAudience, normalizeCampaignChannels } = require("../services/broadcast-campaign-audience");
+const { MAX_FILE_BYTES, MAX_TOTAL_BYTES, MAX_FILES, storeAttachment, removeAttachment } = require("../services/broadcast-email-attachments");
 
 const router = express.Router();
 router.use(authenticateToken, requireCommercialAccess);
@@ -18,6 +20,14 @@ const mediaUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: Math.max(...Object.values(LIMITS)) },
 });
+const emailAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_BYTES },
+});
+const emailAttachmentUploadMiddleware = (req, res, next) => emailAttachmentUpload.single("file")(req, res, (error) => {
+  if (error) return errorResponse(res, error);
+  return next();
+});
 const parseId = (value) =>
   Number.isSafeInteger(Number(value)) && Number(value) > 0
     ? Number(value)
@@ -25,13 +35,14 @@ const parseId = (value) =>
 const parsePage = (value, fallback) =>
   Math.min(Math.max(Number(value) || fallback, 1), 100000);
 const errorResponse = (res, error) => {
+  const status = error?.code === "LIMIT_FILE_SIZE" ? 413 : Number(error?.status) || 500;
   if (!error?.status)
     console.error("[Broadcast] request failed", {
       code: error?.code || "UNKNOWN",
       message: error?.message || "unknown",
     });
-  return res.status(Number(error?.status) || 500).json({
-    error: error?.status
+  return res.status(status).json({
+    error: error?.status || error?.code === "LIMIT_FILE_SIZE"
       ? error.message
       : "Nao foi possivel processar a campanha.",
   });
@@ -74,10 +85,21 @@ async function validAccount(accountId, userId) {
   return result.rows[0];
 }
 
+async function validEmailProvider(providerId) {
+  if (providerId == null) return null;
+  const id = parseId(providerId);
+  if (!id) throw new campaigns.BroadcastCampaignError(400, "INVALID_EMAIL_PROVIDER");
+  const result = await query("SELECT id, provider, status FROM integration_providers WHERE id = ? AND provider = 'smtp' LIMIT 1", [id]);
+  if (!result.rows?.[0]) throw new campaigns.BroadcastCampaignError(400, "INVALID_EMAIL_PROVIDER");
+  return result.rows[0];
+}
+
 function contentPayload(body = {}) {
   return {
     contentType: body.content_type,
     textContent: body.text_content,
+    emailSubject: body.email_subject,
+    emailBodyText: body.email_body_text,
     mediaStoragePath: body.media_storage_path,
     mimeType: body.mime_type,
     originalFilename: body.original_filename,
@@ -138,15 +160,22 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
+    let channels;
+    try { channels = normalizeCampaignChannels(req.body?.channels || req.body?.channel); } catch { throw new campaigns.BroadcastCampaignError(400, "Canal de campanha invalido."); }
     const account = await validAccount(
       req.body?.communication_account_id,
       req.userId,
     );
+    if (channels.includes("whatsapp") && !account) throw new campaigns.BroadcastCampaignError(400, "Conta WhatsApp obrigatoria.");
+    const emailProvider = await validEmailProvider(req.body?.email_provider_id);
     const campaign = await campaigns.createDraft({
       userId: req.userId,
       name: req.body?.name,
+      channels,
       communicationAccountId: account?.id ?? null,
+      emailProviderId: emailProvider?.id ?? null,
       cadenceSeconds: req.body?.cadence_seconds,
+      idempotencyKey: req.get("Idempotency-Key"),
     });
     await writeEvent(campaign.id, req.userId, "created");
     res.status(201).json({ campaign });
@@ -163,12 +192,14 @@ router.delete("/:id", async (req, res) => {
         409,
         "ONLY_DRAFT_CAMPAIGNS_CAN_BE_DELETED",
       );
+    const attachments = await query("SELECT storage_key FROM broadcast_campaign_attachments WHERE campaign_id = ?", [campaign.id]);
     const result = await query(
       "DELETE FROM broadcast_campaigns WHERE id = ? AND created_by_user_id = ? AND status = 'draft'",
       [campaign.id, req.userId],
     );
     if (!result.affectedRows)
       throw new campaigns.BroadcastCampaignError(404, "CAMPAIGN_NOT_FOUND");
+    await Promise.all((attachments.rows || []).map((item) => removeAttachment(item.storage_key)));
     res.json({ success: true, id: campaign.id });
   } catch (error) {
     errorResponse(res, error);
@@ -189,13 +220,17 @@ router.put("/:id/audience", async (req, res) => {
     ];
     const rows = folderIds.length
       ? await query(
-          `SELECT DISTINCT p.id, p.business_name, p.normalized_phone
+          `SELECT DISTINCT p.id, p.business_name, p.normalized_phone, p.email
       FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id JOIN prospects p ON p.id = m.prospect_id
       WHERE f.owner_user_id = ? AND m.folder_id IN (${folderIds.map(() => "?").join(",")})`,
           [req.userId, ...folderIds],
         )
       : { rows: [] };
-    const eligible = (rows.rows || []).filter((row) => row.normalized_phone);
+    const channels = campaign.channel === "both" ? ["whatsapp", "email"] : [campaign.channel || "whatsapp"];
+    const eligible = (rows.rows || []).filter((row) => {
+      const state = eligibility(row);
+      return (channels.includes("whatsapp") && state.whatsappEligible) || (channels.includes("email") && state.emailEligible);
+    });
     await query(
       "DELETE FROM broadcast_campaign_recipients WHERE campaign_id = ?",
       [campaign.id],
@@ -206,6 +241,7 @@ router.put("/:id/audience", async (req, res) => {
       eligible.map((row) => ({
         prospectId: row.id,
         phone: row.normalized_phone,
+        email: row.email,
         name: row.business_name,
       })),
     );
@@ -220,7 +256,8 @@ router.put("/:id/audience", async (req, res) => {
       folder_ids: folderIds,
       selected_folders: folderIds.length,
       eligible: added.recipientIds.length,
-      missing_phone: (rows.rows || []).length - eligible.length,
+      missing_phone: channels.includes("whatsapp") ? (rows.rows || []).filter((row) => !eligibility(row).whatsappEligible).length : 0,
+      missing_email: channels.includes("email") ? (rows.rows || []).filter((row) => !eligibility(row).emailEligible).length : 0,
     });
   } catch (error) {
     errorResponse(res, error);
@@ -234,7 +271,9 @@ router.get("/audience/preview", async (req, res) => {
     const q = String(req.query.search || "")
       .trim()
       .slice(0, 100);
-    if (req.query.folder_id) {
+    if (req.query.folder_id === "none") {
+      conditions.push("NOT EXISTS (SELECT 1 FROM lead_folder_members no_list_members WHERE no_list_members.prospect_id = p.id)");
+    } else if (req.query.folder_id) {
       const folderId = parseId(req.query.folder_id);
       const folder = FOLDER_SEGMENTS[String(req.query.folder_id)];
       if (folder) conditions.push(folder);
@@ -306,7 +345,9 @@ router.get("/audience/preview", async (req, res) => {
     );
     const metrics = await query(
       `SELECT COUNT(*) AS total, SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone,
-      SUM(p.normalized_phone IS NULL OR p.normalized_phone = '') AS without_phone,
+      SUM(p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$') AS with_email,
+      SUM((p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AND p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$') AS with_both,
+      SUM((p.normalized_phone IS NULL OR p.normalized_phone = '') AND (p.email IS NULL OR NOT (LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'))) AS without_any_contact,
       SUM(p.normalized_phone IN (SELECT normalized_phone FROM prospects WHERE owner_user_id = ? AND normalized_phone IS NOT NULL AND normalized_phone <> '' GROUP BY normalized_phone HAVING COUNT(*) > 1)) AS potentially_duplicate
       FROM prospects p WHERE ${where}`,
       [req.userId, ...params],
@@ -317,12 +358,21 @@ router.get("/audience/preview", async (req, res) => {
       [...params, pageSize, (page - 1) * pageSize],
     );
     const totals = metrics.rows?.[0] || {};
+    const prospects = (rows.rows || []).map((row) => ({ ...row, ...eligibility(row), leadId: Number(row.id), name: row.business_name }));
     res.json({
       total: Number(totals.total || 0),
       with_phone: Number(totals.with_phone || 0),
+      with_email: Number(totals.with_email || 0),
+      with_both: Number(totals.with_both || 0),
+      without_any_contact: Number(totals.without_any_contact || 0),
       without_phone: Number(totals.without_phone || 0),
       potentially_duplicate: Number(totals.potentially_duplicate || 0),
-      prospects: rows.rows || [],
+      totalLeads: Number(totals.total || 0),
+      withWhatsApp: Number(totals.with_phone || 0),
+      withEmail: Number(totals.with_email || 0),
+      withBoth: Number(totals.with_both || 0),
+      withoutAnyContact: Number(totals.without_any_contact || 0),
+      prospects,
       page,
       pageSize,
     });
@@ -335,12 +385,14 @@ router.get("/audience/folders", async (req, res) => {
   try {
     const manual = await query(
       `SELECT f.id, f.name, f.description, COUNT(m.prospect_id) AS total,
-      SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone
+      SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone,
+      SUM(p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$') AS with_email
       FROM lead_folders f LEFT JOIN lead_folder_members m ON m.folder_id = f.id
       LEFT JOIN prospects p ON p.id = m.prospect_id
       WHERE f.owner_user_id = ? GROUP BY f.id ORDER BY f.name`,
       [req.userId],
     );
+    const noList = await query(`SELECT COUNT(*) AS total, SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone, SUM(p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$') AS with_email FROM prospects p WHERE p.owner_user_id = ? AND NOT EXISTS (SELECT 1 FROM lead_folder_members m WHERE m.prospect_id = p.id)`, [req.userId]);
     res.json({
       manual_folders: (manual.rows || []).map((row) => ({
         id: Number(row.id),
@@ -348,11 +400,34 @@ router.get("/audience/folders", async (req, res) => {
         description: row.description,
         total: Number(row.total || 0),
         with_phone: Number(row.with_phone || 0),
+        with_email: Number(row.with_email || 0),
       })),
+      virtual_filters: [{ id: "none", name: "Sem Lista", total: Number(noList.rows?.[0]?.total || 0), with_phone: Number(noList.rows?.[0]?.with_phone || 0), with_email: Number(noList.rows?.[0]?.with_email || 0) }],
     });
   } catch (error) {
     errorResponse(res, error);
   }
+});
+
+router.get("/email-signature", async (req, res) => {
+  try {
+    const signature = await campaigns.getDefaultEmailSignature();
+    res.json({ signature: signature ? { id: signature.id, html_content: signature.html_content, text_content: signature.text_content, updated_at: signature.updated_at } : null });
+  } catch (error) { errorResponse(res, error); }
+});
+
+router.get("/email-providers", async (req, res) => {
+  try {
+    const result = await query("SELECT id, provider, status, configuration_metadata FROM integration_providers WHERE provider = 'smtp' AND status IN ('configured', 'connected') ORDER BY id");
+    res.json({ providers: (result.rows || []).map((row) => { let metadata = {}; try { metadata = typeof row.configuration_metadata === "string" ? JSON.parse(row.configuration_metadata) : row.configuration_metadata || {}; } catch {} return { id: Number(row.id), name: metadata.fromName || metadata.username || "SMTP", from_email: metadata.fromEmail || null, status: row.status }; }) });
+  } catch (error) { errorResponse(res, error); }
+});
+
+router.put("/email-signature", async (req, res) => {
+  try {
+    const signature = await campaigns.saveDefaultEmailSignature(req.userId, req.body?.html_content);
+    res.json({ signature });
+  } catch (error) { errorResponse(res, error); }
 });
 
 router.get("/:id/review", async (req, res) => {
@@ -363,11 +438,17 @@ router.get("/:id/review", async (req, res) => {
       req.userId,
     );
     const recipients = await campaigns.getRecipients(campaign.id, req.userId);
+    const attachments = await campaigns.listEmailAttachments(campaign.id, req.userId);
     const content = campaign.content_id
       ? {
           id: campaign.content_id,
           content_type: campaign.content_type,
           text_content: campaign.text_content,
+          email_subject: campaign.email_subject,
+          email_body_text: campaign.email_body_text,
+          email_html: campaign.email_html,
+          email_signature_html: campaign.email_signature_html,
+          email_signature_text: campaign.email_signature_text,
           media_storage_path: campaign.media_storage_path,
           mime_type: campaign.mime_type,
           original_filename: campaign.original_filename,
@@ -381,11 +462,12 @@ router.get("/:id/review", async (req, res) => {
     );
     const validation = {
       has_name: Boolean(String(campaign.name || "").trim()),
-      has_account: Boolean(account),
+       has_account: campaign.channel === "email" ? true : Boolean(account),
       has_content: Boolean(
         content &&
-        (content.content_type !== "text" ||
-          String(content.text_content || "").trim()),
+        (campaign.channel === "email"
+          ? String(content.email_subject || "").trim() && String(content.email_body_text || "").trim()
+          : content.content_type !== "text" || String(content.text_content || "").trim()),
       ),
       has_recipients: recipients.length > 0,
     };
@@ -393,6 +475,7 @@ router.get("/:id/review", async (req, res) => {
       campaign,
       account,
       content,
+      attachments,
       total_recipients: recipients.length,
       counts,
       validation,
@@ -412,9 +495,11 @@ router.get("/:id", async (req, res) => {
       req.userId,
     );
     const recipients = await campaigns.getRecipients(campaign.id, req.userId);
+    const attachments = await campaigns.listEmailAttachments(campaign.id, req.userId);
     res.json({
       campaign,
       account,
+      attachments,
       recipient_summary: {
         total: recipients.length,
         by_status: Object.fromEntries(
@@ -439,6 +524,8 @@ router.patch("/:id", async (req, res) => {
     const values = {};
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "name")) values.name = req.body.name;
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "communication_account_id")) values.communicationAccountId = account?.id ?? null;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "channels")) values.channels = req.body.channels;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "email_provider_id")) values.emailProviderId = (await validEmailProvider(req.body.email_provider_id))?.id ?? null;
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "scheduled_at")) values.scheduledAt = req.body.scheduled_at;
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "cadence_seconds")) values.cadenceSeconds = req.body.cadence_seconds;
     const campaign = await campaigns.updateDraft(req.params.id, req.userId, values);
@@ -460,6 +547,37 @@ router.put("/:id/content", async (req, res) => {
   } catch (error) {
     errorResponse(res, error);
   }
+});
+
+router.get("/:id/email-attachments", async (req, res) => {
+  try {
+    const attachments = await campaigns.listEmailAttachments(req.params.id, req.userId);
+    res.json({ attachments });
+  } catch (error) { errorResponse(res, error); }
+});
+
+router.post("/:id/email-attachments", emailAttachmentUploadMiddleware, async (req, res) => {
+  let stored;
+  try {
+    const campaign = await campaignForUser(req.params.id, req.userId);
+    if (campaign.status !== "draft") throw new campaigns.BroadcastCampaignError(409, "CAMPAIGN_NOT_EDITABLE");
+    if (campaign.channel !== "email" && campaign.channel !== "both") throw new campaigns.BroadcastCampaignError(400, "Anexos de e-mail exigem o canal e-mail.");
+    if (!req.file) throw new campaigns.BroadcastCampaignError(400, "Arquivo obrigatorio.");
+    const existing = await query("SELECT COUNT(*) AS total, COALESCE(SUM(size_bytes), 0) AS total_bytes FROM broadcast_campaign_attachments WHERE campaign_id = ?", [campaign.id]);
+    if (Number(existing.rows?.[0]?.total || 0) >= MAX_FILES) throw new campaigns.BroadcastCampaignError(400, "A campanha pode ter no maximo 5 anexos.");
+    if (Number(existing.rows?.[0]?.total_bytes || 0) + req.file.size > MAX_TOTAL_BYTES) throw new campaigns.BroadcastCampaignError(413, "Os anexos da campanha podem somar no maximo 20 MB.");
+    stored = await storeAttachment(campaign.id, req.file);
+    const result = await query("INSERT INTO broadcast_campaign_attachments (campaign_id, original_name, storage_key, mime_type, size_bytes) VALUES (?, ?, ?, ?, ?)", [campaign.id, stored.originalName, stored.storageKey, stored.mimeType, stored.size]);
+    res.status(201).json({ attachment: { id: Number(result.insertId), original_name: stored.originalName, mime_type: stored.mimeType, size_bytes: stored.size } });
+  } catch (error) {
+    if (stored?.storageKey) await removeAttachment(stored.storageKey).catch(() => {});
+    errorResponse(res, error);
+  }
+});
+
+router.delete("/:id/email-attachments/:attachmentId", async (req, res) => {
+  try { res.json({ success: true, ...(await campaigns.removeEmailAttachment(req.params.id, req.params.attachmentId, req.userId)) }); }
+  catch (error) { errorResponse(res, error); }
 });
 
 router.post(
@@ -569,7 +687,7 @@ router.post("/:id/recipients", async (req, res) => {
       const ids = [...new Set(explicit.map(parseId).filter(Boolean))];
       if (ids.length) {
         const result = await query(
-          `SELECT id, business_name, phone, normalized_phone FROM prospects WHERE owner_user_id = ? AND id IN (${ids.map(() => "?").join(",")})`,
+          `SELECT id, business_name, phone, normalized_phone, email FROM prospects WHERE owner_user_id = ? AND id IN (${ids.map(() => "?").join(",")})`,
           [req.userId, ...ids],
         );
         prospects = result.rows || [];
@@ -585,18 +703,17 @@ router.post("/:id/recipients", async (req, res) => {
       const originalQuery = req.query;
       req.query = previewReq.query;
       const params = [req.userId];
-      const conditions = [
-        "p.owner_user_id = ?",
-        "p.normalized_phone IS NOT NULL",
-        "p.normalized_phone <> ''",
-      ];
+      const conditions = ["p.owner_user_id = ?"];
+      if (campaign.channel === "email") conditions.push("p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'");
+      else if (campaign.channel === "both") conditions.push("((p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') OR (p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'))");
+      else conditions.push("p.normalized_phone IS NOT NULL AND p.normalized_phone <> ''");
       for (const field of ["status", "origin", "city", "state"])
         if (req.query[field]) {
           conditions.push(`p.${field} = ?`);
           params.push(String(req.query[field]).slice(0, 100));
         }
       const result = await query(
-        `SELECT p.id, p.business_name, p.phone, p.normalized_phone FROM prospects p WHERE ${conditions.join(" AND ")} ORDER BY p.id LIMIT ${EXPLICIT_RECIPIENT_MAX}`,
+        `SELECT p.id, p.business_name, p.phone, p.normalized_phone, p.email FROM prospects p WHERE ${conditions.join(" AND ")} ORDER BY p.id LIMIT ${EXPLICIT_RECIPIENT_MAX}`,
         params,
       );
       prospects = result.rows || [];
@@ -608,17 +725,18 @@ router.post("/:id/recipients", async (req, res) => {
         (item) => `${item.prospect_id || ""}:${item.recipient_phone}`,
       ),
     );
-    const eligible = prospects.filter(
-      (item) =>
-        item.normalized_phone &&
-        !existingKeys.has(`${item.id}:${item.normalized_phone}`),
-    );
+    const eligible = prospects.filter((item) => {
+      const state = eligibility(item);
+      const channelEligible = campaign.channel === "email" ? state.emailEligible : campaign.channel === "both" ? state.whatsappEligible || state.emailEligible : state.whatsappEligible;
+      return channelEligible && !existingKeys.has(`${item.id}:${item.normalized_phone}`);
+    });
     const result = await campaigns.addRecipients(
       campaign.id,
       req.userId,
       eligible.map((item) => ({
         prospectId: item.id,
         phone: item.normalized_phone,
+        email: item.email,
         name: item.business_name,
       })),
     );

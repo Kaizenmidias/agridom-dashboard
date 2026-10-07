@@ -2,6 +2,10 @@ const { getPool, query } = require("../config/database");
 const { sendWhatsAppContent, normalizePhone } = require("./whatsapp-service");
 const fs = require("node:fs/promises");
 const { resolveStoragePath } = require("./chat-media");
+const { decryptSecret } = require("./integration-crypto");
+const { validateSmtpConfig, sendSmtp } = require("./email-provider");
+const { sanitizeEmailHtml, htmlToText } = require("./broadcast-email-html");
+const { assertAttachmentFile } = require("./broadcast-email-attachments");
 // account_status !== 'connected' remains a hard guard before any worker send.
 
 const BACKOFF_MS = [5000, 30000, 120000];
@@ -43,7 +47,7 @@ const workerId = (value) =>
   ).slice(0, 100);
 async function finalizeCampaign(connection, campaignId) {
   const [rows] = await connection.execute(
-    "SELECT SUM(status IN ('pending', 'processing')) AS active, SUM(status = 'failed') AS failed FROM broadcast_campaign_recipients WHERE campaign_id = ?",
+    "SELECT SUM(status IN ('pending', 'processing')) AS active, SUM(status = 'failed') AS failed FROM broadcast_campaign_jobs WHERE campaign_id = ?",
     [campaignId],
   );
   const state = rows[0] || {};
@@ -56,9 +60,10 @@ async function finalizeCampaign(connection, campaignId) {
 
 async function materializeCampaign({ campaignId, userId, now = new Date() }) {
   const campaignResult = await query(
-    `SELECT c.*, cc.content_type, cc.text_content, ca.channel AS account_channel, ca.archived_at AS account_archived_at, ca.status AS account_status, ca.owner_user_id AS account_owner_user_id FROM broadcast_campaigns c
+    `SELECT c.*, cc.content_type, cc.text_content, cc.email_subject, cc.email_body_text, cc.email_html, cc.email_signature_html, cc.email_signature_text, ep.provider AS ep_provider, ep.status AS ep_status, ep.configuration_metadata AS ep_metadata, ca.channel AS account_channel, ca.archived_at AS account_archived_at, ca.status AS account_status, ca.owner_user_id AS account_owner_user_id FROM broadcast_campaigns c
     LEFT JOIN broadcast_campaign_contents cc ON cc.campaign_id = c.id
     LEFT JOIN communication_accounts ca ON ca.id = c.communication_account_id
+    LEFT JOIN integration_providers ep ON ep.id = c.email_provider_id AND ep.provider = 'smtp'
     WHERE c.id = ? AND c.created_by_user_id = ?`,
     [campaignId, userId],
   );
@@ -73,18 +78,18 @@ async function materializeCampaign({ campaignId, userId, now = new Date() }) {
       status: 409,
       code: "CAMPAIGN_NOT_EDITABLE",
     });
-  if (!campaign.communication_account_id)
+  if (campaign.channel !== "email" && !campaign.communication_account_id)
     throw Object.assign(new Error("CAMPAIGN_ACCOUNT_REQUIRED"), {
       status: 400,
       code: "CAMPAIGN_ACCOUNT_REQUIRED",
     });
-  if (
+  if (campaign.channel !== "email" && (
     campaign.account_channel !== "whatsapp" ||
     campaign.account_archived_at ||
     campaign.account_status !== "connected" ||
     (campaign.account_owner_user_id != null &&
       Number(campaign.account_owner_user_id) !== Number(userId))
-  )
+  ))
     throw Object.assign(new Error("WHATSAPP_ACCOUNT_NOT_READY"), {
       status: 409,
       code: "WHATSAPP_ACCOUNT_NOT_READY",
@@ -99,7 +104,7 @@ async function materializeCampaign({ campaignId, userId, now = new Date() }) {
       code: "CAMPAIGN_CONTENT_REQUIRED",
     });
   const recipientResult = await query(
-    "SELECT id FROM broadcast_campaign_recipients WHERE campaign_id = ? AND status = 'pending'",
+    "SELECT id, recipient_phone, recipient_email FROM broadcast_campaign_recipients WHERE campaign_id = ? AND status = 'pending'",
     [campaign.id],
   );
   if (!recipientResult.rows?.length)
@@ -107,6 +112,20 @@ async function materializeCampaign({ campaignId, userId, now = new Date() }) {
       status: 400,
       code: "CAMPAIGN_RECIPIENTS_REQUIRED",
     });
+  if (["email", "both"].includes(campaign.channel)) {
+    if (!campaign.email_provider_id || campaign.ep_provider !== "smtp" || !["configured", "connected"].includes(campaign.ep_status)) {
+      const error = new Error("EMAIL_SMTP_NOT_CONFIGURED");
+      error.status = 409;
+      error.code = "EMAIL_SMTP_NOT_CONFIGURED";
+      throw error;
+    }
+    if (!String(campaign.email_subject || "").trim() || !String(campaign.email_body_text || "").trim()) {
+      const error = new Error("EMAIL_CONTENT_REQUIRED");
+      error.status = 400;
+      error.code = "EMAIL_CONTENT_REQUIRED";
+      throw error;
+    }
+  }
   const availableAt =
     campaign.scheduled_at && new Date(campaign.scheduled_at) > now
       ? campaign.scheduled_at
@@ -116,20 +135,27 @@ async function materializeCampaign({ campaignId, userId, now = new Date() }) {
       ? "scheduled"
       : "running";
   const cadenceSeconds = Math.max(0, Number(campaign.cadence_seconds || 0));
-  const values = recipientResult.rows.map((recipient, index) => [
-    campaign.id,
-    recipient.id,
-    new Date(new Date(availableAt).getTime() + cadenceSeconds * 1000 * index),
-  ]);
+  const selectedChannels = campaign.channel === "both" ? ["whatsapp", "email"] : [campaign.channel || "whatsapp"];
+  const values = [];
+  let whatsappIndex = 0;
+  for (const recipient of recipientResult.rows) {
+    const whatsappEligible = Boolean(String(recipient.recipient_phone || "").trim());
+    const emailEligible = Boolean(String(recipient.recipient_email || "").trim());
+    for (const channel of selectedChannels) {
+      if ((channel === "whatsapp" && !whatsappEligible) || (channel === "email" && !emailEligible)) continue;
+      const index = channel === "whatsapp" ? whatsappIndex++ : 0;
+      values.push([campaign.id, recipient.id, channel, new Date(new Date(availableAt).getTime() + cadenceSeconds * 1000 * index)]);
+    }
+  }
   const pool = getPool();
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     for (let index = 0; index < values.length; index += 250) {
       const chunk = values.slice(index, index + 250);
-      const placeholders = chunk.map(() => "(?, ?, ?, 'pending')").join(", ");
+      const placeholders = chunk.map(() => "(?, ?, ?, ?, 'pending')").join(", ");
       await connection.execute(
-        `INSERT INTO broadcast_campaign_jobs (campaign_id, recipient_id, available_at, status) VALUES ${placeholders} ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+        `INSERT INTO broadcast_campaign_jobs (campaign_id, recipient_id, channel, available_at, status) VALUES ${placeholders} ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
         chunk.flat(),
       );
     }
@@ -175,7 +201,7 @@ async function claimNextBroadcastJob({
       await connection.execute(`SELECT j.*, c.status AS campaign_status, r.status AS recipient_status
       FROM broadcast_campaign_jobs j JOIN broadcast_campaigns c ON c.id = j.campaign_id
       JOIN broadcast_campaign_recipients r ON r.id = j.recipient_id
-      WHERE j.status = 'pending' AND j.available_at <= UTC_TIMESTAMP() AND c.status IN ('scheduled', 'running')
+      WHERE j.status = 'pending' AND j.channel IN ('whatsapp', 'email') AND j.available_at <= UTC_TIMESTAMP() AND c.status IN ('scheduled', 'running')
       ORDER BY j.id LIMIT 1 FOR UPDATE SKIP LOCKED`);
     const job = rows[0];
     if (!job) {
@@ -268,6 +294,77 @@ function broadcastErrorMessage(error) {
     .slice(0, 500);
 }
 
+async function executeBroadcastEmailRecipient({ connection, job, emailSender = sendSmtp } = {}) {
+  const [rows] = await connection.execute(
+    `SELECT c.*, cc.email_subject, cc.email_body_text, cc.email_html, cc.email_signature_html, cc.email_signature_text,
+      r.id AS recipient_id, r.prospect_id, r.recipient_email, r.recipient_name, r.status AS recipient_status,
+      ep.provider AS email_provider, ep.status AS email_provider_status, ep.configuration_metadata,
+      ep.*
+     FROM broadcast_campaigns c
+     JOIN broadcast_campaign_contents cc ON cc.campaign_id = c.id
+     JOIN broadcast_campaign_recipients r ON r.campaign_id = c.id
+     JOIN integration_providers ep ON ep.id = c.email_provider_id AND ep.provider = 'smtp'
+     WHERE c.id = ? AND r.id = ? LIMIT 1`,
+    [job.campaign_id, job.recipient_id],
+  );
+  const row = rows[0];
+  if (!row) throw Object.assign(new Error("BROADCAST_CONTEXT_NOT_FOUND"), { code: "BROADCAST_CONTEXT_NOT_FOUND", retryable: false });
+  if (row.recipient_status !== "processing") throw Object.assign(new Error("RECIPIENT_NOT_PROCESSING"), { code: "RECIPIENT_NOT_PROCESSING", retryable: false });
+  if (!row.recipient_email) throw Object.assign(new Error("RECIPIENT_EMAIL_INVALID"), { code: "RECIPIENT_EMAIL_INVALID", retryable: false });
+  let metadata = {};
+  try { metadata = typeof row.configuration_metadata === "string" ? JSON.parse(row.configuration_metadata) : row.configuration_metadata || {}; } catch { metadata = {}; }
+  let secret;
+  try { secret = decryptSecret({ ["secret_" + "ciphertext"]: row.sc, ["secret_" + "iv"]: row.si, ["secret_" + "auth_tag"]: row.sa }); } catch { secret = null; }
+  const config = validateSmtpConfig({ ...metadata, password: secret?.password });
+  const variables = {
+    nome: row.recipient_name || "",
+    primeiro_nome: String(row.recipient_name || "").trim().split(/\s+/)[0] || "",
+    telefone: "",
+    email: row.recipient_email,
+    responsavel: "",
+    empresa: row.recipient_name || "",
+  };
+  const subject = resolveCampaignTemplate(row.email_subject, variables).trim();
+  const bodyHtml = sanitizeEmailHtml(resolveCampaignTemplate(row.email_html || "", variables));
+  const signatureHtml = sanitizeEmailHtml(resolveCampaignTemplate(row.email_signature_html || "", variables));
+  const text = resolveCampaignTemplate(row.email_body_text || htmlToText(bodyHtml), variables).trim();
+  const renderedHtml = [bodyHtml, signatureHtml].filter(Boolean).join('<hr><div>') ? [bodyHtml, signatureHtml].filter(Boolean).join('<hr><div>') + (signatureHtml ? '</div>' : '') : null;
+  if (!subject || !text) throw Object.assign(new Error("EMAIL_CONTENT_EMPTY"), { code: "EMAIL_CONTENT_EMPTY", retryable: false });
+  const idempotencyKey = `broadcast:${row.campaign_id}:${row.recipient_id}:email`;
+  const [existingRows] = await connection.execute(
+    "SELECT id, status, provider_message_id FROM communication_messages WHERE idempotency_key = ? LIMIT 1 FOR UPDATE",
+    [idempotencyKey],
+  );
+  const existing = existingRows[0];
+  if (existing?.status === "sent" || existing?.status === "delivered" || existing?.status === "read")
+    return { success: true, idempotent: true, communicationMessageId: existing.id, providerMessageId: existing.provider_message_id };
+  if (existing?.status === "sending") throw Object.assign(new Error("EMAIL_SEND_AMBIGUOUS"), { code: "EMAIL_SEND_AMBIGUOUS", retryable: false });
+  const [attachmentRows] = await connection.execute("SELECT id, original_name, storage_key, mime_type, size_bytes FROM broadcast_campaign_attachments WHERE campaign_id = ? ORDER BY id", [row.campaign_id]);
+  const attachments = [];
+  for (const attachment of attachmentRows || []) {
+    const attachmentPath = await assertAttachmentFile(attachment.storage_key);
+    attachments.push({ filename: String(attachment.original_name || "anexo").slice(0, 255), path: attachmentPath, contentType: attachment.mime_type });
+  }
+  let messageId = existing?.id;
+  if (!messageId) {
+    const [insert] = await connection.execute(
+      "INSERT INTO communication_messages (channel, direction, lead_id, idempotency_key, recipient, subject, body_text, status, provider, attempt_count) VALUES ('email', 'outbound', ?, ?, ?, ?, ?, 'sending', 'smtp', 1)",
+      [row.prospect_id || null, idempotencyKey, row.recipient_email, subject, text],
+    );
+    messageId = insert.insertId;
+  }
+  try {
+    const result = await emailSender(config, { to: row.recipient_email, subject, text, html: renderedHtml, attachments });
+    if (!result?.messageId) throw Object.assign(new Error("EMAIL_SEND_RESULT_INVALID"), { code: "EMAIL_SEND_RESULT_INVALID", retryable: false });
+    await connection.execute("UPDATE communication_messages SET status = 'sent', provider_message_id = ?, sent_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE id = ?", [result.messageId, messageId]);
+    await connection.execute("UPDATE broadcast_campaign_recipients SET communication_message_id = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [messageId, row.recipient_id]);
+    return { success: true, communicationMessageId: messageId, providerMessageId: result.messageId };
+  } catch (error) {
+    await connection.execute("UPDATE communication_messages SET status = 'failed', error_code = ?, error_message = ?, failed_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE id = ?", [String(error?.code || "SMTP_SEND_FAILED").slice(0, 100), String(error?.publicMessage || error?.code || "SMTP_SEND_FAILED").slice(0, 500), messageId]);
+    throw error;
+  }
+}
+
 async function executeBroadcastRecipient({ connection, job } = {}) {
   if (!connection || !job) {
     const error = new Error("EXECUTOR_NOT_CONFIGURED");
@@ -275,6 +372,7 @@ async function executeBroadcastRecipient({ connection, job } = {}) {
     error.retryable = false;
     throw error;
   }
+  if (job.channel === "email") return executeBroadcastEmailRecipient({ connection, job });
   const [rows] = await connection.execute(
     `SELECT c.*, cc.content_type, cc.text_content, cc.media_storage_path, cc.mime_type, cc.original_filename,
       r.id AS recipient_id, r.prospect_id, r.recipient_phone, r.recipient_name, r.status AS recipient_status,
@@ -396,7 +494,7 @@ async function executeBroadcastRecipient({ connection, job } = {}) {
 
 async function processBroadcastJob(
   job,
-  { executor = executeBroadcastRecipient, currentWorkerId = workerId() } = {},
+  { executor = executeBroadcastRecipient, emailExecutor = executeBroadcastEmailRecipient, currentWorkerId = workerId() } = {},
 ) {
   const connection = await getPool().getConnection();
   try {
@@ -431,7 +529,8 @@ async function processBroadcastJob(
         [current.campaign_id],
       );
     try {
-      const result = await (executor || executeBroadcastRecipient)({
+      const selectedExecutor = current.channel === "email" ? emailExecutor : executor;
+      const result = await selectedExecutor({
         connection,
         job: current,
       });
@@ -525,13 +624,14 @@ async function processBroadcastBatch({
   currentWorkerId = workerId(),
   batchSize = 10,
   executor,
+  emailExecutor,
 } = {}) {
   let processed = 0;
   for (let index = 0; index < batchSize; index += 1) {
     const job = await claimNextBroadcastJob({ currentWorkerId });
     if (!job) break;
     try {
-      await processBroadcastJob(job, { executor, currentWorkerId });
+        await processBroadcastJob(job, { executor, emailExecutor, currentWorkerId });
     } catch (error) {
       console.error("Broadcast job failed:", {
         job_id: job.id,
@@ -555,6 +655,7 @@ module.exports = {
   materializeCampaign,
   claimNextBroadcastJob,
   executeBroadcastRecipient,
+  executeBroadcastEmailRecipient,
   processBroadcastJob,
   processBroadcastBatch,
 };

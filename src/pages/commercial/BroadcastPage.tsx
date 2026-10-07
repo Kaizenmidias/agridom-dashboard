@@ -17,6 +17,14 @@ import {
   Search,
   Send,
   XCircle,
+  Mail,
+  Smartphone,
+  Bold,
+  Italic,
+  Underline,
+  List,
+  Link as LinkIcon,
+  AlignLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
@@ -37,7 +45,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { broadcastAPI, type Campaign } from "@/api/broadcast-campaigns";
+import { broadcastAPI, type Campaign, type EmailAttachment } from "@/api/broadcast-campaigns";
 import { whatsappAPI } from "@/api/whatsapp";
 
 const labels: Record<string, string> = {
@@ -386,7 +394,7 @@ export function BroadcastPage() {
 function Stepper({ step }: { step: number }) {
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-1">
-      {["Configuração", "Público", "Mensagem", "Revisão"].map((name, index) => (
+      {["Público", "Canais", "Conteúdo", "Agendamento", "Revisão"].map((name, index) => (
         <div className="flex items-center gap-2" key={name}>
           <div
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm ${index + 1 <= step ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
@@ -398,7 +406,7 @@ function Stepper({ step }: { step: number }) {
           >
             {name}
           </span>
-          {index < 3 && (
+          {index < 4 && (
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
@@ -515,6 +523,17 @@ export function NewBroadcastPage() {
     seconds: 0,
   });
   const [text, setText] = useState("");
+  const [channels, setChannels] = useState<Array<"whatsapp" | "email">>(["whatsapp"]);
+  const [emailProviderId, setEmailProviderId] = useState("");
+  const [emailProviders, setEmailProviders] = useState<Array<{ id: number; name?: string; from_email?: string; status: string }>>([]);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [signature, setSignature] = useState<{ id: number; html_content: string; text_content: string } | null>(null);
+  const [useSignature, setUseSignature] = useState(true);
+  const [signatureDraft, setSignatureDraft] = useState("");
+  const [signatureEditing, setSignatureEditing] = useState(false);
+  const [emailAttachments, setEmailAttachments] = useState<EmailAttachment[]>([]);
+  const [emailUploadBusy, setEmailUploadBusy] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<
@@ -559,12 +578,17 @@ export function NewBroadcastPage() {
       .folders()
       .then((data) => setManualFolders(data.manual_folders || []))
       .catch(() => setManualFolders([]));
+    void broadcastAPI.emailProviders().then((data) => setEmailProviders(data.providers || [])).catch(() => setEmailProviders([]));
+    void broadcastAPI.signature().then((data) => { setSignature(data.signature); setSignatureDraft(data.signature?.html_content || ""); }).catch(() => setSignature(null));
     if (id)
       void broadcastAPI
         .get(Number(id))
         .then(({ campaign }) => {
           setName(campaign.name);
           setText(campaign.text_content || "");
+          setEmailSubject(campaign.email_subject || "");
+          setEmailBody(campaign.email_body_text || "");
+          void broadcastAPI.emailAttachments(campaign.id).then((data) => setEmailAttachments(data.attachments || [])).catch(() => setEmailAttachments([]));
           const total = Number(campaign.cadence_seconds || 0);
           setCadence({
             days: Math.floor(total / 86400),
@@ -581,6 +605,8 @@ export function NewBroadcastPage() {
       const result = await broadcastAPI.create({
         name,
         communication_account_id: accountId ? Number(accountId) : null,
+        channels,
+        email_provider_id: emailProviderId ? Number(emailProviderId) : null,
         cadence_seconds:
           cadence.days * 86400 +
           cadence.hours * 3600 +
@@ -593,6 +619,8 @@ export function NewBroadcastPage() {
     await broadcastAPI.update(campaignId, {
       name,
       communication_account_id: accountId ? Number(accountId) : null,
+      channels,
+      email_provider_id: emailProviderId ? Number(emailProviderId) : null,
       scheduled_at: scheduled
         ? new Date(scheduled).toISOString().slice(0, 19).replace("T", " ")
         : null,
@@ -608,13 +636,13 @@ export function NewBroadcastPage() {
     setSaving(true);
     try {
       const current = await ensureCampaign();
-      if (step === 2 && selectedFolderIds.length) {
+      if (step === 3 && selectedFolderIds.length) {
         await broadcastAPI.audienceFolders(current, selectedFolderIds);
         setFolderAudience({ eligible: 1, missing_phone: 0 });
 
         toast.success("Público adicionado ao disparo.");
       }
-      if (step === 3) {
+      if (step === 4) {
         if (attachment) {
           const type = attachment.type.startsWith("image/")
             ? "image"
@@ -625,8 +653,16 @@ export function NewBroadcastPage() {
                 : "document";
           await broadcastAPI.uploadMedia(current, attachment, type, text);
         } else await broadcastAPI.content(current, text);
+        if (channels.includes("email")) await broadcastAPI.content(current, {
+          content_type: "text",
+          text_content: text,
+          email_subject: emailSubject,
+          email_body_text: emailBody,
+          email_html: emailBody,
+          email_signature_html: useSignature ? signature?.html_content || "" : "",
+        } as any);
       }
-      setStep(Math.min(4, step + 1));
+      setStep(Math.min(5, step + 1));
     } catch (e) {
       toast.error(
         e instanceof Error ? e.message : "Não foi possível salvar o rascunho.",
@@ -670,6 +706,32 @@ export function NewBroadcastPage() {
     } finally {
       setSaving(false);
     }
+  };
+  const saveSignature = async () => {
+    try {
+      const result = await broadcastAPI.saveSignature(signatureDraft);
+      setSignature(result.signature);
+      setSignatureEditing(false);
+      toast.success("Assinatura salva.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel salvar a assinatura.");
+    }
+  };
+  const uploadEmailAttachment = async (file: File) => {
+    setEmailUploadBusy(true);
+    try {
+      const current = await ensureCampaign();
+      const result = await broadcastAPI.uploadEmailAttachment(current, file);
+      setEmailAttachments((items) => [...items, result.attachment]);
+      toast.success("Anexo adicionado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel anexar o arquivo.");
+    } finally { setEmailUploadBusy(false); }
+  };
+  const removeEmailAttachment = async (attachmentId: number) => {
+    if (!campaignId) return;
+    try { await broadcastAPI.removeEmailAttachment(campaignId, attachmentId); setEmailAttachments((items) => items.filter((item) => item.id !== attachmentId)); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Nao foi possivel remover o anexo."); }
   };
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -794,6 +856,20 @@ export function NewBroadcastPage() {
         </Card>
       )}
       {step === 2 && (
+        <Card className="max-w-3xl shadow-none">
+          <CardHeader><CardTitle>Como vocÃª quer entrar em contato?</CardTitle><p className="text-sm text-muted-foreground">Escolha um ou os dois canais.</p></CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            {[{ id: "whatsapp" as const, label: "WhatsApp", description: "Enviar mensagem pelo WhatsApp", icon: Smartphone }, { id: "email" as const, label: "E-mail", description: "Enviar mensagem por e-mail", icon: Mail }].map(({ id: channel, label, description, icon: Icon }) => {
+              const active = channels.includes(channel);
+              return <button type="button" key={channel} onClick={() => setChannels((current) => active ? current.filter((item) => item !== channel) : [...current, channel])} className={`rounded-lg border p-5 text-left transition ${active ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:bg-muted/50"}`} aria-pressed={active}><Icon className="mb-3 h-6 w-6 text-primary" /><p className="font-semibold">{label}</p><p className="mt-1 text-sm text-muted-foreground">{description}</p></button>;
+            })}
+            {channels.includes("whatsapp") && <label className="sm:col-span-2 block text-sm font-medium">Conta do WhatsApp<select className="mt-2 h-10 w-full rounded-md border bg-background px-3" value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Selecione um número</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} {account.phone_number || ""}</option>)}</select></label>}
+            {channels.includes("email") && <label className="sm:col-span-2 block text-sm font-medium">Conta de e-mail<select className="mt-2 h-10 w-full rounded-md border bg-background px-3" value={emailProviderId} onChange={(event) => setEmailProviderId(event.target.value)}><option value="">Selecione um remetente</option>{emailProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.name} {provider.from_email ? `Â· ${provider.from_email}` : ""}</option>)}</select>{!emailProviders.length && <span className="mt-2 block text-sm text-amber-700">Nenhuma conta de e-mail configurada.</span>}</label>}
+          </CardContent>
+          <div className="flex justify-between border-t p-6"><Button variant="outline" onClick={() => setStep(1)}>Voltar</Button><Button disabled={saving || !channels.length || (channels.includes("whatsapp") && !accountId) || (channels.includes("email") && !emailProviderId)} onClick={() => void next()}>Continuar <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
+        </Card>
+      )}
+      {step === 3 && (
         <Card className="shadow-none">
           <CardHeader>
             <CardTitle>Público</CardTitle>
@@ -898,7 +974,7 @@ export function NewBroadcastPage() {
           </div>
         </Card>
       )}
-      {step === 3 && (
+      {step === 4 && (
         <Card className="shadow-none">
           <CardHeader>
             <CardTitle>Mensagem</CardTitle>
@@ -907,7 +983,18 @@ export function NewBroadcastPage() {
             </p>
           </CardHeader>
           <CardContent className="grid gap-6 lg:grid-cols-2">
-            <div>
+            {channels.includes("email") && <div className="space-y-4 rounded-lg border p-4">
+              <div><p className="font-semibold">Editor de e-mail</p><p className="text-sm text-muted-foreground">Componha assunto e corpo para o remetente selecionado.</p></div>
+              <label className="block text-sm font-medium">Assunto<Input className="mt-2" value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} placeholder="{{primeiro_nome}}, podemos conversar?" /></label>
+              <div className="flex flex-wrap gap-1">
+                {[Bold, Italic, Underline, List, LinkIcon, AlignLeft].map((Icon, index) => <Button key={index} type="button" size="icon" variant="outline" aria-label="Formatação disponível" onClick={() => setEmailBody((value) => index === 0 ? `${value}<strong></strong>` : index === 1 ? `${value}<em></em>` : index === 2 ? `${value}<u></u>` : value)}><Icon className="h-4 w-4" /></Button>)}
+              </div>
+              <textarea className="min-h-48 w-full rounded-md border bg-background p-3 text-sm" value={emailBody} onChange={(event) => setEmailBody(event.target.value)} placeholder="Escreva o conteúdo do e-mail..." aria-label="Conteúdo do e-mail" />
+              <div className="rounded-md border border-dashed p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-medium">Anexos do e-mail</p><p className="text-xs text-muted-foreground">PDF, imagens, DOC/DOCX e XLS/XLSX. Ate 5 arquivos e 20 MB.</p></div><label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"><Paperclip className="h-4 w-4" />{emailUploadBusy ? "Enviando..." : "Adicionar arquivo"}<input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={emailUploadBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadEmailAttachment(file); event.currentTarget.value = ""; }} /></label></div><p className="mt-2 text-xs text-muted-foreground">{emailAttachments.length}/5 arquivos - {(emailAttachments.reduce((sum, item) => sum + Number(item.size_bytes || 0), 0) / 1024 / 1024).toFixed(2)}/20 MB</p>{emailAttachments.length ? <ul className="mt-2 space-y-1">{emailAttachments.map((item) => <li className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1 text-sm" key={item.id}><FileText className="h-4 w-4 text-primary" /><span className="min-w-0 flex-1 truncate">{item.original_name}</span><span className="text-xs text-muted-foreground">{(Number(item.size_bytes) / 1024 / 1024).toFixed(2)} MB</span><Button type="button" size="sm" variant="ghost" onClick={() => void removeEmailAttachment(item.id)}>Remover</Button></li>)}</ul> : null}</div>
+              <div className="rounded-md bg-muted/40 p-3 text-sm"><div className="flex items-center justify-between gap-3"><label className="flex items-center gap-2"><Checkbox checked={useSignature} onCheckedChange={(value) => setUseSignature(Boolean(value))} />Adicionar assinatura padrão</label><Button type="button" variant="link" size="sm" onClick={() => setSignatureEditing((value) => !value)}>{signature ? "Editar assinatura" : "Configurar assinatura"}</Button></div>{!signature && <p className="mt-2 text-amber-700">Nenhuma assinatura configurada.</p>}{signatureEditing && <div className="mt-3 space-y-2"><textarea className="min-h-24 w-full rounded-md border bg-background p-2" value={signatureDraft} onChange={(event) => setSignatureDraft(event.target.value)} placeholder="Sua assinatura em HTML simples" aria-label="Assinatura padrão" /><Button type="button" size="sm" onClick={() => void saveSignature()}>Salvar assinatura</Button></div>}</div>
+              <div className="rounded-md border bg-muted/20 p-3"><p className="mb-2 text-xs font-medium">Preview do e-mail</p><p className="text-sm font-semibold">{emailSubject.replace(/\{\{[^}]+\}\}/g, "[Nome]") || "Sem assunto"}</p><p className="mt-2 whitespace-pre-wrap text-sm">{emailBody.replace(/<[^>]+>/g, "").replace(/\{\{[^}]+\}\}/g, "[Nome]") || "Seu conteúdo aparecerá aqui."}</p>{useSignature && signature ? <div className="mt-3 border-t pt-3 text-sm" dangerouslySetInnerHTML={{ __html: signature.html_content }} /> : null}</div>
+            </div>}
+            {channels.includes("whatsapp") && <div>
               <Textarea
                 className="min-h-56"
                 value={text}
@@ -991,7 +1078,6 @@ export function NewBroadcastPage() {
               <p className="mt-2 text-right text-xs text-muted-foreground">
                 {text.length} caracteres
               </p>
-            </div>
             <div className="space-y-2">
               <div>
                 <p className="text-sm font-semibold">Prévia no WhatsApp</p>
@@ -1004,14 +1090,14 @@ export function NewBroadcastPage() {
                 attachment={attachment}
                 attachmentUrl={attachmentUrl}
               />
-            </div>
+            </div></div>}
           </CardContent>
           <div className="flex justify-between border-t p-6">
             <Button variant="outline" onClick={() => setStep(2)}>
               Voltar
             </Button>
             <Button
-              disabled={saving || !text.trim()}
+              disabled={saving || emailUploadBusy || (!text.trim() && !emailBody.trim())}
               onClick={() => void next()}
             >
               Salvar mensagem <ChevronRight className="ml-2 h-4 w-4" />
@@ -1019,10 +1105,10 @@ export function NewBroadcastPage() {
           </div>
         </Card>
       )}
-      {step === 4 && campaignId && (
+      {step === 5 && campaignId && (
         <ReviewStep
           campaignId={campaignId}
-          onBack={() => setStep(3)}
+          onBack={() => setStep(4)}
           onStart={() => void start()}
           saving={saving}
         />
@@ -1119,6 +1205,7 @@ function ReviewStep({
               {review.content.content_type}
             </p>
           ) : null}
+          {review.attachments?.length ? <div className="mt-3 border-t pt-3"><p className="text-xs font-medium">Anexos de e-mail</p><ul className="mt-1 space-y-1 text-sm">{review.attachments.map((item: EmailAttachment) => <li key={item.id}>{item.original_name} · {(Number(item.size_bytes) / 1024 / 1024).toFixed(2)} MB</li>)}</ul></div> : null}
         </div>
         <div className="space-y-2">
           {[

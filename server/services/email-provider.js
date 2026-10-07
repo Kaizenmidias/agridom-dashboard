@@ -68,6 +68,8 @@ async function sendSmtp(config, message) {
       replyTo: message.replyTo || config.replyTo || undefined,
       subject: String(message.subject || '').trim(),
       text: String(message.text || ''),
+      ...(message.html ? { html: String(message.html) } : {}),
+      ...(Array.isArray(message.attachments) ? { attachments: message.attachments } : {}),
     });
     return { success: true, provider: 'smtp', messageId: info.messageId, accepted: info.accepted || [], rejected: info.rejected || [] };
   } catch (cause) {
