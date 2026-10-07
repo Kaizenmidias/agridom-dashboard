@@ -18,6 +18,8 @@ test("prospecção retorna somente leads novos vinculados ao job e sem raw paylo
 test("tela de prospecção mostra status final, resultados por execução e polling controlado", () => {
   const page = read("../src/pages/commercial/ProspectingPage.tsx");
   assert.match(page, /ProspectingRunStatus/);
+  assert.match(page, /\["Duplicados", job\?\.duplicateCount \?\? 0\]/);
+  assert.match(page, /text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950\/30 dark:text-emerald-100/);
   assert.match(page, /onClick=\{\(\) => onViewJob\(item\.id\)\}/);
   assert.match(page, /ACTIVE_PROSPECTING_STATUSES\.includes\(item\.status\)/);
   assert.match(page, /ACTIVE_PROSPECTING_STATUSES\.includes\(data\.job\.status\)/);

@@ -361,11 +361,11 @@ function ProspectingJobProgress({ job, events, onCancel }: { job: ProspectingJob
   );
 }
 
-function ProspectingSummaryCards({ results }: { results: ProspectingResult[] }) {
+function ProspectingSummaryCards({ results, job }: { results: ProspectingResult[]; job: ProspectingJob | null }) {
   const values = [
     ["Encontrados", results.length],
     ["Novos", results.filter((item) => item.duplicateStatus === "new").length],
-    ["Duplicados", results.filter((item) => item.duplicateStatus !== "new").length],
+    ["Duplicados", job?.duplicateCount ?? 0],
     ["Com telefone", results.filter((item) => item.phone).length],
     ["WhatsApp validado", results.filter((item) => item.whatsappStatus === "valid").length],
     ["Com e-mail", results.filter((item) => item.email).length],
@@ -412,7 +412,7 @@ function ProspectingRunStatus({ job }: { job: ProspectingJob | null }) {
   if (!job) return null;
   const statusLabel: Record<string, string> = { queued: "Na fila", running: "Processando", collecting: "Coletando", normalizing: "Normalizando", validating: "Validando", completed: "Prospecção concluída", failed: "Prospecção com erro", cancelled: "Prospecção cancelada" };
   const active = ["queued", "running", "collecting", "normalizing", "validating"].includes(job.status);
-  return <Alert className={cn("border", job.status === "completed" ? "border-emerald-200 bg-emerald-50" : job.status === "failed" ? "border-red-200 bg-red-50" : "border-blue-200 bg-blue-50")}>
+  return <Alert className={cn("border", job.status === "completed" ? "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100" : job.status === "failed" ? "border-red-200 bg-red-50" : "border-blue-200 bg-blue-50")}>
     {active ? <Loader2 className="h-4 w-4 animate-spin" /> : job.status === "completed" ? <CheckCircle2 className="h-4 w-4" /> : job.status === "failed" ? <XCircle className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
     <AlertTitle>{statusLabel[job.status] || job.status}</AlertTitle>
     <AlertDescription>{job.status === "completed" ? `${job.foundCount} novo(s) lead(s) adicionado(s) ao CRM. ${job.duplicateCount} duplicado(s) ignorado(s).` : job.status === "failed" ? (job.errorMessage || "A execução não foi concluída.") : "Acompanhe o andamento nesta página; a atualização automática para ao finalizar."}</AlertDescription>
@@ -826,7 +826,7 @@ export default function ProspectingPage() {
       </Card>
 
       <ProspectingRunStatus job={job} />
-      <ProspectingSummaryCards results={results} />
+      <ProspectingSummaryCards job={job} results={results} />
       <ProspectingJobMetrics job={job} />
       <ProspectingResultsTable job={job} results={results} selectedIds={selectedIds} onToggle={toggleResult} onToggleAll={toggleAllResults} onImport={() => setImportOpen(true)} />
       <ProspectingHistory items={history} onRefresh={loadInitialData} onViewJob={(id) => void refreshJob(id)} />
