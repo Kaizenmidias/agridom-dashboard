@@ -29,7 +29,8 @@ const safePayload = (value) => JSON.stringify(value).slice(0, 100000);
 function actorInput(parameters) {
   const searchTerm = String(parameters.searchTerms || '').trim();
   const quantity = validateRequestedQuantity(parameters.quantity);
-  const locationQuery = [parameters.city, parameters.state].filter(Boolean).join(', ');
+  const rawLocationQuery = String(parameters.locationQuery || [parameters.city, parameters.state].filter(Boolean).join(', ')).trim();
+  const locationQuery = rawLocationQuery && /brasil$/i.test(rawLocationQuery) ? rawLocationQuery : rawLocationQuery ? `${rawLocationQuery}, Brasil` : null;
   const input = {
     searchStringsArray: [searchTerm],
     maxCrawledPlacesPerSearch: candidateBudget(quantity),

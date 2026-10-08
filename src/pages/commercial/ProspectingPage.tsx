@@ -152,14 +152,19 @@ function GoogleMapsSearchForm({
   destinationFolderId: number | null;
 }) {
   const [searchTerms, setSearchTerms] = useState("");
+  const [locationQuery, setLocationQuery] = useState("");
   const [quantity, setQuantity] = useState("20");
   const [minimumRating, setMinimumRating] = useState("any");
 
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label>Termos de busca</Label>
-        <Textarea placeholder="Ex.: escritorio de contabilidade em Curitiba" value={searchTerms} onChange={(event) => setSearchTerms(event.target.value)} />
+        <Label>O que deseja encontrar?</Label>
+        <Textarea placeholder="Ex.: Contabilidade" value={searchTerms} onChange={(event) => setSearchTerms(event.target.value)} />
+      </div>
+      <div className="space-y-2">
+        <Label>Onde deseja buscar?</Label>
+        <Input placeholder="Ex.: São Paulo, SP" value={locationQuery} onChange={(event) => setLocationQuery(event.target.value)} />
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         <div className="space-y-2">
@@ -185,7 +190,7 @@ function GoogleMapsSearchForm({
           </Select>
         </div>
       </div>
-      <Button disabled={running || !searchTerms.trim() || destinationFolderId == null} onClick={() => onSubmit({ source: "google_maps", searchTerms, quantity: Number(quantity), minimumRating: minimumRating === "any" ? null : Number(minimumRating), destinationFolderId })}>
+      <Button disabled={running || !searchTerms.trim() || !locationQuery.trim() || destinationFolderId == null} onClick={() => onSubmit({ source: "google_maps", searchTerms, locationQuery, quantity: Number(quantity), minimumRating: minimumRating === "any" ? null : Number(minimumRating), destinationFolderId })}>
         {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Buscar empresas
       </Button>
     </div>
@@ -695,6 +700,10 @@ export default function ProspectingPage() {
   const startSearch = async (payload: ProspectingSearchPayload) => {
     if (destinationFolderId == null) {
       toast({ title: "Selecione uma lista", description: "Escolha a lista de destino antes de iniciar a prospecção.", variant: "destructive" });
+      return;
+    }
+    if (payload.source === "google_maps" && (!payload.searchTerms.trim() || !payload.locationQuery.trim())) {
+      toast({ title: "Preencha a busca", description: "Informe o que deseja encontrar e onde deseja buscar.", variant: "destructive" });
       return;
     }
     try {

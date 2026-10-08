@@ -159,6 +159,7 @@ export interface BrazilianCity {
 export interface GoogleMapsSearchPayload {
   source: "google_maps";
   searchTerms: string;
+  locationQuery: string;
   quantity: number;
   minimumRating: number | null;
   destinationFolderId?: number | null;

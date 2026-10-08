@@ -38,9 +38,9 @@ const candidate = (title, phone) => ({ title, categoryName: 'Servicos', phoneNum
 
 test('candidateBudget dobra a meta e o payload Compass usa locationQuery', () => {
   assert.equal(candidateBudget(50), 100);
-  const payload = actorInput({ searchTerms: 'contabilidade', city: 'Salvador', state: 'BA', quantity: 100 });
+  const payload = actorInput({ searchTerms: 'contabilidade', locationQuery: 'Salvador, BA', quantity: 100 });
   assert.equal(payload.maxCrawledPlacesPerSearch, 200);
-  assert.equal(payload.locationQuery, 'Salvador, BA');
+  assert.equal(payload.locationQuery, 'Salvador, BA, Brasil');
   assert.equal('location' in payload, false);
 });
 
