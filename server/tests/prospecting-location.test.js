@@ -8,12 +8,17 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 test("Google Maps separa termo e localização e exige os campos na interface", () => {
   const page = read("../src/pages/commercial/ProspectingPage.tsx");
+  const route = read("routes/prospecting.js");
+  const service = read("services/prospecting-service.js");
   assert.match(page, /O que deseja encontrar\?/);
   assert.match(page, /Onde deseja buscar\?/);
   assert.match(page, /locationQuery/);
   assert.match(page, /!locationQuery\.trim\(\)/);
   assert.match(page, /payload\.source === "google_maps"/);
   assert.match(page, /destinationFolderId == null/);
+  assert.match(route, /JSON\.stringify\(req\.body \|\| \{\}\)/);
+  assert.match(service, /apifySearch\(\{ \.\.\.parameters, quantity: job\.requested_quantity \}/);
+  assert.match(service, /language: 'pt-BR'/);
 });
 
 test("jobs antigos sem locationQuery continuam com fallback seguro no histórico", () => {

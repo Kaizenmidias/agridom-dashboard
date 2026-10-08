@@ -9,8 +9,8 @@ const { normalizeIntegrationMetadata } = require('../services/integration-metada
 const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', '..', ...parts), 'utf8');
 
 test('PROSPECCAO Apify monta o contrato real do Actor e limita a quantidade', () => {
-  assert.deepEqual(actorInput({ searchTerms: 'Contabilidade', locationQuery: 'Salvador, BA', quantity: 50 }), { searchStringsArray: ['Contabilidade'], locationQuery: 'Salvador, BA, Brasil', maxCrawledPlacesPerSearch: 100 });
-  assert.deepEqual(actorInput({ searchTerms: 'Contabilidade', locationQuery: 'São Paulo, SP, Brasil', quantity: 50 }), { searchStringsArray: ['Contabilidade'], locationQuery: 'São Paulo, SP, Brasil', maxCrawledPlacesPerSearch: 100 });
+  assert.deepEqual(actorInput({ searchTerms: 'Contabilidade', locationQuery: 'Salvador, BA', quantity: 50 }), { searchStringsArray: ['Contabilidade'], locationQuery: 'Salvador, BA, Brasil', maxCrawledPlacesPerSearch: 100, language: 'pt-BR' });
+  assert.deepEqual(actorInput({ searchTerms: 'Contabilidade', locationQuery: 'São Paulo, SP, Brasil', quantity: 50 }), { searchStringsArray: ['Contabilidade'], locationQuery: 'São Paulo, SP, Brasil', maxCrawledPlacesPerSearch: 100, language: 'pt-BR' });
   assert.throws(() => actorInput({ searchTerms: 'x', quantity: 999 }), { code: 'PROSPECTING_QUANTITY_INVALID' });
 });
 

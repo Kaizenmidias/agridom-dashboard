@@ -47,19 +47,22 @@ test('candidateBudget dobra a meta e o payload Compass usa locationQuery', () =>
 test('apifySearch devolve todos os itens do fetch mockado sem truncamento', async () => {
   const items = Array.from({ length: 100 }, (_, index) => ({ title: `Lead ${index}` }));
   let requestedUrl = '';
+  let requestedBody = null;
   process.env.INTEGRATION_ENCRYPTION_KEY = 'offline-test-key';
   const secret = encryptSecret({ token: 'offline-test-token' });
   const result = await apifySearch(
-    { searchTerms: 'contabilidade', quantity: 50 },
+    { searchTerms: 'contabilidade', locationQuery: 'São Paulo, SP', quantity: 50 },
     { configuration_metadata: { googleMapsActorId: 'compass/crawler-google-places' }, secret_ciphertext: secret.ciphertext, secret_iv: secret.iv, secret_auth_tag: secret.authTag },
-    async (url) => {
+    async (url, options) => {
       requestedUrl = url;
+      requestedBody = JSON.parse(options.body);
       return { ok: true, async json() { return items; } };
     },
   );
   assert.equal(result.length, 100);
   assert.match(requestedUrl, /run-sync-get-dataset-items\?token=/);
   assert.doesNotMatch(requestedUrl, /limit=/);
+  assert.deepEqual(requestedBody, { searchStringsArray: ['contabilidade'], locationQuery: 'São Paulo, SP, Brasil', maxCrawledPlacesPerSearch: 100, language: 'pt-BR' });
 });
 
 test('processa novo, duplicado, inválido e preserva contadores/resultados', async () => {

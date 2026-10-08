@@ -34,6 +34,7 @@ function actorInput(parameters) {
   const input = {
     searchStringsArray: [searchTerm],
     maxCrawledPlacesPerSearch: candidateBudget(quantity),
+    language: 'pt-BR',
   };
   if (locationQuery) input.locationQuery = locationQuery;
   return input;
