@@ -5,6 +5,7 @@ import {
   Archive,
   Building2,
   CheckCircle2,
+  Clipboard,
   Circle,
   Edit,
   ExternalLink,
@@ -186,6 +187,15 @@ const initialFilters: LeadFilters = {
   createdAt: "all",
   lastContactAt: "all",
 };
+
+export function getValidLeadEmails(leads: Lead[]): string[] {
+  const validEmails = new Set<string>();
+  for (const lead of leads) {
+    const email = normalizeEmail(lead.email);
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) validEmails.add(email);
+  }
+  return [...validEmails];
+}
 
 function getScoreClass(score?: number | null) {
   const value = score || 0;
@@ -622,6 +632,20 @@ export default function LeadsPage() {
     setFilters({ ...initialFilters, folderId: filters.folderId });
     setQuery("");
     setPage(1);
+  };
+
+  const copyFilteredEmails = async () => {
+    const emails = getValidLeadEmails(filteredLeads);
+    if (!emails.length) {
+      toast.info("Nenhum e-mail disponível para copiar.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(emails.join(", "));
+      toast.success(`${emails.length} e-mails copiados`);
+    } catch {
+      toast.error("Não foi possível copiar os e-mails.");
+    }
   };
 
   const getLeadPath = (lead: Lead) => {
@@ -1324,7 +1348,22 @@ export default function LeadsPage() {
                         </TableHead>
                         <TableHead>Nome</TableHead>
                         <TableHead>Organização</TableHead>
-                        <TableHead>E-mail</TableHead>
+                        <TableHead>
+                          <span className="inline-flex items-center gap-1.5">
+                            E-mail
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="Copiar e-mails"
+                              aria-label="Copiar e-mails"
+                              onClick={() => void copyFilteredEmails()}
+                            >
+                              <Clipboard className="h-3.5 w-3.5" />
+                            </Button>
+                          </span>
+                        </TableHead>
                         <TableHead>Telefone</TableHead>
                         <TableHead>Cidade</TableHead>
                         <TableHead>Orçamento</TableHead>
