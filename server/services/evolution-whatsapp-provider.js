@@ -124,6 +124,36 @@ function normalizeState(value) {
   return "error";
 }
 
+function normalizeIdentityPhone(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw.includes("@g.us") || raw.includes("@broadcast")) return null;
+  const digits = raw.replace(/@s\.whatsapp\.net$|@c\.us$/i, "").replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15 ? digits : null;
+}
+
+function extractIdentityCandidate(value) {
+  if (!value || typeof value !== "object") return { phoneNumber: null, displayName: null };
+  const candidates = [
+    value,
+    value.instance,
+    value.instance?.profile,
+    value.instance?.owner,
+    value.profile,
+    value.owner,
+    value.user,
+    value.me,
+    value.data,
+    value.response,
+  ].filter(Boolean);
+  for (const item of candidates) {
+    const jid = item.ownerJid || item.owner || item.wuid || item.jid || item.id || item.number || item.phoneNumber || item.phone;
+    const phoneNumber = normalizeIdentityPhone(jid);
+    const displayName = String(item.profileName || item.pushName || item.name || item.displayName || item.verifiedName || "").trim() || null;
+    if (phoneNumber || displayName) return { phoneNumber, displayName };
+  }
+  return { phoneNumber: null, displayName: null };
+}
+
 class EvolutionWhatsAppProvider {
   constructor(config) {
     this.baseUrl = validateBaseUrl(config.baseUrl);
@@ -253,8 +283,25 @@ class EvolutionWhatsAppProvider {
     );
     return {
       status: normalizeState(data.instance?.state || data.state),
+      identity: extractIdentityCandidate(data),
       raw: data,
     };
+  }
+
+  async fetchInstances() {
+    const data = await this.request("GET", "/instance/fetchInstances");
+    const payload = Array.isArray(data) ? data : Array.isArray(data?.instances) ? data.instances : Array.isArray(data?.data) ? data.data : [];
+    return { instances: payload, raw: data };
+  }
+
+  async fetchInstance(instanceName) {
+    const { instances, raw } = await this.fetchInstances();
+    const wanted = String(instanceName || "");
+    const found = instances.find((item) => {
+      const name = item?.instanceName || item?.instance?.instanceName || item?.name || item?.id || item?.instance?.id;
+      return String(name || "") === wanted;
+    }) || null;
+    return { exists: Boolean(found), identity: extractIdentityCandidate(found || raw), raw: found || raw };
   }
 
   async sendText(instanceName, number, text, quoted) {
@@ -380,4 +427,5 @@ module.exports = {
   normalizeState,
   validateBaseUrl,
   providerError,
+  extractIdentityCandidate,
 };

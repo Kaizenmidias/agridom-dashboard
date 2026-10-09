@@ -15,6 +15,9 @@ const allowed = (key, ms = 5000) => { const now = Date.now(); const previous = l
 const parseJson = (value, fallback = {}) => { if (value && typeof value === 'object') return value; try { return JSON.parse(value || JSON.stringify(fallback)); } catch { return fallback; } };
 const publicConfig = (row) => { const metadata = parseJson(row?.configuration_metadata); return { provider: 'evolution', status: row?.status || 'not_configured', configured: Boolean(row?.secret_ciphertext && metadata.baseUrl), metadata: { baseUrl: metadata.baseUrl || '', timeout: metadata.timeout || 15000, apiKeyMasked: row?.secret_ciphertext ? '********' : '' }, lastTestedAt: row?.last_tested_at || null, lastError: row?.last_error || null }; };
 const publicAccount = (row) => ({ id: Number(row.id), name: row.name, channel: row.channel, provider: row.provider, externalInstanceId: row.external_instance_id, phoneNumber: row.phone_number, displayName: row.display_name, status: row.status, autoCreateLeads: Boolean(row.auto_create_leads), lastConnectedAt: row.last_connected_at, lastDisconnectedAt: row.last_disconnected_at, createdAt: row.created_at, updatedAt: row.updated_at });
+const QR_COOLDOWN_MS = 10000;
+const safeLockName = (accountId) => `kaizen:whatsapp:reconnect:${Number(accountId)}`;
+const providerNotFound = (error) => error?.providerStatus === 404 || error?.providerCode === '404' || /not\s*found|not\s*exist/i.test(String(error?.providerMessage || error?.message || ''));
 function resolveEvolutionCredential(rawApiKey, current) {
   const apiKey = String(rawApiKey || '').trim();
   const stored = current ? decryptSecret(current) : null;
@@ -22,6 +25,72 @@ function resolveEvolutionCredential(rawApiKey, current) {
   if (!resolvedApiKey) return null;
   const webhookSecret = stored?.webhookSecret || generateWebhookSecret();
   return { apiKey: resolvedApiKey, webhookSecret, envelope: encryptSecret({ apiKey: resolvedApiKey, webhookSecret }) };
+}
+
+async function withAccountLock(accountId, callback) {
+  const connection = await getPool().getConnection();
+  const lockName = safeLockName(accountId);
+  let locked = false;
+  try {
+    const [rows] = await connection.execute('SELECT GET_LOCK(?, 0) AS acquired', [lockName]);
+    locked = Number(rows[0]?.acquired || 0) === 1;
+    if (!locked) {
+      const error = new Error('WHATSAPP_RECONNECT_IN_PROGRESS');
+      error.status = 409;
+      error.publicMessage = 'Uma reconexão deste número já está em andamento.';
+      throw error;
+    }
+    return await callback();
+  } finally {
+    if (locked) await connection.execute('SELECT RELEASE_LOCK(?)', [lockName]).catch(() => {});
+    connection.release();
+  }
+}
+
+function accountUpdateFromStatus(account, status, identity = {}) {
+  const phoneNumber = identity.phoneNumber || null;
+  const displayName = identity.displayName || null;
+  return {
+    status,
+    phoneNumber: phoneNumber || account.phone_number || null,
+    displayName: account.display_name || displayName || null,
+    confirmedPhoneNumber: phoneNumber,
+    confirmedDisplayName: account.display_name ? null : displayName,
+  };
+}
+
+async function resolveConfirmedIdentity(provider, account, state) {
+  if (state?.identity?.phoneNumber || state?.status !== 'connected' || typeof provider.fetchInstance !== 'function') return state?.identity || {};
+  try {
+    const instance = await provider.fetchInstance(account.external_instance_id);
+    return instance.identity || state?.identity || {};
+  } catch {
+    return state?.identity || {};
+  }
+}
+
+async function persistAccountSnapshot(account, snapshot) {
+  await getPool().execute(
+    `UPDATE communication_accounts
+     SET status = ?,
+         phone_number = COALESCE(?, phone_number),
+         display_name = COALESCE(display_name, ?),
+         last_connected_at = IF(? = 'connected', COALESCE(last_connected_at, UTC_TIMESTAMP()), last_connected_at),
+         last_disconnected_at = IF(? = 'disconnected', UTC_TIMESTAMP(), last_disconnected_at),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [snapshot.status, snapshot.confirmedPhoneNumber, snapshot.confirmedDisplayName, snapshot.status, snapshot.status, account.id],
+  );
+}
+
+function qrRecentlyRequested(account) {
+  const metadata = parseJson(account.metadata);
+  const previous = metadata.reconnectQrRequestedAt ? Date.parse(metadata.reconnectQrRequestedAt) : 0;
+  return Number.isFinite(previous) && previous > 0 && Date.now() - previous < QR_COOLDOWN_MS;
+}
+
+async function markQrRequested(accountId) {
+  await getPool().execute("UPDATE communication_accounts SET metadata = JSON_SET(COALESCE(metadata, JSON_OBJECT()), '$.reconnectQrRequestedAt', ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?", [new Date().toISOString(), accountId]);
 }
 
 async function persistEvolutionCredential(connection, current) {
@@ -119,13 +188,31 @@ router.post('/accounts/:id/webhook/sync', ...admin, async (req, res) => {
 
 router.get('/accounts/:id/qr', ...admin, async (req, res) => {
   try {
-    const [rows] = await getPool().execute("SELECT * FROM communication_accounts WHERE id = ? AND archived_at IS NULL", [req.params.id]);
+    const [rows] = await getPool().execute("SELECT * FROM communication_accounts WHERE id = ? AND archived_at IS NULL AND provider = 'evolution'", [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Conexao WhatsApp nao encontrada.' });
-    const { provider } = await loadEvolutionConfig(getPool(), rows[0]);
-    const result = await provider.connect(rows[0].external_instance_id);
-    await getPool().execute("UPDATE communication_accounts SET status = 'qr_required', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [rows[0].id]);
-    res.json({ status: 'qr_required', qrCode: result.qrCode, pairingCode: result.pairingCode || null });
-  } catch (error) { res.status(400).json({ error: error?.publicMessage || 'Nao foi possivel gerar o QR Code.' }); }
+    await withAccountLock(rows[0].id, async () => {
+      const account = rows[0];
+      const { provider } = await loadEvolutionConfig(getPool(), account);
+      let state;
+      try {
+        state = await provider.status(account.external_instance_id);
+      } catch (error) {
+        if (providerNotFound(error)) return res.status(404).json({ error: 'Instancia Evolution nao encontrada. A reconexao nao recria instancias automaticamente.' });
+        throw error;
+      }
+      const currentStatus = state.status === 'connected' ? 'connected' : state.status === 'disconnected' ? 'disconnected' : state.status === 'error' ? 'error' : 'connecting';
+      const identity = await resolveConfirmedIdentity(provider, account, state);
+      const snapshot = accountUpdateFromStatus(account, currentStatus, identity);
+      await persistAccountSnapshot(account, snapshot);
+      if (currentStatus === 'connected') return res.json({ status: 'connected', qrCode: null, pairingCode: null, account: publicAccount({ ...account, status: snapshot.status, phone_number: snapshot.phoneNumber, display_name: snapshot.displayName }) });
+      if (qrRecentlyRequested(account)) return res.status(429).json({ error: 'Aguarde alguns segundos antes de solicitar outro QR Code.' });
+      const result = await provider.connect(account.external_instance_id);
+      const nextStatus = result.qrCode || result.pairingCode ? 'qr_required' : 'connecting';
+      await markQrRequested(account.id);
+      await persistAccountSnapshot(account, { ...snapshot, status: nextStatus });
+      return res.json({ status: nextStatus, qrCode: result.qrCode, pairingCode: result.pairingCode || null, account: publicAccount({ ...account, status: nextStatus, phone_number: snapshot.phoneNumber, display_name: snapshot.displayName }) });
+    });
+  } catch (error) { res.status(error?.status || 400).json({ error: error?.publicMessage || 'Nao foi possivel gerar o QR Code.' }); }
 });
 
 router.get('/accounts/:id/status', ...admin, async (req, res) => {
@@ -135,8 +222,10 @@ router.get('/accounts/:id/status', ...admin, async (req, res) => {
     const { provider } = await loadEvolutionConfig(getPool(), rows[0]);
     const result = await provider.status(rows[0].external_instance_id);
     const nextStatus = result.status === 'connected' ? 'connected' : result.status === 'disconnected' ? 'disconnected' : 'connecting';
-    await getPool().execute(`UPDATE communication_accounts SET status = ?, last_connected_at = IF(? = 'connected', COALESCE(last_connected_at, UTC_TIMESTAMP()), last_connected_at), last_disconnected_at = IF(? = 'disconnected', UTC_TIMESTAMP(), last_disconnected_at), updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [nextStatus, nextStatus, nextStatus, rows[0].id]);
-    res.json({ status: nextStatus });
+    const identity = await resolveConfirmedIdentity(provider, rows[0], result);
+    const snapshot = accountUpdateFromStatus(rows[0], nextStatus, identity);
+    await persistAccountSnapshot(rows[0], snapshot);
+    res.json({ status: nextStatus, account: publicAccount({ ...rows[0], status: snapshot.status, phone_number: snapshot.phoneNumber, display_name: snapshot.displayName }) });
   } catch (error) { res.status(400).json({ error: error?.publicMessage || 'Nao foi possivel consultar o estado WhatsApp.' }); }
 });
 
@@ -158,3 +247,4 @@ router.delete('/accounts/:id', ...admin, async (req, res) => {
 
 module.exports = router;
 module.exports.resolveEvolutionCredential = resolveEvolutionCredential;
+module.exports.qrRecentlyRequested = qrRecentlyRequested;

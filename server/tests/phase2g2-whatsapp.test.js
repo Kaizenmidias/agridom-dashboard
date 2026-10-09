@@ -25,6 +25,17 @@ test('2G.2 provider valida URL e normaliza estados sem depender da Evolution rea
   assert.throws(() => provider.validateBaseUrl('file:///tmp/secret'), /URL base/);
 });
 
+test('2G.2 provider extrai identidade confirmada sem inventar numero pela instancia', () => {
+  assert.deepEqual(provider.extractIdentityCandidate({ instance: { ownerJid: '5511999999999@s.whatsapp.net', profileName: 'Kaizen' } }), {
+    phoneNumber: '5511999999999',
+    displayName: 'Kaizen',
+  });
+  assert.deepEqual(provider.extractIdentityCandidate({ instance: { instanceName: 'Kaizen-Comercial', state: 'open' } }), {
+    phoneNumber: null,
+    displayName: null,
+  });
+});
+
 test('2G.2 migration cria contas, conversas, webhook deduplicado e evolui mensagens', () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS communication_accounts/i);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS conversations/i);
