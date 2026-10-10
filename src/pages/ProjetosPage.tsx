@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Edit, Trash2, Plus, Calendar, DollarSign, User, TrendingUp, Clock, Search, Filter, CheckSquare } from 'lucide-react';
+import { Edit, Trash2, Plus, Calendar, DollarSign, User, TrendingUp, Clock, Search, Filter, CheckSquare, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { NovoProjetoDialog } from '@/components/novo-projeto-dialog';
 import { getProjects, deleteProject, updateProject } from '@/api/crud';
@@ -29,6 +29,14 @@ const ProjetosPage = () => {
   // Estados para seleção múltipla
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
+  const [completingProjects, setCompletingProjects] = useState<string[]>([]);
+
+  const todayDateOnly = () => {
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${today.getFullYear()}-${month}-${day}`;
+  };
 
   // Função para carregar projetos do backend
   const loadProjects = useCallback(async () => {
@@ -95,7 +103,7 @@ const ProjetosPage = () => {
       case 'completed': return 'Concluído';
       case 'paused': return 'Pausado';
       case 'cancelled': return 'Cancelado';
-      default: return projectType;
+      default: return status;
     }
   };
 
@@ -172,20 +180,23 @@ const ProjetosPage = () => {
   
   // Função para marcar projeto como concluído
   const handleCompleteProject = async (projeto: Project) => {
+    const projectId = String(projeto.id);
+    if (completingProjects.includes(projectId)) return;
+
+    setCompletingProjects(prev => [...prev, projectId]);
     try {
       const updatedProject = {
         status: 'completed' as const,
-        paid_value: projeto.project_value || 0, // Valor pendente vira pago
-        completion_date: new Date().toISOString() // Registrar data de conclusão
+        completion_date: todayDateOnly()
       };
       
-      const success = await updateProject(projeto.id, updatedProject);
+      const completedProject = await updateProject(projectId, updatedProject);
       
-      if (success) {
-        await loadProjects(); // Recarregar projetos
+      if (completedProject) {
+        setProjetos(prev => prev.map(item => String(item.id) === projectId ? completedProject : item));
         toast({
           title: "Projeto concluído",
-          description: "O projeto foi marcado como concluído e o valor pendente foi contabilizado como pago.",
+          description: "O projeto foi marcado como concluído com sucesso.",
         });
       } else {
         toast({
@@ -201,6 +212,8 @@ const ProjetosPage = () => {
         description: "Erro ao concluir o projeto.",
         variant: "destructive"
       });
+    } finally {
+      setCompletingProjects(prev => prev.filter(id => id !== projectId));
     }
   };
   
@@ -217,7 +230,7 @@ const ProjetosPage = () => {
     if (selectAll) {
       setSelectedProjects([]);
     } else {
-      setSelectedProjects(filteredProjects.map(p => p.id));
+      setSelectedProjects(filteredProjects.map(p => String(p.id)));
     }
     setSelectAll(!selectAll);
   };
@@ -226,16 +239,17 @@ const ProjetosPage = () => {
   const handleBulkStatusChange = async (newStatus: string) => {
     try {
       for (const projectId of selectedProjects) {
-        const projeto = projetos.find(p => p.id === projectId);
+        const projeto = projetos.find(p => String(p.id) === projectId);
         if (projeto) {
-          const updatedProject = {
-            ...projeto,
-            status: newStatus as any,
-            ...(newStatus === 'completed' && { 
-              paid_value: projeto.project_value || 0,
-              completion_date: new Date().toISOString()
-            })
-          };
+          const updatedProject = newStatus === 'completed'
+            ? {
+                status: 'completed' as const,
+                completion_date: todayDateOnly()
+              }
+            : {
+                ...projeto,
+                status: newStatus as any
+              };
           await updateProject(projectId, updatedProject);
         }
       }
@@ -511,8 +525,8 @@ const ProjetosPage = () => {
                   <TableRow key={projeto.id}>
                     <TableCell>
                       <Checkbox
-                        checked={selectedProjects.includes(projeto.id)}
-                        onCheckedChange={() => handleSelectProject(projeto.id)}
+                        checked={selectedProjects.includes(String(projeto.id))}
+                        onCheckedChange={() => handleSelectProject(String(projeto.id))}
                       />
                     </TableCell>
                     <TableCell className="font-medium">
@@ -560,11 +574,16 @@ const ProjetosPage = () => {
                           <Button 
                             variant="outline" 
                             size="sm"
+                            disabled={completingProjects.includes(String(projeto.id))}
                             onClick={() => handleCompleteProject(projeto)}
                             className="text-green-600 hover:text-green-700 hover:bg-green-50"
                           >
-                            <Calendar className="h-4 w-4 mr-1" />
-                            Concluir
+                            {completingProjects.includes(String(projeto.id)) ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <Calendar className="h-4 w-4 mr-1" />
+                            )}
+                            {completingProjects.includes(String(projeto.id)) ? 'Concluindo' : 'Concluir'}
                           </Button>
                         )}
                         

@@ -46,6 +46,32 @@ const queryById = async (query, table, id, userId) => {
 
 const parseNumber = (value) => Number(value || 0) || 0;
 
+const normalizeDateOnly = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  const text = String(value).trim();
+  if (!text) return null;
+
+  const dateOnly = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (dateOnly) return dateOnly[1];
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  return null;
+};
+
+const isProjectCompletionRequest = (body = {}) => {
+  if (String(body.status || '').toLowerCase() !== 'completed') return false;
+  const allowedFields = new Set(['status', 'completion_date']);
+  return Object.keys(body).every((key) => allowedFields.has(key));
+};
+
 // Users
 router.get('/users', authenticateToken, async (req, res) => {
   try {
@@ -167,9 +193,53 @@ router.post('/projects', authenticateToken, requireModuleAccess('can_access_proj
 });
 
 router.put('/projects/:id', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
+  if (isProjectCompletionRequest(req.body)) {
+    let connection;
+    try {
+      connection = await getPool().getConnection();
+      await connection.beginTransaction();
+
+      const [projectRows] = await connection.execute('SELECT * FROM projects WHERE id = ? FOR UPDATE', [req.params.id]);
+      const currentProject = projectRows[0];
+      if (!currentProject) {
+        await connection.rollback();
+        return res.status(404).json({ error: 'Projeto nao encontrado' });
+      }
+
+      if (currentProject.status !== 'completed') {
+        const completionDate = normalizeDateOnly(req.body.completion_date) || new Date().toISOString().slice(0, 10);
+        await connection.execute(
+          `UPDATE projects
+           SET status = 'completed',
+               completion_date = COALESCE(completion_date, ?),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [completionDate, req.params.id]
+        );
+      }
+
+      const [updatedRows] = await connection.execute('SELECT * FROM projects WHERE id = ?', [req.params.id]);
+      await connection.commit();
+      return res.json(updatedRows[0]);
+    } catch (error) {
+      if (connection) await connection.rollback();
+      console.error('Erro ao concluir projeto:', {
+        projectId: req.params.id,
+        code: error.code,
+        sqlMessage: error.sqlMessage,
+        message: error.message
+      });
+      return res.status(500).json({ error: 'Erro interno do servidor' });
+    } finally {
+      connection?.release();
+    }
+  }
+
   try {
     const { name, client, client_name, project_type, status, description, project_value, paid_value, delivery_date, completion_date } = req.body;
     const query = getQuery(req);
+    const normalizedDeliveryDate = normalizeDateOnly(delivery_date);
+    const normalizedCompletionDate = normalizeDateOnly(completion_date);
     await query(
       `UPDATE projects
        SET name = COALESCE(?, name),
@@ -183,13 +253,18 @@ router.put('/projects/:id', authenticateToken, requireModuleAccess('can_access_p
            completion_date = COALESCE(?, completion_date),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [name ?? null, client || client_name || null, project_type ?? null, status ?? null, description ?? null, project_value ?? null, paid_value ?? null, delivery_date ?? null, completion_date ?? null, req.params.id]
+      [name ?? null, client || client_name || null, project_type ?? null, status ?? null, description ?? null, project_value ?? null, paid_value ?? null, normalizedDeliveryDate, normalizedCompletionDate, req.params.id]
     );
     const result = await query('SELECT * FROM projects WHERE id = ?', [req.params.id]);
     if (!result.rows?.length) return res.status(404).json({ error: 'Projeto nao encontrado' });
     res.json(result.rows[0]);
   } catch (error) {
-    console.error('Erro ao atualizar projeto:', error);
+    console.error('Erro ao atualizar projeto:', {
+      projectId: req.params.id,
+      code: error.code,
+      sqlMessage: error.sqlMessage,
+      message: error.message
+    });
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
