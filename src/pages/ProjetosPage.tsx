@@ -15,6 +15,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { usePagination } from '@/hooks/use-pagination';
 
+const projectValue = (value: number | null | undefined) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : 0;
+};
+
+export const calculateProjectStats = (projects: Project[]) => ({
+  emAndamento: projects.filter((project) => project.status === 'active' || project.status === 'paused').length,
+  finalizados: projects.filter((project) => project.status === 'completed').length,
+  faturamentoTotal: projects
+    .filter((project) => project.status === 'completed')
+    .reduce((total, project) => total + projectValue(project.project_value), 0),
+  valorPendente: projects
+    .filter((project) => project.status === 'active' || project.status === 'paused')
+    .reduce((total, project) => total + projectValue(project.project_value), 0),
+});
+
 const ProjetosPage = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -118,30 +134,7 @@ const ProjetosPage = () => {
   };
 
   // Calcular estatísticas reais dos projetos
-  const calculateProjectStats = () => {
-    const emAndamento = projetos.filter(p => p.status === 'active' || p.status === 'paused').length;
-    const finalizados = projetos.filter(p => p.status === 'completed').length;
-    
-    // Calcular faturamento total (soma dos valores pagos)
-    const faturamentoTotal = projetos.reduce((total, projeto) => {
-      const paidValue = Number(projeto.paid_value) || 0;
-      return total + paidValue;
-    }, 0);
-    
-    // Calcular valor pendente (valor total - valor pago)
-    const valorPendente = projetos.reduce((total, projeto) => {
-      const valorProjeto = Number(projeto.project_value) || 0;
-      const valorPago = Number(projeto.paid_value) || 0;
-      return total + (valorProjeto - valorPago);
-    }, 0);
-    
-    return {
-      emAndamento,
-      finalizados,
-      faturamentoTotal,
-      valorPendente
-    };
-  };
+  const stats = calculateProjectStats(projetos);
   
   // Filtrar projetos baseado na pesquisa e filtros
   const filteredProjects = projetos.filter(projeto => {
@@ -300,8 +293,6 @@ const ProjetosPage = () => {
   useEffect(() => {
     setSelectAll(selectedProjects.length === filteredProjects.length && filteredProjects.length > 0);
   }, [selectedProjects, filteredProjects]);
-
-  const stats = calculateProjectStats();
 
   if (loading) {
     return (
