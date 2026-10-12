@@ -34,7 +34,6 @@ export function AutomationRunsPage() {
   useEffect(() => { void load(1); }, []);
   const open = async (run: AutomationRun) => { try { setSelected(await automationsAPI.getRun(run.id)); } catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível carregar a execução."); } };
   const retry = async (run: AutomationRun) => {
-    if (!window.confirm("Iniciar uma nova tentativa? Ações externas, como o envio de mensagens, poderão ser realizadas.")) return;
     setRetrying(run.id);
     try { await automationsAPI.retryRun(run.id); toast.success("Nova tentativa solicitada."); await load(); }
     catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível solicitar o retry."); }

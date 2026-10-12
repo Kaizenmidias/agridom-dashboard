@@ -463,12 +463,20 @@ async function retryRun(userId, runId, dependencies = {}) {
     if (!eligibility.canRetry) throw new AutomationError(409, eligibility.reason || 'Esta execucao nao pode ser reenviada com seguranca.');
     const nextAttempt = retryRuns.length + 1;
     const correlationId = `manual-retry:${runId}:${nextAttempt}`;
-    const [runResult] = await connection.execute(
-      `INSERT INTO automation_runs
-       (automation_id, automation_version_id, event_id, entity_type, entity_id, status, correlation_id, idempotency_key)
-       VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)`,
-      [run.automation_id, run.automation_version_id, run.event_id, run.entity_type, run.entity_id, correlationId, correlationId],
-    );
+    let runResult;
+    try {
+      [runResult] = await connection.execute(
+        `INSERT INTO automation_runs
+         (automation_id, automation_version_id, event_id, entity_type, entity_id, status, correlation_id, idempotency_key, execution_kind)
+         VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, 'manual_retry')`,
+        [run.automation_id, run.automation_version_id, run.event_id, run.entity_type, run.entity_id, correlationId, correlationId],
+      );
+    } catch (error) {
+      if (error?.code === 'ER_DUP_ENTRY' || error?.errno === 1062 || error?.sqlState === '23000') {
+        throw new AutomationError(409, 'Esta execucao ja possui uma tentativa equivalente ou a estrutura de idempotencia precisa ser atualizada.');
+      }
+      throw error;
+    }
     const newRunId = Number(runResult.insertId);
     const [jobResult] = await connection.execute(
       `INSERT INTO automation_jobs

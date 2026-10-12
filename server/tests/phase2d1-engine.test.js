@@ -20,6 +20,18 @@ test('2D.1 migration adds persistent event state and run idempotency without des
   assert.doesNotMatch(migration, /DROP\s+TABLE|TRUNCATE\s+TABLE|DELETE\s+FROM|DROP\s+COLUMN|ALTER\s+DATABASE/i);
 });
 
+test('retry migration deduplicates normal events while allowing multiple manual retries', () => {
+  const retryMigration = fs.readFileSync(path.join(__dirname, '../../database/migrations/20261012_automation_retry_event_uniqueness.sql'), 'utf8');
+  assert.match(retryMigration, /DROP INDEX uq_automation_run_event_automation_version/);
+  assert.match(retryMigration, /execution_kind ENUM\('event', 'manual_retry'\)/);
+  assert.match(retryMigration, /event_dedupe_key VARCHAR\(191\)/);
+  assert.match(retryMigration, /execution_kind = 'event'/);
+  assert.match(retryMigration, /uq_automation_run_event_dedupe_key/);
+  assert.match(retryMigration, /GENERATED ALWAYS AS/);
+  assert.match(retryMigration, /information_schema\.STATISTICS/);
+  assert.doesNotMatch(retryMigration.replace(/^--.*$/gm, ''), /DROP TABLE|TRUNCATE TABLE|DELETE FROM|DROP COLUMN/i);
+});
+
 test('matcher uses only active automation and its exact active version trigger', async () => {
   let sql = '';
   const connection = { execute: async (query) => { sql = query; return [[{ automation_id: 4, automation_version_id: 12, definition: '{"schemaVersion":1,"trigger":{"type":"lead.created"},"steps":[]}' }]]; } };
