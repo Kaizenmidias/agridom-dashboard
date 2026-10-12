@@ -27,9 +27,32 @@ test('retry migration deduplicates normal events while allowing multiple manual 
   assert.match(retryMigration, /event_dedupe_key VARCHAR\(191\)/);
   assert.match(retryMigration, /execution_kind = 'event'/);
   assert.match(retryMigration, /uq_automation_run_event_dedupe_key/);
+  assert.match(retryMigration, /idx_automation_runs_event_id/);
+  assert.match(retryMigration, /DECLARE EXIT HANDLER FOR SQLEXCEPTION/);
   assert.match(retryMigration, /GENERATED ALWAYS AS/);
   assert.match(retryMigration, /information_schema\.STATISTICS/);
   assert.doesNotMatch(retryMigration.replace(/^--.*$/gm, ''), /DROP TABLE|TRUNCATE TABLE|DELETE FROM|DROP COLUMN/i);
+});
+
+test('nullable dedupe migration backfills legacy events and leaves manual retries null', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '../../database/migrations/20261012_automation_retry_event_dedupe_nullable.sql'), 'utf8');
+  assert.match(migration, /ADD COLUMN event_dedupe_key VARCHAR\(191\) NULL/);
+  assert.match(migration, /SET event_dedupe_key = CONCAT\(event_id/);
+  assert.match(migration, /event_id IS NOT NULL/);
+  assert.match(migration, /event_dedupe_key <> CONCAT\(event_id/);
+  assert.match(migration, /execution_kind = 'manual_retry'[\s\S]*event_dedupe_key IS NOT NULL/);
+  assert.match(migration, /execution_kind = 'event'[\s\S]*event_id IS NULL[\s\S]*event_dedupe_key IS NOT NULL/);
+  assert.match(migration, /HAVING COUNT\(\*\) > 1/);
+  assert.match(migration, /SIGNAL SQLSTATE '45000'/);
+  assert.match(migration, /uq_automation_run_event_dedupe_key/);
+  assert.match(migration, /dedupe_index_non_unique/);
+  assert.match(migration, /dedupe_index_column_count/);
+  assert.match(migration, /dedupe_index_sub_part IS NOT NULL/);
+  assert.match(migration, /DROP INDEX uq_automation_run_event_automation_version/);
+  assert.match(migration, /idx_automation_runs_event_id/);
+  assert.match(migration, /REGEXP '\(\^\| \)GENERATED'/);
+  assert.match(migration, /definicao incompativel/);
+  assert.doesNotMatch(migration, /FOREIGN_KEY_CHECKS/i);
 });
 
 test('matcher uses only active automation and its exact active version trigger', async () => {
@@ -49,6 +72,8 @@ test('run and bootstrap job creation is idempotent at the database boundary', as
   const result = await createRunAndJob(connection, { id: 8, entity_type: 'lead', entity_id: '42', correlation_id: '123e4567-e89b-12d3-a456-426614174000' }, { automation_id: 4, automation_version_id: 12 });
   assert.deepEqual(result, { runId: 21, jobId: 31, runKey: 'event:8:automation:4:version:12', jobKey: 'run:21:bootstrap' });
   assert.match(calls[0].sql, /ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID\(id\)/);
+  assert.match(calls[0].sql, /event_dedupe_key/);
+  assert.equal(calls[0].params.at(-1), '8:4:12');
   assert.match(calls[1].sql, /engine\.bootstrap/);
 });
 

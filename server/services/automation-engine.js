@@ -126,10 +126,10 @@ async function createRunAndJob(connection, event, match) {
   const runKey = `event:${event.id}:automation:${match.automation_id}:version:${match.automation_version_id}`;
   const [runResult] = await connection.execute(
     `INSERT INTO automation_runs
-      (automation_id, automation_version_id, event_id, entity_type, entity_id, status, correlation_id, idempotency_key)
-     VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
+      (automation_id, automation_version_id, event_id, entity_type, entity_id, status, correlation_id, idempotency_key, execution_kind, event_dedupe_key)
+     VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, 'event', ?)
      ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-    [match.automation_id, match.automation_version_id, event.id, event.entity_type, event.entity_id, event.correlation_id, runKey]
+    [match.automation_id, match.automation_version_id, event.id, event.entity_type, event.entity_id, event.correlation_id, runKey, event.id == null ? null : `${event.id}:${match.automation_id}:${match.automation_version_id}`]
   );
   const runId = Number(runResult.insertId);
   const jobKey = `run:${runId}:bootstrap`;
