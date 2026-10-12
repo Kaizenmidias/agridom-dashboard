@@ -357,7 +357,14 @@ async function listAllRuns({ page = 1, pageSize = 25 } = {}) {
             ar.status, ar.error_code, ar.error_message, ar.started_at, ar.finished_at, ar.correlation_id, ar.created_at, ar.updated_at,
             a.name AS automation_name, av.version_number, ae.event_type,
             p.business_name AS lead_name, p.phone AS lead_phone,
-            EXISTS (SELECT 1 FROM automation_jobs ajc WHERE ajc.automation_run_id = ar.id AND ajc.status = 'pending') AS has_pending_job
+            EXISTS (SELECT 1 FROM automation_jobs ajc WHERE ajc.automation_run_id = ar.id AND ajc.status = 'pending') AS has_pending_job,
+            (SELECT COUNT(*) FROM communication_messages cm WHERE cm.automation_run_id = ar.id) AS communication_count,
+            EXISTS (SELECT 1 FROM communication_messages cm WHERE cm.automation_run_id = ar.id AND cm.status NOT IN ('failed', 'cancelled')) AS nonterminal_communication,
+            EXISTS (SELECT 1 FROM communication_messages cm WHERE cm.automation_run_id = ar.id AND (cm.status = 'sent' OR cm.provider_message_id IS NOT NULL)) AS sent_communication,
+            EXISTS (SELECT 1 FROM automation_runs rr WHERE rr.correlation_id LIKE CONCAT('manual-retry:', ar.id, ':%') AND rr.status IN ('queued', 'running', 'waiting')) AS active_retry,
+            (SELECT aj.status FROM automation_jobs aj WHERE aj.automation_run_id = ar.id ORDER BY aj.id DESC LIMIT 1) AS job_status,
+            (SELECT aj.attempts FROM automation_jobs aj WHERE aj.automation_run_id = ar.id ORDER BY aj.id DESC LIMIT 1) AS job_attempts,
+            (SELECT ars.status FROM automation_run_steps ars WHERE ars.automation_run_id = ar.id ORDER BY ars.id DESC LIMIT 1) AS step_status
      FROM automation_runs ar
      JOIN automations a ON a.id = ar.automation_id
      JOIN automation_versions av ON av.id = ar.automation_version_id
@@ -366,14 +373,19 @@ async function listAllRuns({ page = 1, pageSize = 25 } = {}) {
      ORDER BY ar.created_at DESC, ar.id DESC LIMIT ? OFFSET ?`,
     [safePageSize, offset]
   );
-  return { runs: rows.map((run) => ({
-    ...run,
-    can_cancel: run.status === 'queued' && Boolean(Number(run.has_pending_job)),
-    can_retry: run.status === 'failed' && isSafeRetryFailure(run.error_code, run.error_message),
-    retry_block_reason: run.status === 'failed' && !isSafeRetryFailure(run.error_code, run.error_message)
-      ? 'A falha pode ter sido aceita pelo provedor e nao pode ser reenviada automaticamente.'
-      : null,
-  })), pagination: { page: safePage, pageSize: safePageSize, total: Number(countRows[0]?.total || 0), totalPages: Math.ceil(Number(countRows[0]?.total || 0) / safePageSize) } };
+  return { runs: rows.map((run) => {
+    const eligibility = run.status === 'failed'
+      ? classifyRetryEligibility(run)
+      : { classification: run.status === 'completed' ? 'already_completed' : 'insufficient_evidence', canRetry: false, reason: null, evidence: retryEvidence(run) };
+    return {
+      ...run,
+      can_cancel: run.status === 'queued' && Boolean(Number(run.has_pending_job)),
+      can_retry: eligibility.canRetry,
+      retry_block_reason: eligibility.reason,
+      retry_evidence: eligibility.evidence,
+      retry_classification: eligibility.classification,
+    };
+  }), pagination: { page: safePage, pageSize: safePageSize, total: Number(countRows[0]?.total || 0), totalPages: Math.ceil(Number(countRows[0]?.total || 0) / safePageSize) } };
 }
 
 const AMBIGUOUS_RETRY_FAILURES = /EVOLUTION_REQUEST_FAILED|EVOLUTION_TIMEOUT|EVOLUTION_CONNECTION_RESET|EVOLUTION_HTTP_REJECTED|EVOLUTION_INVALID_RESPONSE/i;
@@ -383,6 +395,43 @@ const isSafeRetryFailure = (errorCode, errorMessage) => {
   const value = `${errorCode || ''} ${errorMessage || ''}`;
   return SAFE_RETRY_FAILURES.test(value) && !isAmbiguousRetryFailure(errorCode, errorMessage);
 };
+const retryBlockReason = (errorCode, errorMessage) => {
+  if (!errorCode && !errorMessage) return 'Falha antiga sem diagnóstico suficiente para uma reexecução segura.';
+  if (isAmbiguousRetryFailure(errorCode, errorMessage)) return 'A falha pode ter sido aceita pelo provedor e não pode ser reenviada automaticamente.';
+  return 'O tipo de falha não foi classificado como seguro para reexecução.';
+};
+const PRE_PROVIDER_FAILURES = new Set([
+  'PUBLISHED_DEFINITION_INVALID', 'AUTOMATION_STEP_NOT_FOUND', 'UNKNOWN_STEP_REFERENCE',
+  'UNKNOWN_STEP_TYPE', 'INVALID_WAIT', 'WHATSAPP_ACCOUNT_REQUIRED', 'WHATSAPP_ACCOUNT_NOT_CONNECTED',
+  'WHATSAPP_NOT_CONFIGURED', 'INVALID_WHATSAPP_MESSAGE', 'RECIPIENT_PHONE_INVALID',
+  'RECIPIENT_PHONE_MISSING', 'MEDIA_TYPE_NOT_SUPPORTED', 'MEDIA_FILE_REQUIRED',
+  'RECIPIENT_EMAIL_MISSING', 'EMAIL_INTEGRATION_NOT_CONFIGURED', 'INVALID_EMAIL_SUBJECT',
+  'INVALID_EMAIL_MESSAGE', 'USER_NOT_FOUND', 'ACTION_NOT_IMPLEMENTED'
+]);
+const normalizedErrorCode = (value) => String(value || '').replace(/^ENGINE_ERROR:/i, '').toUpperCase();
+const retryEvidence = (run) => ({
+  communicationCount: Number(run.communication_count || 0),
+  nonTerminalCommunication: Boolean(Number(run.nonterminal_communication || 0)),
+  sentCommunication: Boolean(Number(run.sent_communication || 0)),
+  activeRetry: Boolean(Number(run.active_retry || 0)),
+  errorCode: run.error_code || null,
+  errorMessage: run.error_message || null,
+});
+function classifyRetryEligibility(run) {
+  const evidence = retryEvidence(run);
+  if (run.status === 'completed' || evidence.sentCommunication) return { classification: 'already_completed', canRetry: false, reason: 'A execucao ou uma comunicacao associada ja foi concluida.', evidence };
+  if (!run.automation_id || !run.automation_version_id || !run.entity_type || !run.entity_id) return { classification: 'invalid_context', canRetry: false, reason: 'A execucao nao possui contexto completo para reexecucao.', evidence };
+  if (evidence.activeRetry) return { classification: 'insufficient_evidence', canRetry: false, reason: 'Ja existe uma nova tentativa em andamento.', evidence };
+  if (evidence.nonTerminalCommunication || evidence.communicationCount > 0) return { classification: 'ambiguous_provider', canRetry: false, reason: 'Existe comunicacao associada; o resultado externo nao pode ser comprovado como nao enviado.', evidence };
+  const code = normalizedErrorCode(run.error_code);
+  if (PRE_PROVIDER_FAILURES.has(code) && run.job_status === 'failed' && run.step_status === 'queued' && Number(run.job_attempts || 0) > 0) {
+    return { classification: 'safe_with_persisted_evidence', canRetry: true, reason: null, evidence };
+  }
+  if (PRE_PROVIDER_FAILURES.has(code)) return { classification: 'safe_pre_provider', canRetry: true, reason: null, evidence };
+  if (!run.error_code && !run.error_message) return { classification: 'insufficient_evidence', canRetry: false, reason: 'Falha antiga sem diagnostico suficiente para uma reexecucao segura.', evidence };
+  if (isAmbiguousRetryFailure(run.error_code, run.error_message) || SAFE_RETRY_FAILURES.test(`${run.error_code || ''} ${run.error_message || ''}`)) return { classification: 'ambiguous_provider', canRetry: false, reason: 'A falha pode ter sido aceita pelo provedor e nao pode ser reenviada automaticamente.', evidence };
+  return { classification: 'insufficient_evidence', canRetry: false, reason: 'O tipo de falha nao foi classificado como seguro para reexecucao.', evidence };
+}
 
 async function retryRun(userId, runId, dependencies = {}) {
   return withTransaction(async (connection) => {
@@ -395,23 +444,23 @@ async function retryRun(userId, runId, dependencies = {}) {
     const run = runs[0];
     if (!run) return null;
     if (run.status !== 'failed') throw new AutomationError(409, 'Somente execucoes com falha podem ser repetidas.');
-    if (!isSafeRetryFailure(run.error_code, run.error_message)) {
-      throw new AutomationError(409, 'Esta execucao nao pode ser reenviada porque o provedor pode ter aceitado a mensagem.');
-    }
     const [messages] = await connection.execute(
-      `SELECT id, status FROM communication_messages
-       WHERE automation_run_id = ? AND status NOT IN ('failed', 'cancelled')
-       LIMIT 1 FOR UPDATE`,
+      `SELECT id, status, provider_message_id FROM communication_messages
+       WHERE automation_run_id = ? FOR UPDATE`,
       [runId],
     );
-    if (messages[0]) throw new AutomationError(409, 'Esta execucao possui comunicacao em estado que impede um retry seguro.');
+    run.communication_count = messages.length;
+    run.nonterminal_communication = messages.some((message) => !['failed', 'cancelled'].includes(message.status));
+    run.sent_communication = messages.some((message) => message.status === 'sent' || message.provider_message_id);
     const [retryRuns] = await connection.execute(
       `SELECT id, status FROM automation_runs
        WHERE correlation_id LIKE ? ORDER BY id DESC FOR UPDATE`,
       [`manual-retry:${runId}:%`],
     );
     const activeRetry = retryRuns.find((item) => ['queued', 'running', 'waiting'].includes(item.status));
-    if (activeRetry) throw new AutomationError(409, 'Esta execucao ja possui uma nova tentativa em andamento.');
+    run.active_retry = Boolean(activeRetry);
+    const eligibility = classifyRetryEligibility(run);
+    if (!eligibility.canRetry) throw new AutomationError(409, eligibility.reason || 'Esta execucao nao pode ser reenviada com seguranca.');
     const nextAttempt = retryRuns.length + 1;
     const correlationId = `manual-retry:${runId}:${nextAttempt}`;
     const [runResult] = await connection.execute(
@@ -481,6 +530,7 @@ module.exports = {
   listRuns,
   listAllRuns,
   retryRun,
+  classifyRetryEligibility,
   cancelRun,
   getRun,
 };

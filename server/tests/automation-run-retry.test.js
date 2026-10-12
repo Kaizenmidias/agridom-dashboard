@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { AutomationError, retryRun } = require('../services/automation-repository');
+const { AutomationError, retryRun, classifyRetryEligibility } = require('../services/automation-repository');
 
 function fakePool({ run = {}, messages = [], retryRuns = [] } = {}) {
   const calls = [];
@@ -26,11 +26,31 @@ function fakePool({ run = {}, messages = [], retryRuns = [] } = {}) {
 }
 
 test('retry cria nova execucao e job usando a configuracao original', async () => {
-  const pool = fakePool({ run: { id: 10, automation_id: 4, automation_version_id: 7, event_id: 2, entity_type: 'lead', entity_id: 81, status: 'failed', error_code: 'EVOLUTION_UNAVAILABLE' } });
+  const pool = fakePool({ run: { id: 10, automation_id: 4, automation_version_id: 7, event_id: 2, entity_type: 'lead', entity_id: 81, status: 'failed', error_code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED' } });
   const result = await retryRun(1, 10, { pool });
   assert.deepEqual(result, { runId: 900, jobId: 901, retryOf: 10, status: 'queued' });
   const runInsert = pool.calls.find((item) => /INSERT INTO automation_runs/.test(item.sql));
   assert.equal(runInsert.params.slice(0, 5).join(','), '4,7,2,lead,81');
+});
+
+test('classifica somente falhas comprovadamente anteriores ao provider como seguras', () => {
+  assert.equal(classifyRetryEligibility({
+    status: 'failed', automation_id: 4, automation_version_id: 7, entity_type: 'lead', entity_id: 81,
+    error_code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED',
+  }).classification, 'safe_pre_provider');
+  assert.equal(classifyRetryEligibility({
+    status: 'failed', automation_id: 4, automation_version_id: 7, entity_type: 'lead', entity_id: 81,
+    error_code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED', job_status: 'failed', step_status: 'queued', job_attempts: 1,
+  }).classification, 'safe_with_persisted_evidence');
+});
+
+test('mantem bloqueadas falhas ambiguas, antigas sem diagnostico e contexto invalido', () => {
+  const base = { status: 'failed', automation_id: 4, automation_version_id: 7, entity_type: 'lead', entity_id: 81 };
+  assert.equal(classifyRetryEligibility({ ...base, error_code: 'EVOLUTION_REQUEST_FAILED' }).classification, 'ambiguous_provider');
+  assert.equal(classifyRetryEligibility({ ...base }).classification, 'insufficient_evidence');
+  assert.equal(classifyRetryEligibility({ ...base, automation_version_id: null, error_code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED' }).classification, 'invalid_context');
+  assert.equal(classifyRetryEligibility({ ...base, status: 'completed' }).classification, 'already_completed');
+  assert.equal(classifyRetryEligibility({ ...base, error_code: 'WHATSAPP_ACCOUNT_NOT_CONNECTED', communication_count: 1 }).classification, 'ambiguous_provider');
 });
 
 test('retry rejeita execucao nao failed, comunicacao ambigua e retry ativo', async () => {

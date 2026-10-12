@@ -69,6 +69,15 @@ export type AutomationRun = {
   can_retry?: boolean;
   can_cancel?: boolean;
   retry_block_reason?: string | null;
+  retry_classification?: "safe_pre_provider" | "safe_with_persisted_evidence" | "ambiguous_provider" | "already_completed" | "insufficient_evidence" | "invalid_context" | null;
+  retry_evidence?: {
+    communicationCount: number;
+    nonTerminalCommunication: boolean;
+    sentCommunication: boolean;
+    activeRetry: boolean;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  } | null;
 };
 
 export type AutomationWebhookEndpoint = {

@@ -32,9 +32,12 @@ test('worker claims only pending jobs and does not reopen cancelled work', () =>
 test('retry blocks ambiguous provider outcomes and only exposes safe failures', () => {
   assert.match(repositorySource, /EVOLUTION_REQUEST_FAILED/);
   assert.match(repositorySource, /const SAFE_RETRY_FAILURES/);
-  assert.match(repositorySource, /isSafeRetryFailure\(run\.error_code, run\.error_message\)/);
+  assert.match(repositorySource, /classifyRetryEligibility\(run\)/);
   assert.match(repositorySource, /ar\.error_code, ar\.error_message/);
   assert.match(repositorySource, /retry_block_reason/);
+  assert.match(repositorySource, /communication_count/);
+  assert.match(repositorySource, /safe_pre_provider/);
+  assert.match(repositorySource, /ambiguous_provider/);
 });
 
 test('runs page uses backend authority for retry and cancellation controls', () => {
