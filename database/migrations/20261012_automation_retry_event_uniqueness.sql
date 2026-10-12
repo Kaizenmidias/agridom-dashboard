@@ -6,6 +6,11 @@ DROP PROCEDURE IF EXISTS apply_automation_retry_event_uniqueness;
 DELIMITER $$
 CREATE PROCEDURE apply_automation_retry_event_uniqueness()
 BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    RESIGNAL;
+  END;
+
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE()
@@ -23,6 +28,16 @@ BEGIN
       AND INDEX_NAME = 'uq_automation_run_event_automation_version_kind'
   ) THEN
     ALTER TABLE automation_runs DROP INDEX uq_automation_run_event_automation_version_kind;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'automation_runs'
+      AND INDEX_NAME = 'idx_automation_runs_event_id'
+  ) THEN
+    ALTER TABLE automation_runs
+      ADD KEY idx_automation_runs_event_id (event_id);
   END IF;
 
   IF NOT EXISTS (
