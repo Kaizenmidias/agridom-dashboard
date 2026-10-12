@@ -46,5 +46,6 @@ test('interface de execucoes exibe lead, telefone e retry somente para failed', 
   assert.match(page, /formatPhone\(run\.lead_phone\)/);
   assert.match(page, /run\.status === "failed"/);
   assert.match(page, /Tentar novamente/);
+  assert.match(page, /Ações externas.*poderão ser realizadas/);
   assert.match(api, /retryRun/);
 });
