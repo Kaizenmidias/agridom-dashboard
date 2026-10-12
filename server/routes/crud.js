@@ -591,14 +591,14 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
       `SELECT COALESCE(SUM(e.amount), 0) AS revenue
        FROM project_financial_events e
        JOIN projects p ON p.id = e.project_id
-       WHERE p.user_id = ? AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
+       WHERE p.user_id = ? AND p.status <> 'cancelled' AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
       [req.userId, currentStart, currentEnd]
     );
     const previousEventRevenueResult = await query(
       `SELECT COALESCE(SUM(e.amount), 0) AS revenue
        FROM project_financial_events e
        JOIN projects p ON p.id = e.project_id
-       WHERE p.user_id = ? AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
+       WHERE p.user_id = ? AND p.status <> 'cancelled' AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
       [req.userId, prevStart, prevEnd]
     );
     const unclassifiedLegacyResult = await query(

@@ -46,6 +46,14 @@ test('financial history does not expose internal idempotency keys and dashboard 
   assert.match(crud, /unclassified_legacy_revenue/);
 });
 
+test('dashboard excludes cancelled financial events and frontend uses Brazilian currency parsing', () => {
+  assert.match(crud, /p\.status <> 'cancelled' AND e\.direction = 'credit'/);
+  const currency = fs.readFileSync(path.join(root, 'src/lib/currency.ts'), 'utf8');
+  assert.match(currency, /toLocaleString\('pt-BR'/);
+  assert.match(currency, /replace\(\/\\\.\/g, ''\)/);
+  assert.match(currency, /maskCurrencyBR/);
+});
+
 test('payment and completion use project locks and do not exceed the contract value', () => {
   assert.match(service, /SELECT \* FROM projects WHERE id = \? FOR UPDATE/);
   assert.match(service, /payment > calculateProjectBalance\(project\)/);

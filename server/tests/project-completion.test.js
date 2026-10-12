@@ -89,7 +89,8 @@ test('project indicators tolerate null and invalid project values', () => {
   ]);
 
   assert.deepEqual(stats, { emAndamento: 1, finalizados: 2, faturamentoTotal: 70, valorPendente: 300 });
-  assert.match(projectsPage, /Number\.isFinite\(numericValue\)/);
+  const currency = fs.readFileSync(path.join(root, 'src/lib/currency.ts'), 'utf8');
+  assert.match(currency, /Number\.isFinite\(parsed\)/);
 });
 
 test('project indicators are recalculated from the current project list after mutations', () => {

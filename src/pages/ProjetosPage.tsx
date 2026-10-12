@@ -14,11 +14,9 @@ import { Project } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { usePagination } from '@/hooks/use-pagination';
+import { formatCurrencyBR, maskCurrencyBR, parseCurrencyBR } from '@/lib/currency';
 
-const projectValue = (value: number | null | undefined) => {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? numericValue : 0;
-};
+const projectValue = (value: number | string | null | undefined) => parseCurrencyBR(value);
 
 export const calculateProjectStats = (projects: Project[]) => ({
   emAndamento: projects.filter((project) => project.status === 'active' || project.status === 'paused').length,
@@ -151,10 +149,10 @@ const ProjetosPage = () => {
 
   const submitPayment = async () => {
     if (!paymentProject) return;
-    const amount = Number(paymentAmount.replace(',', '.'));
+    const amount = parseCurrencyBR(paymentAmount);
     const balance = Math.max(0, projectValue(paymentProject.project_value) - projectValue(paymentProject.paid_value));
     if (!Number.isFinite(amount) || amount <= 0 || amount > balance || !paymentDate) {
-      toast({ title: 'Pagamento inválido', description: `Informe um valor positivo até ${balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} e uma data.`, variant: 'destructive' });
+      toast({ title: 'Pagamento inválido', description: `Informe um valor positivo até ${formatCurrencyBR(balance)} e uma data.`, variant: 'destructive' });
       return;
     }
     setPaymentLoading(true);
@@ -674,7 +672,7 @@ const ProjetosPage = () => {
               <div><span className="text-muted-foreground">Pendente</span><strong className="block">{Math.max(0, projectValue(paymentProject.project_value) - projectValue(paymentProject.paid_value)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div>
             </div>
             <div className="mt-5 space-y-3">
-              <label className="block text-sm font-medium">Valor do pagamento<input className="mt-1 w-full rounded-md border bg-background p-2" type="number" min="0.01" step="0.01" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} /></label>
+              <label className="block text-sm font-medium">Valor do pagamento<input className="mt-1 w-full rounded-md border bg-background p-2" inputMode="decimal" value={paymentAmount} onChange={(e) => setPaymentAmount(maskCurrencyBR(e.target.value))} placeholder="R$ 0,00" /></label>
               <label className="block text-sm font-medium">Data de competência<input className="mt-1 w-full rounded-md border bg-background p-2" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></label>
             </div>
             <div className="mt-6 flex justify-end gap-2"><Button variant="outline" onClick={() => setPaymentProject(null)} disabled={paymentLoading}>Cancelar</Button><Button onClick={submitPayment} disabled={paymentLoading}>{paymentLoading ? 'Registrando...' : 'Confirmar pagamento'}</Button></div>
