@@ -142,6 +142,13 @@ export const getProjects = async (): Promise<Project[]> => {
   return result.data
 }
 
+export const getProjectFinancialSummary = async (year: number, month: number | 'all'): Promise<{ revenue: number }> => {
+  await checkAuth()
+  const result = await crudAPI.getProjectFinancialSummary(year, month)
+  if (result.error) throw new Error(result.error)
+  return result.data
+}
+
 export const createProject = async (projectData: InsertProject): Promise<Project> => {
   await checkAuth()
   const result = await crudAPI.createProject(projectData)

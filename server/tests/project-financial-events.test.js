@@ -10,6 +10,7 @@ const baselineMigration = fs.readFileSync(path.join(root, 'database/migrations/2
 const softDeleteMigration = fs.readFileSync(path.join(root, 'database/migrations/20261013_project_soft_delete.sql'), 'utf8');
 const service = fs.readFileSync(path.join(root, 'server/services/project-financial-service.js'), 'utf8');
 const crud = fs.readFileSync(path.join(root, 'server/routes/crud.js'), 'utf8');
+const projectsPage = fs.readFileSync(path.join(root, 'src/pages/ProjetosPage.tsx'), 'utf8');
 
 test('financial events preserve competence, idempotency and historical traceability', () => {
   assert.match(migration, /idempotency_key VARCHAR\(191\) NOT NULL/);
@@ -85,4 +86,14 @@ test('financial accumulation uses paid_value once and soft deletion preserves hi
   assert.match(crud, /UPDATE projects SET deleted_at = CURRENT_TIMESTAMP/);
   assert.match(crud, /p\.deleted_at IS NULL/);
   assert.match(service, /SELECT id FROM project_financial_events WHERE project_id = \? LIMIT 1 FOR UPDATE/);
+});
+
+test('project period filters separate created projects from financial competence', () => {
+  assert.match(crud, /router\.get\('\/projects\/financial-summary'/);
+  assert.match(crud, /e\.competence_date BETWEEN \? AND \?/);
+  assert.match(crud, /p\.deleted_at IS NULL/);
+  assert.match(projectsPage, /Todos os períodos/);
+  assert.match(projectsPage, /Todos os meses/);
+  assert.match(projectsPage, /created\.getFullYear\(\) === Number\(periodYear\)/);
+  assert.match(projectsPage, /getProjectFinancialSummary\(Number\(periodYear\)/);
 });

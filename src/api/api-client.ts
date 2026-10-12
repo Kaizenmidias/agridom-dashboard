@@ -154,6 +154,7 @@ export const crudAPI = {
   deleteUser: (id: number | string) => toResult(() => requestJson(`/api/users/${id}`, { method: 'DELETE' })),
 
   getProjects: () => toResult(() => requestJson('/api/projects'), []),
+  getProjectFinancialSummary: (year: number, month: number | 'all') => toResult(() => requestJson(`/api/projects/financial-summary?year=${year}&month=${month}`)),
   createProject: (data: any) => toResult(() => requestJson('/api/projects', { method: 'POST', body: JSON.stringify(data) })),
   updateProject: (id: number | string, data: any) => toResult(() => requestJson(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) })),
   recordProjectPayment: (id: number | string, data: any) => toResult(() => requestJson(`/api/projects/${id}/payments`, { method: 'POST', body: JSON.stringify(data) })),

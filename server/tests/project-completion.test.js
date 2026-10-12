@@ -97,7 +97,7 @@ test('project indicators are recalculated from the current project list after mu
 
   const completed = [{ status: 'completed', project_value: 900, paid_value: 900, financial_event_count: 1, financial_event_total: 900 }];
   assert.deepEqual(calculateStats(completed), { emAndamento: 0, finalizados: 1, faturamentoTotal: 900, valorPendente: 0 });
-  assert.match(projectsPage, /const stats = calculateProjectStats\(projetos\)/);
+  assert.match(projectsPage, /const baseStats = calculateProjectStats\(periodProjects\)/);
   assert.match(projectsPage, /setProjetos\(prev => prev\.map/);
   assert.match(projectsPage, /await loadProjects\(\)/);
 });

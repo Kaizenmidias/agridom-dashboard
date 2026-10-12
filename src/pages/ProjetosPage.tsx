@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Edit, Trash2, Plus, Calendar, DollarSign, User, TrendingUp, Clock, Search, Filter, CheckSquare, Loader2, Receipt, History } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { NovoProjetoDialog } from '@/components/novo-projeto-dialog';
-import { getProjects, deleteProject, updateProject, recordProjectPayment, getProjectFinancialHistory } from '@/api/crud';
+import { getProjects, getProjectFinancialSummary, deleteProject, updateProject, recordProjectPayment, getProjectFinancialHistory } from '@/api/crud';
 import { Project } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
@@ -33,6 +33,9 @@ const ProjetosPage = () => {
   const { user } = useAuth();
   const [projetos, setProjetos] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [periodYear, setPeriodYear] = useState('all');
+  const [periodMonth, setPeriodMonth] = useState('all');
+  const [periodRevenue, setPeriodRevenue] = useState(0);
   
   // Estados para filtros e pesquisa
   const [searchTerm, setSearchTerm] = useState('');
@@ -88,6 +91,18 @@ const ProjetosPage = () => {
     }
   }, [user]); // Simplificado para evitar loops de dependência
 
+  useEffect(() => {
+    if (!user || periodYear === 'all') {
+      setPeriodRevenue(0);
+      return;
+    }
+    let cancelled = false;
+    getProjectFinancialSummary(Number(periodYear), periodMonth === 'all' ? 'all' : Number(periodMonth))
+      .then((summary) => { if (!cancelled) setPeriodRevenue(projectValue(summary.revenue)); })
+      .catch(() => { if (!cancelled) setPeriodRevenue(0); });
+    return () => { cancelled = true; };
+  }, [user, periodYear, periodMonth, projetos]);
+
   const handleDeleteProject = async (id: string) => {
     try {
       await deleteProject(id);
@@ -137,8 +152,19 @@ const ProjetosPage = () => {
     }
   };
 
-  // Calcular estatísticas reais dos projetos
-  const stats = calculateProjectStats(projetos);
+  const availableYears = Array.from(new Set([
+    2025,
+    2026,
+    new Date().getFullYear(),
+    ...projetos.map((project) => new Date(project.created_at).getFullYear()).filter(Number.isFinite),
+  ])).sort((a, b) => b - a);
+  const periodProjects = periodYear === 'all' ? projetos : projetos.filter((project) => {
+    const created = new Date(project.created_at);
+    return created.getFullYear() === Number(periodYear)
+      && (periodMonth === 'all' || created.getMonth() + 1 === Number(periodMonth));
+  });
+  const baseStats = calculateProjectStats(periodProjects);
+  const stats = periodYear === 'all' ? baseStats : { ...baseStats, faturamentoTotal: periodRevenue };
 
   const openPayment = (project: Project) => {
     setPaymentProject(project);
@@ -173,7 +199,7 @@ const ProjetosPage = () => {
   };
   
   // Filtrar projetos baseado na pesquisa e filtros
-  const filteredProjects = projetos.filter(projeto => {
+  const filteredProjects = periodProjects.filter(projeto => {
     // Filtro por termo de pesquisa
     const matchesSearch = projeto.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (projeto.client && projeto.client.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -358,6 +384,27 @@ const ProjetosPage = () => {
       </div>
 
       {/* Estatísticas Rápidas */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-muted-foreground">Período</span>
+        <Select value={periodYear} onValueChange={(value) => { setPeriodYear(value); setPeriodMonth('all'); }}>
+          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Ano" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os períodos</SelectItem>
+            {availableYears.map((year) => <SelectItem key={year} value={String(year)}>{year}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {periodYear !== 'all' && (
+          <Select value={periodMonth} onValueChange={setPeriodMonth}>
+            <SelectTrigger className="w-[170px]"><SelectValue placeholder="Mês" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os meses</SelectItem>
+              {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+                .map((month, index) => <SelectItem key={month} value={String(index + 1)}>{month}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">

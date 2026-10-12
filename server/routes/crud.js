@@ -166,6 +166,30 @@ router.get('/projects', authenticateToken, requireModuleAccess('can_access_proje
   }
 });
 
+router.get('/projects/financial-summary', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
+  try {
+    const year = Number(req.query.year);
+    const month = req.query.month === undefined || req.query.month === 'all' ? null : Number(req.query.month);
+    if (!Number.isInteger(year) || year < 2000 || year > 2200 || (month !== null && (!Number.isInteger(month) || month < 1 || month > 12))) {
+      return res.status(400).json({ error: 'Periodo invalido' });
+    }
+    const start = month === null ? `${year}-01-01` : `${year}-${String(month).padStart(2, '0')}-01`;
+    const end = month === null ? `${year}-12-31` : new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+    const result = await getQuery(req)(
+      `SELECT COALESCE(SUM(e.amount), 0) AS revenue
+       FROM project_financial_events e
+       JOIN projects p ON p.id = e.project_id
+       WHERE p.user_id = ? AND p.deleted_at IS NULL AND p.status <> 'cancelled'
+         AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
+      [req.userId, start, end]
+    );
+    res.json({ revenue: Number(result.rows?.[0]?.revenue || 0), year, month });
+  } catch (error) {
+    console.error('Erro ao buscar resumo financeiro de projetos:', { code: error.code, message: error.message });
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 router.post('/projects', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
   let connection;
   try {
