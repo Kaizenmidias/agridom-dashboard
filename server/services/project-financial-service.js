@@ -10,6 +10,8 @@ async function ensureLegacyBaseline(connection, project) {
   if (opening <= 0) return null;
   const [existing] = await connection.execute('SELECT * FROM project_financial_baselines WHERE project_id = ? FOR UPDATE', [project.id]);
   if (existing[0]) return existing[0];
+  const [events] = await connection.execute('SELECT id FROM project_financial_events WHERE project_id = ? LIMIT 1 FOR UPDATE', [project.id]);
+  if (events[0]) return null;
   const [result] = await connection.execute(
     `INSERT INTO project_financial_baselines (project_id, amount, competence_date, origin, idempotency_key)
      VALUES (?, ?, NULL, 'legacy_opening_balance', ?)`,
@@ -49,7 +51,7 @@ async function recordFinancialEvent(connection, event) {
 }
 
 async function settleProjectOnCompletion({ connection, projectId, completionDate, createdBy = null }) {
-  const [rows] = await connection.execute('SELECT * FROM projects WHERE id = ? FOR UPDATE', [projectId]);
+  const [rows] = await connection.execute('SELECT * FROM projects WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [projectId]);
   const project = rows[0];
   if (!project) return null;
   if (project.status === 'completed') return project;
@@ -68,13 +70,13 @@ async function settleProjectOnCompletion({ connection, projectId, completionDate
     });
   }
 
-  await connection.execute(`UPDATE projects SET status = 'completed', paid_value = project_value, completion_date = COALESCE(completion_date, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [completionDate, projectId]);
+  await connection.execute(`UPDATE projects SET status = 'completed', paid_value = project_value, completion_date = COALESCE(completion_date, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL`, [completionDate, projectId]);
   const [updated] = await connection.execute('SELECT * FROM projects WHERE id = ?', [projectId]);
   return updated[0] || null;
 }
 
 async function recordProjectPayment({ connection, projectId, amount, competenceDate, createdBy = null, idempotencyKey }) {
-  const [rows] = await connection.execute('SELECT * FROM projects WHERE id = ? FOR UPDATE', [projectId]);
+  const [rows] = await connection.execute('SELECT * FROM projects WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [projectId]);
   const project = rows[0];
   if (!project) return null;
   if (!idempotencyKey) throw Object.assign(new Error('Idempotency key is required'), { code: 'FINANCIAL_IDEMPOTENCY_REQUIRED' });

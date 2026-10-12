@@ -158,7 +158,7 @@ router.get('/projects', authenticateToken, requireModuleAccess('can_access_proje
   try {
     const result = await getQuery(req)(`SELECT p.*, COALESCE(b.amount, 0) AS financial_legacy_baseline, COALESCE(SUM(CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END), 0) AS financial_event_total, COUNT(e.id) AS financial_event_count
       FROM projects p LEFT JOIN project_financial_baselines b ON b.project_id = p.id LEFT JOIN project_financial_events e ON e.project_id = p.id
-      WHERE p.user_id = ? GROUP BY p.id ORDER BY p.created_at DESC`, [req.userId]);
+      WHERE p.user_id = ? AND p.deleted_at IS NULL GROUP BY p.id ORDER BY p.created_at DESC`, [req.userId]);
     res.json(result.rows || []);
   } catch (error) {
     console.error('Erro ao buscar projetos:', error);
@@ -247,10 +247,10 @@ router.put('/projects/:id', authenticateToken, requireModuleAccess('can_access_p
            delivery_date = COALESCE(?, delivery_date),
            completion_date = COALESCE(?, completion_date),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
+       WHERE id = ? AND deleted_at IS NULL`,
       [name ?? null, client || client_name || null, project_type ?? null, status ?? null, description ?? null, project_value ?? null, normalizedDeliveryDate, normalizedCompletionDate, req.params.id]
     );
-    const result = await query('SELECT * FROM projects WHERE id = ?', [req.params.id]);
+    const result = await query('SELECT * FROM projects WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
     if (!result.rows?.length) return res.status(404).json({ error: 'Projeto nao encontrado' });
     res.json(result.rows[0]);
   } catch (error) {
@@ -273,7 +273,7 @@ router.post('/projects/:id/payments', authenticateToken, requireModuleAccess('ca
     if (amount <= 0 || !competenceDate || !idempotencyKey) return res.status(400).json({ error: 'Valor, competencia e chave de idempotencia sao obrigatorios' });
     connection = await getPool().getConnection();
     await connection.beginTransaction();
-    const [owned] = await connection.execute("SELECT id, status, project_value, paid_value FROM projects WHERE id = ? AND user_id = ? FOR UPDATE", [req.params.id, req.userId]);
+    const [owned] = await connection.execute("SELECT id, status, project_value, paid_value FROM projects WHERE id = ? AND user_id = ? AND deleted_at IS NULL FOR UPDATE", [req.params.id, req.userId]);
     if (!owned[0]) { await connection.rollback(); return res.status(404).json({ error: 'Projeto nao encontrado' }); }
     if (owned[0].status === 'cancelled') { await connection.rollback(); return res.status(409).json({ error: 'Projeto cancelado nao aceita pagamentos' }); }
     const project = await recordProjectPayment({ connection, projectId: req.params.id, amount, competenceDate, createdBy: req.userId, idempotencyKey });
@@ -290,10 +290,10 @@ router.post('/projects/:id/payments', authenticateToken, requireModuleAccess('ca
 router.get('/projects/:id/financial-history', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
   try {
     const query = getQuery(req);
-    const baseline = await query('SELECT id, amount, competence_date, origin, created_at FROM project_financial_baselines WHERE project_id = ? AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ?)', [req.params.id, req.params.id, req.userId]);
-    const events = await query('SELECT id, event_type, direction, amount, competence_date, origin, created_at FROM project_financial_events WHERE project_id = ? AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ?) ORDER BY COALESCE(competence_date, DATE(created_at)), id', [req.params.id, req.params.id, req.userId]);
+    const baseline = await query('SELECT id, amount, competence_date, origin, created_at FROM project_financial_baselines WHERE project_id = ? AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ? AND deleted_at IS NULL)', [req.params.id, req.params.id, req.userId]);
+    const events = await query('SELECT id, event_type, direction, amount, competence_date, origin, created_at FROM project_financial_events WHERE project_id = ? AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ? AND deleted_at IS NULL) ORDER BY COALESCE(competence_date, DATE(created_at)), id', [req.params.id, req.params.id, req.userId]);
     if (!baseline.rows?.length && !events.rows?.length) {
-      const project = await query('SELECT id FROM projects WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+      const project = await query('SELECT id FROM projects WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [req.params.id, req.userId]);
       if (!project.rows?.length) return res.status(404).json({ error: 'Projeto nao encontrado' });
     }
     res.json({ baseline: baseline.rows?.[0] || null, events: events.rows || [] });
@@ -306,19 +306,9 @@ router.get('/projects/:id/financial-history', authenticateToken, requireModuleAc
 router.delete('/projects/:id', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
   try {
     const query = getQuery(req);
-    const project = await query('SELECT id, paid_value FROM projects WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    const project = await query('SELECT id FROM projects WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [req.params.id, req.userId]);
     if (!project.rows?.length) return res.status(404).json({ error: 'Projeto nao encontrado' });
-    const financial = await query(
-      `SELECT
-         (SELECT COUNT(*) FROM project_financial_events WHERE project_id = ?) AS event_count,
-         (SELECT COUNT(*) FROM project_financial_baselines WHERE project_id = ?) AS baseline_count`,
-      [req.params.id, req.params.id]
-    );
-    const counts = financial.rows?.[0] || {};
-    if (Number(project.rows[0].paid_value) > 0 || Number(counts.event_count) > 0 || Number(counts.baseline_count) > 0) {
-      return res.status(409).json({ error: 'Projeto com historico financeiro nao pode ser excluido' });
-    }
-    await query('DELETE FROM projects WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    await query('UPDATE projects SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [req.params.id, req.userId]);
     res.json({ message: 'Projeto excluido com sucesso' });
   } catch (error) {
     console.error('Erro ao excluir projeto:', { projectId: req.params.id, code: error.code, message: error.message });
@@ -457,6 +447,7 @@ router.get('/briefings', authenticateToken, requireModuleAccess('can_access_brie
        COALESCE(p.client, p.client_name) AS project_client_name, p.project_type AS project_type,
        p.project_value, p.paid_value, p.status AS project_status, p.user_id AS project_owner_id
        FROM briefings b LEFT JOIN projects p ON p.id = b.project_id
+       WHERE b.project_id IS NULL OR p.deleted_at IS NULL
        ORDER BY b.created_at DESC`);
     res.json(result.rows || []);
   } catch (error) {
@@ -593,32 +584,32 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     const projectsResult = await query(
       `SELECT p.*, COALESCE(b.amount, 0) AS financial_legacy_baseline, COALESCE(SUM(CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END), 0) AS financial_event_total, COUNT(e.id) AS financial_event_count
         FROM projects p LEFT JOIN project_financial_baselines b ON b.project_id = p.id LEFT JOIN project_financial_events e ON e.project_id = p.id
-        WHERE p.user_id = ?
+        WHERE p.user_id = ? AND p.deleted_at IS NULL
           AND (DATE(p.created_at) BETWEEN ? AND ? OR DATE(p.delivery_date) BETWEEN ? AND ? OR DATE(p.completion_date) BETWEEN ? AND ?)
         GROUP BY p.id`,
       [req.userId, currentStart, currentEnd, currentStart, currentEnd, currentStart, currentEnd]
     );
     const expensesResult = await query('SELECT * FROM expenses WHERE user_id = ?', [req.userId]);
-    const previousProjectsResult = await query('SELECT * FROM projects WHERE user_id = ? AND DATE(created_at) BETWEEN ? AND ?', [req.userId, prevStart, prevEnd]);
+    const previousProjectsResult = await query('SELECT * FROM projects WHERE user_id = ? AND deleted_at IS NULL AND DATE(created_at) BETWEEN ? AND ?', [req.userId, prevStart, prevEnd]);
     const eventRevenueResult = await query(
       `SELECT COALESCE(SUM(e.amount), 0) AS revenue
        FROM project_financial_events e
        JOIN projects p ON p.id = e.project_id
-       WHERE p.user_id = ? AND p.status <> 'cancelled' AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
+       WHERE p.user_id = ? AND p.deleted_at IS NULL AND p.status <> 'cancelled' AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
       [req.userId, currentStart, currentEnd]
     );
     const previousEventRevenueResult = await query(
       `SELECT COALESCE(SUM(e.amount), 0) AS revenue
        FROM project_financial_events e
        JOIN projects p ON p.id = e.project_id
-       WHERE p.user_id = ? AND p.status <> 'cancelled' AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
+       WHERE p.user_id = ? AND p.deleted_at IS NULL AND p.status <> 'cancelled' AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
       [req.userId, prevStart, prevEnd]
     );
     const unclassifiedLegacyResult = await query(
       `SELECT COALESCE(SUM(CASE WHEN b.amount IS NOT NULL THEN b.amount ELSE p.paid_value END), 0) AS amount
        FROM projects p
        LEFT JOIN project_financial_baselines b ON b.project_id = p.id
-       WHERE p.user_id = ? AND p.status <> 'cancelled'
+       WHERE p.user_id = ? AND p.deleted_at IS NULL AND p.status <> 'cancelled'
          AND (b.id IS NOT NULL OR (p.paid_value > 0 AND NOT EXISTS (SELECT 1 FROM project_financial_events e WHERE e.project_id = p.id)))`,
       [req.userId]
     );
@@ -654,7 +645,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     });
 
     const recentProjects = await query(
-      'SELECT id, name, status, project_value, created_at FROM projects WHERE user_id = ? ORDER BY created_at DESC LIMIT 5',
+      'SELECT id, name, status, project_value, created_at FROM projects WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 5',
       [req.userId]
     );
 

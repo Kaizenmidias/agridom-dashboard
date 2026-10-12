@@ -17,14 +17,7 @@ const calculateStats = (projects) => ({
   emAndamento: projects.filter((project) => project.status === 'active' || project.status === 'paused').length,
   finalizados: projects.filter((project) => project.status === 'completed').length,
   faturamentoTotal: projects.filter((project) => project.status !== 'cancelled')
-    .reduce((total, project) => {
-      const baseline = Number.isFinite(Number(project.financial_legacy_baseline)) ? Number(project.financial_legacy_baseline) : 0;
-      const eventTotal = Number.isFinite(Number(project.financial_event_total)) ? Number(project.financial_event_total) : 0;
-      const recognized = baseline + eventTotal;
-      return total + (Number(project.financial_event_count) > 0 || baseline > 0
-        ? recognized
-        : (Number.isFinite(Number(project.paid_value)) ? Number(project.paid_value) : 0));
-    }, 0),
+    .reduce((total, project) => total + (Number.isFinite(Number(project.paid_value)) ? Number(project.paid_value) : 0), 0),
   valorPendente: projects
     .filter((project) => project.status !== 'cancelled')
     .reduce((total, project) => total + Math.max(0,
@@ -51,7 +44,7 @@ test('project completion preserves financial values and avoids revenue side effe
 });
 
 test('project completion is idempotent and relationship-safe', () => {
-  assert.match(financialService, /SELECT \* FROM projects WHERE id = \? FOR UPDATE/);
+  assert.match(financialService, /SELECT \* FROM projects WHERE id = \? AND deleted_at IS NULL FOR UPDATE/);
   assert.match(financialService, /project\.status === 'completed'/);
   assert.match(financialService, /completion_date = COALESCE\(completion_date, \?\)/);
   assert.match(completionBranch, /Projeto nao encontrado/);
@@ -72,17 +65,17 @@ test('bulk project completion uses the same financial-preserving semantics', () 
   assert.doesNotMatch(bulkHandler, /paid_value/);
 });
 
-test('project indicators use total value by operational status, not paid value', () => {
+test('project indicators use paid value once and pending balance separately', () => {
   const stats = calculateStats([
     { status: 'active', project_value: 1000, paid_value: 250 },
     { status: 'paused', project_value: 500, paid_value: 0 },
-    { status: 'completed', project_value: 900, paid_value: 0, financial_event_count: 1, financial_event_total: 900 },
+    { status: 'completed', project_value: 900, paid_value: 900, financial_event_count: 1, financial_event_total: 900 },
     { status: 'completed', project_value: 700, paid_value: 700, financial_event_count: 1, financial_event_total: 700 },
     { status: 'cancelled', project_value: 400, paid_value: 100 },
   ]);
 
-  assert.deepEqual(stats, { emAndamento: 2, finalizados: 2, faturamentoTotal: 1850, valorPendente: 2150 });
-  assert.match(projectsPage, /financial_event_total/);
+  assert.deepEqual(stats, { emAndamento: 2, finalizados: 2, faturamentoTotal: 1850, valorPendente: 1250 });
+  assert.match(projectsPage, /faturamentoTotal:[\s\S]+projectValue\(project\.paid_value\)/);
   assert.match(projectsPage, /valorPendente: projects[\s\S]+filter\(\(project\) => project\.status !== 'cancelled'\)/);
 });
 
@@ -116,15 +109,15 @@ test('legacy completed projects remain in accumulated revenue without inventing 
   ]);
   assert.equal(stats.faturamentoTotal, 1050);
   assert.equal(stats.valorPendente, 0);
-  assert.match(projectsPage, /eventCount > 0 \|\| baseline > 0/);
+  assert.match(projectsPage, /faturamentoTotal:[\s\S]+projectValue\(project\.paid_value\)/);
 });
 
 test('project deletion preserves financial history and is owner-scoped', () => {
   assert.match(crud, /SELECT id FROM projects WHERE id = \? AND user_id = \?/);
   assert.match(crud, /project_financial_events WHERE project_id = \?/);
   assert.match(crud, /project_financial_baselines WHERE project_id = \?/);
-  assert.match(crud, /Number\(project\.rows\[0\]\.paid_value\) > 0/);
-  assert.match(crud, /Projeto com historico financeiro nao pode ser excluido/);
-  assert.match(crud, /DELETE FROM projects WHERE id = \? AND user_id = \?/);
+  assert.match(crud, /SELECT id FROM projects WHERE id = \? AND user_id = \? AND deleted_at IS NULL/);
+  assert.match(crud, /UPDATE projects SET deleted_at = CURRENT_TIMESTAMP/);
+  assert.match(crud, /UPDATE projects SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = \? AND user_id = \? AND deleted_at IS NULL/);
   assert.match(projectsPage, /error instanceof Error \? error\.message/);
 });

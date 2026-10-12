@@ -7,6 +7,7 @@ const typescript = require('typescript');
 const root = path.resolve(__dirname, '../..');
 const migration = fs.readFileSync(path.join(root, 'database/migrations/20261012_project_financial_events.sql'), 'utf8');
 const baselineMigration = fs.readFileSync(path.join(root, 'database/migrations/20261012_project_financial_baselines.sql'), 'utf8');
+const softDeleteMigration = fs.readFileSync(path.join(root, 'database/migrations/20261013_project_soft_delete.sql'), 'utf8');
 const service = fs.readFileSync(path.join(root, 'server/services/project-financial-service.js'), 'utf8');
 const crud = fs.readFileSync(path.join(root, 'server/routes/crud.js'), 'utf8');
 
@@ -68,7 +69,7 @@ test('currency conversion does not multiply real-valued API data by 100', () => 
 });
 
 test('payment and completion use project locks and do not exceed the contract value', () => {
-  assert.match(service, /SELECT \* FROM projects WHERE id = \? FOR UPDATE/);
+  assert.match(service, /SELECT \* FROM projects WHERE id = \? AND deleted_at IS NULL FOR UPDATE/);
   assert.match(service, /payment > calculateProjectBalance\(project\)/);
   assert.match(service, /paid_value = paid_value \+ \?/);
   assert.match(service, /paid_value = project_value/);
@@ -77,4 +78,11 @@ test('payment and completion use project locks and do not exceed the contract va
 test('legacy projects are not backfilled automatically', () => {
   assert.doesNotMatch(service, /isHistorical:\s*true/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS project_financial_events/);
+});
+
+test('financial accumulation uses paid_value once and soft deletion preserves history', () => {
+  assert.match(softDeleteMigration, /deleted_at DATETIME NULL/);
+  assert.match(crud, /UPDATE projects SET deleted_at = CURRENT_TIMESTAMP/);
+  assert.match(crud, /p\.deleted_at IS NULL/);
+  assert.match(service, /SELECT id FROM project_financial_events WHERE project_id = \? LIMIT 1 FOR UPDATE/);
 });

@@ -48,11 +48,13 @@ CREATE TABLE IF NOT EXISTS projects (
   end_date DATE NULL,
   delivery_date DATE NULL,
   completion_date DATE NULL,
+  deleted_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_projects_user_status (user_id, status),
   KEY idx_projects_delivery_date (delivery_date),
+  KEY idx_projects_deleted_at (deleted_at),
   CONSTRAINT fk_projects_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
