@@ -369,6 +369,11 @@ const Dashboard = () => {
               Total acumulado
             </span>
           </div>
+          {Number(dashboardStats?.unclassified_legacy_revenue || 0) > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground" title="Pagamentos legados sem competência mensal comprovada">
+              Histórico sem competência: {Number(dashboardStats.unclassified_legacy_revenue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          )}
         </div>
         
         <div className="stat-card card-hover">

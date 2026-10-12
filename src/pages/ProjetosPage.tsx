@@ -6,10 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Edit, Trash2, Plus, Calendar, DollarSign, User, TrendingUp, Clock, Search, Filter, CheckSquare, Loader2 } from 'lucide-react';
+import { Edit, Trash2, Plus, Calendar, DollarSign, User, TrendingUp, Clock, Search, Filter, CheckSquare, Loader2, Receipt, History } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { NovoProjetoDialog } from '@/components/novo-projeto-dialog';
-import { getProjects, deleteProject, updateProject } from '@/api/crud';
+import { getProjects, deleteProject, updateProject, recordProjectPayment, getProjectFinancialHistory } from '@/api/crud';
 import { Project } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
@@ -23,9 +23,8 @@ const projectValue = (value: number | null | undefined) => {
 export const calculateProjectStats = (projects: Project[]) => ({
   emAndamento: projects.filter((project) => project.status === 'active' || project.status === 'paused').length,
   finalizados: projects.filter((project) => project.status === 'completed').length,
-  faturamentoTotal: projects
-    .filter((project) => project.status === 'completed')
-    .reduce((total, project) => total + projectValue(project.project_value), 0),
+  faturamentoTotal: projects.filter((project) => project.status !== 'cancelled')
+    .reduce((total, project) => total + projectValue(project.financial_legacy_baseline) + projectValue(project.financial_event_total), 0),
   valorPendente: projects
     .filter((project) => project.status !== 'cancelled')
     .reduce((total, project) => total + Math.max(0, projectValue(project.project_value) - projectValue(project.paid_value)), 0),
@@ -46,6 +45,13 @@ const ProjetosPage = () => {
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
   const [completingProjects, setCompletingProjects] = useState<string[]>([]);
+  const [paymentProject, setPaymentProject] = useState<Project | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState('');
+  const [paymentKey, setPaymentKey] = useState('');
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [historyProject, setHistoryProject] = useState<Project | null>(null);
+  const [financialHistory, setFinancialHistory] = useState<{ baseline: any | null; events: any[] }>({ baseline: null, events: [] });
 
   const todayDateOnly = () => {
     const today = new Date();
@@ -135,6 +141,38 @@ const ProjetosPage = () => {
 
   // Calcular estatísticas reais dos projetos
   const stats = calculateProjectStats(projetos);
+
+  const openPayment = (project: Project) => {
+    setPaymentProject(project);
+    setPaymentAmount('');
+    setPaymentDate(todayDateOnly());
+    setPaymentKey(crypto.randomUUID());
+  };
+
+  const submitPayment = async () => {
+    if (!paymentProject) return;
+    const amount = Number(paymentAmount.replace(',', '.'));
+    const balance = Math.max(0, projectValue(paymentProject.project_value) - projectValue(paymentProject.paid_value));
+    if (!Number.isFinite(amount) || amount <= 0 || amount > balance || !paymentDate) {
+      toast({ title: 'Pagamento inválido', description: `Informe um valor positivo até ${balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} e uma data.`, variant: 'destructive' });
+      return;
+    }
+    setPaymentLoading(true);
+    try {
+      await recordProjectPayment(paymentProject.id, { amount, competence_date: paymentDate, idempotency_key: paymentKey });
+      setPaymentProject(null);
+      await loadProjects();
+      toast({ title: 'Pagamento registrado', description: 'O pagamento foi registrado com sucesso.' });
+    } catch (error) {
+      toast({ title: 'Não foi possível registrar', description: error instanceof Error ? error.message : 'Erro interno do servidor', variant: 'destructive' });
+    } finally { setPaymentLoading(false); }
+  };
+
+  const openHistory = async (project: Project) => {
+    setHistoryProject(project);
+    try { setFinancialHistory(await getProjectFinancialHistory(project.id)); }
+    catch { setFinancialHistory({ baseline: null, events: [] }); toast({ title: 'Erro', description: 'Não foi possível carregar o histórico.', variant: 'destructive' }); }
+  };
   
   // Filtrar projetos baseado na pesquisa e filtros
   const filteredProjects = projetos.filter(projeto => {
@@ -597,6 +635,13 @@ const ProjetosPage = () => {
                           <Trash2 className="h-4 w-4 mr-1" />
                           Excluir
                         </Button>
+                        <Button variant="outline" size="sm" onClick={() => openPayment(projeto)} disabled={projeto.status === 'cancelled' || Math.max(0, projectValue(projeto.project_value) - projectValue(projeto.paid_value)) <= 0}>
+                          <Receipt className="h-4 w-4 mr-1" />
+                          Pagamento
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => openHistory(projeto)} title="Ver histórico financeiro" aria-label={`Ver histórico financeiro de ${projeto.name}`}>
+                          <History className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -618,6 +663,38 @@ const ProjetosPage = () => {
           )}
         </CardContent>
       </Card>
+      {paymentProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="payment-title">
+          <div className="w-full max-w-md rounded-lg bg-card p-6 shadow-xl">
+            <h2 id="payment-title" className="text-lg font-semibold">Registrar pagamento</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{paymentProject.name}</p>
+            <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+              <div><span className="text-muted-foreground">Contratado</span><strong className="block">{projectValue(paymentProject.project_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div>
+              <div><span className="text-muted-foreground">Pago</span><strong className="block">{projectValue(paymentProject.paid_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div>
+              <div><span className="text-muted-foreground">Pendente</span><strong className="block">{Math.max(0, projectValue(paymentProject.project_value) - projectValue(paymentProject.paid_value)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div>
+            </div>
+            <div className="mt-5 space-y-3">
+              <label className="block text-sm font-medium">Valor do pagamento<input className="mt-1 w-full rounded-md border bg-background p-2" type="number" min="0.01" step="0.01" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} /></label>
+              <label className="block text-sm font-medium">Data de competência<input className="mt-1 w-full rounded-md border bg-background p-2" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></label>
+            </div>
+            <div className="mt-6 flex justify-end gap-2"><Button variant="outline" onClick={() => setPaymentProject(null)} disabled={paymentLoading}>Cancelar</Button><Button onClick={submitPayment} disabled={paymentLoading}>{paymentLoading ? 'Registrando...' : 'Confirmar pagamento'}</Button></div>
+          </div>
+        </div>
+      )}
+      {historyProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="history-title">
+          <div className="w-full max-w-lg rounded-lg bg-card p-6 shadow-xl">
+            <h2 id="history-title" className="text-lg font-semibold">Histórico financeiro</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{historyProject.name}</p>
+            <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+              {financialHistory.baseline && <div className="rounded-md border border-dashed p-3 text-sm"><div className="flex justify-between"><span>Linha de base legada</span><strong>{projectValue(financialHistory.baseline.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div><p className="text-xs text-muted-foreground">Competência desconhecida</p></div>}
+              {financialHistory.events.map((event) => <div key={event.id} className="rounded-md border p-3 text-sm"><div className="flex justify-between"><span>{event.event_type === 'completion_settlement' ? 'Quitação automática' : 'Pagamento recebido'}</span><strong>{projectValue(event.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div><p className="text-xs text-muted-foreground">{event.competence_date || 'Competência desconhecida'} · {event.origin}</p></div>)}
+              {!financialHistory.baseline && financialHistory.events.length === 0 && <p className="text-sm text-muted-foreground">Nenhum lançamento financeiro registrado.</p>}
+            </div>
+            <div className="mt-6 flex justify-end"><Button onClick={() => setHistoryProject(null)}>Fechar</Button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

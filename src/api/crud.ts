@@ -160,6 +160,20 @@ export const updateProject = async (id: string, projectData: Partial<Project>): 
   return result.data
 }
 
+export const recordProjectPayment = async (id: string | number, payment: { amount: number; competence_date: string; idempotency_key: string }): Promise<Project> => {
+  await checkAuth()
+  const result = await crudAPI.recordProjectPayment(id, payment)
+  if (result.error) throw new Error(result.error)
+  return result.data
+}
+
+export const getProjectFinancialHistory = async (id: string | number): Promise<{ baseline: any | null; events: any[] }> => {
+  await checkAuth()
+  const result = await crudAPI.getProjectFinancialHistory(id)
+  if (result.error) throw new Error(result.error)
+  return result.data
+}
+
 export const deleteProject = async (id: string): Promise<void> => {
   await checkAuth()
   const result = await crudAPI.deleteProject(id)

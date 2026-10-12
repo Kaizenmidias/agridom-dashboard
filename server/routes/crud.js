@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { calculateTotalMonthlyExpenses } = require('../utils/billing-calculations');
 const { getPool } = require('../config/database');
+const { settleProjectOnCompletion, recordProjectPayment, recordFinancialEvent, parseAmount } = require('../services/project-financial-service');
 
 const router = express.Router();
 
@@ -155,7 +156,9 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
 // Projects
 router.get('/projects', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
   try {
-    const result = await getQuery(req)('SELECT * FROM projects ORDER BY created_at DESC');
+    const result = await getQuery(req)(`SELECT p.*, COALESCE(b.amount, 0) AS financial_legacy_baseline, COALESCE(SUM(CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END), 0) AS financial_event_total, COUNT(e.id) AS financial_event_count
+      FROM projects p LEFT JOIN project_financial_baselines b ON b.project_id = p.id LEFT JOIN project_financial_events e ON e.project_id = p.id
+      WHERE p.user_id = ? GROUP BY p.id ORDER BY p.created_at DESC`, [req.userId]);
     res.json(result.rows || []);
   } catch (error) {
     console.error('Erro ao buscar projetos:', error);
@@ -166,15 +169,22 @@ router.get('/projects', authenticateToken, requireModuleAccess('can_access_proje
 router.post('/projects', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
   let connection;
   try {
-    const { name, client, client_name, project_type, status, description, project_value, paid_value, delivery_date, completion_date } = req.body;
+    const { name, client, client_name, project_type, status, description, project_value, paid_value, payment_date, delivery_date, completion_date } = req.body;
     if (!name) return res.status(400).json({ error: 'Nome do projeto e obrigatorio' });
+    const contractValue = parseAmount(project_value);
+    const initialPayment = parseAmount(paid_value);
+    if (initialPayment > contractValue) return res.status(400).json({ error: 'Pagamento inicial maior que o valor do projeto' });
+    if (initialPayment > 0 && !payment_date) return res.status(400).json({ error: 'Data do pagamento inicial e obrigatoria' });
     connection = await getPool().getConnection();
     await connection.beginTransaction();
     const [inserted] = await connection.execute(
       `INSERT INTO projects (user_id, name, client, project_type, status, description, project_value, paid_value, delivery_date, completion_date, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [req.userId, name, client || client_name || null, project_type || 'website', status || 'active', description || null, project_value || 0, paid_value || 0, delivery_date || null, completion_date || null]
+      [req.userId, name, client || client_name || null, project_type || 'website', status || 'active', description || null, contractValue, initialPayment, delivery_date || null, completion_date || null]
     );
+    if (initialPayment > 0) {
+      await recordFinancialEvent(connection, { projectId: inserted.insertId, eventType: 'payment_received', amount: initialPayment, competenceDate: normalizeDateOnly(payment_date), origin: 'initial_payment', idempotencyKey: `project:${inserted.insertId}:initial-payment`, createdBy: req.userId });
+    }
     await connection.execute(
       `INSERT INTO briefings (project_id, user_id, title, client, client_name, project_type, description, content, status, priority, deadline, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'medium', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
@@ -199,29 +209,14 @@ router.put('/projects/:id', authenticateToken, requireModuleAccess('can_access_p
       connection = await getPool().getConnection();
       await connection.beginTransaction();
 
-      const [projectRows] = await connection.execute('SELECT * FROM projects WHERE id = ? FOR UPDATE', [req.params.id]);
-      const currentProject = projectRows[0];
-      if (!currentProject) {
+      const completionDate = normalizeDateOnly(req.body.completion_date) || new Date().toISOString().slice(0, 10);
+      const completedProject = await settleProjectOnCompletion({ connection, projectId: req.params.id, completionDate, createdBy: req.userId });
+      if (!completedProject) {
         await connection.rollback();
         return res.status(404).json({ error: 'Projeto nao encontrado' });
       }
-
-      if (currentProject.status !== 'completed') {
-        const completionDate = normalizeDateOnly(req.body.completion_date) || new Date().toISOString().slice(0, 10);
-        await connection.execute(
-          `UPDATE projects
-           SET status = 'completed',
-               paid_value = project_value,
-               completion_date = COALESCE(completion_date, ?),
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = ?`,
-          [completionDate, req.params.id]
-        );
-      }
-
-      const [updatedRows] = await connection.execute('SELECT * FROM projects WHERE id = ?', [req.params.id]);
       await connection.commit();
-      return res.json(updatedRows[0]);
+      return res.json(completedProject);
     } catch (error) {
       if (connection) await connection.rollback();
       console.error('Erro ao concluir projeto:', {
@@ -237,7 +232,7 @@ router.put('/projects/:id', authenticateToken, requireModuleAccess('can_access_p
   }
 
   try {
-    const { name, client, client_name, project_type, status, description, project_value, paid_value, delivery_date, completion_date } = req.body;
+    const { name, client, client_name, project_type, status, description, project_value, delivery_date, completion_date } = req.body;
     const query = getQuery(req);
     const normalizedDeliveryDate = normalizeDateOnly(delivery_date);
     const normalizedCompletionDate = normalizeDateOnly(completion_date);
@@ -249,12 +244,11 @@ router.put('/projects/:id', authenticateToken, requireModuleAccess('can_access_p
            status = COALESCE(?, status),
            description = COALESCE(?, description),
            project_value = COALESCE(?, project_value),
-           paid_value = COALESCE(?, paid_value),
            delivery_date = COALESCE(?, delivery_date),
            completion_date = COALESCE(?, completion_date),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [name ?? null, client || client_name || null, project_type ?? null, status ?? null, description ?? null, project_value ?? null, paid_value ?? null, normalizedDeliveryDate, normalizedCompletionDate, req.params.id]
+      [name ?? null, client || client_name || null, project_type ?? null, status ?? null, description ?? null, project_value ?? null, normalizedDeliveryDate, normalizedCompletionDate, req.params.id]
     );
     const result = await query('SELECT * FROM projects WHERE id = ?', [req.params.id]);
     if (!result.rows?.length) return res.status(404).json({ error: 'Projeto nao encontrado' });
@@ -266,6 +260,45 @@ router.put('/projects/:id', authenticateToken, requireModuleAccess('can_access_p
       sqlMessage: error.sqlMessage,
       message: error.message
     });
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.post('/projects/:id/payments', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
+  let connection;
+  try {
+    const amount = parseAmount(req.body.amount);
+    const competenceDate = normalizeDateOnly(req.body.competence_date);
+    const idempotencyKey = String(req.body.idempotency_key || '').trim();
+    if (amount <= 0 || !competenceDate || !idempotencyKey) return res.status(400).json({ error: 'Valor, competencia e chave de idempotencia sao obrigatorios' });
+    connection = await getPool().getConnection();
+    await connection.beginTransaction();
+    const [owned] = await connection.execute("SELECT id, status, project_value, paid_value FROM projects WHERE id = ? AND user_id = ? FOR UPDATE", [req.params.id, req.userId]);
+    if (!owned[0]) { await connection.rollback(); return res.status(404).json({ error: 'Projeto nao encontrado' }); }
+    if (owned[0].status === 'cancelled') { await connection.rollback(); return res.status(409).json({ error: 'Projeto cancelado nao aceita pagamentos' }); }
+    const project = await recordProjectPayment({ connection, projectId: req.params.id, amount, competenceDate, createdBy: req.userId, idempotencyKey });
+    await connection.commit();
+    return res.json(project);
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Erro ao registrar pagamento do projeto:', { projectId: req.params.id, code: error.code, message: error.message });
+    const clientError = ['FINANCIAL_IDEMPOTENCY_REQUIRED', 'FINANCIAL_IDEMPOTENCY_CONFLICT', 'FINANCIAL_PAYMENT_EXCEEDS_BALANCE'].includes(error.code);
+    return res.status(error.code === 'FINANCIAL_IDEMPOTENCY_REQUIRED' ? 400 : clientError ? 409 : 500).json({ error: clientError ? error.message : 'Erro interno do servidor' });
+  } finally { connection?.release(); }
+});
+
+router.get('/projects/:id/financial-history', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
+  try {
+    const query = getQuery(req);
+    const baseline = await query('SELECT id, amount, competence_date, origin, created_at FROM project_financial_baselines WHERE project_id = ? AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ?)', [req.params.id, req.params.id, req.userId]);
+    const events = await query('SELECT id, event_type, direction, amount, competence_date, origin, created_at FROM project_financial_events WHERE project_id = ? AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ?) ORDER BY COALESCE(competence_date, DATE(created_at)), id', [req.params.id, req.params.id, req.userId]);
+    if (!baseline.rows?.length && !events.rows?.length) {
+      const project = await query('SELECT id FROM projects WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+      if (!project.rows?.length) return res.status(404).json({ error: 'Projeto nao encontrado' });
+    }
+    res.json({ baseline: baseline.rows?.[0] || null, events: events.rows || [] });
+  } catch (error) {
+    console.error('Erro ao buscar historico financeiro:', { projectId: req.params.id, code: error.code, message: error.message });
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -545,14 +578,37 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     const prevEnd = previousEndDate || new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10);
 
     const projectsResult = await query(
-      `SELECT *
-       FROM projects
-       WHERE user_id = ?
-         AND (DATE(created_at) BETWEEN ? AND ? OR DATE(delivery_date) BETWEEN ? AND ? OR DATE(completion_date) BETWEEN ? AND ?)`,
+      `SELECT p.*, COALESCE(b.amount, 0) AS financial_legacy_baseline, COALESCE(SUM(CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END), 0) AS financial_event_total, COUNT(e.id) AS financial_event_count
+        FROM projects p LEFT JOIN project_financial_baselines b ON b.project_id = p.id LEFT JOIN project_financial_events e ON e.project_id = p.id
+        WHERE p.user_id = ?
+          AND (DATE(p.created_at) BETWEEN ? AND ? OR DATE(p.delivery_date) BETWEEN ? AND ? OR DATE(p.completion_date) BETWEEN ? AND ?)
+        GROUP BY p.id`,
       [req.userId, currentStart, currentEnd, currentStart, currentEnd, currentStart, currentEnd]
     );
     const expensesResult = await query('SELECT * FROM expenses WHERE user_id = ?', [req.userId]);
     const previousProjectsResult = await query('SELECT * FROM projects WHERE user_id = ? AND DATE(created_at) BETWEEN ? AND ?', [req.userId, prevStart, prevEnd]);
+    const eventRevenueResult = await query(
+      `SELECT COALESCE(SUM(e.amount), 0) AS revenue
+       FROM project_financial_events e
+       JOIN projects p ON p.id = e.project_id
+       WHERE p.user_id = ? AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
+      [req.userId, currentStart, currentEnd]
+    );
+    const previousEventRevenueResult = await query(
+      `SELECT COALESCE(SUM(e.amount), 0) AS revenue
+       FROM project_financial_events e
+       JOIN projects p ON p.id = e.project_id
+       WHERE p.user_id = ? AND e.direction = 'credit' AND e.competence_date BETWEEN ? AND ?`,
+      [req.userId, prevStart, prevEnd]
+    );
+    const unclassifiedLegacyResult = await query(
+      `SELECT COALESCE(SUM(CASE WHEN b.amount IS NOT NULL THEN b.amount ELSE p.paid_value END), 0) AS amount
+       FROM projects p
+       LEFT JOIN project_financial_baselines b ON b.project_id = p.id
+       WHERE p.user_id = ? AND p.status <> 'cancelled'
+         AND (b.id IS NOT NULL OR (p.paid_value > 0 AND NOT EXISTS (SELECT 1 FROM project_financial_events e WHERE e.project_id = p.id)))`,
+      [req.userId]
+    );
 
     const projects = projectsResult.rows || [];
     const expenses = expensesResult.rows || [];
@@ -570,12 +626,8 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     const totalProjectValue = projects.reduce((sum, project) => sum + parseNumber(project.project_value), 0);
     const totalPaidValue = projects.reduce((sum, project) => sum + parseNumber(project.paid_value), 0);
     const completedProjects = projects.filter((project) => project.status === 'completed');
-    const currentRevenue = completedProjects
-      .filter((project) => project.completion_date >= currentStart && project.completion_date <= currentEnd)
-      .reduce((sum, project) => sum + parseNumber(project.project_value), 0);
-    const previousRevenue = (previousProjectsResult.rows || [])
-      .filter((project) => project.status === 'completed' && project.completion_date >= prevStart && project.completion_date <= prevEnd)
-      .reduce((sum, project) => sum + parseNumber(project.project_value), 0);
+    const currentRevenue = parseNumber(eventRevenueResult.rows?.[0]?.revenue);
+    const previousRevenue = parseNumber(previousEventRevenueResult.rows?.[0]?.revenue);
     const currentReceivable = projects
       .filter((project) => project.status !== 'cancelled')
       .reduce((sum, project) => sum + Math.max(0, parseNumber(project.project_value) - parseNumber(project.paid_value)), 0);
@@ -619,6 +671,7 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         receivable: currentReceivable,
       },
       current_receivable: currentReceivable,
+      unclassified_legacy_revenue: parseNumber(unclassifiedLegacyResult.rows?.[0]?.amount),
       revenue_by_month: [{ month: `${year}-${String(month).padStart(2, '0')}`, revenue: currentRevenue, expenses: totalExpensesAmount }],
       expenses_by_category: Array.from(categoryMap.values()),
       recent_projects: recentProjects.rows || [],

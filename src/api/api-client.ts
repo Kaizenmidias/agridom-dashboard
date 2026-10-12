@@ -156,6 +156,8 @@ export const crudAPI = {
   getProjects: () => toResult(() => requestJson('/api/projects'), []),
   createProject: (data: any) => toResult(() => requestJson('/api/projects', { method: 'POST', body: JSON.stringify(data) })),
   updateProject: (id: number | string, data: any) => toResult(() => requestJson(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) })),
+  recordProjectPayment: (id: number | string, data: any) => toResult(() => requestJson(`/api/projects/${id}/payments`, { method: 'POST', body: JSON.stringify(data) })),
+  getProjectFinancialHistory: (id: number | string) => toResult(() => requestJson(`/api/projects/${id}/financial-history`)),
   deleteProject: (id: number | string) => toResult(() => requestJson(`/api/projects/${id}`, { method: 'DELETE' })),
 
   getExpenses: () => toResult(() => requestJson('/api/expenses'), []),
@@ -205,6 +207,7 @@ export interface DashboardStats {
     receivable: number
   }
   current_receivable: number
+  unclassified_legacy_revenue: number
   revenue_by_month: Array<{ month: string; revenue: number; expenses?: number }>
   expenses_by_category: Array<{ category: string; total_amount: number; count: number }>
   recent_projects: Array<{ id: string; name: string; status: string; project_value: number; created_at: string }>
@@ -256,6 +259,7 @@ const buildEmptyDashboardStats = (): DashboardStats => ({
     receivable: 0,
   },
   current_receivable: 0,
+  unclassified_legacy_revenue: 0,
   revenue_by_month: [],
   expenses_by_category: [],
   recent_projects: [],

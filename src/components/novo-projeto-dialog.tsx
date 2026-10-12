@@ -59,7 +59,8 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
     description: projeto?.description || "",
     project_value: formatCurrency(projeto?.project_value),
     paid_value: formatCurrency(projeto?.paid_value),
-    delivery_date: projeto?.delivery_date || ""
+    delivery_date: projeto?.delivery_date || "",
+    payment_date: ""
   })
 
   const resetForm = () => {
@@ -72,7 +73,8 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
         description: "",
         project_value: "",
         paid_value: "",
-        delivery_date: ""
+        delivery_date: "",
+        payment_date: ""
       })
     }
   }
@@ -115,6 +117,7 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
           description: projetoForm.description,
           project_value: convertCurrencyToNumber(projetoForm.project_value),
           paid_value: convertCurrencyToNumber(projetoForm.paid_value),
+          payment_date: projetoForm.payment_date || null,
           delivery_date: projetoForm.delivery_date || null,
           user_id: user.id, // ID do usuário autenticado
           completion_date: null
@@ -265,7 +268,7 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
                  disabled={loading}
                />
              </div>
-             <div className="space-y-2">
+             {!isEditing && <div className="space-y-2">
                <Label htmlFor="paid_value">Valor Pago</Label>
                <Input
                  id="paid_value"
@@ -283,8 +286,13 @@ export function NovoProjetoDialog({ children, projeto, onProjectChange }: NovoPr
                  placeholder="R$ 0,00"
                  disabled={loading}
                />
-             </div>
+             </div>}
            </div>
+
+          {!isEditing && <div className="space-y-2">
+            <Label htmlFor="payment_date">Data do pagamento inicial</Label>
+            <Input id="payment_date" type="date" value={projetoForm.payment_date} onChange={(e) => setProjetoForm(prev => ({ ...prev, payment_date: e.target.value }))} disabled={loading} />
+          </div>}
 
           <div className="space-y-2">
             <Label htmlFor="delivery_date">Data de Entrega</Label>

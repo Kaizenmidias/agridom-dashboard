@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS project_financial_events (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  project_id BIGINT UNSIGNED NOT NULL,
+  event_type VARCHAR(50) NOT NULL,
+  direction ENUM('credit', 'debit') NOT NULL DEFAULT 'credit',
+  amount DECIMAL(12,2) NOT NULL,
+  competence_date DATE NULL,
+  origin VARCHAR(50) NOT NULL,
+  idempotency_key VARCHAR(191) NOT NULL,
+  reference_event_id BIGINT UNSIGNED NULL,
+  is_historical TINYINT(1) NOT NULL DEFAULT 0,
+  notes VARCHAR(500) NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_project_financial_event_idempotency (project_id, idempotency_key),
+  KEY idx_project_financial_events_project_date (project_id, competence_date),
+  KEY idx_project_financial_events_date (competence_date),
+  KEY idx_project_financial_events_reference (reference_event_id),
+  CONSTRAINT fk_project_financial_events_project FOREIGN KEY (project_id) REFERENCES projects(id),
+  CONSTRAINT fk_project_financial_events_reference FOREIGN KEY (reference_event_id) REFERENCES project_financial_events(id),
+  CONSTRAINT fk_project_financial_events_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

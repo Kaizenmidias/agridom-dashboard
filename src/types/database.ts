@@ -58,6 +58,9 @@ export interface User {
   can_access_users: boolean;
   created_at: string;
   updated_at: string;
+  financial_event_total?: number;
+  financial_event_count?: number;
+  financial_legacy_baseline?: number;
 }
 
 export interface InsertUser {
@@ -105,6 +108,7 @@ export interface InsertProject {
   start_date: string;
   end_date?: string;
   user_id: number;
+  payment_date?: string | null;
 }
 
 // Tipos de despesas

@@ -1,0 +1,59 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+
+const root = path.resolve(__dirname, '../..');
+const migration = fs.readFileSync(path.join(root, 'database/migrations/20261012_project_financial_events.sql'), 'utf8');
+const baselineMigration = fs.readFileSync(path.join(root, 'database/migrations/20261012_project_financial_baselines.sql'), 'utf8');
+const service = fs.readFileSync(path.join(root, 'server/services/project-financial-service.js'), 'utf8');
+const crud = fs.readFileSync(path.join(root, 'server/routes/crud.js'), 'utf8');
+
+test('financial events preserve competence, idempotency and historical traceability', () => {
+  assert.match(migration, /idempotency_key VARCHAR\(191\) NOT NULL/);
+  assert.match(migration, /competence_date DATE/);
+  assert.match(baselineMigration, /UNIQUE KEY uq_project_financial_baseline_project/);
+  assert.match(migration, /reference_event_id BIGINT UNSIGNED/);
+  assert.match(migration, /is_historical TINYINT\(1\)/);
+  assert.match(service, /idempotencyKey/);
+});
+
+test('completion records only the incremental balance and remains idempotent', () => {
+  assert.match(service, /completion_settlement/);
+  assert.match(service, /calculateProjectBalance/);
+  assert.match(service, /project:\$\{projectId\}:completion-settlement/);
+  assert.match(service, /if \(project\.status === 'completed'\) return project/);
+  assert.match(crud, /settleProjectOnCompletion/);
+});
+
+test('legacy baseline is captured once and is added to later events without inventing competence', () => {
+  assert.match(service, /project_financial_baselines/);
+  assert.match(service, /legacy_opening_balance/);
+  assert.match(service, /competenceDate: completionDate/);
+  assert.match(crud, /financial_legacy_baseline/);
+  assert.match(migration, /competence_date DATE NULL/);
+});
+
+test('idempotency conflicts are explicit and resolved before balance rejection', () => {
+  assert.match(service, /FINANCIAL_IDEMPOTENCY_CONFLICT/);
+  assert.match(service, /FINANCIAL_PAYMENT_EXCEEDS_BALANCE/);
+  assert.match(crud, /recordProjectPayment/);
+});
+
+test('financial history does not expose internal idempotency keys and dashboard signals legacy values', () => {
+  assert.doesNotMatch(crud, /SELECT id, amount, competence_date, origin, idempotency_key, created_at FROM project_financial_baselines/);
+  assert.doesNotMatch(crud, /SELECT id, event_type, direction, amount, competence_date, origin, idempotency_key, created_at FROM project_financial_events/);
+  assert.match(crud, /unclassified_legacy_revenue/);
+});
+
+test('payment and completion use project locks and do not exceed the contract value', () => {
+  assert.match(service, /SELECT \* FROM projects WHERE id = \? FOR UPDATE/);
+  assert.match(service, /payment > calculateProjectBalance\(project\)/);
+  assert.match(service, /paid_value = paid_value \+ \?/);
+  assert.match(service, /paid_value = project_value/);
+});
+
+test('legacy projects are not backfilled automatically', () => {
+  assert.doesNotMatch(service, /isHistorical:\s*true/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS project_financial_events/);
+});
