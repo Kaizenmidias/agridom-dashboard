@@ -17,9 +17,14 @@ const calculateStats = (projects) => ({
   emAndamento: projects.filter((project) => project.status === 'active' || project.status === 'paused').length,
   finalizados: projects.filter((project) => project.status === 'completed').length,
   faturamentoTotal: projects.filter((project) => project.status !== 'cancelled')
-    .reduce((total, project) => total + (Number(project.financial_event_count) > 0
-      ? (Number.isFinite(Number(project.financial_event_total)) ? Number(project.financial_event_total) : 0)
-      : (Number.isFinite(Number(project.paid_value)) ? Number(project.paid_value) : 0)), 0),
+    .reduce((total, project) => {
+      const baseline = Number.isFinite(Number(project.financial_legacy_baseline)) ? Number(project.financial_legacy_baseline) : 0;
+      const eventTotal = Number.isFinite(Number(project.financial_event_total)) ? Number(project.financial_event_total) : 0;
+      const recognized = baseline + eventTotal;
+      return total + (Number(project.financial_event_count) > 0 || baseline > 0
+        ? recognized
+        : (Number.isFinite(Number(project.paid_value)) ? Number(project.paid_value) : 0));
+    }, 0),
   valorPendente: projects
     .filter((project) => project.status !== 'cancelled')
     .reduce((total, project) => total + Math.max(0,
@@ -102,4 +107,24 @@ test('project indicators are recalculated from the current project list after mu
   assert.match(projectsPage, /const stats = calculateProjectStats\(projetos\)/);
   assert.match(projectsPage, /setProjetos\(prev => prev\.map/);
   assert.match(projectsPage, /await loadProjects\(\)/);
+});
+
+test('legacy completed projects remain in accumulated revenue without inventing events', () => {
+  const stats = calculateStats([
+    { status: 'completed', project_value: 150, paid_value: 150, financial_event_count: 0 },
+    { status: 'completed', project_value: 900, paid_value: 900, financial_event_count: 0 },
+  ]);
+  assert.equal(stats.faturamentoTotal, 1050);
+  assert.equal(stats.valorPendente, 0);
+  assert.match(projectsPage, /eventCount > 0 \|\| baseline > 0/);
+});
+
+test('project deletion preserves financial history and is owner-scoped', () => {
+  assert.match(crud, /SELECT id FROM projects WHERE id = \? AND user_id = \?/);
+  assert.match(crud, /project_financial_events WHERE project_id = \?/);
+  assert.match(crud, /project_financial_baselines WHERE project_id = \?/);
+  assert.match(crud, /Number\(project\.rows\[0\]\.paid_value\) > 0/);
+  assert.match(crud, /Projeto com historico financeiro nao pode ser excluido/);
+  assert.match(crud, /DELETE FROM projects WHERE id = \? AND user_id = \?/);
+  assert.match(projectsPage, /error instanceof Error \? error\.message/);
 });

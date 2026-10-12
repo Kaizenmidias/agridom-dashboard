@@ -305,10 +305,23 @@ router.get('/projects/:id/financial-history', authenticateToken, requireModuleAc
 
 router.delete('/projects/:id', authenticateToken, requireModuleAccess('can_access_projects'), async (req, res) => {
   try {
-    await getQuery(req)('DELETE FROM projects WHERE id = ?', [req.params.id]);
+    const query = getQuery(req);
+    const project = await query('SELECT id, paid_value FROM projects WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    if (!project.rows?.length) return res.status(404).json({ error: 'Projeto nao encontrado' });
+    const financial = await query(
+      `SELECT
+         (SELECT COUNT(*) FROM project_financial_events WHERE project_id = ?) AS event_count,
+         (SELECT COUNT(*) FROM project_financial_baselines WHERE project_id = ?) AS baseline_count`,
+      [req.params.id, req.params.id]
+    );
+    const counts = financial.rows?.[0] || {};
+    if (Number(project.rows[0].paid_value) > 0 || Number(counts.event_count) > 0 || Number(counts.baseline_count) > 0) {
+      return res.status(409).json({ error: 'Projeto com historico financeiro nao pode ser excluido' });
+    }
+    await query('DELETE FROM projects WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
     res.json({ message: 'Projeto excluido com sucesso' });
   } catch (error) {
-    console.error('Erro ao excluir projeto:', error);
+    console.error('Erro ao excluir projeto:', { projectId: req.params.id, code: error.code, message: error.message });
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });

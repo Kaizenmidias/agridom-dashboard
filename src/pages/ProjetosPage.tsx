@@ -22,7 +22,13 @@ export const calculateProjectStats = (projects: Project[]) => ({
   emAndamento: projects.filter((project) => project.status === 'active' || project.status === 'paused').length,
   finalizados: projects.filter((project) => project.status === 'completed').length,
   faturamentoTotal: projects.filter((project) => project.status !== 'cancelled')
-    .reduce((total, project) => total + projectValue(project.financial_legacy_baseline) + projectValue(project.financial_event_total), 0),
+    .reduce((total, project) => {
+      const baseline = projectValue(project.financial_legacy_baseline);
+      const eventTotal = projectValue(project.financial_event_total);
+      const eventCount = projectValue(project.financial_event_count);
+      const recognized = baseline + eventTotal;
+      return total + (eventCount > 0 || baseline > 0 ? recognized : projectValue(project.paid_value));
+    }, 0),
   valorPendente: projects
     .filter((project) => project.status !== 'cancelled')
     .reduce((total, project) => total + Math.max(0, projectValue(project.project_value) - projectValue(project.paid_value)), 0),
@@ -101,7 +107,7 @@ const ProjetosPage = () => {
       console.error('Erro ao excluir projeto:', error);
       toast({
         title: "Erro",
-        description: "Erro ao excluir o projeto.",
+        description: error instanceof Error ? error.message : "Erro ao excluir o projeto.",
         variant: "destructive"
       });
     }
