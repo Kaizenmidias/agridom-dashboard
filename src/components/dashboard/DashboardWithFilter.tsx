@@ -2,6 +2,7 @@
 import { addDays, format, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
@@ -40,37 +41,10 @@ const DashboardWithFilter: React.FC = () => {
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
 
   // Estados para dados reais do dashboard
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>({
-    projects: {
-      total_projects: 0,
-      active_projects: 0,
-      completed_projects: 0,
-      paused_projects: 0,
-      total_project_value: 0,
-      total_paid_value: 0
-    },
-    expenses: {
-      total_expenses: 0,
-      total_expenses_amount: 0,
-      expense_categories: 0
-    },
-    previous_period: {
-      revenue: 0,
-      expenses: 0,
-      receivable: 0
-    },
-    current_period: {
-      revenue: 0,
-      expenses: 0,
-      profit: 0,
-      receivable: 0
-    },
-    current_receivable: 0,
-    revenue_by_month: [],
-    expenses_by_category: [],
-    recent_projects: []
-  });
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [lastFilters, setLastFilters] = useState<Parameters<typeof dashboardAPI.getBackendDashboardStats>[0]>({});
   
   // Dados financeiros calculados a partir dos dados reais
   const currentMonthData = {
@@ -101,6 +75,8 @@ const DashboardWithFilter: React.FC = () => {
   }) => {
     try {
       setLoading(true);
+      setDashboardError(null);
+      setLastFilters(filters || {});
 
       if (!isAuthenticated || !user) {
         setDashboardStats(null)
@@ -116,11 +92,12 @@ const DashboardWithFilter: React.FC = () => {
     } catch (error: any) {
       console.error('Erro ao carregar dados do dashboard:', error);
 
-      if (error?.message?.includes('Token') || error?.message?.includes('token')) {
-        setDashboardStats(null)
-      } else {
-        toast.error('Erro ao carregar dados do dashboard');
-      }
+      setDashboardStats(null);
+      const message = error?.message?.includes('Token') || error?.message?.includes('token')
+        ? 'Sua sessão expirou. Faça login novamente.'
+        : 'Não foi possível carregar as estatísticas. Tente novamente.';
+      setDashboardError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -501,8 +478,22 @@ const DashboardWithFilter: React.FC = () => {
 
 
 
+      {dashboardError && !loading && (
+        <Card role="alert" className="border-destructive/50">
+          <CardContent className="flex items-center justify-between gap-4 p-4">
+            <div>
+              <p className="font-medium">Não foi possível carregar as estatísticas</p>
+              <p className="text-sm text-muted-foreground">{dashboardError}</p>
+            </div>
+            <Button type="button" onClick={() => loadDashboardData(lastFilters)}>
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Resumo Financeiro */}
-        {loading ? (
+        {dashboardError ? null : loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((i) => (
               <Card key={i}>
@@ -528,7 +519,7 @@ const DashboardWithFilter: React.FC = () => {
         )}
 
       {/* Gráfico de Relatório */}
-      <Card>
+      {!dashboardError && <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Relatório de {getMetricLabel()}</CardTitle>
           <div className="w-full sm:w-auto sm:min-w-[150px]">
@@ -599,10 +590,10 @@ const DashboardWithFilter: React.FC = () => {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Cards de Métricas Rápidas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {!dashboardError && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Projetos Ativos</CardTitle>
@@ -670,7 +661,7 @@ const DashboardWithFilter: React.FC = () => {
             </p>
           </CardContent>
         </Card>
-      </div>
+      </div>}
     </div>
   );
 };

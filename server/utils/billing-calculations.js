@@ -51,10 +51,25 @@ function calculateAnnualMonthlyAmount(annualAmount) {
  * @param {string} date - Data no formato YYYY-MM-DD
  * @returns {number} Dia da semana (0 = Domingo, 1 = Segunda, ..., 6 = Sábado)
  */
+function getCalendarDateParts(date) {
+  if (date instanceof Date) {
+    if (Number.isNaN(date.getTime())) return null;
+    return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
+  }
+  if (typeof date !== 'string') return null;
+  const match = date.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const [year, month, day] = match.slice(1).map(Number);
+  const parsed = new Date(year, month - 1, day);
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null;
+  return { year, month, day };
+}
+
 function getDayOfWeekFromDate(date) {
   // Criar a data no fuso horário local para evitar problemas de UTC
-  const [year, month, day] = date.split('-').map(Number);
-  return new Date(year, month - 1, day).getDay();
+  const parts = getCalendarDateParts(date);
+  if (!parts) return null;
+  return new Date(parts.year, parts.month - 1, parts.day).getDay();
 }
 
 /**
@@ -82,14 +97,16 @@ function calculateMonthlyAmount(
     case 'unica':
       // Para despesas únicas, só contar se a data está no mês/ano alvo
       // Usar parsing manual para evitar problemas de fuso horário
-      const [expenseYear, expenseMonth] = date.split('-').map(Number);
+      const expenseDate = getCalendarDateParts(date);
+      if (!expenseDate) return 0;
       
-      if (expenseYear === year && expenseMonth === month) {
+      if (expenseDate.year === year && expenseDate.month === month) {
         return numericAmount;
       }
       return 0;
     case 'semanal':
       const dayOfWeek = getDayOfWeekFromDate(date);
+      if (dayOfWeek === null) return 0;
       return calculateWeeklyMonthlyAmount(numericAmount, year, month, dayOfWeek);
     case 'mensal':
       // Despesas mensais devem aparecer em todos os meses
@@ -100,9 +117,10 @@ function calculateMonthlyAmount(
     default:
       // Para tipos desconhecidos, tratar como única
       // Usar parsing manual para evitar problemas de fuso horário
-      const [unknownExpenseYear, unknownExpenseMonth] = date.split('-').map(Number);
+      const unknownExpenseDate = getCalendarDateParts(date);
+      if (!unknownExpenseDate) return 0;
       
-      if (unknownExpenseYear === year && unknownExpenseMonth === month) {
+      if (unknownExpenseDate.year === year && unknownExpenseDate.month === month) {
         return numericAmount;
       }
       return 0;
@@ -153,6 +171,7 @@ module.exports = {
   getWeekdayOccurrencesInMonth,
   calculateWeeklyMonthlyAmount,
   calculateAnnualMonthlyAmount,
+  getCalendarDateParts,
   getDayOfWeekFromDate,
   calculateMonthlyAmount,
   calculateTotalMonthlyExpenses,
