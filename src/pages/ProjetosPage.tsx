@@ -27,8 +27,8 @@ export const calculateProjectStats = (projects: Project[]) => ({
     .filter((project) => project.status === 'completed')
     .reduce((total, project) => total + projectValue(project.project_value), 0),
   valorPendente: projects
-    .filter((project) => project.status === 'active' || project.status === 'paused')
-    .reduce((total, project) => total + projectValue(project.project_value), 0),
+    .filter((project) => project.status !== 'cancelled')
+    .reduce((total, project) => total + Math.max(0, projectValue(project.project_value) - projectValue(project.paid_value)), 0),
 });
 
 const ProjetosPage = () => {

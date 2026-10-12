@@ -211,6 +211,7 @@ router.put('/projects/:id', authenticateToken, requireModuleAccess('can_access_p
         await connection.execute(
           `UPDATE projects
            SET status = 'completed',
+               paid_value = project_value,
                completion_date = COALESCE(completion_date, ?),
                updated_at = CURRENT_TIMESTAMP
            WHERE id = ?`,
@@ -568,7 +569,16 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
     const totalExpensesAmount = calculateTotalMonthlyExpenses(mappedExpenses, year, month);
     const totalProjectValue = projects.reduce((sum, project) => sum + parseNumber(project.project_value), 0);
     const totalPaidValue = projects.reduce((sum, project) => sum + parseNumber(project.paid_value), 0);
-    const previousRevenue = (previousProjectsResult.rows || []).reduce((sum, project) => sum + parseNumber(project.paid_value), 0);
+    const completedProjects = projects.filter((project) => project.status === 'completed');
+    const currentRevenue = completedProjects
+      .filter((project) => project.completion_date >= currentStart && project.completion_date <= currentEnd)
+      .reduce((sum, project) => sum + parseNumber(project.project_value), 0);
+    const previousRevenue = (previousProjectsResult.rows || [])
+      .filter((project) => project.status === 'completed' && project.completion_date >= prevStart && project.completion_date <= prevEnd)
+      .reduce((sum, project) => sum + parseNumber(project.project_value), 0);
+    const currentReceivable = projects
+      .filter((project) => project.status !== 'cancelled')
+      .reduce((sum, project) => sum + Math.max(0, parseNumber(project.project_value) - parseNumber(project.paid_value)), 0);
 
     const categoryMap = new Map();
     mappedExpenses.forEach((expense) => {
@@ -603,13 +613,13 @@ router.get('/dashboard/stats', authenticateToken, async (req, res) => {
         receivable: 0,
       },
       current_period: {
-        revenue: totalPaidValue,
+        revenue: currentRevenue,
         expenses: totalExpensesAmount,
-        profit: totalPaidValue - totalExpensesAmount,
-        receivable: Math.max(0, totalProjectValue - totalPaidValue),
+        profit: currentRevenue - totalExpensesAmount,
+        receivable: currentReceivable,
       },
-      current_receivable: Math.max(0, totalProjectValue - totalPaidValue),
-      revenue_by_month: [{ month: `${year}-${String(month).padStart(2, '0')}`, revenue: totalPaidValue, expenses: totalExpensesAmount }],
+      current_receivable: currentReceivable,
+      revenue_by_month: [{ month: `${year}-${String(month).padStart(2, '0')}`, revenue: currentRevenue, expenses: totalExpensesAmount }],
       expenses_by_category: Array.from(categoryMap.values()),
       recent_projects: recentProjects.rows || [],
     });

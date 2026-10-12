@@ -19,8 +19,10 @@ const calculateStats = (projects) => ({
     .filter((project) => project.status === 'completed')
     .reduce((total, project) => total + (Number.isFinite(Number(project.project_value)) ? Number(project.project_value) : 0), 0),
   valorPendente: projects
-    .filter((project) => project.status === 'active' || project.status === 'paused')
-    .reduce((total, project) => total + (Number.isFinite(Number(project.project_value)) ? Number(project.project_value) : 0), 0),
+    .filter((project) => project.status !== 'cancelled')
+    .reduce((total, project) => total + Math.max(0,
+      (Number.isFinite(Number(project.project_value)) ? Number(project.project_value) : 0) -
+      (Number.isFinite(Number(project.paid_value)) ? Number(project.paid_value) : 0)), 0),
 });
 
 test('project completion stores a MySQL DATE compatible value', () => {
@@ -37,7 +39,7 @@ test('project completion stores a MySQL DATE compatible value', () => {
 test('project completion preserves financial values and avoids revenue side effects', () => {
   assert.match(completionBranch, /UPDATE projects/);
   assert.match(completionBranch, /SET status = 'completed'/);
-  assert.doesNotMatch(completionBranch, /paid_value\s*=/);
+  assert.match(completionBranch, /paid_value = project_value/);
   assert.doesNotMatch(completionBranch, /INSERT INTO\s+(expenses|revenues|payments|cash|parcels)/i);
   assert.doesNotMatch(frontendCompleteHandler, /paid_value/);
 });
@@ -73,9 +75,9 @@ test('project indicators use total value by operational status, not paid value',
     { status: 'cancelled', project_value: 400, paid_value: 100 },
   ]);
 
-  assert.deepEqual(stats, { emAndamento: 2, finalizados: 2, faturamentoTotal: 1600, valorPendente: 1500 });
+  assert.deepEqual(stats, { emAndamento: 2, finalizados: 2, faturamentoTotal: 1600, valorPendente: 2150 });
   assert.match(projectsPage, /faturamentoTotal: projects[\s\S]+filter\(\(project\) => project\.status === 'completed'\)/);
-  assert.match(projectsPage, /valorPendente: projects[\s\S]+filter\(\(project\) => project\.status === 'active' \|\| project\.status === 'paused'\)/);
+  assert.match(projectsPage, /valorPendente: projects[\s\S]+filter\(\(project\) => project\.status !== 'cancelled'\)/);
 });
 
 test('project indicators tolerate null and invalid project values', () => {
@@ -85,7 +87,7 @@ test('project indicators tolerate null and invalid project values', () => {
     { status: 'completed', project_value: 300, paid_value: null },
   ]);
 
-  assert.deepEqual(stats, { emAndamento: 1, finalizados: 2, faturamentoTotal: 300, valorPendente: 0 });
+  assert.deepEqual(stats, { emAndamento: 1, finalizados: 2, faturamentoTotal: 300, valorPendente: 300 });
   assert.match(projectsPage, /Number\.isFinite\(numericValue\)/);
 });
 
@@ -94,7 +96,7 @@ test('project indicators are recalculated from the current project list after mu
   assert.deepEqual(calculateStats(initial), { emAndamento: 1, finalizados: 0, faturamentoTotal: 0, valorPendente: 900 });
 
   const completed = [{ status: 'completed', project_value: 900, paid_value: 0 }];
-  assert.deepEqual(calculateStats(completed), { emAndamento: 0, finalizados: 1, faturamentoTotal: 900, valorPendente: 0 });
+  assert.deepEqual(calculateStats(completed), { emAndamento: 0, finalizados: 1, faturamentoTotal: 900, valorPendente: 900 });
   assert.match(projectsPage, /const stats = calculateProjectStats\(projetos\)/);
   assert.match(projectsPage, /setProjetos\(prev => prev\.map/);
   assert.match(projectsPage, /await loadProjects\(\)/);
