@@ -1,6 +1,10 @@
 export const parseCurrencyBR = (value: string | number | null | undefined): number => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  const normalized = String(value ?? '').replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.').trim();
+  const raw = String(value ?? '').replace(/R\$\s?/g, '').trim();
+  const hasComma = raw.includes(',');
+  const normalized = hasComma
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw.replace(/\.(?=\d{3}(?:\D|$))/g, '');
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 };

@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const typescript = require('typescript');
 
 const root = path.resolve(__dirname, '../..');
 const migration = fs.readFileSync(path.join(root, 'database/migrations/20261012_project_financial_events.sql'), 'utf8');
@@ -52,6 +53,18 @@ test('dashboard excludes cancelled financial events and frontend uses Brazilian 
   assert.match(currency, /toLocaleString\('pt-BR'/);
   assert.match(currency, /replace\(\/\\\.\/g, ''\)/);
   assert.match(currency, /maskCurrencyBR/);
+});
+
+test('currency conversion does not multiply real-valued API data by 100', () => {
+  const source = fs.readFileSync(path.join(root, 'src/lib/currency.ts'), 'utf8');
+  const compiled = typescript.transpileModule(source, { compilerOptions: { module: typescript.ModuleKind.CommonJS } }).outputText;
+  const module = { exports: {} };
+  new Function('exports', 'module', compiled)(module.exports, module);
+
+  assert.equal(module.exports.formatCurrencyBR(900), 'R$ 900,00');
+  assert.equal(module.exports.formatCurrencyBR(900.00), 'R$ 900,00');
+  assert.equal(module.exports.formatCurrencyBR('900.00'), 'R$ 900,00');
+  assert.equal(module.exports.formatCurrencyBR('150.00'), 'R$ 150,00');
 });
 
 test('payment and completion use project locks and do not exceed the contract value', () => {
