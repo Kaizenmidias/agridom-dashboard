@@ -34,6 +34,8 @@ import { useToast } from "@/hooks/use-toast";
 import { prospectingAPI } from "@/api/prospecting";
 import { emailIntegrationsAPI } from "@/api/email-integrations";
 import { buildApiUrl } from "@/config/api";
+import { GmailIntegrationPanel } from "@/components/integrations/GmailIntegrationPanel";
+import { useAuth } from "@/contexts/AuthContext";
 
 async function readAiResponse(response: Response) {
   const contentType = response.headers.get("content-type") || "";
@@ -280,6 +282,7 @@ function buildPayload(provider: IntegrationProvider, draft: IntegrationDraft) {
 
 export function IntegrationLibrary() {
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -512,6 +515,7 @@ export function IntegrationLibrary() {
       </Alert>
 
       <AiProvidersPanel />
+      {isAdmin ? <GmailIntegrationPanel /> : null}
 
       {loadError ? (
         <Alert variant="destructive">

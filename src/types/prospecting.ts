@@ -23,6 +23,22 @@ export type DuplicateStatus = "new" | "duplicate" | "possible_duplicate";
 
 export type IntegrationProvider = "apify" | "casa_dos_dados" | "whatsapp_validator" | "smtp";
 
+export type GmailConnectionStatus = "disconnected" | "connecting" | "connected" | "reconnect_required" | "error";
+
+export interface GmailConnection {
+  id: number;
+  provider: "google_gmail";
+  emailAddress: string | null;
+  displayName: string | null;
+  status: GmailConnectionStatus;
+  scopesGranted: string[] | null;
+  connectedAt: string | null;
+  lastRefreshedAt: string | null;
+  lastErrorCode: string | null;
+  disconnectedAt: string | null;
+  hasRefreshToken: boolean;
+}
+
 export type IntegrationStatus =
   | "not_configured"
   | "configured"
