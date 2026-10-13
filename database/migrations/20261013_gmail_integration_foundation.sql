@@ -42,8 +42,13 @@ CREATE TABLE IF NOT EXISTS gmail_connections (
 
 CREATE TABLE IF NOT EXISTS gmail_oauth_states (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  scope_key VARCHAR(191) NOT NULL DEFAULT 'default',
+  pending_scope_key VARCHAR(191) NULL,
   state_hash CHAR(64) NOT NULL,
   initiated_by_user_id BIGINT UNSIGNED NOT NULL,
+  intent ENUM('initial', 'reconnect') NOT NULL DEFAULT 'initial',
+  base_connection_id BIGINT UNSIGNED NULL,
+  base_connection_updated_at DATETIME NULL,
   code_verifier_ciphertext TEXT NULL,
   code_verifier_iv VARCHAR(64) NULL,
   code_verifier_auth_tag VARCHAR(64) NULL,
@@ -52,6 +57,9 @@ CREATE TABLE IF NOT EXISTS gmail_oauth_states (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_gmail_oauth_state_hash (state_hash),
+  UNIQUE KEY uq_gmail_oauth_pending_scope (scope_key, pending_scope_key),
   KEY idx_gmail_oauth_state_expiry (expires_at, consumed_at),
+  KEY idx_gmail_oauth_base_connection (base_connection_id),
+  CONSTRAINT fk_gmail_oauth_state_connection FOREIGN KEY (base_connection_id) REFERENCES gmail_connections(id) ON DELETE SET NULL,
   CONSTRAINT fk_gmail_oauth_state_user FOREIGN KEY (initiated_by_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
