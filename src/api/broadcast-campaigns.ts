@@ -20,6 +20,8 @@ export type Campaign = {
   id: number;
   name: string;
   status: string;
+  created_at?: string | null;
+  updated_at?: string | null;
   scheduled_at?: string | null;
   cadence_seconds?: number;
   account_name?: string;
