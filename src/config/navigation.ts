@@ -54,7 +54,7 @@ export const navigationItems: NavigationItem[] = [
       { label: "Prospecção", icon: Search, path: "/comercial/prospeccao", legacyPaths: ["/prospeccao"], requiredPermissions: ["can_access_crm"] },
       { label: "Métricas", icon: ChartNoAxesCombined, path: "/comercial/metricas", requiredPermissions: ["can_access_crm"] },
       { label: "Disparar", icon: Send, path: "/comercial/disparar", requiredPermissions: ["can_access_crm"] },
-      { label: "E-mail Marketing", icon: Mail, path: "/comercial/disparar", requiredPermissions: ["can_access_crm"] },
+      { label: "E-mail Marketing", icon: Mail, path: "/comercial/email-marketing", requiredPermissions: ["can_access_crm"] },
       { label: "Automações", icon: Workflow, path: "/comercial/automacoes", requiredPermissions: ["can_access_crm"] },
       { label: "Agenda", icon: CalendarDays, path: "/comercial/agenda", requiredPermissions: ["can_access_crm"] },
       { label: "Diagnóstico", icon: ScanSearch, path: "/comercial/diagnostico", requiredPermissions: ["can_access_crm"] },

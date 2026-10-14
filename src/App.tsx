@@ -29,6 +29,7 @@ import { BroadcastPage, NewBroadcastPage, BroadcastDetailPage } from "./pages/co
 import { ChatsPage } from "./pages/commercial/ChatsPage";
 import { ConnectedNumbersPage } from "./pages/commercial/ConnectedNumbersPage";
 import { WebsiteDiagnosticsPage } from "./pages/commercial/WebsiteDiagnosticsPage";
+import EmailMarketingPage from "./pages/commercial/EmailMarketingPage";
 import { AgentDetailPage } from "./pages/ai/AgentDetailPage";
 import { AssistantsPage, ContentsPage, NewAgentPage, PromptsPage } from "./pages/ai/AiPlaceholders";
 import { AgentsManagementPage as AgentsPage } from "./pages/ai/AgentsManagementPage";
@@ -69,6 +70,7 @@ const routes = [
   { path: "/comercial/prospeccao", element: <ProspectingPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/metricas", element: <MetricsPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/disparar", element: <BroadcastPage />, protected: true, restrictedForRicardo: false },
+  { path: "/comercial/email-marketing", element: <EmailMarketingPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/disparar/novo", element: <NewBroadcastPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/disparar/:id/editar", element: <NewBroadcastPage />, protected: true, restrictedForRicardo: false },
   { path: "/comercial/disparar/:id", element: <BroadcastDetailPage />, protected: true, restrictedForRicardo: false },
