@@ -45,6 +45,12 @@ async function request<T>(endpoint: string, init?: RequestInit): Promise<T> {
 }
 
 export const prospectionAPI = {
+  getEmailConsent(id: number) {
+    return request<{ consent: { email_marketing_consent: number; email_marketing_consent_at?: string | null; email_marketing_consent_source?: string | null; suppressed: number }; history: Array<{ id: number; consented: number; recorded_at: string; source: string; legal_basis?: string | null; note?: string | null }> }>(`/prospects/${id}/email-consent`)
+  },
+  updateEmailConsent(id: number, payload: { consented: boolean; source: string; legal_basis?: string; note?: string; resubscribe?: boolean }) {
+    return request<{ success: boolean; consented: boolean; resubscribe: boolean }>(`/prospects/${id}/email-consent`, { method: 'PUT', body: JSON.stringify(payload) })
+  },
   bootstrap() {
     return request<ProspectionBootstrap>('/bootstrap')
   },

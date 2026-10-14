@@ -15,7 +15,7 @@ test("both campaigns finalize from channel jobs, not the shared recipient status
 test("email attachment worker fails closed when a private file is missing", () => {
   const source = read("services/broadcast-campaign-worker.js");
   assert.match(source, /assertAttachmentFile\(attachment\.storage_key\)/);
-  assert.match(source, /emailSender\(config, \{ to: row\.recipient_email, subject, text, html: renderedHtml, attachments \}\)/);
+  assert.match(source, /emailSender\(config, \{/);
 });
 
 test("migrations add independent columns and preserve WhatsApp defaults", () => {

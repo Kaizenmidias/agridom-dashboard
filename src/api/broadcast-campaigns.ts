@@ -38,6 +38,7 @@ export type Campaign = {
   channels?: Array<"whatsapp" | "email">;
   channel?: "whatsapp" | "email" | "both";
   email_provider_id?: number | null;
+  email_provider?: "smtp" | "gmail";
   email_subject?: string | null;
   email_body_text?: string | null;
   idempotency_key?: string | null;
@@ -54,6 +55,10 @@ export type Audience = {
   with_phone: number;
   without_phone: number;
   potentially_duplicate: number;
+  email_eligible?: number;
+  email_unsubscribed?: number;
+  email_no_consent?: number;
+  email_invalid?: number;
   totalLeads?: number;
   withWhatsApp?: number;
   withEmail?: number;
@@ -73,7 +78,7 @@ export type Audience = {
   }>;
 };
 export const broadcastAPI = {
-  emailProviders: () => request<{ providers: Array<{ id: number; name?: string; from_email?: string; status: string }> }>("/email-providers"),
+  emailProviders: () => request<{ providers: Array<{ id: number | string; provider?: "smtp" | "gmail"; name?: string; from_email?: string; status: string }> }>("/email-providers"),
   signature: () => request<{ signature: { id: number; html_content: string; text_content: string } | null }>("/email-signature"),
   saveSignature: (html_content: string) => request<{ signature: { id: number; html_content: string; text_content: string } }>("/email-signature", { method: "PUT", body: JSON.stringify({ html_content }) }),
   list: () => request<{ campaigns: Campaign[] }>("/"),

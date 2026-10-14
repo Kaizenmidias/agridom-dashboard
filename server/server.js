@@ -64,6 +64,7 @@ const conversationsRouter = require('./routes/conversations');
 const agentsRouter = require('./routes/agents');
 const aiRouter = require('./routes/ai');
 const broadcastCampaignsRouter = require('./routes/broadcast-campaigns');
+const broadcastUnsubscribeRouter = require('./routes/broadcast-unsubscribe');
 const websiteDiagnosticsRouter = require('./routes/website-diagnostics');
 
 
@@ -88,6 +89,7 @@ app.use('/api/conversations', conversationsRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/broadcast-campaigns', broadcastCampaignsRouter);
+app.use('/api/broadcast-unsubscribe', broadcastUnsubscribeRouter);
 app.use('/api/website-diagnostics', websiteDiagnosticsRouter);
 
 

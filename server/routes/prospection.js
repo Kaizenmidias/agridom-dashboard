@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
-const { requireCommercialAccess } = require('../middleware/commercial-access');
+const { requireCommercialAccess, requireCommercialAdmin } = require('../middleware/commercial-access');
 const { getPool } = require('../config/database');
 const { dispatchDomainEvent, requestEventContext } = require('../services/domain-events');
 const { createOrFindProspect } = require('../services/prospect-service');
@@ -18,6 +18,47 @@ const connectionQuery = async (connection, sql, params = []) => {
 
 router.use(authenticateToken);
 router.use(requireCommercialAccess);
+
+router.get('/prospects/:id/email-consent', async (req, res) => {
+  try {
+    const prospectId = Number(req.params.id);
+    const [rows] = await getPool().execute(`SELECT p.id, p.email, p.email_marketing_consent, p.email_marketing_consent_at, p.email_marketing_consent_source,
+      EXISTS(SELECT 1 FROM broadcast_email_suppressions s WHERE s.email = LOWER(TRIM(p.email))) AS suppressed
+      FROM prospects p WHERE p.id = ? AND p.owner_user_id = ? LIMIT 1`, [prospectId, req.userId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Lead nao encontrado.' });
+    const [history] = await getPool().execute(`SELECT id, consented, recorded_at, source, legal_basis, note FROM email_marketing_consent_history WHERE prospect_id = ? ORDER BY recorded_at DESC, id DESC LIMIT 50`, [prospectId]);
+    return res.json({ consent: rows[0], history });
+  } catch (error) { return res.status(500).json({ error: 'Nao foi possivel carregar o consentimento.' }); }
+});
+
+router.put('/prospects/:id/email-consent', requireCommercialAdmin, async (req, res) => {
+  const prospectId = Number(req.params.id);
+  const consented = req.body?.consented === true;
+  const source = String(req.body?.source || '').trim().slice(0, 80);
+  const legalBasis = String(req.body?.legal_basis || '').trim().slice(0, 160) || null;
+  const note = String(req.body?.note || '').trim().slice(0, 500) || null;
+  const resubscribe = req.body?.resubscribe === true;
+  if (!Number.isSafeInteger(prospectId) || !source || (consented && !legalBasis)) return res.status(400).json({ error: 'Consentimento exige origem e base legal.' });
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const [prospects] = await connection.execute('SELECT id, email FROM prospects WHERE id = ? AND owner_user_id = ? FOR UPDATE', [prospectId, req.userId]);
+    const prospect = prospects[0];
+    if (!prospect) { await connection.rollback(); return res.status(404).json({ error: 'Lead nao encontrado.' }); }
+    const email = String(prospect.email || '').trim().toLowerCase();
+    if (consented && resubscribe) {
+      await connection.execute('DELETE FROM broadcast_email_suppressions WHERE email = ?', [email]);
+    } else if (consented) {
+      const [suppressed] = await connection.execute('SELECT id FROM broadcast_email_suppressions WHERE email = ? FOR UPDATE', [email]);
+      if (suppressed[0]) { await connection.rollback(); return res.status(409).json({ error: 'DESCADASTRO_EXIGE_REAUTORIZACAO_EXPLICITA' }); }
+    }
+    await connection.execute('UPDATE prospects SET email_marketing_consent = ?, email_marketing_consent_at = IF(? = 1, UTC_TIMESTAMP(), NULL), email_marketing_consent_source = ? WHERE id = ?', [consented ? 1 : 0, consented ? 1 : 0, source, prospectId]);
+    await connection.execute('INSERT INTO email_marketing_consent_history (prospect_id, email, consented, source, legal_basis, actor_user_id, note) VALUES (?, ?, ?, ?, ?, ?, ?)', [prospectId, email, consented ? 1 : 0, source, legalBasis, req.userId, note]);
+    await connection.commit();
+    return res.json({ success: true, consented, resubscribe: resubscribe && consented });
+  } catch (error) { await connection.rollback().catch(() => {}); return res.status(500).json({ error: 'Nao foi possivel registrar o consentimento.' }); }
+  finally { connection.release(); }
+});
 
 router.get('/folders', async (req, res) => {
   try {

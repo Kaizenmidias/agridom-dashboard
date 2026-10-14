@@ -2,7 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const { authenticateToken } = require("../middleware/auth");
 const { requireCommercialAccess } = require("../middleware/commercial-access");
-const { query } = require("../config/database");
+const { getPool, query } = require("../config/database");
 const campaigns = require("../services/broadcast-campaign-service");
 const {
   materializeCampaign,
@@ -10,6 +10,7 @@ const {
 const { LIMITS, storeBuffer } = require("../services/chat-media");
 const { eligibility, summarizeAudience, normalizeCampaignChannels } = require("../services/broadcast-campaign-audience");
 const { MAX_FILE_BYTES, MAX_TOTAL_BYTES, MAX_FILES, storeAttachment, removeAttachment } = require("../services/broadcast-email-attachments");
+const { getCurrentConnection } = require("../services/gmail-oauth-repository");
 
 const router = express.Router();
 router.use(authenticateToken, requireCommercialAccess);
@@ -85,7 +86,13 @@ async function validAccount(accountId, userId) {
   return result.rows[0];
 }
 
-async function validEmailProvider(providerId) {
+async function validEmailProvider(providerId, provider = "smtp") {
+  if (String(provider).toLowerCase() === "gmail") {
+    const connection = await getCurrentConnection(getPool());
+    if (!connection || connection.status !== "connected" || !connection.email_address)
+      throw new campaigns.BroadcastCampaignError(409, "GMAIL_NOT_CONNECTED");
+    return { id: null, provider: "gmail", status: "connected", from_email: connection.email_address };
+  }
   if (providerId == null) return null;
   const id = parseId(providerId);
   if (!id) throw new campaigns.BroadcastCampaignError(400, "INVALID_EMAIL_PROVIDER");
@@ -167,13 +174,14 @@ router.post("/", async (req, res) => {
       req.userId,
     );
     if (channels.includes("whatsapp") && !account) throw new campaigns.BroadcastCampaignError(400, "Conta WhatsApp obrigatoria.");
-    const emailProvider = await validEmailProvider(req.body?.email_provider_id);
+    const emailProvider = await validEmailProvider(req.body?.email_provider_id, req.body?.email_provider);
     const campaign = await campaigns.createDraft({
       userId: req.userId,
       name: req.body?.name,
       channels,
       communicationAccountId: account?.id ?? null,
       emailProviderId: emailProvider?.id ?? null,
+      emailProvider: emailProvider?.provider || "smtp",
       cadenceSeconds: req.body?.cadence_seconds,
       idempotencyKey: req.get("Idempotency-Key"),
     });
@@ -220,7 +228,7 @@ router.put("/:id/audience", async (req, res) => {
     ];
     const rows = folderIds.length
       ? await query(
-          `SELECT DISTINCT p.id, p.business_name, p.normalized_phone, p.email
+          `SELECT DISTINCT p.id, p.business_name, p.normalized_phone, p.email, p.email_marketing_consent
       FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id JOIN prospects p ON p.id = m.prospect_id
       WHERE f.owner_user_id = ? AND m.folder_id IN (${folderIds.map(() => "?").join(",")})`,
           [req.userId, ...folderIds],
@@ -229,7 +237,7 @@ router.put("/:id/audience", async (req, res) => {
     const channels = campaign.channel === "both" ? ["whatsapp", "email"] : [campaign.channel || "whatsapp"];
     const eligible = (rows.rows || []).filter((row) => {
       const state = eligibility(row);
-      return (channels.includes("whatsapp") && state.whatsappEligible) || (channels.includes("email") && state.emailEligible);
+      return (channels.includes("whatsapp") && state.whatsappEligible) || (channels.includes("email") && state.emailEligible && Number(row.email_marketing_consent) === 1);
     });
     await query(
       "DELETE FROM broadcast_campaign_recipients WHERE campaign_id = ?",
@@ -348,17 +356,25 @@ router.get("/audience/preview", async (req, res) => {
       SUM(p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$') AS with_email,
       SUM((p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AND p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$') AS with_both,
       SUM((p.normalized_phone IS NULL OR p.normalized_phone = '') AND (p.email IS NULL OR NOT (LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'))) AS without_any_contact,
-      SUM(p.normalized_phone IN (SELECT normalized_phone FROM prospects WHERE owner_user_id = ? AND normalized_phone IS NOT NULL AND normalized_phone <> '' GROUP BY normalized_phone HAVING COUNT(*) > 1)) AS potentially_duplicate
+      SUM(p.normalized_phone IN (SELECT normalized_phone FROM prospects WHERE owner_user_id = ? AND normalized_phone IS NOT NULL AND normalized_phone <> '' GROUP BY normalized_phone HAVING COUNT(*) > 1)) AS potentially_duplicate,
+      SUM(p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$' AND p.email_marketing_consent = 1 AND NOT EXISTS (SELECT 1 FROM broadcast_email_suppressions s WHERE s.email = LOWER(TRIM(p.email)))) AS email_eligible,
+      SUM(p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$' AND EXISTS (SELECT 1 FROM broadcast_email_suppressions s WHERE s.email = LOWER(TRIM(p.email)))) AS email_unsubscribed,
+      SUM(p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$' AND COALESCE(p.email_marketing_consent, 0) <> 1 AND NOT EXISTS (SELECT 1 FROM broadcast_email_suppressions s WHERE s.email = LOWER(TRIM(p.email)))) AS email_no_consent,
+      SUM(p.email IS NULL OR NOT (LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$')) AS email_invalid
       FROM prospects p WHERE ${where}`,
       [req.userId, ...params],
     );
     const rows = await query(
-      `SELECT p.id, p.business_name, p.phone, p.normalized_phone, p.email, p.status, p.origin, p.city, p.state, p.assigned_user_id, p.created_at
+      `SELECT p.id, p.business_name, p.phone, p.normalized_phone, p.email, p.email_marketing_consent, p.email_marketing_consent_at, p.email_marketing_consent_source, EXISTS(SELECT 1 FROM broadcast_email_suppressions s WHERE s.email = LOWER(TRIM(p.email))) AS email_suppressed, p.status, p.origin, p.city, p.state, p.assigned_user_id, p.created_at
       FROM prospects p WHERE ${where} ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
       [...params, pageSize, (page - 1) * pageSize],
     );
     const totals = metrics.rows?.[0] || {};
-    const prospects = (rows.rows || []).map((row) => ({ ...row, ...eligibility(row), leadId: Number(row.id), name: row.business_name }));
+    const prospects = (rows.rows || []).map((row) => {
+      const state = eligibility(row);
+      const emailClassification = !state.emailEligible ? "invalid_email" : Number(row.email_suppressed) === 1 ? "unsubscribed" : Number(row.email_marketing_consent) !== 1 ? "no_consent" : "eligible";
+      return { ...row, ...state, emailClassification, leadId: Number(row.id), name: row.business_name };
+    });
     res.json({
       total: Number(totals.total || 0),
       with_phone: Number(totals.with_phone || 0),
@@ -367,6 +383,10 @@ router.get("/audience/preview", async (req, res) => {
       without_any_contact: Number(totals.without_any_contact || 0),
       without_phone: Number(totals.without_phone || 0),
       potentially_duplicate: Number(totals.potentially_duplicate || 0),
+      email_eligible: Number(totals.email_eligible || 0),
+      email_unsubscribed: Number(totals.email_unsubscribed || 0),
+      email_no_consent: Number(totals.email_no_consent || 0),
+      email_invalid: Number(totals.email_invalid || 0),
       totalLeads: Number(totals.total || 0),
       withWhatsApp: Number(totals.with_phone || 0),
       withEmail: Number(totals.with_email || 0),
@@ -419,7 +439,14 @@ router.get("/email-signature", async (req, res) => {
 router.get("/email-providers", async (req, res) => {
   try {
     const result = await query("SELECT id, provider, status, configuration_metadata FROM integration_providers WHERE provider = 'smtp' AND status IN ('configured', 'connected') ORDER BY id");
-    res.json({ providers: (result.rows || []).map((row) => { let metadata = {}; try { metadata = typeof row.configuration_metadata === "string" ? JSON.parse(row.configuration_metadata) : row.configuration_metadata || {}; } catch {} return { id: Number(row.id), name: metadata.fromName || metadata.username || "SMTP", from_email: metadata.fromEmail || null, status: row.status }; }) });
+    const providers = (result.rows || []).map((row) => { let metadata = {}; try { metadata = typeof row.configuration_metadata === "string" ? JSON.parse(row.configuration_metadata) : row.configuration_metadata || {}; } catch {} return { id: Number(row.id), provider: "smtp", name: metadata.fromName || metadata.username || "SMTP", from_email: metadata.fromEmail || null, status: row.status }; });
+    try {
+      const gmail = await getCurrentConnection(getPool());
+      if (gmail?.status === "connected" && gmail.email_address) providers.push({ id: "gmail", provider: "gmail", name: "Gmail", from_email: gmail.email_address, status: "connected" });
+    } catch (error) {
+      if (!/table|relation|doesn't exist/i.test(String(error?.message || ""))) throw error;
+    }
+    res.json({ providers });
   } catch (error) { errorResponse(res, error); }
 });
 
@@ -525,7 +552,11 @@ router.patch("/:id", async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "name")) values.name = req.body.name;
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "communication_account_id")) values.communicationAccountId = account?.id ?? null;
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "channels")) values.channels = req.body.channels;
-    if (Object.prototype.hasOwnProperty.call(req.body || {}, "email_provider_id")) values.emailProviderId = (await validEmailProvider(req.body.email_provider_id))?.id ?? null;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "email_provider") || Object.prototype.hasOwnProperty.call(req.body || {}, "email_provider_id")) {
+      const selected = await validEmailProvider(req.body.email_provider_id, req.body.email_provider);
+      values.emailProviderId = selected?.id ?? null;
+      values.emailProvider = selected?.provider || "smtp";
+    }
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "scheduled_at")) values.scheduledAt = req.body.scheduled_at;
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "cadence_seconds")) values.cadenceSeconds = req.body.cadence_seconds;
     const campaign = await campaigns.updateDraft(req.params.id, req.userId, values);
@@ -713,7 +744,7 @@ router.post("/:id/recipients", async (req, res) => {
           params.push(String(req.query[field]).slice(0, 100));
         }
       const result = await query(
-        `SELECT p.id, p.business_name, p.phone, p.normalized_phone, p.email FROM prospects p WHERE ${conditions.join(" AND ")} ORDER BY p.id LIMIT ${EXPLICIT_RECIPIENT_MAX}`,
+        `SELECT p.id, p.business_name, p.phone, p.normalized_phone, p.email, p.email_marketing_consent FROM prospects p WHERE ${conditions.join(" AND ")} ORDER BY p.id LIMIT ${EXPLICIT_RECIPIENT_MAX}`,
         params,
       );
       prospects = result.rows || [];
@@ -728,7 +759,7 @@ router.post("/:id/recipients", async (req, res) => {
     const eligible = prospects.filter((item) => {
       const state = eligibility(item);
       const channelEligible = campaign.channel === "email" ? state.emailEligible : campaign.channel === "both" ? state.whatsappEligible || state.emailEligible : state.whatsappEligible;
-      return channelEligible && !existingKeys.has(`${item.id}:${item.normalized_phone}`);
+      return channelEligible && (campaign.channel !== "email" || Number(item.email_marketing_consent) === 1) && !existingKeys.has(`${item.id}:${item.normalized_phone}`);
     });
     const result = await campaigns.addRecipients(
       campaign.id,
@@ -750,6 +781,7 @@ router.post("/:id/recipients", async (req, res) => {
       eligible: eligible.length,
       added: result.recipientIds.length,
       duplicates: prospects.length - eligible.length,
+      suppressed: result.suppressed || 0,
       missing_phone: 0,
       invalid_phone: 0,
     });

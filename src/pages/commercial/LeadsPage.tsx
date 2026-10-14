@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import {
   Archive,
@@ -98,6 +99,7 @@ import type {
 } from "@/types/lead";
 import { formatPhone } from "@/utils/phone";
 import { buildWhatsAppUrl } from "@/utils/whatsapp";
+import { prospectionAPI } from "@/api/prospection";
 import {
   getWebsiteDomain,
   normalizeEmail,
@@ -423,6 +425,7 @@ const emptyLeadForm = {
 };
 
 export default function LeadsPage() {
+  const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const { leads, loading, error, reload } = useLeads();
   const [sessionLeads, setSessionLeads] = useState<Lead[]>([]);
@@ -449,6 +452,11 @@ export default function LeadsPage() {
   const [citiesLoading, setCitiesLoading] = useState(false);
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
+  const [emailConsent, setEmailConsent] = useState<any>(null);
+  const [emailConsentSource, setEmailConsentSource] = useState("");
+  const [emailConsentBasis, setEmailConsentBasis] = useState("");
+  const [emailConsentNote, setEmailConsentNote] = useState("");
+  const [emailConsentLoading, setEmailConsentLoading] = useState(false);
 
   useEffect(() => {
     void commercialEntitiesAPI
@@ -837,7 +845,24 @@ export default function LeadsPage() {
   const openEditLeadDialog = (lead: Lead) => {
     setEditingLeadId(lead.id);
     setLeadForm(leadToForm(lead));
+    setEmailConsent(null);
+    if (isAdmin) void prospectionAPI.getEmailConsent(Number(lead.id)).then((result) => {
+      setEmailConsent(result);
+      setEmailConsentSource(result.consent.email_marketing_consent_source || "");
+    }).catch(() => setEmailConsent(null));
     setLeadDialogOpen(true);
+  };
+
+  const saveEmailConsent = async (consented: boolean, resubscribe = false) => {
+    if (!editingLeadId || !emailConsentSource.trim() || (consented && !emailConsentBasis.trim())) return;
+    setEmailConsentLoading(true);
+    try {
+      await prospectionAPI.updateEmailConsent(Number(editingLeadId), { consented, source: emailConsentSource, legal_basis: emailConsentBasis, note: emailConsentNote, resubscribe });
+      const result = await prospectionAPI.getEmailConsent(Number(editingLeadId));
+      setEmailConsent(result);
+      toast.success("Preferência de e-mail registrada.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível registrar a preferência."); }
+    finally { setEmailConsentLoading(false); }
   };
 
   const upsertLocalLead = (lead: Lead) => {
@@ -1692,6 +1717,12 @@ export default function LeadsPage() {
                 placeholder="contato@empresa.com"
               />
             </div>
+            {editingLeadId && isAdmin ? <div className="sm:col-span-2 rounded-md border bg-muted/30 p-4 space-y-3">
+              <div><p className="text-sm font-medium">Comunicação por e-mail</p><p className="text-xs text-muted-foreground">Consentimento explícito é necessário. Descadastros não são removidos por edição comum.</p></div>
+              {emailConsent ? <div className="grid gap-2 text-xs sm:grid-cols-3"><span>Status: {emailConsent.consent.email_marketing_consent ? "Elegível" : "Sem autorização"}</span><span>Descadastro: {emailConsent.consent.suppressed ? "Sim" : "Não"}</span><span>Registrado: {emailConsent.consent.email_marketing_consent_at || "Não registrado"}</span></div> : <p className="text-xs text-muted-foreground">Carregando status...</p>}
+              <div className="grid gap-2 sm:grid-cols-3"><Input placeholder="Origem da autorização" value={emailConsentSource} onChange={(e) => setEmailConsentSource(e.target.value)} /><Input placeholder="Base legal" value={emailConsentBasis} onChange={(e) => setEmailConsentBasis(e.target.value)} /><Input placeholder="Nota de auditoria" value={emailConsentNote} onChange={(e) => setEmailConsentNote(e.target.value)} /></div>
+              <div className="flex flex-wrap gap-2"><Button type="button" size="sm" disabled={emailConsentLoading || !emailConsentSource.trim() || !emailConsentBasis.trim()} onClick={() => void saveEmailConsent(true)}>Registrar autorização</Button><Button type="button" size="sm" variant="outline" disabled={emailConsentLoading || !emailConsentSource.trim()} onClick={() => void saveEmailConsent(false)}>Revogar autorização</Button>{emailConsent?.consent?.suppressed ? <Button type="button" size="sm" variant="outline" disabled={emailConsentLoading || !emailConsentSource.trim() || !emailConsentBasis.trim()} onClick={() => void saveEmailConsent(true, true)}>Reautorizar após descadastro</Button> : null}</div>
+            </div> : null}
             <div className="space-y-2">
               <Label htmlFor="lead-phone">Telefone</Label>
               <Input

@@ -3,16 +3,17 @@ const { getCurrentConnection } = require('./gmail-oauth-repository');
 
 const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 
-function encodeMessage({ to, subject, text, from }) {
+function encodeMessage({ to, subject, text, from, html, unsubscribeUrl }) {
+  const content = html
+    ? `Content-Type: multipart/alternative; boundary="kaizen-boundary"\r\n\r\n--kaizen-boundary\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${text}\r\n--kaizen-boundary\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${html}\r\n--kaizen-boundary--`
+    : 'Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n' + text;
   const lines = [
     `To: ${to}`,
     `From: ${from}`,
     `Subject: ${subject}`,
+    ...(unsubscribeUrl ? [`List-Unsubscribe: <${unsubscribeUrl}>`, 'List-Unsubscribe-Post: List-Unsubscribe=One-Click'] : []),
     'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: 8bit',
-    '',
-    text,
+    content,
   ];
   return Buffer.from(lines.join('\r\n'), 'utf8').toString('base64url');
 }

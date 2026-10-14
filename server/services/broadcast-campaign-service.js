@@ -1,3 +1,4 @@
+const crypto = require("node:crypto");
 const { query } = require("../config/database");
 const { channelValue, normalizeCampaignChannels, normalizeCampaignEmail } = require("./broadcast-campaign-audience");
 const { sanitizeEmailHtml, htmlToText } = require("./broadcast-email-html");
@@ -143,6 +144,7 @@ async function createDraft({
   channels,
   communicationAccountId = null,
   emailProviderId = null,
+  emailProvider = "smtp",
   cadenceSeconds = 0,
   idempotencyKey = null,
   content,
@@ -161,6 +163,9 @@ async function createDraft({
   const providerId = emailProviderId == null ? null : idOf(emailProviderId);
   if (emailProviderId != null && !providerId)
     throw new BroadcastCampaignError(400, "Provedor SMTP invalido.");
+  const provider = String(emailProvider || "smtp").trim().toLowerCase();
+  if (!["smtp", "gmail"].includes(provider))
+    throw new BroadcastCampaignError(400, "Provedor de email invalido.");
   if (idempotencyKey != null && (!key || key.length < 8)) throw new BroadcastCampaignError(400, "Idempotency-Key invalida.");
   const existing = key ? await query("SELECT id FROM broadcast_campaigns WHERE created_by_user_id = ? AND idempotency_key = ? LIMIT 1", [ownerId, key]) : { rows: [] };
   if (existing.rows?.[0]) return getCampaign(existing.rows[0].id, ownerId);
@@ -169,8 +174,8 @@ async function createDraft({
   let result;
   try {
     result = await query(
-      "INSERT INTO broadcast_campaigns (name, channel, communication_account_id, email_provider_id, cadence_seconds, status, created_by_user_id, idempotency_key) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?)",
-      [campaignName, campaignChannel, accountId, providerId, normalizeCadence(cadenceSeconds), ownerId, key],
+      "INSERT INTO broadcast_campaigns (name, channel, communication_account_id, email_provider_id, email_provider, cadence_seconds, status, created_by_user_id, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?)",
+      [campaignName, campaignChannel, accountId, providerId, provider, normalizeCadence(cadenceSeconds), ownerId, key],
     );
   } catch (error) {
     if (!key || String(error?.code || '').toUpperCase() !== 'ER_DUP_ENTRY') throw error;
@@ -195,6 +200,11 @@ async function updateDraft(id, userId, values = {}) {
   const providerId = values.emailProviderId === undefined
     ? campaign.email_provider_id
     : values.emailProviderId == null ? null : idOf(values.emailProviderId);
+  const provider = values.emailProvider === undefined
+    ? String(campaign.email_provider || "smtp")
+    : String(values.emailProvider || "smtp").trim().toLowerCase();
+  if (!["smtp", "gmail"].includes(provider))
+    throw new BroadcastCampaignError(400, "Provedor de email invalido.");
   let campaignChannel = campaign.channel;
   if (values.channels !== undefined) {
     try { campaignChannel = channelValue(values.channels); } catch { throw new BroadcastCampaignError(400, "Canal de campanha invalido."); }
@@ -210,12 +220,13 @@ async function updateDraft(id, userId, values = {}) {
   )
     throw new BroadcastCampaignError(400, "Dados da campanha invalidos.");
   await query(
-    "UPDATE broadcast_campaigns SET name = ?, channel = ?, communication_account_id = ?, email_provider_id = ?, scheduled_at = ?, cadence_seconds = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND created_by_user_id = ? AND status = 'draft'",
+    "UPDATE broadcast_campaigns SET name = ?, channel = ?, communication_account_id = ?, email_provider_id = ?, email_provider = ?, scheduled_at = ?, cadence_seconds = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND created_by_user_id = ? AND status = 'draft'",
     [
       name,
       campaignChannel,
       accountId,
       providerId,
+      provider,
       values.scheduledAt ?? campaign.scheduled_at ?? null,
       cadenceSeconds,
       campaign.id,
@@ -255,6 +266,7 @@ async function addRecipients(campaignId, userId, recipients = []) {
   if (!Array.isArray(recipients))
     throw new BroadcastCampaignError(400, "Destinatarios invalidos.");
   const added = [];
+  let suppressed = 0;
   for (const recipient of recipients) {
     const phone = normalizePhone(
       recipient.phone || recipient.recipientPhone || recipient.recipient_phone,
@@ -267,20 +279,29 @@ async function addRecipients(campaignId, userId, recipients = []) {
       );
     const prospectId =
       recipient.prospectId == null ? null : idOf(recipient.prospectId);
+    if (email) {
+      const suppressedResult = await query("SELECT id FROM broadcast_email_suppressions WHERE email = ? LIMIT 1", [email]);
+      if (suppressedResult.rows?.[0]) { suppressed += 1; continue; }
+      if (!prospectId) { suppressed += 1; continue; }
+      const consentResult = await query("SELECT email_marketing_consent FROM prospects WHERE id = ? LIMIT 1", [prospectId]);
+      if (Number(consentResult.rows?.[0]?.email_marketing_consent || 0) !== 1) { suppressed += 1; continue; }
+    }
+    const unsubscribeToken = email ? crypto.randomBytes(32).toString("hex") : null;
     const result = await query(
-      `INSERT INTO broadcast_campaign_recipients (campaign_id, prospect_id, recipient_phone, recipient_email, recipient_name)
-      VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      `INSERT INTO broadcast_campaign_recipients (campaign_id, prospect_id, recipient_phone, recipient_email, recipient_name, unsubscribe_token)
+      VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       [
         campaign.id,
         prospectId,
         phone,
         email,
         recipient.name || recipient.recipientName || null,
+        unsubscribeToken,
       ],
     );
     added.push(Number(result.insertId));
   }
-  return { campaignId: campaign.id, recipientIds: added };
+  return { campaignId: campaign.id, recipientIds: added, suppressed };
 }
 
 async function getRecipients(campaignId, userId, status) {

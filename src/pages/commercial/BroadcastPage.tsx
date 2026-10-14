@@ -525,7 +525,7 @@ export function NewBroadcastPage() {
   const [text, setText] = useState("");
   const [channels, setChannels] = useState<Array<"whatsapp" | "email">>(["whatsapp"]);
   const [emailProviderId, setEmailProviderId] = useState("");
-  const [emailProviders, setEmailProviders] = useState<Array<{ id: number; name?: string; from_email?: string; status: string }>>([]);
+  const [emailProviders, setEmailProviders] = useState<Array<{ id: number | string; provider?: "smtp" | "gmail"; name?: string; from_email?: string; status: string }>>([]);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [signature, setSignature] = useState<{ id: number; html_content: string; text_content: string } | null>(null);
@@ -606,7 +606,8 @@ export function NewBroadcastPage() {
         name,
         communication_account_id: accountId ? Number(accountId) : null,
         channels,
-        email_provider_id: emailProviderId ? Number(emailProviderId) : null,
+        email_provider: emailProviderId === "gmail" ? "gmail" : "smtp",
+        email_provider_id: emailProviderId && emailProviderId !== "gmail" ? Number(emailProviderId) : null,
         cadence_seconds:
           cadence.days * 86400 +
           cadence.hours * 3600 +
@@ -620,7 +621,8 @@ export function NewBroadcastPage() {
       name,
       communication_account_id: accountId ? Number(accountId) : null,
       channels,
-      email_provider_id: emailProviderId ? Number(emailProviderId) : null,
+      email_provider: emailProviderId === "gmail" ? "gmail" : "smtp",
+      email_provider_id: emailProviderId && emailProviderId !== "gmail" ? Number(emailProviderId) : null,
       scheduled_at: scheduled
         ? new Date(scheduled).toISOString().slice(0, 19).replace("T", " ")
         : null,
@@ -912,12 +914,16 @@ export function NewBroadcastPage() {
             )}
             {audience && (
               <>
-                <div className="grid gap-3 sm:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-5">
                   {[
                     ["Total encontrado", audience.total],
                     ["Com telefone", audience.with_phone],
                     ["Sem telefone", audience.without_phone],
                     ["Possíveis duplicados", audience.potentially_duplicate],
+                    ["Elegíveis para e-mail", audience.email_eligible || 0],
+                    ["Sem consentimento", audience.email_no_consent || 0],
+                    ["Descadastrados", audience.email_unsubscribed || 0],
+                    ["E-mails inválidos", audience.email_invalid || 0],
                   ].map(([label, value]) => (
                     <div
                       className="rounded-md border p-3"
@@ -930,6 +936,7 @@ export function NewBroadcastPage() {
                     </div>
                   ))}
                 </div>
+                <p className="text-sm font-medium">Receberão a campanha: {audience.email_eligible || 0} destinatário(s) com consentimento válido.</p>
                 <div className="overflow-x-auto rounded-md border">
                   <table className="w-full min-w-[650px] text-sm">
                     <thead className="border-b bg-muted/30 text-left">

@@ -4,6 +4,8 @@ const fs = require("node:fs/promises");
 const { resolveStoragePath } = require("./chat-media");
 const { decryptSecret } = require("./integration-crypto");
 const { validateSmtpConfig, sendSmtp } = require("./email-provider");
+const { sendGmail } = require("./gmail-provider");
+const { getCurrentConnection } = require("./gmail-oauth-repository");
 const { sanitizeEmailHtml, htmlToText } = require("./broadcast-email-html");
 const { assertAttachmentFile } = require("./broadcast-email-attachments");
 // account_status !== 'connected' remains a hard guard before any worker send.
@@ -113,7 +115,15 @@ async function materializeCampaign({ campaignId, userId, now = new Date() }) {
       code: "CAMPAIGN_RECIPIENTS_REQUIRED",
     });
   if (["email", "both"].includes(campaign.channel)) {
-    if (!campaign.email_provider_id || campaign.ep_provider !== "smtp" || !["configured", "connected"].includes(campaign.ep_status)) {
+    if (campaign.email_provider === "gmail") {
+      const gmail = await getCurrentConnection(getPool());
+      if (!gmail || gmail.status !== "connected") {
+        const error = new Error("GMAIL_NOT_CONNECTED");
+        error.status = 409;
+        error.code = "GMAIL_NOT_CONNECTED";
+        throw error;
+      }
+    } else if (!campaign.email_provider_id || campaign.ep_provider !== "smtp" || !["configured", "connected"].includes(campaign.ep_status)) {
       const error = new Error("EMAIL_SMTP_NOT_CONFIGURED");
       error.status = 409;
       error.code = "EMAIL_SMTP_NOT_CONFIGURED";
@@ -294,16 +304,18 @@ function broadcastErrorMessage(error) {
     .slice(0, 500);
 }
 
-async function executeBroadcastEmailRecipient({ connection, job, emailSender = sendSmtp } = {}) {
+async function executeBroadcastEmailRecipient({ connection, job, emailSender = sendSmtp, gmailSender = sendGmail } = {}) {
   const [rows] = await connection.execute(
     `SELECT c.*, cc.email_subject, cc.email_body_text, cc.email_html, cc.email_signature_html, cc.email_signature_text,
-      r.id AS recipient_id, r.prospect_id, r.recipient_email, r.recipient_name, r.status AS recipient_status,
-      ep.provider AS email_provider, ep.status AS email_provider_status, ep.configuration_metadata,
+      r.id AS recipient_id, r.prospect_id, r.recipient_email, r.recipient_name, r.unsubscribe_token, r.status AS recipient_status,
+      c.email_provider AS campaign_email_provider, ep.provider AS email_provider, ep.status AS email_provider_status, ep.configuration_metadata,
+      p.email_marketing_consent,
       ep.*
      FROM broadcast_campaigns c
      JOIN broadcast_campaign_contents cc ON cc.campaign_id = c.id
      JOIN broadcast_campaign_recipients r ON r.campaign_id = c.id
-     JOIN integration_providers ep ON ep.id = c.email_provider_id AND ep.provider = 'smtp'
+     LEFT JOIN prospects p ON p.id = r.prospect_id
+     LEFT JOIN integration_providers ep ON ep.id = c.email_provider_id AND ep.provider = 'smtp'
      WHERE c.id = ? AND r.id = ? LIMIT 1`,
     [job.campaign_id, job.recipient_id],
   );
@@ -311,11 +323,21 @@ async function executeBroadcastEmailRecipient({ connection, job, emailSender = s
   if (!row) throw Object.assign(new Error("BROADCAST_CONTEXT_NOT_FOUND"), { code: "BROADCAST_CONTEXT_NOT_FOUND", retryable: false });
   if (row.recipient_status !== "processing") throw Object.assign(new Error("RECIPIENT_NOT_PROCESSING"), { code: "RECIPIENT_NOT_PROCESSING", retryable: false });
   if (!row.recipient_email) throw Object.assign(new Error("RECIPIENT_EMAIL_INVALID"), { code: "RECIPIENT_EMAIL_INVALID", retryable: false });
+  if (Number(row.email_marketing_consent || 0) !== 1) {
+    await connection.execute("UPDATE broadcast_campaign_recipients SET status = 'skipped', last_error = 'EMAIL_CONSENT_REQUIRED', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [row.recipient_id]);
+    return { success: true, skipped: true };
+  }
+  const suppressedRows = await connection.execute("SELECT id FROM broadcast_email_suppressions WHERE email = ? LIMIT 1", [String(row.recipient_email).trim().toLowerCase()]);
+  if (suppressedRows[0]?.[0]) {
+    await connection.execute("UPDATE broadcast_campaign_recipients SET status = 'skipped', last_error = 'EMAIL_SUPPRESSED', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [row.recipient_id]);
+    return { success: true, skipped: true };
+  }
+  const emailProvider = row.campaign_email_provider || row.email_provider || "smtp";
   let metadata = {};
   try { metadata = typeof row.configuration_metadata === "string" ? JSON.parse(row.configuration_metadata) : row.configuration_metadata || {}; } catch { metadata = {}; }
   let secret;
   try { secret = decryptSecret({ ["secret_" + "ciphertext"]: row.sc, ["secret_" + "iv"]: row.si, ["secret_" + "auth_tag"]: row.sa }); } catch { secret = null; }
-  const config = validateSmtpConfig({ ...metadata, password: secret?.password });
+  const config = emailProvider === "smtp" ? validateSmtpConfig({ ...metadata, password: secret?.password }) : null;
   const variables = {
     nome: row.recipient_name || "",
     primeiro_nome: String(row.recipient_name || "").trim().split(/\s+/)[0] || "",
@@ -328,7 +350,11 @@ async function executeBroadcastEmailRecipient({ connection, job, emailSender = s
   const bodyHtml = sanitizeEmailHtml(resolveCampaignTemplate(row.email_html || "", variables));
   const signatureHtml = sanitizeEmailHtml(resolveCampaignTemplate(row.email_signature_html || "", variables));
   const text = resolveCampaignTemplate(row.email_body_text || htmlToText(bodyHtml), variables).trim();
-  const renderedHtml = [bodyHtml, signatureHtml].filter(Boolean).join('<hr><div>') ? [bodyHtml, signatureHtml].filter(Boolean).join('<hr><div>') + (signatureHtml ? '</div>' : '') : null;
+  const unsubscribeUrl = row.unsubscribe_token
+    ? `${String(process.env.PUBLIC_APP_URL || "").replace(/\/$/, "")}/api/broadcast-unsubscribe/${row.unsubscribe_token}`
+    : null;
+  const renderedHtml = [bodyHtml, signatureHtml, unsubscribeUrl ? `<p><a href="${unsubscribeUrl}">Descadastrar</a></p>` : ""].filter(Boolean).join('<hr><div>') ? [bodyHtml, signatureHtml, unsubscribeUrl ? `<p><a href="${unsubscribeUrl}">Descadastrar</a></p>` : ""].filter(Boolean).join('<hr><div>') + (signatureHtml ? '</div>' : '') : null;
+  const renderedText = `${text}${unsubscribeUrl ? `\n\nDescadastrar: ${unsubscribeUrl}` : ""}`;
   if (!subject || !text) throw Object.assign(new Error("EMAIL_CONTENT_EMPTY"), { code: "EMAIL_CONTENT_EMPTY", retryable: false });
   const idempotencyKey = `broadcast:${row.campaign_id}:${row.recipient_id}:email`;
   const [existingRows] = await connection.execute(
@@ -348,13 +374,15 @@ async function executeBroadcastEmailRecipient({ connection, job, emailSender = s
   let messageId = existing?.id;
   if (!messageId) {
     const [insert] = await connection.execute(
-      "INSERT INTO communication_messages (channel, direction, lead_id, idempotency_key, recipient, subject, body_text, status, provider, attempt_count) VALUES ('email', 'outbound', ?, ?, ?, ?, ?, 'sending', 'smtp', 1)",
-      [row.prospect_id || null, idempotencyKey, row.recipient_email, subject, text],
+      "INSERT INTO communication_messages (channel, direction, lead_id, idempotency_key, recipient, subject, body_text, status, provider, attempt_count) VALUES ('email', 'outbound', ?, ?, ?, ?, ?, 'sending', ?, 1)",
+      [row.prospect_id || null, idempotencyKey, row.recipient_email, subject, renderedText, emailProvider],
     );
     messageId = insert.insertId;
   }
   try {
-    const result = await emailSender(config, { to: row.recipient_email, subject, text, html: renderedHtml, attachments });
+    const result = emailProvider === "gmail"
+      ? await gmailSender(getPool(), { to: row.recipient_email, subject, text: renderedText, html: renderedHtml, unsubscribeUrl })
+      : await emailSender(config, { to: row.recipient_email, subject, text: renderedText, html: renderedHtml, attachments });
     if (!result?.messageId) throw Object.assign(new Error("EMAIL_SEND_RESULT_INVALID"), { code: "EMAIL_SEND_RESULT_INVALID", retryable: false });
     await connection.execute("UPDATE communication_messages SET status = 'sent', provider_message_id = ?, sent_at = UTC_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP WHERE id = ?", [result.messageId, messageId]);
     await connection.execute("UPDATE broadcast_campaign_recipients SET communication_message_id = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [messageId, row.recipient_id]);
@@ -539,6 +567,15 @@ async function processBroadcastJob(
           code: "EXECUTOR_NO_SUCCESS",
           retryable: false,
         });
+      if (result.skipped) {
+        await connection.execute(
+          "UPDATE broadcast_campaign_jobs SET status = 'completed', processed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL, last_error = NULL WHERE id = ?",
+          [current.id],
+        );
+        await finalizeCampaign(connection, current.campaign_id);
+        await connection.commit();
+        return { completed: true, skipped: true };
+      }
       await connection.execute(
         "UPDATE broadcast_campaign_jobs SET status = 'completed', processed_at = UTC_TIMESTAMP(), locked_at = NULL, locked_by = NULL, last_error = NULL WHERE id = ?",
         [current.id],
