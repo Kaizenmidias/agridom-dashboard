@@ -10,7 +10,7 @@ test('Gmail provider sends through mocked token refresh and Gmail API without SM
   process.env.GOOGLE_GMAIL_REDIRECT_URI = 'https://crm.example.test/api/integrations/gmail/oauth/callback';
   const envelope = encryptSecret({ refreshToken: 'refresh-token' });
   const calls = [];
-  const pool = { execute: async () => [[{ id: 1, status: 'connected', email_address: 'shared@example.test', refresh_token_ciphertext: envelope.ciphertext, refresh_token_iv: envelope.iv, refresh_token_auth_tag: envelope.authTag }]] };
+  const pool = { execute: async () => [[{ id: 1, status: 'connected', email_address: 'shared@example.test', scopes_granted: ['openid', 'email', 'https://www.googleapis.com/auth/gmail.send'], refresh_token_ciphertext: envelope.ciphertext, refresh_token_iv: envelope.iv, refresh_token_auth_tag: envelope.authTag }]] };
   const result = await sendGmail(pool, { to: 'recipient@example.test', subject: 'Subject', text: 'Body' }, {
     fetchImpl: async (url, options) => {
       calls.push({ url, options });

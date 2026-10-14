@@ -44,3 +44,10 @@ test('Gmail card is restricted by the existing admin permission context', () => 
   assert.match(library, /useAuth/);
   assert.match(library, /isAdmin \? <GmailIntegrationPanel \/> : null/);
 });
+
+test('Gmail test-send UI is available only when connected and prevents duplicate submits', () => {
+  assert.match(panel, /Enviar e-mail de teste/);
+  assert.match(panel, /sendTest\(testForm\)/);
+  assert.match(panel, /testSending/);
+  assert.match(panel, /connection\?\.emailAddress/);
+});

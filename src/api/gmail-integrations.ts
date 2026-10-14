@@ -19,4 +19,5 @@ export const gmailIntegrationsAPI = {
   start: () => request<{ authorizationUrl: string }>("/oauth/start"),
   reconnect: () => request<{ authorizationUrl: string }>("/reconnect", { method: "POST" }),
   disconnect: () => request<{ success: boolean; locallyDisconnected: boolean; revocationConfirmed: boolean; connection: null }>("/disconnect", { method: "POST" }),
+  sendTest: (payload: { to: string; subject: string; message: string }) => request<{ success: boolean; provider: string }>("/test-send", { method: "POST", body: JSON.stringify(payload) }),
 };

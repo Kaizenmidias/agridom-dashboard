@@ -1,6 +1,8 @@
 const { decryptRefreshToken, refreshAccessToken } = require('./gmail-oauth');
 const { getCurrentConnection } = require('./gmail-oauth-repository');
 
+const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+
 function encodeMessage({ to, subject, text, from }) {
   const lines = [
     `To: ${to}`,
@@ -20,6 +22,13 @@ async function sendGmail(pool, message, { fetchImpl = fetch } = {}) {
   if (!connection || connection.status !== 'connected' || !connection.refresh_token_ciphertext) {
     const error = new Error('GMAIL_NOT_CONNECTED');
     error.code = 'GMAIL_NOT_CONNECTED';
+    error.retryable = false;
+    throw error;
+  }
+  const scopes = typeof connection.scopes_granted === 'string' ? JSON.parse(connection.scopes_granted) : connection.scopes_granted;
+  if (!Array.isArray(scopes) || !scopes.includes(GMAIL_SEND_SCOPE)) {
+    const error = new Error('GMAIL_SCOPE_REQUIRED');
+    error.code = 'GMAIL_SCOPE_REQUIRED';
     error.retryable = false;
     throw error;
   }

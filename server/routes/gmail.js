@@ -6,6 +6,11 @@ const { getPool } = require('../config/database');
 const { assertAdministrativeGmailAccess, createStateMaterial, publicGmailConnection } = require('../services/gmail-connection-foundation');
 const oauth = require('../services/gmail-oauth');
 const repository = require('../services/gmail-oauth-repository');
+const { sendGmail } = require('../services/gmail-provider');
+
+const testSendByUser = new Map();
+const testSendInFlight = new Set();
+const TEST_SEND_WINDOW_MS = 60 * 1000;
 
 function createGmailRouter(deps = {}) {
   const router = express.Router();
@@ -49,6 +54,32 @@ function createGmailRouter(deps = {}) {
   router.get('/status', ...admin, async (req, res) => {
     try { assertAdministrativeGmailAccess({ userId: req.userId, commercialUser: req.commercialUser }); res.json({ connection: publicGmailConnection(await repo.getCurrentConnection(pool)) }); }
     catch (error) { res.status(400).json({ error: error.message || 'Nao foi possivel consultar o Gmail.' }); }
+  });
+
+  router.post('/test-send', ...admin, async (req, res) => {
+    try {
+      assertAdministrativeGmailAccess({ userId: req.userId, commercialUser: req.commercialUser });
+      const now = Date.now();
+      const userId = Number(req.userId);
+      const previous = testSendByUser.get(userId) || 0;
+      if (testSendInFlight.has(userId) || now - previous < TEST_SEND_WINDOW_MS) return res.status(429).json({ error: 'Aguarde um minuto antes de enviar outro e-mail de teste.' });
+      const to = String(req.body?.to || '').trim();
+      const subject = String(req.body?.subject || '').trim();
+      const text = String(req.body?.message || '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) || to.length > 320) return res.status(400).json({ error: 'Informe um destinatario valido.' });
+      if (!subject || subject.length > 200 || /[\r\n]/.test(subject)) return res.status(400).json({ error: 'Informe um assunto valido.' });
+      if (!text || text.length > 10000) return res.status(400).json({ error: 'Informe uma mensagem valida.' });
+      testSendInFlight.add(userId);
+      const result = await sendGmail(pool, { to, subject, text });
+      testSendByUser.set(userId, now);
+      testSendInFlight.delete(userId);
+      res.json({ success: true, provider: result.provider });
+    } catch (error) {
+      testSendInFlight.delete(Number(req.userId));
+      const status = error.code === 'GMAIL_SCOPE_REQUIRED' ? 409 : error.code === 'GMAIL_NOT_CONNECTED' ? 409 : 400;
+      const message = error.code === 'GMAIL_SCOPE_REQUIRED' ? 'A conta Gmail precisa ser reconectada para conceder permissao de envio.' : error.code === 'GMAIL_NOT_CONNECTED' ? 'Conecte uma conta Gmail antes de enviar o teste.' : 'Nao foi possivel enviar o e-mail de teste.';
+      res.status(status).json({ error: message });
+    }
   });
 
   router.post('/disconnect', ...admin, async (req, res) => {

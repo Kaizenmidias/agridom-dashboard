@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, ExternalLink, Loader2, Mail, RefreshCw, Unplug } from "lucide-react";
+import { CheckCircle2, ExternalLink, Loader2, Mail, RefreshCw, Send, Unplug } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { gmailIntegrationsAPI } from "@/api/gmail-integrations";
@@ -43,6 +46,9 @@ export function GmailIntegrationPanel() {
   const [busy, setBusy] = useState<"connect" | "disconnect" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testSending, setTestSending] = useState(false);
+  const [testForm, setTestForm] = useState({ to: "", subject: "", message: "" });
   const popupRef = useRef<Window | null>(null);
   const pollRef = useRef<number | null>(null);
   const pollBusyRef = useRef(false);
@@ -150,6 +156,21 @@ export function GmailIntegrationPanel() {
     }
   };
 
+  const sendTest = async () => {
+    if (testSending) return;
+    try {
+      setTestSending(true);
+      await gmailIntegrationsAPI.sendTest(testForm);
+      setTestOpen(false);
+      setTestForm({ to: "", subject: "", message: "" });
+      toast({ title: "E-mail de teste enviado", description: "O Gmail confirmou o envio da mensagem." });
+    } catch (cause) {
+      toast({ title: "Não foi possível enviar", description: cause instanceof Error ? cause.message : "Verifique a conexão Gmail e tente novamente.", variant: "destructive" });
+    } finally {
+      setTestSending(false);
+    }
+  };
+
   if (!isAdmin) return null;
 
   const status = connection?.status || "disconnected";
@@ -177,6 +198,7 @@ export function GmailIntegrationPanel() {
             {status === "reconnect_required" || status === "error" ? "Reconectar Gmail" : "Conectar Gmail"}
           </Button>
           {status === "connected" ? <Button variant="outline" onClick={() => setConfirmOpen(true)} disabled={Boolean(busy)}><Unplug className="mr-2 h-4 w-4" />Desconectar</Button> : null}
+          {status === "connected" ? <Button variant="outline" onClick={() => setTestOpen(true)} disabled={Boolean(busy) || testSending}><Send className="mr-2 h-4 w-4" />Enviar e-mail de teste</Button> : null}
           <Button variant="ghost" size="icon" onClick={() => void loadStatus()} disabled={loading || Boolean(busy)} aria-label="Atualizar status do Gmail" title="Atualizar status do Gmail"><CheckCircle2 className="h-4 w-4" /></Button>
         </div>
         {status === "connecting" ? <p className="text-xs text-muted-foreground">Aguardando a conclusão da autorização em outra guia.</p> : null}
@@ -184,6 +206,18 @@ export function GmailIntegrationPanel() {
       </CardContent>
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent><DialogHeader><DialogTitle>Desconectar Gmail?</DialogTitle><DialogDescription>{connection?.emailAddress ? `A conta ${connection.emailAddress} será desativada no CRM.` : "A conta Gmail será desativada no CRM."} A revogação no Google será informada separadamente.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancelar</Button><Button variant="destructive" onClick={() => void disconnect()} disabled={busy === "disconnect"}>{busy === "disconnect" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Desconectar</Button></DialogFooter></DialogContent>
+      </Dialog>
+      <Dialog open={testOpen} onOpenChange={setTestOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Enviar e-mail de teste</DialogTitle><DialogDescription>O envio usará exclusivamente a conta Gmail conectada.</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2"><Label>De</Label><Input value={connection?.emailAddress || ""} readOnly /></div>
+            <div className="space-y-2"><Label htmlFor="gmail-test-to">Para</Label><Input id="gmail-test-to" type="email" value={testForm.to} onChange={(event) => setTestForm((current) => ({ ...current, to: event.target.value }))} maxLength={320} /></div>
+            <div className="space-y-2"><Label htmlFor="gmail-test-subject">Assunto</Label><Input id="gmail-test-subject" value={testForm.subject} onChange={(event) => setTestForm((current) => ({ ...current, subject: event.target.value }))} maxLength={200} /></div>
+            <div className="space-y-2"><Label htmlFor="gmail-test-message">Mensagem</Label><Textarea id="gmail-test-message" value={testForm.message} onChange={(event) => setTestForm((current) => ({ ...current, message: event.target.value }))} maxLength={10000} /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setTestOpen(false)} disabled={testSending}>Cancelar</Button><Button onClick={() => void sendTest()} disabled={testSending || !testForm.to.trim() || !testForm.subject.trim() || !testForm.message.trim()}>{testSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}Enviar e-mail</Button></DialogFooter>
+        </DialogContent>
       </Dialog>
     </Card>
   );
