@@ -13,6 +13,14 @@ const navigation = fs.readFileSync(
   path.join(root, "src/config/navigation.ts"),
   "utf8",
 );
+const editor = fs.readFileSync(
+  path.join(root, "src/components/email-marketing/EmailVisualEditor.tsx"),
+  "utf8",
+);
+const sanitizer = fs.readFileSync(
+  path.join(root, "src/lib/email-html.ts"),
+  "utf8",
+);
 
 test("email marketing keeps an independent route without replacing Disparar", () => {
   assert.match(
@@ -50,10 +58,34 @@ test("composer exposes real window states and does not simulate a Gmail inbox", 
   assert.doesNotMatch(page, /gmail.*inbox|messages\.list/i);
 });
 
-test("composer sanitizes formatted HTML before persisting the draft", () => {
-  assert.match(page, /function sanitizeEmailHtml/);
-  assert.match(page, /allowedTags/);
-  assert.match(page, /\/\^\(https\?:\|mailto:\)\/i/);
+test("composer uses the visual editor and sanitizes HTML before persisting drafts", () => {
+  assert.match(page, /<EmailVisualEditor/);
+  assert.match(page, /emailHtmlToText\(safeHtml\)/);
   assert.match(page, /const safeHtml = sanitizeEmailHtml\(bodyHtml\)/);
-  assert.match(page, /email_body_text: stripHtml\(safeHtml\)/);
+  assert.match(sanitizer, /export function sanitizeEmailHtml/);
+  assert.match(sanitizer, /ALLOWED_TAGS/);
+  assert.match(sanitizer, /\^https:/);
+});
+
+test("visual editor exposes functional formatting, media, CTA, variables and previews", () => {
+  for (const command of [
+    "undo", "redo", "bold", "italic", "underline", "strikeThrough",
+    "justifyLeft", "justifyCenter", "justifyRight", "insertUnorderedList",
+    "insertOrderedList", "removeFormat",
+  ]) {
+    assert.match(editor, new RegExp(`command\\(\\"${command}\\"`));
+  }
+  assert.match(editor, /Inserir imagem/);
+  assert.match(editor, /Inserir botão/);
+  assert.match(editor, /\{\{primeiro_nome\}\}/);
+  assert.match(editor, /setPreview\("desktop"\)/);
+  assert.match(editor, /setPreview\("mobile"\)/);
+  assert.match(editor, /sandbox=""/);
+});
+
+test("drafts can be reopened without replacing their audience implicitly", () => {
+  assert.match(page, /Editar rascunho/);
+  assert.match(page, /initialCampaign\?\.email_html/);
+  assert.match(page, /broadcastAPI\.update\(initialCampaign\.id/);
+  assert.match(page, /if \(selectedFolderIds\.length\)/);
 });

@@ -270,6 +270,24 @@ function resolveCampaignTemplate(value, variables) {
     });
 }
 
+function escapeTemplateHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function resolveCampaignHtmlTemplate(value, variables) {
+  return resolveCampaignTemplate(
+    value,
+    Object.fromEntries(
+      Object.entries(variables || {}).map(([key, item]) => [key, escapeTemplateHtml(item)]),
+    ),
+  );
+}
+
 function classifyBroadcastError(error) {
   if (error?.retryable === true) return error;
   const retryableCodes = new Set([
@@ -347,8 +365,8 @@ async function executeBroadcastEmailRecipient({ connection, job, emailSender = s
     empresa: row.recipient_name || "",
   };
   const subject = resolveCampaignTemplate(row.email_subject, variables).trim();
-  const bodyHtml = sanitizeEmailHtml(resolveCampaignTemplate(row.email_html || "", variables));
-  const signatureHtml = sanitizeEmailHtml(resolveCampaignTemplate(row.email_signature_html || "", variables));
+  const bodyHtml = sanitizeEmailHtml(resolveCampaignHtmlTemplate(row.email_html || "", variables));
+  const signatureHtml = sanitizeEmailHtml(resolveCampaignHtmlTemplate(row.email_signature_html || "", variables));
   const text = resolveCampaignTemplate(row.email_body_text || htmlToText(bodyHtml), variables).trim();
   const unsubscribeUrl = row.unsubscribe_token
     ? `${String(process.env.PUBLIC_APP_URL || "").replace(/\/$/, "")}/api/broadcast-unsubscribe/${row.unsubscribe_token}`
@@ -685,6 +703,7 @@ module.exports = {
   TERMINAL_RECIPIENT_STATUSES,
   TEMPLATE_VARIABLES,
   resolveCampaignTemplate,
+  resolveCampaignHtmlTemplate,
   classifyBroadcastError,
   broadcastErrorMessage,
   safeWorkerError,

@@ -43,6 +43,7 @@ export type Campaign = {
   email_provider?: "smtp" | "gmail";
   email_subject?: string | null;
   email_body_text?: string | null;
+  email_html?: string | null;
   idempotency_key?: string | null;
 };
 export type EmailAttachment = {

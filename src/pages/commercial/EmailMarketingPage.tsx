@@ -2,21 +2,15 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ComponentType,
 } from "react";
 import {
-  AlignLeft,
   ArrowLeft,
-  Bold,
   CalendarClock,
   FileText,
   Filter,
   Inbox,
-  Italic,
-  Link2,
-  List,
   Mail,
   Maximize2,
   Menu,
@@ -29,7 +23,6 @@ import {
   Send,
   Settings2,
   ShieldCheck,
-  Underline,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -39,6 +32,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { broadcastAPI, type Campaign } from "@/api/broadcast-campaigns";
+import { EmailVisualEditor } from "@/components/email-marketing/EmailVisualEditor";
+import { emailHtmlToText, sanitizeEmailHtml } from "@/lib/email-html";
 
 type MailboxSection =
   | "campaigns"
@@ -117,43 +112,6 @@ function stripHtml(value?: string | null) {
     .trim();
 }
 
-function sanitizeEmailHtml(value: string) {
-  if (typeof window === "undefined") return value;
-  const documentNode = new DOMParser().parseFromString(value, "text/html");
-  const allowedTags = new Set([
-    "B",
-    "STRONG",
-    "I",
-    "EM",
-    "U",
-    "P",
-    "DIV",
-    "BR",
-    "UL",
-    "OL",
-    "LI",
-    "A",
-  ]);
-  [...documentNode.body.querySelectorAll("*")].forEach((element) => {
-    if (!allowedTags.has(element.tagName)) {
-      element.replaceWith(...Array.from(element.childNodes));
-      return;
-    }
-    [...element.attributes].forEach((attribute) => {
-      const keepSafeLink =
-        element.tagName === "A" &&
-        attribute.name === "href" &&
-        /^(https?:|mailto:)/i.test(attribute.value);
-      if (!keepSafeLink) element.removeAttribute(attribute.name);
-    });
-    if (element.tagName === "A") {
-      element.setAttribute("target", "_blank");
-      element.setAttribute("rel", "noopener noreferrer");
-    }
-  });
-  return documentNode.body.innerHTML;
-}
-
 function StatusBadge({ status }: { status: string }) {
   return (
     <Badge
@@ -175,6 +133,7 @@ export default function EmailMarketingPage() {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
 
   const load = useCallback(async () => {
@@ -368,6 +327,7 @@ export default function EmailMarketingPage() {
           <Button
             className="mb-5 h-12 w-fit min-w-36 justify-start rounded-2xl bg-[#BEFA33] px-5 text-zinc-950 hover:bg-[#aee82f]"
             onClick={() => {
+              setEditingCampaign(null);
               setComposerOpen(true);
               setSidebarOpen(false);
             }}
@@ -426,6 +386,10 @@ export default function EmailMarketingPage() {
               campaign={selectedCampaign}
               onBack={() => setSelectedCampaign(null)}
               onAction={runCampaignAction}
+              onEdit={() => {
+                setEditingCampaign(selectedCampaign);
+                setComposerOpen(true);
+              }}
             />
           ) : section === "suppression" ? (
             <SuppressionView />
@@ -436,7 +400,10 @@ export default function EmailMarketingPage() {
               loading={loading}
               onOpen={openCampaign}
               onRefresh={load}
-              onCompose={() => setComposerOpen(true)}
+              onCompose={() => {
+                setEditingCampaign(null);
+                setComposerOpen(true);
+              }}
             />
           )}
         </main>
@@ -446,9 +413,15 @@ export default function EmailMarketingPage() {
         <EmailComposer
           providers={providers}
           folders={folders}
-          onClose={() => setComposerOpen(false)}
+          initialCampaign={editingCampaign}
+          onClose={() => {
+            setComposerOpen(false);
+            setEditingCampaign(null);
+          }}
           onSaved={async () => {
             setComposerOpen(false);
+            setEditingCampaign(null);
+            setSelectedCampaign(null);
             setSection("drafts");
             await load();
           }}
@@ -553,10 +526,12 @@ function CampaignDetail({
   campaign,
   onBack,
   onAction,
+  onEdit,
 }: {
   campaign: Campaign;
   onBack: () => void;
   onAction: (campaign: Campaign, action: "pause" | "resume") => Promise<void>;
+  onEdit: () => void;
 }) {
   const body = stripHtml(campaign.email_body_text || campaign.text_content);
   return (
@@ -565,6 +540,11 @@ function CampaignDetail({
         <Button variant="ghost" size="icon" aria-label="Voltar para campanhas" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
+        {campaign.status === "draft" ? (
+          <Button variant="ghost" size="sm" onClick={onEdit}>
+            Editar rascunho
+          </Button>
+        ) : null}
         {campaign.status === "paused" ? (
           <Button variant="ghost" size="sm" onClick={() => void onAction(campaign, "resume")}>
             <Play className="mr-2 h-4 w-4" /> Retomar
@@ -643,32 +623,37 @@ function SuppressionView() {
 function EmailComposer({
   providers,
   folders,
+  initialCampaign,
   onClose,
   onSaved,
 }: {
   providers: Provider[];
   folders: Folder[];
+  initialCampaign: Campaign | null;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const editorRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<ComposerSize>("normal");
   const [mode, setMode] = useState<"campaign" | "individual">("campaign");
-  const [name, setName] = useState("");
-  const [providerId, setProviderId] = useState("");
-  const [subject, setSubject] = useState("");
-  const [bodyHtml, setBodyHtml] = useState("");
+  const [name, setName] = useState(initialCampaign?.name || "");
+  const [providerId, setProviderId] = useState(
+    initialCampaign?.email_provider_id ? String(initialCampaign.email_provider_id) : "",
+  );
+  const [subject, setSubject] = useState(initialCampaign?.email_subject || "");
+  const [bodyHtml, setBodyHtml] = useState(
+    initialCampaign?.email_html || initialCampaign?.email_body_text || "",
+  );
   const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
+    if (providerId) return;
     const gmail = providers.find(
       (provider) => provider.provider === "gmail" && provider.status === "connected",
     );
     if (gmail) setProviderId(String(gmail.id));
     else if (providers[0]) setProviderId(String(providers[0].id));
-  }, [providers]);
+  }, [providerId, providers]);
 
   const selectedProvider = providers.find(
     (provider) => String(provider.id) === providerId,
@@ -677,49 +662,42 @@ function EmailComposer({
     .filter((folder) => selectedFolderIds.includes(folder.id))
     .reduce((total, folder) => total + Number(folder.total || 0), 0);
 
-  const applyFormat = (command: string, value?: string) => {
-    editorRef.current?.focus();
-    document.execCommand(command, false, value);
-    setBodyHtml(editorRef.current?.innerHTML || "");
-  };
-
-  const addLink = () => {
-    const url = window.prompt("Informe uma URL iniciada por https://");
-    if (!url || !/^https:\/\//i.test(url)) return;
-    applyFormat("createLink", url);
-  };
-
   const saveDraft = async () => {
     if (mode === "individual") {
       toast.info("O envio individual ainda não possui um endpoint de produção neste módulo.");
       return;
     }
-    if (!name.trim() || !providerId || !subject.trim() || !stripHtml(bodyHtml)) {
+    if (!name.trim() || !providerId || !subject.trim() || !emailHtmlToText(bodyHtml)) {
       toast.error("Preencha nome, remetente, assunto e conteúdo.");
       return;
     }
-    if (!selectedFolderIds.length) {
+    if (!initialCampaign && !selectedFolderIds.length) {
       toast.error("Selecione ao menos uma lista de contatos.");
       return;
     }
     setSaving(true);
     try {
       const provider = providers.find((item) => String(item.id) === providerId);
-      const created = await broadcastAPI.create({
+      const campaignPayload = {
         name: name.trim(),
         channels: ["email"],
         email_provider: provider?.provider === "gmail" ? "gmail" : "smtp",
         email_provider_id: provider?.provider === "gmail" ? null : Number(providerId),
-      });
-      await broadcastAPI.audienceFolders(created.campaign.id, selectedFolderIds);
+      };
+      const campaignId = initialCampaign
+        ? (await broadcastAPI.update(initialCampaign.id, campaignPayload)).campaign.id
+        : (await broadcastAPI.create(campaignPayload)).campaign.id;
+      if (selectedFolderIds.length) {
+        await broadcastAPI.audienceFolders(campaignId, selectedFolderIds);
+      }
       const safeHtml = sanitizeEmailHtml(bodyHtml);
-      await broadcastAPI.content(created.campaign.id, {
+      await broadcastAPI.content(campaignId, {
         content_type: "text",
         email_subject: subject.trim(),
-        email_body_text: stripHtml(safeHtml),
+        email_body_text: emailHtmlToText(safeHtml),
         email_html: safeHtml,
       });
-      toast.success("Rascunho salvo com o público selecionado.");
+      toast.success(initialCampaign ? "Rascunho atualizado." : "Rascunho salvo com o público selecionado.");
       await onSaved();
     } catch (error) {
       toast.error(
@@ -866,47 +844,12 @@ function EmailComposer({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 border-b border-white/10 px-3 py-1.5">
-                  {[
-                    [Bold, "bold", "Negrito"],
-                    [Italic, "italic", "Itálico"],
-                    [Underline, "underline", "Sublinhado"],
-                    [List, "insertUnorderedList", "Lista"],
-                    [AlignLeft, "justifyLeft", "Alinhar à esquerda"],
-                  ].map(([Icon, command, label]) => (
-                    <Button
-                      key={String(command)}
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      title={String(label)}
-                      onClick={() => applyFormat(String(command))}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </Button>
-                  ))}
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Inserir link" onClick={addLink}>
-                    <Link2 className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {showPreview ? (
-                  <div className="min-h-48 flex-1 overflow-y-auto bg-white px-7 py-6 text-zinc-900">
-                    <p className="mb-1 text-xs text-zinc-500">Pré-visualização</p>
-                    <h3 className="mb-5 text-lg font-semibold">{subject || "Sem assunto"}</h3>
-                    <div className="whitespace-pre-wrap text-sm leading-6">{stripHtml(bodyHtml) || "Seu conteúdo aparecerá aqui."}</div>
-                  </div>
-                ) : (
-                  <div
-                    ref={editorRef}
-                    contentEditable
-                    suppressContentEditableWarning
-                    className="min-h-48 flex-1 overflow-y-auto px-5 py-4 text-sm leading-6 outline-none empty:before:text-zinc-600 empty:before:content-[attr(data-placeholder)]"
-                    data-placeholder="Escreva o conteúdo da campanha..."
-                    onInput={(event) => setBodyHtml(event.currentTarget.innerHTML)}
-                  />
-                )}
+                <EmailVisualEditor
+                  html={bodyHtml}
+                  subject={subject}
+                  from={selectedProvider?.from_email || selectedProvider?.name || "Conta de e-mail"}
+                  onChange={setBodyHtml}
+                />
               </div>
             )}
           </div>
@@ -919,9 +862,6 @@ function EmailComposer({
                 onClick={() => void saveDraft()}
               >
                 {saving ? "Salvando..." : "Salvar rascunho"}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowPreview((current) => !current)}>
-                {showPreview ? "Voltar ao editor" : "Pré-visualizar"}
               </Button>
               <div className="ml-auto hidden text-right sm:block">
                 <p className="text-xs text-zinc-400">{selectedCount} contatos selecionados</p>

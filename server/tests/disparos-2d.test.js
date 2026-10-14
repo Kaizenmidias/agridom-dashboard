@@ -16,11 +16,15 @@ test('DISPAROS-2D usa o serviço WhatsApp existente e mantém o worker sem Evolu
 });
 
 test('DISPAROS-2D resolve somente variáveis allowlistadas e não executa código', () => {
-  const { resolveCampaignTemplate } = require('../services/broadcast-campaign-worker');
+  const { resolveCampaignTemplate, resolveCampaignHtmlTemplate } = require('../services/broadcast-campaign-worker');
   assert.equal(resolveCampaignTemplate('Olá {{primeiro_nome}} {{empresa}}', { primeiro_nome: 'Ana', empresa: 'Kaizen' }), 'Olá Ana Kaizen');
   assert.equal(resolveCampaignTemplate('{{email}} {{nome}}', { email: 'ana@example.com' }), 'ana@example.com ');
   assert.throws(() => resolveCampaignTemplate('{{eval}}', {}), /INVALID_TEMPLATE_VARIABLE/);
   assert.equal(resolveCampaignTemplate('{{nome}}', {}), '');
+  assert.equal(
+    resolveCampaignHtmlTemplate('<p>{{nome}}</p>', { nome: '<img src=x onerror=alert(1)>' }),
+    '<p>&lt;img src=x onerror=alert(1)&gt;</p>',
+  );
 });
 
 test('DISPAROS-2D protege o contrato de receipts e mídia não validada', () => {

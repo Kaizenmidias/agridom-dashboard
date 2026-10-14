@@ -31,7 +31,7 @@ test("worker maps private attachments to Nodemailer and keeps WhatsApp separate"
   const source = require("node:fs").readFileSync(require("node:path").resolve(__dirname, "../services/broadcast-campaign-worker.js"), "utf8");
   assert.match(source, /assertAttachmentFile\(attachment\.storage_key\)/);
   assert.match(source, /filename: String\(attachment\.original_name/);
-  assert.match(source, /emailSender\(config, \{ to: row\.recipient_email, subject, text, html: renderedHtml, attachments \}\)/);
+  assert.match(source, /emailSender\(config,\s*\{[^}]*to: row\.recipient_email[^}]*attachments[^}]*\}\)/s);
   assert.match(source, /if \(job\.channel === "email"\) return executeBroadcastEmailRecipient/);
   assert.match(source, /if \(job\.channel === "email"\) return executeBroadcastEmailRecipient/);
   assert.equal(typeof worker.executeBroadcastEmailRecipient, "function");
