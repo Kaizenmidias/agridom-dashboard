@@ -117,3 +117,11 @@ test('Gmail routes are isolated from SMTP and protect all mutating operations wi
   assert.match(source, /revocationConfirmed/);
   assert.doesNotMatch(source, /sendMail|nodemailer|smtp/);
 });
+
+test('Gmail callback returns a safe opener message and the Gmail router precedes integrations router', () => {
+  const serverSource = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  const routeSource = fs.readFileSync(path.join(__dirname, '../routes/gmail.js'), 'utf8');
+  assert.ok(serverSource.indexOf("app.use('/api/integrations/gmail', gmailRouter)") < serverSource.indexOf("app.use('/api/integrations', integrationsRouter)"));
+  assert.match(routeSource, /type:'kaizen:gmail-oauth'/);
+  assert.match(routeSource, /window\.opener\.postMessage/);
+});

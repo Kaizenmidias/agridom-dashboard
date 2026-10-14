@@ -70,10 +70,20 @@ export function GmailIntegrationPanel() {
     mountedRef.current = true;
     void loadStatus();
     const onFocus = () => void loadStatus();
+    const onOAuthMessage = (event: MessageEvent<{ type?: string; status?: string }>) => {
+      if (event.origin !== window.location.origin || event.source !== popupRef.current || event.data?.type !== "kaizen:gmail-oauth") return;
+      stopPolling();
+      void loadStatus();
+      if (event.data.status === "connected") toast({ title: "Gmail conectado", description: "A conta foi autorizada com sucesso." });
+      else if (event.data.status === "cancelled") toast({ title: "Autorização cancelada", description: "A conexão Gmail anterior foi preservada." });
+      else toast({ title: "Falha na autorização Gmail", description: "A conexão anterior foi preservada. Tente novamente.", variant: "destructive" });
+    };
     window.addEventListener("focus", onFocus);
+    window.addEventListener("message", onOAuthMessage);
     return () => {
       mountedRef.current = false;
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("message", onOAuthMessage);
       if (pollRef.current) window.clearInterval(pollRef.current);
       pollRef.current = null;
       pollStartedAtRef.current = null;

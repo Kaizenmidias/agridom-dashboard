@@ -15,6 +15,7 @@ function createGmailRouter(deps = {}) {
   const admin = [authenticateToken, requireCommercialAccess, requireCommercialAdmin];
   const redirectTarget = () => process.env.GMAIL_OAUTH_RESULT_URL || '/administracao/integracoes';
   const safeRedirect = (status) => `${redirectTarget()}${redirectTarget().includes('?') ? '&' : '?'}gmail=${encodeURIComponent(status)}`;
+  const oauthResult = (status) => `<!doctype html><html><head><meta charset="utf-8"><title>Gmail</title></head><body><p id="message">Concluindo a conexão Gmail...</p><button id="close" hidden>Fechar janela</button><script>const status=${JSON.stringify(status)};const message={type:'kaizen:gmail-oauth',status};const target=window.location.origin;try{if(window.opener&&!window.opener.closed)window.opener.postMessage(message,target)}catch{};document.getElementById('message').textContent=status==='connected'?'Gmail conectado com sucesso.':status==='cancelled'?'A autorização Gmail foi cancelada.':'Não foi possível concluir a autorização Gmail.';const close=document.getElementById('close');try{window.close()}catch{};if(!window.closed){close.hidden=false;close.onclick=()=>window.close()}</script></body></html>`;
 
   const startOAuth = async (req, res) => {
     try {
@@ -41,8 +42,8 @@ function createGmailRouter(deps = {}) {
       if (!tokens.refresh_token) throw Object.assign(new Error('O Google nao retornou refresh token.'), { code: 'GMAIL_REFRESH_TOKEN_MISSING' });
       const identity = await oauthService.identifyAccount(tokens.access_token);
       await repo.saveConnectedConnection(pool, { userId: pending.initiated_by_user_id, identity, refreshToken: tokens.refresh_token, scopes: oauthService.GMAIL_SCOPES, pendingState: pending });
-      res.redirect(safeRedirect('connected'));
-    } catch (error) { res.redirect(safeRedirect(['GMAIL_OAUTH_STATE_INVALID', 'GMAIL_OAUTH_STALE'].includes(error.code) ? 'invalid_state' : 'error')); }
+      res.type('html').send(oauthResult('connected'));
+    } catch (error) { res.type('html').send(oauthResult(error?.code === 'GMAIL_OAUTH_CANCELLED' ? 'cancelled' : 'error')); }
   });
 
   router.get('/status', ...admin, async (req, res) => {
