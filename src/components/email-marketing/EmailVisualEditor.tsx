@@ -93,6 +93,19 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+function plainTextToEmailHtml(value: string) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => {
+      const escaped = escapeHtml(line).replace(/ {2,}/g, (spaces) => `${spaces[0]}${"&nbsp;".repeat(spaces.length - 1)}`);
+      const withMarkdownLinks = escaped.replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/gi, '<a href="$2">$1</a>');
+      const withUrls = withMarkdownLinks.replace(/(^|[\s(])(https:\/\/[^\s<]+)/gi, '$1<a href="$2">$2</a>');
+      return `<p>${withUrls || "<br>"}</p>`;
+    })
+    .join("");
+}
+
 function ToolButton({
   label,
   active = false,
@@ -302,7 +315,9 @@ export function EmailVisualEditor({
 
   const onPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();
-    const source = event.clipboardData.getData("text/html") || escapeHtml(event.clipboardData.getData("text/plain"));
+    const htmlSource = event.clipboardData.getData("text/html");
+    const plainSource = event.clipboardData.getData("text/plain");
+    const source = htmlSource ? sanitizeEmailHtml(htmlSource) : plainTextToEmailHtml(plainSource);
     document.execCommand("insertHTML", false, sanitizeEmailHtml(source));
     sync();
   };
@@ -391,12 +406,6 @@ export function EmailVisualEditor({
         className="min-h-52 flex-1 overflow-y-auto px-5 py-4 text-sm leading-6 outline-none empty:before:text-zinc-600 empty:before:content-[attr(data-placeholder)]"
         data-placeholder="Escreva o conteúdo da campanha..."
         onInput={sync}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
-          event.preventDefault();
-          document.execCommand(event.shiftKey ? "insertLineBreak" : "insertParagraph", false);
-          sync();
-        }}
         onKeyUp={updateToolbarState}
         onMouseUp={updateToolbarState}
         onPaste={onPaste}
