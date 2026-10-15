@@ -43,3 +43,17 @@ test("email html removes javascript and creates a text fallback", () => {
   assert.doesNotMatch(safe, /javascript|alert/);
   assert.equal(htmlToText(safe), "clickOffer\nItem");
 });
+
+test("formatted campaign html survives backend sanitization with a structured text fallback", () => {
+  const source = '<p>First paragraph.</p><p>Second with <strong>bold</strong>.</p><p>Third paragraph.</p><ul><li>List item</li></ul><p><a href="https://example.test/offer">View offer</a></p>';
+  const safe = sanitizeEmailHtml(source);
+
+  assert.match(safe, /<p>First paragraph\.<\/p>/);
+  assert.match(safe, /<strong>bold<\/strong>/);
+  assert.match(safe, /<ul><li>List item<\/li><\/ul>/);
+  assert.match(safe, /href="https:\/\/example\.test\/offer"/);
+  assert.equal(
+    htmlToText(safe),
+    "First paragraph.\nSecond with bold.\nThird paragraph.\nList item\nView offer",
+  );
+});

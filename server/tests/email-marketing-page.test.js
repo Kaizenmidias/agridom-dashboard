@@ -21,6 +21,10 @@ const sanitizer = fs.readFileSync(
   path.join(root, "src/lib/email-html.ts"),
   "utf8",
 );
+const campaignRoutes = fs.readFileSync(
+  path.join(root, "server/routes/broadcast-campaigns.js"),
+  "utf8",
+);
 
 test("email marketing keeps an independent route without replacing Disparar", () => {
   assert.match(
@@ -65,6 +69,9 @@ test("composer uses the visual editor and sanitizes HTML before persisting draft
   assert.match(sanitizer, /export function sanitizeEmailHtml/);
   assert.match(sanitizer, /ALLOWED_TAGS/);
   assert.match(sanitizer, /\^https:/);
+  assert.match(campaignRoutes, /emailHtml: body\.email_html/);
+  assert.match(page, /dangerouslySetInnerHTML=\{\{ __html: bodyHtml \}\}/);
+  assert.match(page, /const bodyHtml = campaign\.email_html[\s\S]*sanitizeEmailHtml/);
 });
 
 test("visual editor exposes functional formatting, media, CTA, variables and previews", () => {
@@ -87,5 +94,6 @@ test("drafts can be reopened without replacing their audience implicitly", () =>
   assert.match(page, /Editar rascunho/);
   assert.match(page, /initialCampaign\?\.email_html/);
   assert.match(page, /broadcastAPI\.update\(initialCampaign\.id/);
-  assert.match(page, /if \(selectedFolderIds\.length\)/);
+  assert.match(page, /initialCampaign\?\.selected_audience\?\.folder_ids/);
+  assert.match(page, /if \(!initialCampaign \|\| audienceChanged\)/);
 });

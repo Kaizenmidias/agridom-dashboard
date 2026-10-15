@@ -107,6 +107,7 @@ function contentPayload(body = {}) {
     textContent: body.text_content,
     emailSubject: body.email_subject,
     emailBodyText: body.email_body_text,
+    emailHtml: body.email_html,
     mediaStoragePath: body.media_storage_path,
     mimeType: body.mime_type,
     originalFilename: body.original_filename,
@@ -260,12 +261,17 @@ router.put("/:id/audience", async (req, res) => {
       added: added.recipientIds.length,
       replaced: true,
     });
+    const selectedAudience = await campaigns.getAudienceSelection(
+      campaign.id,
+      req.userId,
+    );
     res.json({
       folder_ids: folderIds,
       selected_folders: folderIds.length,
       eligible: added.recipientIds.length,
       missing_phone: channels.includes("whatsapp") ? (rows.rows || []).filter((row) => !eligibility(row).whatsappEligible).length : 0,
       missing_email: channels.includes("email") ? (rows.rows || []).filter((row) => !eligibility(row).emailEligible).length : 0,
+      selected_audience: selectedAudience,
     });
   } catch (error) {
     errorResponse(res, error);
@@ -429,6 +435,22 @@ router.get("/audience/folders", async (req, res) => {
   }
 });
 
+router.post("/audience/folders/preview", async (req, res) => {
+  try {
+    const folderIds = Array.isArray(req.body?.folder_ids)
+      ? req.body.folder_ids
+      : [];
+    res.json({
+      selected_audience: await campaigns.getFolderAudienceSummary(
+        folderIds,
+        req.userId,
+      ),
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 router.get("/email-signature", async (req, res) => {
   try {
     const signature = await campaigns.getDefaultEmailSignature();
@@ -522,11 +544,16 @@ router.get("/:id", async (req, res) => {
       req.userId,
     );
     const recipients = await campaigns.getRecipients(campaign.id, req.userId);
+    const selectedAudience = await campaigns.getAudienceSelection(
+      campaign.id,
+      req.userId,
+    );
     const attachments = await campaigns.listEmailAttachments(campaign.id, req.userId);
     res.json({
       campaign,
       account,
       attachments,
+      selected_audience: selectedAudience,
       recipient_summary: {
         total: recipients.length,
         by_status: Object.fromEntries(

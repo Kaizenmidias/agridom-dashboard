@@ -45,6 +45,7 @@ export type Campaign = {
   email_body_text?: string | null;
   email_html?: string | null;
   idempotency_key?: string | null;
+  selected_audience?: CampaignAudienceSelection;
 };
 export type EmailAttachment = {
   id: number;
@@ -52,6 +53,20 @@ export type EmailAttachment = {
   mime_type: string;
   size_bytes: number;
   created_at?: string;
+};
+export type CampaignAudienceSummary = {
+  folder_ids: number[];
+  folders: Array<{ id: number; name: string; total: number }>;
+  total_selected: number;
+  email_valid: number;
+  email_eligible: number;
+  email_no_consent: number;
+  email_unsubscribed: number;
+  email_invalid: number;
+};
+export type CampaignAudienceSelection = CampaignAudienceSummary & {
+  selection_recoverable: boolean;
+  recipient_total: number;
 };
 export type Audience = {
   total: number;
@@ -90,6 +105,7 @@ export const broadcastAPI = {
       campaign: Campaign;
       account?: { name: string; phone_number?: string };
       recipient_summary: { total: number; by_status: Record<string, number> };
+      selected_audience: CampaignAudienceSelection;
     }>(`/${id}`),
   create: (body: unknown) =>
     request<{ campaign: Campaign }>("/", {
@@ -160,6 +176,11 @@ export const broadcastAPI = {
         with_phone: number;
       }>;
     }>("/audience/folders"),
+  previewFolders: (folder_ids: number[]) =>
+    request<{ selected_audience: CampaignAudienceSummary }>(
+      "/audience/folders/preview",
+      { method: "POST", body: JSON.stringify({ folder_ids }) },
+    ),
   addAudience: (id: number, filters: Record<string, string>) =>
     request<{ added: number; duplicates: number; missing_phone: number }>(
       `/${id}/recipients`,
@@ -171,7 +192,14 @@ export const broadcastAPI = {
       { method: "POST", body: JSON.stringify({ folder_id }) },
     ),
   audienceFolders: (id: number, folder_ids: number[]) =>
-    request<{ eligible: number; missing_phone: number }>(`/${id}/audience`, {
+    request<{
+      folder_ids: number[];
+      selected_folders: number;
+      eligible: number;
+      missing_phone: number;
+      missing_email: number;
+      selected_audience: CampaignAudienceSelection;
+    }>(`/${id}/audience`, {
       method: "PUT",
       body: JSON.stringify({ folder_ids }),
     }),

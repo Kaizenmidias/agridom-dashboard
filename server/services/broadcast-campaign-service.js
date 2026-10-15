@@ -318,6 +318,129 @@ async function getRecipients(campaignId, userId, status) {
   return result.rows || [];
 }
 
+function parseAudienceFolderSelection(eventRows = []) {
+  const legacyFolderIds = [];
+  for (const row of eventRows) {
+    let metadata = row?.metadata;
+    try {
+      if (typeof metadata === "string") metadata = JSON.parse(metadata);
+    } catch {
+      continue;
+    }
+    if (!metadata || typeof metadata !== "object") continue;
+    if (metadata.source === "folders" && Array.isArray(metadata.folder_ids)) {
+      return {
+        folderIds: [
+          ...new Set([
+            ...legacyFolderIds,
+            ...metadata.folder_ids.map(idOf).filter(Boolean),
+          ]),
+        ],
+        recoverable: true,
+      };
+    }
+    if (metadata.source === "folder") {
+      const folderId = idOf(metadata.folder_id);
+      if (folderId) legacyFolderIds.push(folderId);
+    }
+  }
+  return {
+    folderIds: [...new Set(legacyFolderIds)],
+    recoverable: legacyFolderIds.length > 0,
+  };
+}
+
+async function getFolderAudienceSummary(folderIds, userId) {
+  const normalizedFolderIds = [...new Set((folderIds || []).map(idOf).filter(Boolean))];
+  if (normalizedFolderIds.length > 100)
+    throw new BroadcastCampaignError(400, "Muitas listas selecionadas.");
+  if (!normalizedFolderIds.length) {
+    return {
+      folder_ids: [],
+      folders: [],
+      total_selected: 0,
+      email_valid: 0,
+      email_eligible: 0,
+      email_no_consent: 0,
+      email_unsubscribed: 0,
+      email_invalid: 0,
+    };
+  }
+  const placeholders = normalizedFolderIds.map(() => "?").join(",");
+  const folders = await query(
+    `SELECT f.id, f.name, COUNT(m.prospect_id) AS total
+     FROM lead_folders f LEFT JOIN lead_folder_members m ON m.folder_id = f.id
+     WHERE f.owner_user_id = ? AND f.id IN (${placeholders})
+     GROUP BY f.id, f.name ORDER BY f.name`,
+    [userId, ...normalizedFolderIds],
+  );
+  const ownedFolderIds = (folders.rows || []).map((row) => Number(row.id));
+  if (!ownedFolderIds.length) {
+    return {
+      folder_ids: [],
+      folders: [],
+      total_selected: 0,
+      email_valid: 0,
+      email_eligible: 0,
+      email_no_consent: 0,
+      email_unsubscribed: 0,
+      email_invalid: 0,
+    };
+  }
+  const ownedPlaceholders = ownedFolderIds.map(() => "?").join(",");
+  const summary = await query(
+    `SELECT COUNT(*) AS total_selected,
+      SUM(a.email_valid) AS email_valid,
+      SUM(a.email_valid = 1 AND a.email_marketing_consent = 1 AND s.id IS NULL) AS email_eligible,
+      SUM(a.email_valid = 1 AND COALESCE(a.email_marketing_consent, 0) <> 1 AND s.id IS NULL) AS email_no_consent,
+      SUM(a.email_valid = 1 AND s.id IS NOT NULL) AS email_unsubscribed,
+      SUM(a.email_valid = 0) AS email_invalid
+     FROM (
+       SELECT DISTINCT p.id, LOWER(TRIM(p.email)) AS normalized_email,
+         p.email_marketing_consent,
+         (p.email IS NOT NULL AND LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$') AS email_valid
+       FROM lead_folder_members m
+       JOIN prospects p ON p.id = m.prospect_id
+       WHERE m.folder_id IN (${ownedPlaceholders})
+     ) a
+     LEFT JOIN broadcast_email_suppressions s ON s.email = a.normalized_email`,
+    ownedFolderIds,
+  );
+  const totals = summary.rows?.[0] || {};
+  return {
+    folder_ids: ownedFolderIds,
+    folders: (folders.rows || []).map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      total: Number(row.total || 0),
+    })),
+    total_selected: Number(totals.total_selected || 0),
+    email_valid: Number(totals.email_valid || 0),
+    email_eligible: Number(totals.email_eligible || 0),
+    email_no_consent: Number(totals.email_no_consent || 0),
+    email_unsubscribed: Number(totals.email_unsubscribed || 0),
+    email_invalid: Number(totals.email_invalid || 0),
+  };
+}
+
+async function getAudienceSelection(campaignId, userId) {
+  const campaign = await getCampaign(campaignId, userId);
+  const events = await query(
+    "SELECT metadata FROM broadcast_campaign_events WHERE campaign_id = ? AND event_type = 'recipients_added' ORDER BY id DESC",
+    [campaign.id],
+  );
+  const parsed = parseAudienceFolderSelection(events.rows || []);
+  const recipients = await query(
+    "SELECT COUNT(*) AS total FROM broadcast_campaign_recipients WHERE campaign_id = ?",
+    [campaign.id],
+  );
+  return {
+    ...(await getFolderAudienceSummary(parsed.folderIds, userId)),
+    selection_recoverable: parsed.recoverable,
+    recipient_total: Number(recipients.rows?.[0]?.total || 0),
+  };
+}
+
 async function getDefaultEmailSignature() {
   const result = await query("SELECT id, html_content, text_content, updated_at FROM broadcast_email_signatures ORDER BY id LIMIT 1");
   return result.rows?.[0] || null;
@@ -369,6 +492,9 @@ module.exports = {
   updateContent,
   addRecipients,
   getRecipients,
+  parseAudienceFolderSelection,
+  getFolderAudienceSummary,
+  getAudienceSelection,
   getDefaultEmailSignature,
   saveDefaultEmailSignature,
   listEmailAttachments,

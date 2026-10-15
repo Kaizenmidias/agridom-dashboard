@@ -80,8 +80,17 @@ export function sanitizeEmailHtml(value: string) {
 }
 
 export function emailHtmlToText(value: string) {
-  const documentNode = new DOMParser().parseFromString(sanitizeEmailHtml(value), "text/html");
-  return String(documentNode.body.textContent || "").replace(/\s+/g, " ").trim();
+  const safeHtml = sanitizeEmailHtml(value)
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<hr\s*\/?\s*>/gi, "\n---\n")
+    .replace(/<li(?:\s[^>]*)?>/gi, "- ")
+    .replace(/<\/(?:p|div|h[1-3]|li|tr)>/gi, "\n");
+  const documentNode = new DOMParser().parseFromString(safeHtml, "text/html");
+  return String(documentNode.body.textContent || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function renderPreviewVariables(value: string) {

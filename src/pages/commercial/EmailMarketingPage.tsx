@@ -31,7 +31,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { broadcastAPI, type Campaign } from "@/api/broadcast-campaigns";
+import {
+  broadcastAPI,
+  type Campaign,
+  type CampaignAudienceSummary,
+} from "@/api/broadcast-campaigns";
 import { EmailVisualEditor } from "@/components/email-marketing/EmailVisualEditor";
 import { emailHtmlToText, sanitizeEmailHtml } from "@/lib/email-html";
 
@@ -198,7 +202,12 @@ export default function EmailMarketingPage() {
   const openCampaign = async (campaign: Campaign) => {
     try {
       const detail = await broadcastAPI.get(campaign.id);
-      setSelectedCampaign({ ...campaign, ...detail.campaign });
+      setSelectedCampaign({
+        ...campaign,
+        ...detail.campaign,
+        total: detail.recipient_summary.total,
+        selected_audience: detail.selected_audience,
+      });
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Não foi possível abrir a campanha.",
@@ -533,7 +542,10 @@ function CampaignDetail({
   onAction: (campaign: Campaign, action: "pause" | "resume") => Promise<void>;
   onEdit: () => void;
 }) {
-  const body = stripHtml(campaign.email_body_text || campaign.text_content);
+  const bodyHtml = campaign.email_html
+    ? sanitizeEmailHtml(campaign.email_html)
+    : "";
+  const bodyText = campaign.email_body_text || campaign.text_content || "";
   return (
     <section className="flex min-h-[calc(100vh-8rem)] flex-col">
       <div className="flex h-12 items-center gap-1 border-b border-white/10 px-3 md:px-5">
@@ -580,9 +592,16 @@ function CampaignDetail({
             </p>
           </div>
         </div>
-        <article className="min-h-52 whitespace-pre-wrap py-4 text-sm leading-7 text-zinc-300">
-          {body || "O conteúdo desta campanha não está disponível na listagem."}
-        </article>
+        {bodyHtml ? (
+          <article
+            className="email-campaign-content min-h-52 overflow-hidden py-4 text-sm leading-7 text-zinc-300 [&_a]:text-[#BEFA33] [&_a]:underline [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_img]:max-w-full [&_li]:ml-5 [&_ol]:list-decimal [&_p]:my-3 [&_table]:max-w-full [&_ul]:list-disc"
+            dangerouslySetInnerHTML={{ __html: bodyHtml }}
+          />
+        ) : (
+          <article className="min-h-52 whitespace-pre-wrap py-4 text-sm leading-7 text-zinc-300">
+            {bodyText || "O conteúdo desta campanha não está disponível na listagem."}
+          </article>
+        )}
         <div className="mt-8 grid gap-px overflow-hidden rounded-md border border-white/10 bg-white/10 sm:grid-cols-3">
           {[
             ["Destinatários", campaign.total || 0],
@@ -595,6 +614,16 @@ function CampaignDetail({
             </div>
           ))}
         </div>
+        {campaign.selected_audience?.selection_recoverable ? (
+          <div className="mt-4 text-xs leading-5 text-zinc-500">
+            <p>
+              Listas vinculadas: {campaign.selected_audience.folders.map((folder) => folder.name).join(", ") || "nenhuma"}.
+            </p>
+            <p>
+              {campaign.selected_audience.total_selected} contatos selecionados, {campaign.selected_audience.email_eligible} elegíveis, {campaign.selected_audience.email_no_consent} sem consentimento, {campaign.selected_audience.email_unsubscribed} descadastrados ou suprimidos e {campaign.selected_audience.email_invalid} com e-mail inválido.
+            </p>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -643,7 +672,15 @@ function EmailComposer({
   const [bodyHtml, setBodyHtml] = useState(
     initialCampaign?.email_html || initialCampaign?.email_body_text || "",
   );
-  const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>(
+    initialCampaign?.selected_audience?.folder_ids || [],
+  );
+  const [audienceChanged, setAudienceChanged] = useState(false);
+  const [audiencePreview, setAudiencePreview] = useState<CampaignAudienceSummary | null>(
+    initialCampaign?.selected_audience || null,
+  );
+  const [audiencePreviewLoading, setAudiencePreviewLoading] = useState(false);
+  const [audiencePreviewError, setAudiencePreviewError] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -655,13 +692,42 @@ function EmailComposer({
     else if (providers[0]) setProviderId(String(providers[0].id));
   }, [providerId, providers]);
 
+  useEffect(() => {
+    if (initialCampaign && !audienceChanged) {
+      setAudiencePreview(initialCampaign.selected_audience || null);
+      return;
+    }
+    let active = true;
+    setAudiencePreviewLoading(true);
+    setAudiencePreviewError(false);
+    const timer = window.setTimeout(() => {
+      void broadcastAPI
+        .previewFolders(selectedFolderIds)
+        .then((result) => {
+          if (active) {
+            setAudiencePreview(result.selected_audience);
+            setAudiencePreviewError(false);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setAudiencePreview(null);
+            setAudiencePreviewError(true);
+          }
+        })
+        .finally(() => {
+          if (active) setAudiencePreviewLoading(false);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [audienceChanged, initialCampaign, selectedFolderIds]);
+
   const selectedProvider = providers.find(
     (provider) => String(provider.id) === providerId,
   );
-  const selectedCount = folders
-    .filter((folder) => selectedFolderIds.includes(folder.id))
-    .reduce((total, folder) => total + Number(folder.total || 0), 0);
-
   const saveDraft = async () => {
     if (mode === "individual") {
       toast.info("O envio individual ainda não possui um endpoint de produção neste módulo.");
@@ -687,7 +753,7 @@ function EmailComposer({
       const campaignId = initialCampaign
         ? (await broadcastAPI.update(initialCampaign.id, campaignPayload)).campaign.id
         : (await broadcastAPI.create(campaignPayload)).campaign.id;
-      if (selectedFolderIds.length) {
+      if (!initialCampaign || audienceChanged) {
         await broadcastAPI.audienceFolders(campaignId, selectedFolderIds);
       }
       const safeHtml = sanitizeEmailHtml(bodyHtml);
@@ -810,11 +876,12 @@ function EmailComposer({
                                 : "border-white/10 text-zinc-400 hover:border-white/25"
                             }`}
                             onClick={() =>
-                              setSelectedFolderIds((current) =>
-                                selected
+                              setSelectedFolderIds((current) => {
+                                setAudienceChanged(true);
+                                return selected
                                   ? current.filter((id) => id !== folder.id)
-                                  : [...current, folder.id],
-                              )
+                                  : [...current, folder.id];
+                              })
                             }
                           >
                             {folder.name} ({folder.total})
@@ -826,6 +893,25 @@ function EmailComposer({
                       ) : null}
                     </div>
                   </div>
+                  {initialCampaign?.selected_audience &&
+                  !initialCampaign.selected_audience.selection_recoverable &&
+                  !audienceChanged ? (
+                    <div className="pb-2 pl-[4.25rem] text-[11px] leading-5 text-amber-300">
+                      {initialCampaign.selected_audience.recipient_total} destinatários persistidos. A lista original não pode ser identificada pelo histórico; editar o conteúdo não altera esses destinatários.
+                    </div>
+                  ) : audiencePreview ? (
+                    <div className="pb-2 pl-[4.25rem] text-[11px] leading-5 text-zinc-500">
+                      {audiencePreview.total_selected} contatos distintos nas listas; {audiencePreview.email_eligible} elegíveis; {audiencePreview.email_no_consent} sem consentimento; {audiencePreview.email_unsubscribed} descadastrados ou suprimidos; {audiencePreview.email_invalid} com e-mail inválido.
+                    </div>
+                  ) : audiencePreviewLoading ? (
+                    <div className="pb-2 pl-[4.25rem] text-[11px] text-zinc-500">
+                      Calculando a audiência selecionada...
+                    </div>
+                  ) : audiencePreviewError ? (
+                    <div className="pb-2 pl-[4.25rem] text-[11px] text-red-300">
+                      Não foi possível calcular a audiência. A seleção não foi alterada.
+                    </div>
+                  ) : null}
                   <div className="py-1">
                     <Input
                       value={name}
@@ -864,8 +950,24 @@ function EmailComposer({
                 {saving ? "Salvando..." : "Salvar rascunho"}
               </Button>
               <div className="ml-auto hidden text-right sm:block">
-                <p className="text-xs text-zinc-400">{selectedCount} contatos selecionados</p>
-                <p className="text-[10px] text-zinc-600">Elegibilidade confirmada ao salvar</p>
+                    <p className="text-xs text-zinc-400">
+                      {audiencePreviewLoading
+                        ? "Calculando audiência..."
+                        : audiencePreviewError
+                          ? "Audiência indisponível"
+                          : initialCampaign?.selected_audience &&
+                              !initialCampaign.selected_audience.selection_recoverable &&
+                              !audienceChanged
+                            ? `${initialCampaign.selected_audience.recipient_total} destinatários persistidos`
+                            : `${audiencePreview?.total_selected || 0} contatos selecionados`}
+                    </p>
+                    <p className="text-[10px] text-zinc-600">
+                      {initialCampaign?.selected_audience &&
+                      !initialCampaign.selected_audience.selection_recoverable &&
+                      !audienceChanged
+                        ? "Lista original não identificável"
+                        : `${audiencePreview?.email_eligible || 0} elegíveis para envio`}
+                    </p>
               </div>
             </footer>
           ) : null}
