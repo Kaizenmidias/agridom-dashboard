@@ -134,6 +134,7 @@ export function EmailVisualEditor({
   onDone?: () => void;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const lastEmittedHtmlRef = useRef(html);
   const savedRangeRef = useRef<Range | null>(null);
   const selectedImageRef = useRef<HTMLImageElement | null>(null);
   const [state, setState] = useState(DEFAULT_STATE);
@@ -143,8 +144,9 @@ export function EmailVisualEditor({
   const [buttonDraft, setButtonDraft] = useState<ButtonDraft | null>(null);
 
   useEffect(() => {
-    if (editorRef.current && editorRef.current.innerHTML !== html)
-      editorRef.current.innerHTML = html;
+    if (!editorRef.current || html === lastEmittedHtmlRef.current) return;
+    if (editorRef.current.innerHTML !== html) editorRef.current.innerHTML = html;
+    lastEmittedHtmlRef.current = html;
   }, [html]);
 
   const updateToolbarState = useCallback(() => {
@@ -190,7 +192,9 @@ export function EmailVisualEditor({
 
   const sync = () => {
     if (!editorRef.current) return;
-    onChange(sanitizeEmailHtml(editorRef.current.innerHTML));
+    const safeHtml = sanitizeEmailHtml(editorRef.current.innerHTML);
+    lastEmittedHtmlRef.current = safeHtml;
+    onChange(safeHtml);
     updateToolbarState();
   };
 

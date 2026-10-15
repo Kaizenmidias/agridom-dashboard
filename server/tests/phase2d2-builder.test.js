@@ -51,6 +51,12 @@ test('2D.2 keeps provider and communication type as full-width fields', () => {
   assert.match(visualEditor, /insertLineBreak/);
 });
 
+test('2D.2 does not reinject parent HTML after local editor input', () => {
+  assert.match(visualEditor, /lastEmittedHtmlRef/);
+  assert.match(visualEditor, /html === lastEmittedHtmlRef\.current/);
+  assert.match(visualEditor, /lastEmittedHtmlRef\.current = safeHtml/);
+});
+
 test('2D.2 action catalog separates executable, integration and future actions', () => {
   assert.ok(ACTION_CATALOG.some((item) => item.id === 'whatsapp.send_message' && item.availability === 'requires_integration'));
   assert.ok(ACTION_CATALOG.some((item) => item.id === 'lead.add_tag' && item.availability === 'available'));
