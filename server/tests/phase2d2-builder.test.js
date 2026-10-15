@@ -47,14 +47,15 @@ test('2D.2 keeps the email editor in a modal and protects contenteditable keyboa
 
 test('2D.2 keeps provider and communication type as full-width fields', () => {
   assert.match(builder, /className="space-y-2"[\s\S]*Provedor[\s\S]*Tipo de comunica/);
-  assert.doesNotMatch(visualEditor, /onKeyDown=\{\(event\) => \{[\s\S]*insertParagraph/);
-  assert.match(visualEditor, /plainTextToEmailHtml/);
+  assert.match(visualEditor, /useEditor\(/);
+  assert.match(visualEditor, /StarterKit/);
+  assert.doesNotMatch(visualEditor, /document\.execCommand/);
 });
 
-test('2D.2 does not reinject parent HTML after local editor input', () => {
-  assert.match(visualEditor, /lastEmittedHtmlRef/);
-  assert.match(visualEditor, /html === lastEmittedHtmlRef\.current/);
-  assert.match(visualEditor, /lastEmittedHtmlRef\.current = safeHtml/);
+test('2D.2 keeps editor state in TipTap and applies external HTML through the document model', () => {
+  assert.match(visualEditor, /editor\.commands\.setContent/);
+  assert.match(visualEditor, /onUpdate:/);
+  assert.match(visualEditor, /sanitizeEmailHtml/);
 });
 
 test('2D.2 action catalog separates executable, integration and future actions', () => {
