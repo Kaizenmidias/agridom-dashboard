@@ -93,7 +93,7 @@ test("visual editor exposes functional formatting, media, CTA, variables and pre
 test("drafts can be reopened without replacing their audience implicitly", () => {
   assert.match(page, /Editar rascunho/);
   assert.match(page, /initialCampaign\?\.email_html/);
-  assert.match(page, /broadcastAPI\.update\(initialCampaign\.id/);
+  assert.match(page, /broadcastAPI\.update\(existingDraftId/);
   assert.match(page, /initialCampaign\?\.selected_audience\?\.folder_ids/);
-  assert.match(page, /if \(!initialCampaign \|\| audienceChanged\)/);
+  assert.match(page, /if \(!existingDraftId \|\| audienceChanged\)/);
 });

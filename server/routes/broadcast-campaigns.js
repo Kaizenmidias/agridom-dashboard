@@ -486,7 +486,11 @@ router.get("/:id/review", async (req, res) => {
       campaign.communication_account_id,
       req.userId,
     );
+    const emailProvider = ["email", "both"].includes(campaign.channel)
+      ? await validEmailProvider(campaign.email_provider_id, campaign.email_provider)
+      : null;
     const recipients = await campaigns.getRecipients(campaign.id, req.userId);
+    const selectedAudience = await campaigns.getAudienceSelection(campaign.id, req.userId);
     const attachments = await campaigns.listEmailAttachments(campaign.id, req.userId);
     const content = campaign.content_id
       ? {
@@ -511,20 +515,23 @@ router.get("/:id/review", async (req, res) => {
     );
     const validation = {
       has_name: Boolean(String(campaign.name || "").trim()),
-       has_account: campaign.channel === "email" ? true : Boolean(account),
+      has_account: campaign.channel === "email" ? Boolean(emailProvider) : Boolean(account),
+      has_email_provider: !["email", "both"].includes(campaign.channel) || Boolean(emailProvider),
       has_content: Boolean(
         content &&
         (campaign.channel === "email"
           ? String(content.email_subject || "").trim() && String(content.email_body_text || "").trim()
           : content.content_type !== "text" || String(content.text_content || "").trim()),
       ),
-      has_recipients: recipients.length > 0,
+      has_recipients: selectedAudience.email_eligible > 0,
     };
     res.json({
       campaign,
       account,
+      email_provider: emailProvider,
       content,
       attachments,
+      selected_audience: selectedAudience,
       total_recipients: recipients.length,
       counts,
       validation,
@@ -842,6 +849,33 @@ router.delete("/:id/recipients/:recipientId", async (req, res) => {
 
 router.post("/:id/start", async (req, res) => {
   try {
+    const result = await materializeCampaign({
+      campaignId: parseId(req.params.id),
+      userId: req.userId,
+    });
+    res.status(202).json(result);
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+router.post("/:id/send-now", async (req, res) => {
+  try {
+    const result = await materializeCampaign({
+      campaignId: parseId(req.params.id),
+      userId: req.userId,
+      forceImmediate: true,
+    });
+    res.status(202).json(result);
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+router.post("/:id/schedule", async (req, res) => {
+  try {
+    const scheduledAt = campaigns.normalizeScheduledAt(req.body?.scheduled_at);
+    if (!scheduledAt || new Date(`${scheduledAt.replace(" ", "T")}Z`).getTime() <= Date.now())
+      throw new campaigns.BroadcastCampaignError(400, "SCHEDULE_MUST_BE_FUTURE");
+    await campaigns.updateDraft(req.params.id, req.userId, { scheduledAt });
     const result = await materializeCampaign({
       campaignId: parseId(req.params.id),
       userId: req.userId,

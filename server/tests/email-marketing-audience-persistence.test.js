@@ -75,7 +75,7 @@ test("details return persisted folders, recipient totals and eligibility classes
 
 test("reopening a draft restores folders and content edits preserve recipients", () => {
   assert.match(pageSource, /initialCampaign\?\.selected_audience\?\.folder_ids \|\| \[\]/);
-  assert.match(pageSource, /if \(!initialCampaign \|\| audienceChanged\)/);
+  assert.match(pageSource, /if \(!existingDraftId \|\| audienceChanged\)/);
   assert.match(pageSource, /setAudienceChanged\(true\)/);
   assert.match(pageSource, /audiencePreview\?\.total_selected/);
   assert.match(pageSource, /total: detail\.recipient_summary\.total/);

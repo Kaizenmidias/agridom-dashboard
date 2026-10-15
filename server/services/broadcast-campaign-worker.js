@@ -55,112 +55,96 @@ async function finalizeCampaign(connection, campaignId) {
   const state = rows[0] || {};
   if (Number(state.active || 0) === 0)
     await connection.execute(
-      "UPDATE broadcast_campaigns SET status = IF(status IN ('cancelled', 'paused'), status, 'completed'), completed_at = IF(status IN ('cancelled', 'paused'), completed_at, UTC_TIMESTAMP()), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [campaignId],
+      "UPDATE broadcast_campaigns SET status = IF(status IN ('cancelled', 'paused'), status, IF(? > 0, 'failed', 'completed')), completed_at = IF(status IN ('cancelled', 'paused'), completed_at, UTC_TIMESTAMP()), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [Number(state.failed || 0), campaignId],
     );
 }
 
-async function materializeCampaign({ campaignId, userId, now = new Date() }) {
-  const campaignResult = await query(
-    `SELECT c.*, cc.content_type, cc.text_content, cc.email_subject, cc.email_body_text, cc.email_html, cc.email_signature_html, cc.email_signature_text, ep.provider AS ep_provider, ep.status AS ep_status, ep.configuration_metadata AS ep_metadata, ca.channel AS account_channel, ca.archived_at AS account_archived_at, ca.status AS account_status, ca.owner_user_id AS account_owner_user_id FROM broadcast_campaigns c
-    LEFT JOIN broadcast_campaign_contents cc ON cc.campaign_id = c.id
-    LEFT JOIN communication_accounts ca ON ca.id = c.communication_account_id
-    LEFT JOIN integration_providers ep ON ep.id = c.email_provider_id AND ep.provider = 'smtp'
-    WHERE c.id = ? AND c.created_by_user_id = ?`,
-    [campaignId, userId],
-  );
-  const campaign = campaignResult.rows?.[0];
-  if (!campaign)
-    throw Object.assign(new Error("CAMPAIGN_NOT_FOUND"), {
-      status: 404,
-      code: "CAMPAIGN_NOT_FOUND",
-    });
-  if (campaign.status !== "draft")
-    throw Object.assign(new Error("CAMPAIGN_NOT_EDITABLE"), {
-      status: 409,
-      code: "CAMPAIGN_NOT_EDITABLE",
-    });
-  if (campaign.channel !== "email" && !campaign.communication_account_id)
-    throw Object.assign(new Error("CAMPAIGN_ACCOUNT_REQUIRED"), {
-      status: 400,
-      code: "CAMPAIGN_ACCOUNT_REQUIRED",
-    });
-  if (campaign.channel !== "email" && (
-    campaign.account_channel !== "whatsapp" ||
-    campaign.account_archived_at ||
-    campaign.account_status !== "connected" ||
-    (campaign.account_owner_user_id != null &&
-      Number(campaign.account_owner_user_id) !== Number(userId))
-  ))
-    throw Object.assign(new Error("WHATSAPP_ACCOUNT_NOT_READY"), {
-      status: 409,
-      code: "WHATSAPP_ACCOUNT_NOT_READY",
-    });
-  if (
-    !campaign.content_type ||
-    (campaign.content_type === "text" &&
-      !String(campaign.text_content || "").trim())
-  )
-    throw Object.assign(new Error("CAMPAIGN_CONTENT_REQUIRED"), {
-      status: 400,
-      code: "CAMPAIGN_CONTENT_REQUIRED",
-    });
-  const recipientResult = await query(
-    "SELECT id, recipient_phone, recipient_email FROM broadcast_campaign_recipients WHERE campaign_id = ? AND status = 'pending'",
-    [campaign.id],
-  );
-  if (!recipientResult.rows?.length)
-    throw Object.assign(new Error("CAMPAIGN_RECIPIENTS_REQUIRED"), {
-      status: 400,
-      code: "CAMPAIGN_RECIPIENTS_REQUIRED",
-    });
-  if (["email", "both"].includes(campaign.channel)) {
-    if (campaign.email_provider === "gmail") {
-      const gmail = await getCurrentConnection(getPool());
-      if (!gmail || gmail.status !== "connected") {
-        const error = new Error("GMAIL_NOT_CONNECTED");
-        error.status = 409;
-        error.code = "GMAIL_NOT_CONNECTED";
-        throw error;
-      }
-    } else if (!campaign.email_provider_id || campaign.ep_provider !== "smtp" || !["configured", "connected"].includes(campaign.ep_status)) {
-      const error = new Error("EMAIL_SMTP_NOT_CONFIGURED");
-      error.status = 409;
-      error.code = "EMAIL_SMTP_NOT_CONFIGURED";
-      throw error;
-    }
-    if (!String(campaign.email_subject || "").trim() || !String(campaign.email_body_text || "").trim()) {
-      const error = new Error("EMAIL_CONTENT_REQUIRED");
-      error.status = 400;
-      error.code = "EMAIL_CONTENT_REQUIRED";
-      throw error;
-    }
-  }
-  const availableAt =
-    campaign.scheduled_at && new Date(campaign.scheduled_at) > now
-      ? campaign.scheduled_at
-      : now;
-  const nextStatus =
-    campaign.scheduled_at && new Date(campaign.scheduled_at) > now
-      ? "scheduled"
-      : "running";
-  const cadenceSeconds = Math.max(0, Number(campaign.cadence_seconds || 0));
-  const selectedChannels = campaign.channel === "both" ? ["whatsapp", "email"] : [campaign.channel || "whatsapp"];
-  const values = [];
-  let whatsappIndex = 0;
-  for (const recipient of recipientResult.rows) {
-    const whatsappEligible = Boolean(String(recipient.recipient_phone || "").trim());
-    const emailEligible = Boolean(String(recipient.recipient_email || "").trim());
-    for (const channel of selectedChannels) {
-      if ((channel === "whatsapp" && !whatsappEligible) || (channel === "email" && !emailEligible)) continue;
-      const index = channel === "whatsapp" ? whatsappIndex++ : 0;
-      values.push([campaign.id, recipient.id, channel, new Date(new Date(availableAt).getTime() + cadenceSeconds * 1000 * index)]);
-    }
-  }
-  const pool = getPool();
+function providerCadenceSeconds(campaign) {
+  const configured = Number(campaign?.cadence_seconds || 0);
+  const environmentValue = campaign?.email_provider === "gmail"
+    ? process.env.BROADCAST_GMAIL_CADENCE_SECONDS
+    : process.env.BROADCAST_SMTP_CADENCE_SECONDS;
+  const providerMinimum = Number(environmentValue ?? (campaign?.email_provider === "gmail" ? 2 : 1));
+  return Math.max(0, configured, Number.isFinite(providerMinimum) ? providerMinimum : 0);
+}
+
+async function materializeCampaign({
+  campaignId,
+  userId,
+  now = new Date(),
+  forceImmediate = false,
+  pool = getPool(),
+  gmailConnectionLoader = getCurrentConnection,
+}) {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    const [campaignRows] = await connection.execute(
+      `SELECT c.*, (c.scheduled_at IS NOT NULL AND c.scheduled_at > UTC_TIMESTAMP()) AS schedule_is_future,
+       cc.content_type, cc.text_content, cc.email_subject, cc.email_body_text, cc.email_html, cc.email_signature_html, cc.email_signature_text,
+       ep.provider AS ep_provider, ep.status AS ep_status, ep.configuration_metadata AS ep_metadata,
+       ca.channel AS account_channel, ca.archived_at AS account_archived_at, ca.status AS account_status, ca.owner_user_id AS account_owner_user_id
+       FROM broadcast_campaigns c
+       LEFT JOIN broadcast_campaign_contents cc ON cc.campaign_id = c.id
+       LEFT JOIN communication_accounts ca ON ca.id = c.communication_account_id
+       LEFT JOIN integration_providers ep ON ep.id = c.email_provider_id AND ep.provider = 'smtp'
+       WHERE c.id = ? AND c.created_by_user_id = ? FOR UPDATE`,
+      [campaignId, userId],
+    );
+    const campaign = campaignRows[0];
+    if (!campaign) throw Object.assign(new Error("CAMPAIGN_NOT_FOUND"), { status: 404, code: "CAMPAIGN_NOT_FOUND" });
+    if (campaign.status !== "draft") throw Object.assign(new Error("CAMPAIGN_ALREADY_STARTED"), { status: 409, code: "CAMPAIGN_ALREADY_STARTED" });
+    if (campaign.channel !== "email" && !campaign.communication_account_id)
+      throw Object.assign(new Error("CAMPAIGN_ACCOUNT_REQUIRED"), { status: 400, code: "CAMPAIGN_ACCOUNT_REQUIRED" });
+    if (campaign.channel !== "email" && (
+      campaign.account_channel !== "whatsapp" || campaign.account_archived_at || campaign.account_status !== "connected" ||
+      (campaign.account_owner_user_id != null && Number(campaign.account_owner_user_id) !== Number(userId))
+    )) throw Object.assign(new Error("WHATSAPP_ACCOUNT_NOT_READY"), { status: 409, code: "WHATSAPP_ACCOUNT_NOT_READY" });
+    if (!campaign.content_type || (campaign.channel !== "email" && campaign.content_type === "text" && !String(campaign.text_content || "").trim()))
+      throw Object.assign(new Error("CAMPAIGN_CONTENT_REQUIRED"), { status: 400, code: "CAMPAIGN_CONTENT_REQUIRED" });
+    if (["email", "both"].includes(campaign.channel)) {
+      if (campaign.email_provider === "gmail") {
+        const gmail = await gmailConnectionLoader(pool);
+        if (!gmail || gmail.status !== "connected")
+          throw Object.assign(new Error("GMAIL_NOT_CONNECTED"), { status: 409, code: "GMAIL_NOT_CONNECTED" });
+      } else if (!campaign.email_provider_id || campaign.ep_provider !== "smtp" || !["configured", "connected"].includes(campaign.ep_status)) {
+        throw Object.assign(new Error("EMAIL_SMTP_NOT_CONFIGURED"), { status: 409, code: "EMAIL_SMTP_NOT_CONFIGURED" });
+      }
+      if (!String(campaign.email_subject || "").trim() || !String(campaign.email_body_text || "").trim())
+        throw Object.assign(new Error("EMAIL_CONTENT_REQUIRED"), { status: 400, code: "EMAIL_CONTENT_REQUIRED" });
+    }
+    const [recipientRows] = await connection.execute(
+      `SELECT r.id, r.recipient_phone, r.recipient_email,
+       (r.recipient_email IS NOT NULL AND p.email_marketing_consent = 1 AND s.id IS NULL) AS email_eligible
+       FROM broadcast_campaign_recipients r
+       LEFT JOIN prospects p ON p.id = r.prospect_id
+       LEFT JOIN broadcast_email_suppressions s ON s.email = LOWER(TRIM(r.recipient_email))
+       WHERE r.campaign_id = ? AND r.status = 'pending'`,
+      [campaign.id],
+    );
+    if (!recipientRows.length)
+      throw Object.assign(new Error("CAMPAIGN_RECIPIENTS_REQUIRED"), { status: 400, code: "CAMPAIGN_RECIPIENTS_REQUIRED" });
+    const hasFutureSchedule = !forceImmediate && Number(campaign.schedule_is_future) === 1;
+    const availableAt = hasFutureSchedule ? campaign.scheduled_at : now;
+    const nextStatus = hasFutureSchedule ? "scheduled" : "running";
+    const whatsappCadence = Math.max(0, Number(campaign.cadence_seconds || 0));
+    const emailCadence = providerCadenceSeconds(campaign);
+    const selectedChannels = campaign.channel === "both" ? ["whatsapp", "email"] : [campaign.channel || "whatsapp"];
+    const values = [];
+    let whatsappIndex = 0;
+    let emailIndex = 0;
+    for (const recipient of recipientRows) {
+      const whatsappEligible = Boolean(String(recipient.recipient_phone || "").trim());
+      const emailEligible = Number(recipient.email_eligible) === 1;
+      for (const channel of selectedChannels) {
+        if ((channel === "whatsapp" && !whatsappEligible) || (channel === "email" && !emailEligible)) continue;
+        const offsetSeconds = channel === "whatsapp" ? whatsappCadence * whatsappIndex++ : emailCadence * emailIndex++;
+        values.push([campaign.id, recipient.id, channel, new Date(new Date(availableAt).getTime() + offsetSeconds * 1000)]);
+      }
+    }
+    if (!values.length)
+      throw Object.assign(new Error("CAMPAIGN_NO_ELIGIBLE_RECIPIENTS"), { status: 409, code: "CAMPAIGN_NO_ELIGIBLE_RECIPIENTS" });
     for (let index = 0; index < values.length; index += 250) {
       const chunk = values.slice(index, index + 250);
       const placeholders = chunk.map(() => "(?, ?, ?, ?, 'pending')").join(", ");
@@ -169,23 +153,25 @@ async function materializeCampaign({ campaignId, userId, now = new Date() }) {
         chunk.flat(),
       );
     }
-    await connection.execute(
-      "UPDATE broadcast_campaigns SET status = ?, started_at = IF(? = 'running', COALESCE(started_at, UTC_TIMESTAMP()), started_at), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'draft'",
-      [nextStatus, nextStatus, campaign.id],
+    const [updated] = await connection.execute(
+      "UPDATE broadcast_campaigns SET status = ?, scheduled_at = IF(? = 'running', NULL, scheduled_at), started_at = IF(? = 'running', COALESCE(started_at, UTC_TIMESTAMP()), started_at), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'draft'",
+      [nextStatus, nextStatus, nextStatus, campaign.id],
     );
+    if (Number(updated.affectedRows || 0) !== 1)
+      throw Object.assign(new Error("CAMPAIGN_ALREADY_STARTED"), { status: 409, code: "CAMPAIGN_ALREADY_STARTED" });
     await connection.execute(
       "INSERT INTO broadcast_campaign_events (campaign_id, event_type, metadata, created_by_user_id) VALUES (?, ?, ?, ?)",
       [
         campaign.id,
         nextStatus === "scheduled" ? "scheduled" : "started",
-        JSON.stringify({ jobs: recipientResult.rows.length }),
+        JSON.stringify({ jobs: values.length }),
         userId,
       ],
     );
     await connection.commit();
     return {
       campaignId: Number(campaign.id),
-      jobs: recipientResult.rows.length,
+      jobs: values.length,
       status: nextStatus,
     };
   } catch (error) {
@@ -708,6 +694,7 @@ module.exports = {
   broadcastErrorMessage,
   safeWorkerError,
   workerId,
+  providerCadenceSeconds,
   materializeCampaign,
   claimNextBroadcastJob,
   executeBroadcastRecipient,

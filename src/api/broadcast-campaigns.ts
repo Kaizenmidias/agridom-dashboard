@@ -63,10 +63,30 @@ export type CampaignAudienceSummary = {
   email_no_consent: number;
   email_unsubscribed: number;
   email_invalid: number;
+  excluded_contacts: Array<{
+    id: number;
+    name: string;
+    email: string | null;
+    reason: "invalid_email" | "unsubscribed" | "no_consent";
+  }>;
 };
 export type CampaignAudienceSelection = CampaignAudienceSummary & {
   selection_recoverable: boolean;
   recipient_total: number;
+};
+export type CampaignReview = {
+  campaign: Campaign;
+  email_provider?: { id: number | null; provider: "smtp" | "gmail"; status: string; from_email?: string } | null;
+  content?: { email_subject?: string; email_body_text?: string; email_html?: string } | null;
+  selected_audience: CampaignAudienceSelection;
+  validation: {
+    has_name: boolean;
+    has_account: boolean;
+    has_content: boolean;
+    has_recipients: boolean;
+  };
+  ready_for_scheduling: boolean;
+  ready_for_start: boolean;
 };
 export type Audience = {
   total: number;
@@ -211,9 +231,16 @@ export const broadcastAPI = {
     ),
   removeRecipient: (id: number, recipientId: number) =>
     request(`/${id}/recipients/${recipientId}`, { method: "DELETE" }),
-  review: (id: number) => request<Record<string, any>>(`/${id}/review`),
+  review: (id: number) => request<CampaignReview>(`/${id}/review`),
   start: (id: number) =>
     request<{ status: string }>(`/${id}/start`, { method: "POST" }),
+  sendNow: (id: number) =>
+    request<{ status: string; jobs: number }>(`/${id}/send-now`, { method: "POST" }),
+  schedule: (id: number, scheduled_at: string) =>
+    request<{ status: string; jobs: number }>(`/${id}/schedule`, {
+      method: "POST",
+      body: JSON.stringify({ scheduled_at }),
+    }),
   progress: (id: number) =>
     request<{
       status: string;

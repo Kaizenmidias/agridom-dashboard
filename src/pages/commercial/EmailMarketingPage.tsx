@@ -35,7 +35,16 @@ import {
   broadcastAPI,
   type Campaign,
   type CampaignAudienceSummary,
+  type CampaignReview,
 } from "@/api/broadcast-campaigns";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmailVisualEditor } from "@/components/email-marketing/EmailVisualEditor";
 import { emailHtmlToText, sanitizeEmailHtml } from "@/lib/email-html";
 
@@ -107,6 +116,31 @@ function formatDate(value?: string | null) {
   }).format(parsed);
 }
 
+function brasiliaInputToUtc(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}:00-03:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+const exclusionLabels = {
+  invalid_email: "E-mail inválido",
+  unsubscribed: "Descadastrado ou suprimido",
+  no_consent: "Sem consentimento",
+} as const;
+
+function campaignErrorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : "";
+  const messages: Record<string, string> = {
+    CAMPAIGN_NO_ELIGIBLE_RECIPIENTS: "Nenhum destinatário continua elegível para esta campanha.",
+    CAMPAIGN_ALREADY_STARTED: "Esta campanha já foi iniciada ou agendada.",
+    GMAIL_NOT_CONNECTED: "A conta Gmail precisa ser reconectada antes do envio.",
+    EMAIL_SMTP_NOT_CONFIGURED: "O provedor SMTP selecionado não está disponível.",
+    EMAIL_CONTENT_REQUIRED: "Informe assunto e conteúdo antes de iniciar.",
+    SCHEDULE_MUST_BE_FUTURE: "Escolha uma data futura no horário de Brasília.",
+  };
+  return messages[message] || message || fallback;
+}
+
 function stripHtml(value?: string | null) {
   return String(value || "")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -140,8 +174,8 @@ export default function EmailMarketingPage() {
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [campaignResult, providerResult, folderResult] = await Promise.all([
         broadcastAPI.list(),
@@ -158,12 +192,17 @@ export default function EmailMarketingPage() {
           : "Não foi possível carregar o E-mail Marketing.",
       );
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => void load(true), 10000);
+    return () => window.clearInterval(timer);
   }, [load]);
 
   const counts = useMemo(
@@ -682,6 +721,13 @@ function EmailComposer({
   const [audiencePreviewLoading, setAudiencePreviewLoading] = useState(false);
   const [audiencePreviewError, setAudiencePreviewError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [draftId, setDraftId] = useState<number | null>(initialCampaign?.id || null);
+  const [review, setReview] = useState<CampaignReview | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const [confirmation, setConfirmation] = useState<"send" | "schedule" | null>(null);
+  const [scheduleLocal, setScheduleLocal] = useState("");
 
   useEffect(() => {
     if (providerId) return;
@@ -728,18 +774,18 @@ function EmailComposer({
   const selectedProvider = providers.find(
     (provider) => String(provider.id) === providerId,
   );
-  const saveDraft = async () => {
+  const persistDraft = async () => {
     if (mode === "individual") {
       toast.info("O envio individual ainda não possui um endpoint de produção neste módulo.");
-      return;
+      return null;
     }
     if (!name.trim() || !providerId || !subject.trim() || !emailHtmlToText(bodyHtml)) {
       toast.error("Preencha nome, remetente, assunto e conteúdo.");
-      return;
+      return null;
     }
     if (!initialCampaign && !selectedFolderIds.length) {
       toast.error("Selecione ao menos uma lista de contatos.");
-      return;
+      return null;
     }
     setSaving(true);
     try {
@@ -750,11 +796,14 @@ function EmailComposer({
         email_provider: provider?.provider === "gmail" ? "gmail" : "smtp",
         email_provider_id: provider?.provider === "gmail" ? null : Number(providerId),
       };
-      const campaignId = initialCampaign
-        ? (await broadcastAPI.update(initialCampaign.id, campaignPayload)).campaign.id
+      const existingDraftId = draftId;
+      const campaignId = existingDraftId
+        ? (await broadcastAPI.update(existingDraftId, campaignPayload)).campaign.id
         : (await broadcastAPI.create(campaignPayload)).campaign.id;
-      if (!initialCampaign || audienceChanged) {
+      setDraftId(campaignId);
+      if (!existingDraftId || audienceChanged) {
         await broadcastAPI.audienceFolders(campaignId, selectedFolderIds);
+        setAudienceChanged(false);
       }
       const safeHtml = sanitizeEmailHtml(bodyHtml);
       await broadcastAPI.content(campaignId, {
@@ -763,14 +812,68 @@ function EmailComposer({
         email_body_text: emailHtmlToText(safeHtml),
         email_html: safeHtml,
       });
-      toast.success(initialCampaign ? "Rascunho atualizado." : "Rascunho salvo com o público selecionado.");
-      await onSaved();
+      return campaignId;
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Não foi possível salvar o rascunho.",
       );
+      return null;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveDraft = async () => {
+    const campaignId = await persistDraft();
+    if (!campaignId) return;
+    toast.success(draftId ? "Rascunho atualizado." : "Rascunho salvo com o público selecionado.");
+    await onSaved();
+  };
+
+  const openReview = async () => {
+    setReviewLoading(true);
+    try {
+      const campaignId = await persistDraft();
+      if (!campaignId) return;
+      const latest = await broadcastAPI.review(campaignId);
+      setReview(latest);
+      setReviewOpen(true);
+    } catch (error) {
+      toast.error(campaignErrorMessage(error, "Não foi possível revisar a campanha."));
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const launchCampaign = async () => {
+    if (!draftId || !review || !confirmation) return;
+    setLaunching(true);
+    try {
+      const result = confirmation === "schedule"
+        ? await (() => {
+            const utc = brasiliaInputToUtc(scheduleLocal);
+            if (!utc || new Date(utc).getTime() <= Date.now())
+              throw new Error("Escolha uma data e horário futuros no horário de Brasília.");
+            return broadcastAPI.schedule(draftId, utc);
+          })()
+        : await broadcastAPI.sendNow(draftId);
+      toast.success(
+        result.status === "scheduled"
+          ? `Campanha agendada com ${result.jobs} destinatários.`
+          : `Campanha enfileirada com ${result.jobs} destinatários.`,
+      );
+      setConfirmation(null);
+      setReviewOpen(false);
+      await onSaved();
+    } catch (error) {
+      toast.error(campaignErrorMessage(error, "Não foi possível iniciar a campanha."));
+      try {
+        setReview(await broadcastAPI.review(draftId));
+      } catch {
+        // Keep the last safe review visible when refresh fails.
+      }
+    } finally {
+      setLaunching(false);
     }
   };
 
@@ -949,6 +1052,13 @@ function EmailComposer({
               >
                 {saving ? "Salvando..." : "Salvar rascunho"}
               </Button>
+              <Button
+                variant="outline"
+                disabled={saving || reviewLoading || audiencePreviewLoading}
+                onClick={() => void openReview()}
+              >
+                {reviewLoading ? "Atualizando..." : "Revisar envio"}
+              </Button>
               <div className="ml-auto hidden text-right sm:block">
                     <p className="text-xs text-zinc-400">
                       {audiencePreviewLoading
@@ -974,6 +1084,124 @@ function EmailComposer({
         </>
       ) : null}
       <span className="sr-only">Remetente atual: {selectedProvider?.from_email || "não definido"}</span>
+      <Dialog open={reviewOpen} onOpenChange={(open) => !launching && setReviewOpen(open)}>
+        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto border-white/10 bg-[#1b1d1e] text-zinc-100">
+          <DialogHeader>
+            <DialogTitle>Revisar envio</DialogTitle>
+            <DialogDescription>
+              Os destinatários foram revalidados agora. O worker verificará consentimento e supressões novamente antes de cada envio.
+            </DialogDescription>
+          </DialogHeader>
+          {review ? (
+            <div className="space-y-5">
+              <div className="grid gap-3 border-y border-white/10 py-4 sm:grid-cols-2">
+                <ReviewField label="Campanha" value={review.campaign.name} />
+                <ReviewField label="Assunto" value={review.content?.email_subject || "Sem assunto"} />
+                <ReviewField
+                  label="Remetente"
+                  value={review.email_provider?.from_email || selectedProvider?.from_email || "Não disponível"}
+                />
+                <ReviewField
+                  label="Listas"
+                  value={review.selected_audience.folders.map((folder) => folder.name).join(", ") || "Seleção histórica"}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-white/10 bg-white/10 sm:grid-cols-3">
+                {[
+                  ["Selecionados", review.selected_audience.total_selected],
+                  ["E-mails válidos", review.selected_audience.email_valid],
+                  ["Elegíveis", review.selected_audience.email_eligible],
+                  ["Sem consentimento", review.selected_audience.email_no_consent],
+                  ["Descadastrados", review.selected_audience.email_unsubscribed],
+                  ["E-mails inválidos", review.selected_audience.email_invalid],
+                ].map(([label, value]) => (
+                  <div key={label} className="bg-[#222526] p-3">
+                    <p className="text-[11px] text-zinc-500">{label}</p>
+                    <p className="mt-1 text-lg font-semibold">{value}</p>
+                  </div>
+                ))}
+              </div>
+              {!review.ready_for_start ? (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+                  {review.selected_audience.email_eligible === 0
+                    ? "O envio está bloqueado porque nenhum contato possui e-mail válido, consentimento ativo e ausência de supressão."
+                    : "Complete remetente, assunto, conteúdo e audiência antes de iniciar."}
+                </div>
+              ) : null}
+              {review.selected_audience.excluded_contacts.length ? (
+                <div>
+                  <h3 className="mb-2 text-sm font-medium">Contatos excluídos da campanha</h3>
+                  <div className="max-h-44 divide-y divide-white/5 overflow-y-auto rounded-md border border-white/10">
+                    {review.selected_audience.excluded_contacts.map((contact) => (
+                      <div key={contact.id} className="flex items-center gap-3 px-3 py-2 text-xs">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-zinc-300">{contact.name}</p>
+                          <p className="truncate text-zinc-600">{contact.email || "Sem e-mail válido"}</p>
+                        </div>
+                        <span className="text-amber-300">{exclusionLabels[contact.reason]}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[10px] text-zinc-600">Exibindo até 100 contatos excluídos.</p>
+                </div>
+              ) : null}
+              <div className="rounded-md border border-white/10 p-3">
+                <Label htmlFor="campaign-schedule" className="text-xs text-zinc-400">
+                  Data e horário para agendamento (Brasília, GMT-3)
+                </Label>
+                <Input
+                  id="campaign-schedule"
+                  type="datetime-local"
+                  value={scheduleLocal}
+                  onChange={(event) => setScheduleLocal(event.target.value)}
+                  className="mt-2 max-w-xs"
+                />
+              </div>
+              {confirmation ? (
+                <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3">
+                  <p className="text-sm text-red-100">
+                    {confirmation === "send"
+                      ? "Confirma o enfileiramento imediato desta campanha?"
+                      : "Confirma o agendamento desta campanha?"}
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button disabled={launching} className="bg-[#BEFA33] text-zinc-950" onClick={() => void launchCampaign()}>
+                      {launching ? "Processando..." : "Confirmar"}
+                    </Button>
+                    <Button disabled={launching} variant="ghost" onClick={() => setConfirmation(null)}>Cancelar</Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2 sm:space-x-0">
+            <Button variant="ghost" disabled={launching} onClick={() => setReviewOpen(false)}>Voltar para edição</Button>
+            <Button
+              variant="outline"
+              disabled={!review?.ready_for_scheduling || launching || !scheduleLocal}
+              onClick={() => setConfirmation("schedule")}
+            >
+              <CalendarClock className="mr-2 h-4 w-4" /> Agendar
+            </Button>
+            <Button
+              disabled={!review?.ready_for_start || launching}
+              className="bg-[#BEFA33] text-zinc-950 hover:bg-[#aee82f]"
+              onClick={() => setConfirmation("send")}
+            >
+              <Send className="mr-2 h-4 w-4" /> Enviar campanha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
+  );
+}
+
+function ReviewField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] text-zinc-500">{label}</p>
+      <p className="truncate text-sm text-zinc-200">{value}</p>
+    </div>
   );
 }

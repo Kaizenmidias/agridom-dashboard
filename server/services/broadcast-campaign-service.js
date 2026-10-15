@@ -137,6 +137,14 @@ function normalizeCadence(value) {
   return seconds;
 }
 
+function normalizeScheduledAt(value) {
+  if (value == null || value === "") return null;
+  const parsed = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(parsed.getTime()))
+    throw new BroadcastCampaignError(400, "Data de agendamento invalida.");
+  return parsed.toISOString().slice(0, 19).replace("T", " ");
+}
+
 async function createDraft({
   userId,
   name,
@@ -227,7 +235,9 @@ async function updateDraft(id, userId, values = {}) {
       accountId,
       providerId,
       provider,
-      values.scheduledAt ?? campaign.scheduled_at ?? null,
+      values.scheduledAt === undefined
+        ? campaign.scheduled_at ?? null
+        : normalizeScheduledAt(values.scheduledAt),
       cadenceSeconds,
       campaign.id,
       userId,
@@ -364,6 +374,7 @@ async function getFolderAudienceSummary(folderIds, userId) {
       email_no_consent: 0,
       email_unsubscribed: 0,
       email_invalid: 0,
+      excluded_contacts: [],
     };
   }
   const placeholders = normalizedFolderIds.map(() => "?").join(",");
@@ -385,6 +396,7 @@ async function getFolderAudienceSummary(folderIds, userId) {
       email_no_consent: 0,
       email_unsubscribed: 0,
       email_invalid: 0,
+      excluded_contacts: [],
     };
   }
   const ownedPlaceholders = ownedFolderIds.map(() => "?").join(",");
@@ -407,6 +419,25 @@ async function getFolderAudienceSummary(folderIds, userId) {
     ownedFolderIds,
   );
   const totals = summary.rows?.[0] || {};
+  const excluded = await query(
+    `SELECT DISTINCT p.id, p.business_name, p.email,
+      CASE
+        WHEN p.email IS NULL OR NOT (LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$') THEN 'invalid_email'
+        WHEN s.id IS NOT NULL THEN 'unsubscribed'
+        WHEN COALESCE(p.email_marketing_consent, 0) <> 1 THEN 'no_consent'
+        ELSE NULL
+      END AS reason
+     FROM lead_folder_members m
+     JOIN prospects p ON p.id = m.prospect_id
+     LEFT JOIN broadcast_email_suppressions s ON s.email = LOWER(TRIM(p.email))
+     WHERE m.folder_id IN (${ownedPlaceholders})
+       AND (p.email IS NULL
+         OR NOT (LOWER(TRIM(p.email)) REGEXP '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$')
+         OR s.id IS NOT NULL
+         OR COALESCE(p.email_marketing_consent, 0) <> 1)
+     ORDER BY p.id DESC LIMIT 100`,
+    ownedFolderIds,
+  );
   return {
     folder_ids: ownedFolderIds,
     folders: (folders.rows || []).map((row) => ({
@@ -420,6 +451,12 @@ async function getFolderAudienceSummary(folderIds, userId) {
     email_no_consent: Number(totals.email_no_consent || 0),
     email_unsubscribed: Number(totals.email_unsubscribed || 0),
     email_invalid: Number(totals.email_invalid || 0),
+    excluded_contacts: (excluded.rows || []).map((row) => ({
+      id: Number(row.id),
+      name: row.business_name || "Contato sem nome",
+      email: row.email || null,
+      reason: row.reason,
+    })),
   };
 }
 
@@ -485,6 +522,7 @@ module.exports = {
   normalizePhone,
   normalizeContent,
   normalizeCadence,
+  normalizeScheduledAt,
   createDraft,
   getCampaign,
   listCampaigns,
