@@ -125,11 +125,13 @@ export function EmailVisualEditor({
   subject,
   from,
   onChange,
+  onDone,
 }: {
   html: string;
   subject: string;
   from: string;
   onChange: (html: string) => void;
+  onDone?: () => void;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
@@ -385,6 +387,12 @@ export function EmailVisualEditor({
         className="min-h-52 flex-1 overflow-y-auto px-5 py-4 text-sm leading-6 outline-none empty:before:text-zinc-600 empty:before:content-[attr(data-placeholder)]"
         data-placeholder="Escreva o conteúdo da campanha..."
         onInput={sync}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          document.execCommand(event.shiftKey ? "insertLineBreak" : "insertParagraph", false);
+          sync();
+        }}
         onKeyUp={updateToolbarState}
         onMouseUp={updateToolbarState}
         onPaste={onPaste}
@@ -409,6 +417,7 @@ export function EmailVisualEditor({
         <div className="ml-auto flex gap-1">
           <Button type="button" variant="ghost" size="sm" onClick={() => setPreview("desktop")}><Monitor className="mr-2 h-4 w-4" /> Desktop</Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => setPreview("mobile")}><Smartphone className="mr-2 h-4 w-4" /> Mobile</Button>
+          {onDone ? <Button type="button" size="sm" onClick={onDone}>Concluir edição</Button> : null}
         </div>
       </div>
 

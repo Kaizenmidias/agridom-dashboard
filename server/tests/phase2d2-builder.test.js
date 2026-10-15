@@ -6,6 +6,7 @@ const { validateAutomationDefinition } = require('../services/automation-definit
 const { ACTION_CATALOG, ACTION_TYPES, STEP_TYPES } = require('../services/automation-catalog');
 
 const builder = fs.readFileSync(path.join(__dirname, '../../src/components/automations/AutomationBuilder.tsx'), 'utf8');
+const visualEditor = fs.readFileSync(path.join(__dirname, '../../src/components/email-marketing/EmailVisualEditor.tsx'), 'utf8');
 const repository = fs.readFileSync(path.join(__dirname, '../services/automation-repository.js'), 'utf8');
 const routes = fs.readFileSync(path.join(__dirname, '../routes/automations.js'), 'utf8');
 const repositoryService = fs.readFileSync(path.join(__dirname, '../services/automation-repository.js'), 'utf8');
@@ -35,6 +36,19 @@ test('2D.2 builder keeps the semantic definition separate from visual coordinate
 test('2D.2 exposes draft update and keeps actions internal', () => {
   assert.match(routes, /patch\('\/:id\/versions\/:versionId'/);
   assert.match(builder, /requires_integration/);
+});
+
+test('2D.2 keeps the email editor in a modal and protects contenteditable keyboard shortcuts', () => {
+  assert.match(builder, /Editar mensagem/);
+  assert.match(builder, /onDone=\{\(\) => setEmailEditorExpanded\(false\)\}/);
+  assert.match(builder, /target\.closest\("\[contenteditable=\\"true\\"\]"\)/);
+  assert.doesNotMatch(builder, /<EmailVisualEditor[\s\S]*className=\{\"w-full/);
+});
+
+test('2D.2 keeps provider and communication type as full-width fields', () => {
+  assert.match(builder, /className="space-y-2"[\s\S]*Provedor[\s\S]*Tipo de comunica/);
+  assert.match(visualEditor, /insertParagraph/);
+  assert.match(visualEditor, /insertLineBreak/);
 });
 
 test('2D.2 action catalog separates executable, integration and future actions', () => {
