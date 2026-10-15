@@ -58,6 +58,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { EmailVisualEditor } from "@/components/email-marketing/EmailVisualEditor";
+import { emailHtmlToText } from "@/lib/email-html";
 import { whatsappAPI, type WhatsAppAccount } from "@/api/whatsapp";
 import { leadFoldersAPI, type LeadFolder } from "@/api/lead-folders";
 import {
@@ -1362,6 +1364,7 @@ function NodeInspector({
   const [endpointLoading, setEndpointLoading] = useState(false);
   const [endpointBusy, setEndpointBusy] = useState(false);
   const [endpointError, setEndpointError] = useState<string | null>(null);
+  const [emailEditorExpanded, setEmailEditorExpanded] = useState(false);
   useEffect(() => {
     if (!isWebhookTrigger || !Number.isSafeInteger(automationId) || automationId <= 0) return;
     setEndpointLoading(true); setEndpointError(null);
@@ -1650,12 +1653,24 @@ function NodeInspector({
         </>
       ) : null}
       {actionType === "activity.complete" ? <FieldLabel label="ID da atividade"><Input type="number" min="1" value={String(node.config.activityId || "")} onChange={(event) => updateConfig("activityId", Number(event.target.value))} /></FieldLabel> : null}
-      {actionType === "email.send" ? <><FieldLabel label="Destinatário"><Input value={String(node.config.recipient || "{{lead.email}}")} onChange={(event) => updateConfig("recipient", event.target.value)} /></FieldLabel><FieldLabel label="Assunto"><Input value={String(node.config.subject || "")} placeholder="Ex.: Olá, {{lead.name}}" onChange={(event) => updateConfig("subject", event.target.value)} /></FieldLabel></> : null}
+      {actionType === "email.send" ? <>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <FieldLabel label="Provedor"><Select value={String(node.config.provider || "gmail")} onValueChange={(value) => updateConfig("provider", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="gmail">Gmail conectado</SelectItem><SelectItem value="smtp">SMTP configurado</SelectItem></SelectContent></Select></FieldLabel>
+          <FieldLabel label="Tipo de comunicação"><Select value={String(node.config.communicationType || "transactional")} onValueChange={(value) => updateConfig("communicationType", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="transactional">Transacional</SelectItem><SelectItem value="commercial">Comercial, exige consentimento</SelectItem></SelectContent></Select></FieldLabel>
+        </div>
+        <FieldLabel label="Destinatário"><Input value={String(node.config.recipient || "{{lead.email}}")} onChange={(event) => updateConfig("recipient", event.target.value)} /></FieldLabel>
+        <FieldLabel label="Assunto"><Input value={String(node.config.subject || "")} placeholder="Ex.: Olá, {{lead.name}}" onChange={(event) => updateConfig("subject", event.target.value)} /></FieldLabel>
+        <div className="space-y-2 rounded-md border border-border bg-background/30 p-2">
+          <div className="flex items-center justify-between gap-2"><Label className="text-xs text-muted-foreground">Conteúdo do e-mail</Label><Button type="button" size="sm" variant="outline" onClick={() => setEmailEditorExpanded(true)}>Expandir editor</Button></div>
+          <EmailVisualEditor html={String(node.config.messageHtml || node.config.message || "")} subject={String(node.config.subject || "")} from="Gmail/SMTP configurado" onChange={(value) => { updateConfig("messageHtml", value); updateConfig("message", emailHtmlToText(value)); }} />
+          <p className="text-[11px] text-muted-foreground">A publicação valida a conexão do provedor escolhido. Mensagens comerciais exigem consentimento e respeitam supressões.</p>
+        </div>
+        <Dialog open={emailEditorExpanded} onOpenChange={setEmailEditorExpanded}><DialogContent className="max-w-5xl"><DialogHeader><DialogTitle>Editor visual de e-mail</DialogTitle><DialogDescription>O conteúdo é sanitizado antes de ser persistido e enviado pela fila.</DialogDescription></DialogHeader><EmailVisualEditor html={String(node.config.messageHtml || node.config.message || "")} subject={String(node.config.subject || "")} from="Gmail/SMTP configurado" onChange={(value) => { updateConfig("messageHtml", value); updateConfig("message", emailHtmlToText(value)); }} /></DialogContent></Dialog>
+      </> : null}
       {actionType === "whatsapp.send" ? <><FieldLabel label="Conta WhatsApp"><Select value={String(node.config.accountId || "")} onValueChange={(value) => updateConfig("accountId", Number(value))}><SelectTrigger><SelectValue placeholder={whatsappAccounts.length ? "Selecione a conta" : "Nenhuma conta conectada"} /></SelectTrigger><SelectContent>{whatsappAccounts.map((account) => <SelectItem key={account.id} value={String(account.id)}>{account.name}{account.phoneNumber ? ` - ${account.phoneNumber}` : ""}</SelectItem>)}</SelectContent></Select></FieldLabel><FieldLabel label="Destinatário"><Input value={String(node.config.recipient || "{{lead.phone}}")} onChange={(event) => updateConfig("recipient", event.target.value)} /></FieldLabel></> : null}
       {actionType === "whatsapp.send" ? <div className="grid grid-cols-2 gap-2"><FieldLabel label="Cadência"><Input type="number" min="1" value={String(node.config.cadenceValue || 1)} onChange={(event) => updateConfig("cadenceValue", Number(event.target.value))} /></FieldLabel><FieldLabel label="Unidade"><Select value={String(node.config.cadenceUnit || "minutes")} onValueChange={(value) => updateConfig("cadenceUnit", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="seconds">Segundos</SelectItem><SelectItem value="minutes">Minutos</SelectItem><SelectItem value="hours">Horas</SelectItem><SelectItem value="days">Dias</SelectItem></SelectContent></Select></FieldLabel></div> : null}
       {actionType === "notification.create" ? <><FieldLabel label="Título"><Input value={String(node.config.title || "")} onChange={(event) => updateConfig("title", event.target.value)} /></FieldLabel><FieldLabel label="Mensagem"><Textarea value={String(node.config.message || "")} onChange={(event) => updateConfig("message", event.target.value)} /></FieldLabel></> : null}
       {[
-        "email.send",
         "whatsapp.send_message",
         "whatsapp.send",
         "whatsapp.send_template",

@@ -204,7 +204,7 @@ export const ACTION_CATALOG: ActionCatalogItem[] = [
     description: "Prepara um e-mail transacional",
     category: "communication",
     icon: Mail,
-    availability: "requires_integration",
+    availability: "available",
     requiredIntegration: "email",
     aliases: ["email", "mensagem"],
   },

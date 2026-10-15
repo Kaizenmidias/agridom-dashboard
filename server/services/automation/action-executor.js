@@ -5,6 +5,7 @@ const { resolveConfig } = require('./variable-resolver');
 const { decryptSecret } = require('../integration-crypto');
 const { validateSmtpConfig, sendSmtp } = require('../email-provider');
 const { sendGmail } = require('../gmail-provider');
+const { sanitizeEmailHtml, htmlToText } = require('../broadcast-email-html');
 const { sendWhatsAppMessage, normalizePhone } = require('../whatsapp-service');
 
 const FIELD_ALLOWLIST = Object.freeze(new Set(['business_name', 'category', 'address', 'city', 'state', 'phone', 'email', 'website', 'status']));
@@ -155,10 +156,20 @@ async function executeAction(connection, actionType, rawConfig, context) {
     const recipient = String(config.recipient || lead.email || '').trim();
     if (!recipient) { const error = new Error('RECIPIENT_EMAIL_MISSING'); error.code = 'RECIPIENT_EMAIL_MISSING'; error.retryable = false; throw error; }
     const subject = String(config.subject || '').trim();
-    const message = String(config.message || '').trim();
+    const messageHtml = sanitizeEmailHtml(config.messageHtml || '');
+    const message = String(config.message || (messageHtml ? htmlToText(messageHtml) : '')).trim();
     const emailProvider = String(config.provider || 'smtp').toLowerCase() === 'gmail' ? 'gmail' : 'smtp';
+    const communicationType = String(config.communicationType || 'transactional').toLowerCase();
+    if (!['transactional', 'commercial'].includes(communicationType)) {
+      const error = new Error('INVALID_EMAIL_COMMUNICATION_TYPE'); error.code = error.message; error.retryable = false; throw error;
+    }
     if (!subject) { const error = new Error('INVALID_EMAIL_SUBJECT'); error.code = 'INVALID_EMAIL_SUBJECT'; error.retryable = false; throw error; }
     if (!message) { const error = new Error('INVALID_EMAIL_MESSAGE'); error.code = 'INVALID_EMAIL_MESSAGE'; error.retryable = false; throw error; }
+    const [suppressedRows] = await connection.execute('SELECT id FROM broadcast_email_suppressions WHERE email = ? LIMIT 1', [recipient.toLowerCase()]);
+    if (suppressedRows[0]) { const error = new Error('EMAIL_SUPPRESSED'); error.code = error.message; error.retryable = false; throw error; }
+    if (communicationType === 'commercial' && Number(lead.email_marketing_consent || 0) !== 1) {
+      const error = new Error('EMAIL_CONSENT_REQUIRED'); error.code = error.message; error.retryable = false; throw error;
+    }
     const idempotencyKey = `email:${context.idempotencyKey}`;
     const [existingRows] = await connection.execute('SELECT * FROM communication_messages WHERE idempotency_key = ? FOR UPDATE', [idempotencyKey]);
     if (existingRows[0]?.status === 'sent') return { recipient, subject, messageId: existingRows[0].provider_message_id, idempotent: true };
@@ -166,15 +177,15 @@ async function executeAction(connection, actionType, rawConfig, context) {
     else await connection.execute("INSERT INTO communication_messages (channel, direction, lead_id, automation_id, automation_run_id, automation_step_id, idempotency_key, recipient, subject, body_text, status, provider, attempt_count) VALUES ('email', 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, 'sending', ?, 1)", [context.leadId, context.automationId, context.runId, context.stepId, idempotencyKey, recipient, subject, message, emailProvider]);
     let result;
     try {
-      if (String(config.provider || 'smtp').toLowerCase() === 'gmail') {
-        result = await sendGmail(getPool(), { to: recipient, subject, text: message });
+      if (emailProvider === 'gmail') {
+        result = await sendGmail(getPool(), { to: recipient, subject, text: message, html: messageHtml || undefined });
       } else {
         const [integrationRows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'smtp' LIMIT 1");
         if (!integrationRows[0]) { const error = new Error('EMAIL_INTEGRATION_NOT_CONFIGURED'); error.code = 'EMAIL_INTEGRATION_NOT_CONFIGURED'; error.retryable = false; throw error; }
         const secret = decryptSecret(integrationRows[0]);
         const metadata = JSON.parse(integrationRows[0].configuration_metadata || '{}');
         const smtp = validateSmtpConfig({ ...metadata, password: secret?.password });
-        result = await sendSmtp(smtp, { to: recipient, subject, text: message, replyTo: config.replyTo || undefined });
+        result = await sendSmtp(smtp, { to: recipient, subject, text: message, html: messageHtml || undefined, replyTo: config.replyTo || undefined });
       }
     } catch (error) {
       const auditConnection = await getPool().getConnection();

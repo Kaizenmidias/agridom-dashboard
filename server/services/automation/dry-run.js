@@ -5,6 +5,8 @@ const { resolveConfig } = require('./variable-resolver');
 const { decryptSecret } = require('../integration-crypto');
 const { validateSmtpConfig } = require('../email-provider');
 const { normalizePhone } = require('../whatsapp-service');
+const { getCurrentConnection } = require('../gmail-oauth-repository');
+const { GMAIL_SEND_SCOPE } = require('../gmail-provider');
 
 async function dryRunAutomation({ definition, leadId, ownerUserId }) {
   const validation = validateAutomationDefinition(definition, { requireSteps: true });
@@ -42,12 +44,19 @@ async function dryRunAutomation({ definition, leadId, ownerUserId }) {
         if (step.config.actionType === 'email.send') {
           const resolved = resolveConfig(step.config, templateContext);
           if (!lead.email) throw new Error('RECIPIENT_EMAIL_MISSING');
-          if (!resolved.subject || !resolved.message) throw new Error('INVALID_EMAIL_TEMPLATE');
-          const [integrationRows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'smtp' LIMIT 1");
-          if (!integrationRows[0]) throw new Error('EMAIL_INTEGRATION_NOT_CONFIGURED');
-          const secret = decryptSecret(integrationRows[0]);
-          validateSmtpConfig({ ...JSON.parse(integrationRows[0].configuration_metadata || '{}'), password: secret?.password });
-          planned.push({ id: step.id, type: step.type, actionType: step.config.actionType, recipient: lead.email, subject: resolved.subject, message: resolved.message, wouldExecute: true, sent: false });
+          if (!resolved.subject || !(resolved.message || resolved.messageHtml)) throw new Error('INVALID_EMAIL_TEMPLATE');
+          const provider = String(resolved.provider || 'smtp').toLowerCase();
+          if (provider === 'gmail') {
+            const current = await getCurrentConnection(connection);
+            const scopes = typeof current?.scopes_granted === 'string' ? JSON.parse(current.scopes_granted) : current?.scopes_granted;
+            if (!current || current.status !== 'connected' || !Array.isArray(scopes) || !scopes.includes(GMAIL_SEND_SCOPE)) throw new Error('GMAIL_NOT_CONNECTED');
+          } else {
+            const [integrationRows] = await connection.execute("SELECT * FROM integration_providers WHERE provider = 'smtp' LIMIT 1");
+            if (!integrationRows[0]) throw new Error('EMAIL_INTEGRATION_NOT_CONFIGURED');
+            const secret = decryptSecret(integrationRows[0]);
+            validateSmtpConfig({ ...JSON.parse(integrationRows[0].configuration_metadata || '{}'), password: secret?.password });
+          }
+          planned.push({ id: step.id, type: step.type, actionType: step.config.actionType, provider, recipient: lead.email, subject: resolved.subject, message: resolved.message, messageHtml: resolved.messageHtml || null, wouldExecute: true, sent: false });
         } else if (step.config.actionType === 'whatsapp.send') {
           const resolved = resolveConfig(step.config, templateContext);
           const recipient = normalizePhone(resolved.recipient || lead.phone);

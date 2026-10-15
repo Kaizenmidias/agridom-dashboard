@@ -56,4 +56,4 @@ async function sendGmail(pool, message, { fetchImpl = fetch } = {}) {
   return { messageId: payload.id, provider: 'gmail' };
 }
 
-module.exports = { encodeMessage, sendGmail };
+module.exports = { GMAIL_SEND_SCOPE, encodeMessage, sendGmail };

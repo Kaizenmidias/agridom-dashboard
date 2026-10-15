@@ -31,6 +31,19 @@ test('2G.1 email action is executable and requires subject/message', () => {
   assert.equal(catalog.ACTION_CATALOG.find((item) => item.id === 'email.send')?.availability, 'available');
   const result = validateAutomationDefinition({ schemaVersion: 1, trigger: { type: 'lead.created', config: {} }, steps: [{ id: 'send', type: 'action', config: { actionType: 'email.send' }, next: null }] }, { requireSteps: true, requireExecutableActions: true });
   assert.ok(result.errors.filter((item) => item.code === 'MISSING_ACTION_CONFIG').length >= 2);
+  const htmlOnly = validateAutomationDefinition({ schemaVersion: 1, trigger: { type: 'lead.created', config: {} }, steps: [{ id: 'send', type: 'action', config: { actionType: 'email.send', subject: 'Assunto', messageHtml: '<p>Conteúdo</p>' }, next: null }] }, { requireSteps: true, requireExecutableActions: true });
+  assert.equal(htmlOnly.valid, true);
+});
+
+test('2G.1 email automation reuses Gmail, visual HTML and communication safeguards', () => {
+  assert.match(builderSource(), /EmailVisualEditor/);
+  assert.match(builderSource(), /messageHtml/);
+  assert.match(builderSource(), /communicationType/);
+  assert.match(executor, /sendGmail/);
+  assert.match(executor, /sanitizeEmailHtml/);
+  assert.match(executor, /EMAIL_SUPPRESSED/);
+  assert.match(executor, /EMAIL_CONSENT_REQUIRED/);
+  assert.match(dryRun, /GMAIL_NOT_CONNECTED/);
 });
 
 test('2G.1 API, executor and dry-run keep communication concerns isolated', () => {
@@ -44,3 +57,7 @@ test('2G.1 API, executor and dry-run keep communication concerns isolated', () =
   assert.match(migration, /communication_messages/);
   assert.match(migration, /secret_ciphertext/);
 });
+
+function builderSource() {
+  return fs.readFileSync(path.join(__dirname, '../../src/components/automations/AutomationBuilder.tsx'), 'utf8');
+}

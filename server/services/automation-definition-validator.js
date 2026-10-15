@@ -158,12 +158,15 @@ function validateAutomationDefinition(input, options = {}) {
           'lead.move_pipeline_stage': ['stageId'], 'activity.create': ['title'], 'activity.create_task': ['title'],
           'activity.create_call': ['title'], 'activity.create_follow_up': ['title'], 'activity.complete': ['activityId'],
           'notification.create': ['title', 'message'],
-          'email.send': ['subject', 'message'],
+          'email.send': ['subject'],
           'whatsapp.send': ['accountId', 'message'],
         }[step.config.actionType] || [];
         requiredFields.forEach((field) => {
           if (step.config[field] === undefined || step.config[field] === null || step.config[field] === '') errors.push(error(`${path}.config.${field}`, 'MISSING_ACTION_CONFIG', `Configuracao obrigatoria ausente: ${field}.`));
         });
+        if (step.config.actionType === 'email.send' && !String(step.config.message || '').trim() && !String(step.config.messageHtml || '').trim()) {
+          errors.push(error(`${path}.config.message`, 'MISSING_ACTION_CONFIG', 'Configuracao obrigatoria ausente: message ou messageHtml.'));
+        }
         if (step.config.actionType === 'lead.update_field' && !['business_name', 'category', 'address', 'city', 'state', 'phone', 'email', 'website'].includes(step.config.field)) errors.push(error(`${path}.config.field`, 'INVALID_LEAD_FIELD', 'Campo de Lead nao permitido.'));
       } else if (step.type === 'wait' && step.config.duration !== undefined && (!Number.isInteger(step.config.duration) || step.config.duration <= 0)) {
         errors.push(error(`${path}.config.duration`, 'INVALID_WAIT_DURATION', 'Duracao de wait deve ser um inteiro positivo.'));
