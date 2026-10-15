@@ -58,6 +58,10 @@ test('2D.2 keeps editor state in TipTap and applies external HTML through the do
   assert.match(visualEditor, /sanitizeEmailHtml/);
 });
 
+test('2D.2 updates automation email HTML and plain text atomically', () => {
+  assert.match(builder, /onChange=\{\(value\) => updateNode\(\{ config: \{ \.\.\.node\.config, messageHtml: value, message: emailHtmlToText\(value\) \} \}\)\}/);
+});
+
 test('2D.2 action catalog separates executable, integration and future actions', () => {
   assert.ok(ACTION_CATALOG.some((item) => item.id === 'whatsapp.send_message' && item.availability === 'requires_integration'));
   assert.ok(ACTION_CATALOG.some((item) => item.id === 'lead.add_tag' && item.availability === 'available'));
