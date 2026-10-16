@@ -2,12 +2,20 @@ const decode = (value) => String(value || '').replace(/&amp;/gi, '&').replace(/&
 const attr = (tag, name) => { const match = String(tag).match(new RegExp(`${name}\\s*=\\s*["']([^"']+)["']`, 'i')); return match ? match[1].trim() : null; };
 const first = (html, expression) => { const match = String(html).match(expression); return match ? decode(match[1]) : null; };
 const ASSET_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'ico', 'css', 'js', 'json', 'xml', 'woff', 'woff2', 'ttf', 'eot', 'map', 'pdf', 'zip', 'doc', 'docx', 'xls', 'xlsx']);
-const validEmail = (value) => {
-  const email = String(value || '').toLowerCase().trim();
-  const match = email.match(/^[^\s@]+@([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$/i);
+const normalizeEmail = (value) => {
+  if (typeof value !== 'string') return null;
+  let email = value.trim();
+  if (!email) return null;
+  if (/%[0-9a-f]{2}/i.test(email)) {
+    try { email = decodeURIComponent(email); } catch { return null; }
+  }
+  email = email.trim().toLowerCase();
+  if (/%20/i.test(email)) return null;
+  const match = email.match(/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$/i);
   if (!match || /example|placeholder|test@|w3\.org|schema\.org/.test(email)) return null;
   return ASSET_EXTENSIONS.has(match[1].split('.').pop()) ? null : email;
 };
+const validEmail = normalizeEmail;
 const cleanInstagram = (value) => { try { const url = new URL(value, 'https://example.invalid'); return /(^|\.)instagram\.com$/i.test(url.hostname) && !/\/(share|intent|p|reel|stories)(\/|$)/i.test(url.pathname) ? `https://www.instagram.com/${url.pathname.split('/').filter(Boolean)[0]}/` : null; } catch { return null; } };
 const cleanLinkedin = (value) => { try { const url = new URL(value, 'https://example.invalid'); return /(^|\.)linkedin\.com$/i.test(url.hostname) && /^\/company\/[^/]+/i.test(url.pathname) ? `https://www.linkedin.com${url.pathname.replace(/\/$/, '')}/` : null; } catch { return null; } };
 const cleanSocial = (value, hostPattern, pathPattern) => { try { const url = new URL(value, 'https://example.invalid'); return hostPattern.test(url.hostname) && pathPattern.test(url.pathname) && !/(share|intent|sharer|status|posts?|reels?|stories?|plugins?)/i.test(url.pathname) ? url.toString().split('?')[0].replace(/\/$/, '') : null; } catch { return null; } };
@@ -61,4 +69,4 @@ function parsePage(html, pageUrl, options = {}) {
   return { fields: { email: emails[0] || null, instagram, linkedin, address: address || null, phone: phone(telValue) || phone(organization.telephone) || phone(whatsappPhone), businessName: organization.name || first(source, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) }, links: hrefs, diagnostic: { technology, technologyEvidence, seo, marketing, mobile: { viewport, forms: forms.length > 0, formCount: forms.length, formFieldCount: marketing.formFieldCount, clickablePhone: marketing.clickablePhone, clickableEmail: marketing.clickableEmail, whatsapp: marketing.whatsapp, imagesWithoutDimensions: seo.imagesWithoutDimensions, ctas: ctaMatches }, security: { https: pageUrl.startsWith('https:'), mixedContent, headers: { contentSecurityPolicy: header('content-security-policy'), xContentTypeOptions: header('x-content-type-options'), referrerPolicy: header('referrer-policy'), strictTransportSecurity: header('strict-transport-security'), permissionsPolicy: header('permissions-policy'), xFrameOptions: header('x-frame-options') } }, performance: { responseTimeMs: options.responseTimeMs ?? null, htmlSizeBytes: Buffer.byteLength(source), scriptCount: scripts, stylesheetCount: stylesheets, imageCount: images.length }, tracking, conversion: { contactForm: marketing.contactForm, genericForm: marketing.genericForm, whatsapp: marketing.whatsapp, clickablePhone: marketing.clickablePhone, clickableEmail: marketing.clickableEmail, ctas: ctaMatches }, social: { instagram, linkedin, facebook, youtube, whatsapp: whatsappLink }, opportunities } };
 }
 
-module.exports = { cleanInstagram, cleanLinkedin, parsePage, validEmail };
+module.exports = { cleanInstagram, cleanLinkedin, normalizeEmail, parsePage, validEmail };

@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { parsePage } = require('../services/website-enrichment-parser');
+const { normalizeEmail, parsePage } = require('../services/website-enrichment-parser');
 const { createPinnedLookup, validateUrl, fetchHtml } = require('../services/website-enrichment-ssrf');
 const { claimNextEnrichment, crawlWebsite, mergeResults, normalizePageUrl, persistEnrichment, websiteUrl } = require('../services/website-enrichment-service');
 const enrichmentServiceSource = require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/website-enrichment-service.js'), 'utf8');
@@ -197,9 +197,45 @@ test('mantem email mailto e JSON-LD validos', () => {
   assert.equal(parsePage('<script type="application/ld+json">{"@type":"Organization","email":"contato@empresa.com.br"}</script>', 'https://empresa.test').fields.email, 'contato@empresa.com.br');
 });
 
+test('normaliza somente e-mails textuais validos e trata encoding de URL com evidencia', () => {
+  assert.equal(normalizeEmail('  CONTATO@EMPRESA.COM  '), 'contato@empresa.com');
+  assert.equal(normalizeEmail('contato%40empresa.com'), 'contato@empresa.com');
+  assert.equal(normalizeEmail('contato%20comercial@empresa.com'), null);
+  assert.equal(normalizeEmail('contato comercial@empresa.com'), null);
+  assert.equal(normalizeEmail('contato@empresa'), null);
+  assert.equal(normalizeEmail(null), null);
+  assert.equal(normalizeEmail(''), null);
+});
+
+test('parser descarta candidatos invalidos e preserva a prioridade do primeiro valido', () => {
+  const result = parsePage('<p>contato%20comercial@empresa.com suporte@empresa.com financeiro@empresa.com</p>', 'https://empresa.test');
+  assert.equal(result.fields.email, 'suporte@empresa.com');
+});
+
+test('parser trata mailto codificado e rejeita espacos internos', () => {
+  assert.equal(parsePage('<a href="mailto:contato%40empresa.com">Contato</a>', 'https://empresa.test').fields.email, 'contato@empresa.com');
+  assert.equal(parsePage('<a href="mailto:contato%20comercial%40empresa.com">Contato</a>', 'https://empresa.test').fields.email, null);
+});
+
 test('consolida oportunidades e preserva a semantica SEO da primeira pagina', () => {
   const page = (imagesWithoutAlt, opportunities) => ({ fields: {}, diagnostic: { technology: {}, seo: { imagesWithoutAlt }, marketing: {}, mobile: {}, security: { headers: {} }, performance: {}, opportunities } });
   const result = mergeResults([page(10, ['Meta Pixel nao detectado', '10 imagens sem atributo alt']), page(2, ['Meta Pixel nao detectado', '2 imagens sem atributo alt']), page(5, ['Meta Pixel nao detectado', '5 imagens sem atributo alt'])]);
   assert.equal(result.diagnostic.seo.imagesWithoutAlt, 10);
   assert.deepEqual(result.diagnostic.opportunities, ['Meta Pixel nao detectado', '10 imagens sem atributo alt']);
+});
+
+test('persistencia descarta email enriquecido invalido sem apagar email valido existente', async () => {
+  const calls = [];
+  const connection = { execute: async (sql, params) => { calls.push({ sql, params }); return [[], {}]; } };
+  await persistEnrichment({ connection, job: { id: 8, prospect_id: 20, email: 'existente@empresa.com', phone: null, address: null, instagram: null, business_name: 'Empresa', analysis_report: null }, result: { fields: { email: 'contato%20comercial@empresa.com' }, diagnostic: { pagesAnalyzed: 1, opportunities: [], partialError: null } } });
+  assert.equal(calls.find((call) => call.sql.startsWith('UPDATE prospects')), undefined);
+});
+
+test('persistencia normaliza email codificado quando o campo do Prospect esta vazio', async () => {
+  const calls = [];
+  const connection = { execute: async (sql, params) => { calls.push({ sql, params }); return [[], {}]; } };
+  await persistEnrichment({ connection, job: { id: 9, prospect_id: 21, email: null, phone: null, address: null, instagram: null, business_name: 'Empresa', analysis_report: null }, result: { fields: { email: ' CONTATO%40EMPRESA.COM ' }, diagnostic: { pagesAnalyzed: 1, opportunities: [], partialError: null } } });
+  const prospectUpdate = calls.find((call) => call.sql.startsWith('UPDATE prospects'));
+  assert.match(prospectUpdate.sql, /email = \?/);
+  assert.equal(prospectUpdate.params[0], 'contato@empresa.com');
 });

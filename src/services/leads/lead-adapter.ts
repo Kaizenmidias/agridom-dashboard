@@ -68,6 +68,17 @@ function mapSource(value?: string | null): LeadSource {
   return "manual";
 }
 
+function normalizeDisplayEmail(value?: string | null): string | null {
+  if (typeof value !== "string") return null;
+  let email = value.trim();
+  if (!email) return null;
+  if (/%[0-9a-f]{2}/i.test(email)) {
+    try { email = decodeURIComponent(email); } catch { return null; }
+  }
+  email = email.trim().toLowerCase();
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(email) && !/\s|%20/i.test(email) ? email : null;
+}
+
 export function prospectToLead(prospect: Prospect): Lead {
   let report: ProspectAnalysisReport = {};
   if (typeof prospect.analysis_report === "string") {
@@ -83,8 +94,8 @@ export function prospectToLead(prospect: Prospect): Lead {
     category: prospect.category,
     phone: prospect.phone,
     whatsapp: buildWhatsAppUrl(prospect.phone),
-    email: prospect.email,
-    secondaryEmail: report.email_secundario || null,
+    email: normalizeDisplayEmail(prospect.email),
+    secondaryEmail: normalizeDisplayEmail(report.email_secundario),
     website: prospect.website,
     city: prospect.city,
     state: prospect.state,

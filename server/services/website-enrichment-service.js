@@ -1,6 +1,6 @@
 const { getPool } = require('../config/database');
 const { fetchHtml } = require('./website-enrichment-ssrf');
-const { parsePage } = require('./website-enrichment-parser');
+const { normalizeEmail, parsePage } = require('./website-enrichment-parser');
 
 const MAX_PAGES = 5;
 const MAX_ATTEMPTS = 2;
@@ -99,11 +99,12 @@ async function persistEnrichment({ connection = getPool(), job, result }) {
     else if (job.analysis_report != null && job.analysis_report !== '') reportIsSafe = false;
   } catch { reportIsSafe = false; }
   const fields = result.fields;
+  const email = normalizeEmail(fields.email);
   const nextReport = { ...report };
   const canPersistLinkedin = reportIsSafe && isBlank(report.linkedin) && !isBlank(fields.linkedin);
   if (canPersistLinkedin) nextReport.linkedin = fields.linkedin;
-  const updates = [fields.email && isBlank(job.email) ? 'email = ?' : null, fields.phone && isBlank(job.phone) ? 'phone = ?' : null, fields.address && isBlank(job.address) ? 'address = ?' : null, fields.instagram && isBlank(job.instagram) ? 'instagram = ?' : null, fields.businessName && isBlank(job.business_name) ? 'business_name = ?' : null, canPersistLinkedin ? 'analysis_report = ?' : null].filter(Boolean);
-  const params = []; if (fields.email && isBlank(job.email)) params.push(fields.email); if (fields.phone && isBlank(job.phone)) params.push(fields.phone); if (fields.address && isBlank(job.address)) params.push(fields.address); if (fields.instagram && isBlank(job.instagram)) params.push(fields.instagram); if (fields.businessName && isBlank(job.business_name)) params.push(fields.businessName); if (canPersistLinkedin) params.push(JSON.stringify(nextReport));
+  const updates = [email && isBlank(job.email) ? 'email = ?' : null, fields.phone && isBlank(job.phone) ? 'phone = ?' : null, fields.address && isBlank(job.address) ? 'address = ?' : null, fields.instagram && isBlank(job.instagram) ? 'instagram = ?' : null, fields.businessName && isBlank(job.business_name) ? 'business_name = ?' : null, canPersistLinkedin ? 'analysis_report = ?' : null].filter(Boolean);
+  const params = []; if (email && isBlank(job.email)) params.push(email); if (fields.phone && isBlank(job.phone)) params.push(fields.phone); if (fields.address && isBlank(job.address)) params.push(fields.address); if (fields.instagram && isBlank(job.instagram)) params.push(fields.instagram); if (fields.businessName && isBlank(job.business_name)) params.push(fields.businessName); if (canPersistLinkedin) params.push(JSON.stringify(nextReport));
   if (updates.length) { params.push(job.prospect_id); await connection.execute(`UPDATE prospects SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params); }
   const status = result.diagnostic.pagesAnalyzed > 0 ? (result.diagnostic.partialError ? 'partial' : 'completed') : 'failed';
   await connection.execute(`UPDATE lead_website_enrichments SET status = ?, completed_at = CURRENT_TIMESTAMP, diagnostic_payload = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [status, JSON.stringify(result.diagnostic), job.id]);
