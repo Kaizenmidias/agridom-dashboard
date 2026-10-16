@@ -212,6 +212,18 @@ const parseId = (value) => {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 };
 
+function normalizeMysqlDateTime(value) {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string' && !(value instanceof Date)) {
+    throw Object.assign(new Error('Data do último contato inválida.'), { statusCode: 400, code: 'INVALID_LAST_CONTACT_DATE' });
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw Object.assign(new Error('Data do último contato inválida.'), { statusCode: 400, code: 'INVALID_LAST_CONTACT_DATE' });
+  }
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 async function validateAssignedUser(query, value) {
   if (value === null) return true;
   const result = await query(
@@ -502,6 +514,8 @@ router.patch('/prospects/:id', async (req, res) => {
       ...previousReport,
       folderName: folder_name ?? previousReport.folderName,
     });
+    const hasLastContactDate = Object.prototype.hasOwnProperty.call(req.body || {}, 'last_contact_date');
+    const normalizedLastContactDate = hasLastContactDate ? normalizeMysqlDateTime(last_contact_date) : null;
     const businessName = normalizeNullable(req.body.business_name);
     const phone = normalizeNullable(req.body.phone);
     const website = normalizeNullable(req.body.website);
@@ -551,7 +565,7 @@ router.patch('/prospects/:id', async (req, res) => {
         website ? normalizeWebsite(website) : null,
         website ? 1 : null,
         status ?? null,
-        last_contact_date ?? null,
+        normalizedLastContactDate,
         approach_suggestion ?? null,
         diagnostic_summary ?? null,
         problems_found ? JSON.stringify(problems_found) : null,
@@ -844,4 +858,5 @@ router.post('/email/send', async (req, res) => {
   res.json({ sent: [] });
 });
 
+router.normalizeMysqlDateTime = normalizeMysqlDateTime;
 module.exports = router;
