@@ -873,6 +873,7 @@ export default function LeadsPage() {
   };
 
   const handleSaveLead = async () => {
+    if (savingLead) return;
     const companyName = leadForm.companyName.trim();
     if (!companyName) return;
 
@@ -934,6 +935,8 @@ export default function LeadsPage() {
       setLeadForm({ ...emptyLeadForm, labels: [] });
       setEditingLeadId(null);
       setLeadDialogOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o lead.");
     } finally {
       setSavingLead(false);
     }

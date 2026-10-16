@@ -185,11 +185,24 @@ const normalizeBusinessName = (value) =>
 
 const buildAnalysisReport = (body = {}, previous = {}) => {
   const { labels, assignedUserId, assignedTo, ...legacyMetadata } = body.metadata || {};
+  if (Object.prototype.hasOwnProperty.call(legacyMetadata, 'budget')) {
+    const rawBudget = legacyMetadata.budget;
+    if (typeof rawBudget === 'number' && Number.isFinite(rawBudget) && rawBudget >= 0) legacyMetadata.budget = String(rawBudget);
+    if (rawBudget !== null && rawBudget !== '' && typeof rawBudget !== 'number' && (typeof rawBudget !== 'string' || rawBudget.length > 80)) {
+      throw Object.assign(new Error('Valor do orçamento inválido.'), { statusCode: 400, code: 'INVALID_BUDGET' });
+    }
+    if (typeof rawBudget === 'number' && (!Number.isFinite(rawBudget) || rawBudget < 0)) {
+      throw Object.assign(new Error('Valor do orçamento inválido.'), { statusCode: 400, code: 'INVALID_BUDGET' });
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(legacyMetadata, 'sector') && legacyMetadata.sector !== null && typeof legacyMetadata.sector !== 'string') {
+    throw Object.assign(new Error('Setor inválido.'), { statusCode: 400, code: 'INVALID_SECTOR' });
+  }
   return {
     ...(previous || {}),
     ...legacyMetadata,
-    source: normalizeNullable(body.source) || previous?.source || 'manual',
-    contactName: normalizeNullable(body.contact_name) || null,
+    ...(Object.prototype.hasOwnProperty.call(body, 'source') ? { source: normalizeNullable(body.source) || previous?.source || 'manual' } : {}),
+    ...(Object.prototype.hasOwnProperty.call(body, 'contact_name') ? { contactName: normalizeNullable(body.contact_name) || null } : {}),
     folderName: previous?.folderName || 'Todos os Leads',
   };
 };
@@ -585,8 +598,8 @@ router.patch('/prospects/:id', async (req, res) => {
     res.json(await hydrateProspect(query, result.rows[0], req.userId));
   } catch (error) {
     if (connection && transactionStarted) await connection.rollback();
-    console.error('Erro ao atualizar prospect:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    console.error('Erro ao atualizar prospect:', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' });
+    res.status(Number(error?.statusCode) === 400 ? 400 : 500).json({ error: Number(error?.statusCode) === 400 ? error.message : 'Erro interno do servidor', code: error?.code || 'PROSPECT_UPDATE_FAILED' });
   } finally {
     if (connection) connection.release();
   }
