@@ -9,8 +9,7 @@ const normalizeEmail = (value) => {
   if (/%[0-9a-f]{2}/i.test(email)) {
     try { email = decodeURIComponent(email); } catch { return null; }
   }
-  email = email.trim().toLowerCase();
-  if (/%20/i.test(email)) return null;
+  email = email.replace(/%20/gi, '').replace(/\s+/g, '').toLowerCase();
   const match = email.match(/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$/i);
   if (!match || /example|placeholder|test@|w3\.org|schema\.org/.test(email)) return null;
   return ASSET_EXTENSIONS.has(match[1].split('.').pop()) ? null : email;

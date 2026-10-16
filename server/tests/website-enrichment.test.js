@@ -200,21 +200,24 @@ test('mantem email mailto e JSON-LD validos', () => {
 test('normaliza somente e-mails textuais validos e trata encoding de URL com evidencia', () => {
   assert.equal(normalizeEmail('  CONTATO@EMPRESA.COM  '), 'contato@empresa.com');
   assert.equal(normalizeEmail('contato%40empresa.com'), 'contato@empresa.com');
-  assert.equal(normalizeEmail('contato%20comercial@empresa.com'), null);
-  assert.equal(normalizeEmail('contato comercial@empresa.com'), null);
+  assert.equal(normalizeEmail('contato%20comercial@gmail.com'), 'contatocomercial@gmail.com');
+  assert.equal(normalizeEmail('contato%20@gmail.com'), 'contato@gmail.com');
+  assert.equal(normalizeEmail('contato comercial@gmail.com'), 'contatocomercial@gmail.com');
+  assert.equal(normalizeEmail('contato\tcomercial@gmail.com'), 'contatocomercial@gmail.com');
   assert.equal(normalizeEmail('contato@empresa'), null);
+  assert.equal(normalizeEmail('contato%20sem-arroba'), null);
   assert.equal(normalizeEmail(null), null);
   assert.equal(normalizeEmail(''), null);
 });
 
 test('parser descarta candidatos invalidos e preserva a prioridade do primeiro valido', () => {
   const result = parsePage('<p>contato%20comercial@empresa.com suporte@empresa.com financeiro@empresa.com</p>', 'https://empresa.test');
-  assert.equal(result.fields.email, 'suporte@empresa.com');
+  assert.equal(result.fields.email, 'contatocomercial@empresa.com');
 });
 
 test('parser trata mailto codificado e rejeita espacos internos', () => {
   assert.equal(parsePage('<a href="mailto:contato%40empresa.com">Contato</a>', 'https://empresa.test').fields.email, 'contato@empresa.com');
-  assert.equal(parsePage('<a href="mailto:contato%20comercial%40empresa.com">Contato</a>', 'https://empresa.test').fields.email, null);
+  assert.equal(parsePage('<a href="mailto:contato%20comercial%40empresa.com">Contato</a>', 'https://empresa.test').fields.email, 'contatocomercial@empresa.com');
 });
 
 test('consolida oportunidades e preserva a semantica SEO da primeira pagina', () => {

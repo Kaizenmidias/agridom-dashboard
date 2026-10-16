@@ -75,8 +75,8 @@ function normalizeDisplayEmail(value?: string | null): string | null {
   if (/%[0-9a-f]{2}/i.test(email)) {
     try { email = decodeURIComponent(email); } catch { return null; }
   }
-  email = email.trim().toLowerCase();
-  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(email) && !/\s|%20/i.test(email) ? email : null;
+  email = email.replace(/%20/gi, '').replace(/\s+/g, '').toLowerCase();
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(email) ? email : null;
 }
 
 export function prospectToLead(prospect: Prospect): Lead {
