@@ -52,6 +52,89 @@ test('2G.2 WhatsApp send existe na engine e eventos de mensagem usam contrato de
   assert.deepEqual(events['message.sent'], ['conversationId', 'messageId']);
 });
 
+function leadConnection(existing = null) {
+  const calls = [];
+  let inserted = false;
+  return {
+    calls,
+    get inserted() { return inserted; },
+    async execute(sql, params = []) {
+      calls.push({ sql, params });
+      if (sql.startsWith('SELECT GET_LOCK') || sql.startsWith('SELECT RELEASE_LOCK')) return [[{ locked: 1 }]];
+      if (sql.startsWith('SELECT * FROM prospects WHERE normalized_phone')) return [[existing].filter(Boolean)];
+      if (sql.startsWith('INSERT INTO prospects')) { inserted = true; return [{ insertId: 901 }]; }
+      if (sql.startsWith('SELECT * FROM prospects WHERE id')) return [[{ id: 901, business_name: params[0] }]];
+      if (sql.startsWith('INSERT INTO automation_events')) return [{ insertId: 1 }];
+      return [{ affectedRows: 1 }];
+    },
+  };
+}
+
+test('2G.2 webhook inbound cria lead novo usando identidade remota quando autorizado', async () => {
+  const connection = leadConnection();
+  const lead = await whatsapp.resolveWebhookLead(connection, { owner_user_id: 1, auto_create_leads: 1 }, {
+    isGroup: false, fromMe: false, phone: '5513999998888', pushName: 'Contato remoto',
+  });
+  assert.equal(connection.inserted, true);
+  const insert = connection.calls.find((call) => call.sql.startsWith('INSERT INTO prospects'));
+  assert.equal(insert.params[1], 'Contato remoto');
+  assert.equal(lead.id, 901);
+});
+
+test('2G.2 webhook inbound respeita auto_create_leads desativado', async () => {
+  const connection = leadConnection();
+  const lead = await whatsapp.resolveWebhookLead(connection, { owner_user_id: 1, auto_create_leads: 0 }, {
+    isGroup: false, fromMe: false, phone: '5513999998888', pushName: 'Contato remoto',
+  });
+  assert.equal(lead, null);
+  assert.equal(connection.inserted, false);
+});
+
+test('2G.2 webhook outbound desconhecido nao cria lead nem usa pushName da conta', async () => {
+  const connection = leadConnection();
+  const lead = await whatsapp.resolveWebhookLead(connection, { owner_user_id: 1, auto_create_leads: 1 }, {
+    isGroup: false, fromMe: true, phone: '5571999999999', pushName: 'Lucas - Kaizen Midias',
+  });
+  assert.equal(lead, null);
+  assert.equal(connection.inserted, false);
+  assert.equal(connection.calls.some((call) => call.sql.startsWith('SELECT GET_LOCK')), false);
+});
+
+test('2G.2 webhook outbound conhecido vincula lead existente sem alterar seu nome', async () => {
+  const existing = { id: 77, business_name: 'Empresa remota', phone: '5571999999999' };
+  const connection = leadConnection(existing);
+  const lead = await whatsapp.resolveWebhookLead(connection, { owner_user_id: 1, auto_create_leads: 1 }, {
+    isGroup: false, fromMe: true, phone: '5571999999999', pushName: 'Lucas - Kaizen Midias',
+  });
+  assert.deepEqual(lead, existing);
+  assert.equal(connection.inserted, false);
+});
+
+test('2G.2 mensagens de grupo nao procuram nem criam leads individuais', async () => {
+  const connection = leadConnection();
+  const lead = await whatsapp.resolveWebhookLead(connection, { owner_user_id: 1, auto_create_leads: 1 }, {
+    isGroup: true, fromMe: false, phone: '5513999998888', pushName: 'Participante',
+  });
+  assert.equal(lead, null);
+  assert.equal(connection.calls.length, 0);
+});
+
+test('2G.2 conversa e mensagem outbound preservam telefone remoto mesmo sem lead', () => {
+  const source = fs.readFileSync(path.join(root, 'server/services/whatsapp-service.js'), 'utf8');
+  assert.match(source, /getOrCreateConversation\(connection, account, parsed\.remoteJid, lead\?\.id \|\| null/);
+  assert.match(source, /remotePhone: parsed\.phone/);
+  assert.match(source, /lead\?\.phone \|\| remotePhone \|\| ''/);
+});
+
+test('2G.2 origem do prospect usa WhatsApp sem forcar Google Maps', () => {
+  const adapter = fs.readFileSync(path.join(root, 'src/services/leads/lead-adapter.ts'), 'utf8');
+  const leadTypes = fs.readFileSync(path.join(root, 'src/types/lead.ts'), 'utf8');
+  assert.match(adapter, /normalized\.includes\("whatsapp"\)/);
+  assert.match(adapter, /report\.source \|\| report\.origem \|\| prospect\.origin \|\| "manual"/);
+  assert.doesNotMatch(adapter, /report\.source \|\| report\.origem \|\| "google_maps"/);
+  assert.match(leadTypes, /\| "whatsapp"/);
+});
+
 test('2G.2 webhook e provider nao expõem credenciais no frontend ou logs', () => {
   const route = fs.readFileSync(path.join(root, 'server/routes/webhooks.js'), 'utf8');
   const ui = fs.readFileSync(path.join(root, 'src/components/integrations/WhatsAppIntegrationPanel.tsx'), 'utf8');

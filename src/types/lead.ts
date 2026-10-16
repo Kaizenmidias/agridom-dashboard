@@ -16,6 +16,7 @@ export type LeadSource =
   | "importacao"
   | "indicacao"
   | "instagram"
+  | "whatsapp"
   | "manual"
   | "n8n";
 

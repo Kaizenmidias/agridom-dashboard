@@ -300,6 +300,7 @@ export interface Prospect {
   } | null;
   last_contact_date?: string | null;
   last_contact_at?: string | null;
+  origin?: string | null;
   status: ProspectStatus;
   created_at: string;
   updated_at: string;

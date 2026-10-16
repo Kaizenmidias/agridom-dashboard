@@ -174,6 +174,7 @@ const sourceLabels: Record<LeadSource, string> = {
   importacao: "Importação",
   indicacao: "Indicação",
   instagram: "Instagram",
+  whatsapp: "WhatsApp",
   manual: "Manual",
   n8n: "n8n",
 };

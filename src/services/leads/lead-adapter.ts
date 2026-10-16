@@ -62,6 +62,7 @@ function mapSource(value?: string | null): LeadSource {
   if (normalized.includes("import")) return "importacao";
   if (normalized.includes("indic")) return "indicacao";
   if (normalized.includes("instagram")) return "instagram";
+  if (normalized.includes("whatsapp")) return "whatsapp";
   if (normalized.includes("n8n")) return "n8n";
 
   return "manual";
@@ -73,7 +74,7 @@ export function prospectToLead(prospect: Prospect): Lead {
     try { report = JSON.parse(prospect.analysis_report || "{}"); } catch { report = {}; }
   } else report = (prospect.analysis_report || {}) as ProspectAnalysisReport;
   const folderName = report.folderName || (prospect.website_exists ? "Qualificados" : "Sem Site");
-  const source = mapSource(report.source || report.origem || "google_maps");
+  const source = mapSource(report.source || report.origem || prospect.origin || "manual");
 
   return {
     id: String(prospect.id),

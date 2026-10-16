@@ -46,7 +46,7 @@ test('CHAT-3C detects groups without deriving a lead phone', () => {
   assert.equal(parsed.isGroup, true);
   assert.equal(parsed.remoteJid, '120000000000@g.us');
   assert.equal(parsed.externalSenderId, '5511000000000@s.whatsapp.net');
-  assert.match(whatsappService, /const lead = parsed\.isGroup \? null : await findOrCreateLead/);
+  assert.match(whatsappService, /const lead = await resolveWebhookLead\(connection, account, parsed\)/);
   assert.match(whatsappService, /senderName: parsed\.isGroup \? parsed\.pushName : null/);
 });
 
