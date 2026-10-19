@@ -3,7 +3,7 @@ const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.en
 require('dotenv').config({ path: path.join(__dirname, envFile) });
 
 const { closeConnection } = require('./config/database');
-const { DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, processEventBatch, processJobBatch, workerId } = require('./services/automation-engine');
+const { DEFAULT_BATCH_SIZE, DEFAULT_LOCK_TIMEOUT_MS, DEFAULT_POLL_MS, automationErrorDiagnostics, processEventBatch, processJobBatch, workerId } = require('./services/automation-engine');
 const { processPendingWhatsAppEvents } = require('./services/whatsapp-service');
 const { processBroadcastBatch, workerId: broadcastWorkerId } = require('./services/broadcast-campaign-worker');
 const { processProspectingBatch } = require('./services/prospecting-service');
@@ -34,9 +34,9 @@ async function startWorker(options = {}) {
         let jobs = 0;
         let whatsappEvents = 0;
         try { events = await processEventBatch({ workerId: currentWorkerId, batchSize, lockTimeoutMs }); }
-        catch (error) { console.error('Automation event cycle failed:', error?.code || 'UNEXPECTED'); }
+        catch (error) { console.error('Automation event cycle failed:', automationErrorDiagnostics(error)); }
         try { jobs = await processJobBatch({ currentWorkerId, batchSize, lockTimeoutMs }); }
-        catch (error) { console.error('Automation job cycle failed:', error?.code || 'UNEXPECTED'); }
+        catch (error) { console.error('Automation job cycle failed:', automationErrorDiagnostics(error)); }
         try { whatsappEvents = await processPendingWhatsAppEvents({ batchSize }); }
         catch (error) { console.error('WhatsApp event cycle failed:', error?.code || 'UNEXPECTED'); }
         let broadcasts = 0;
@@ -54,7 +54,7 @@ async function startWorker(options = {}) {
       if (!workCount && !stopping) await sleep(pollMs);
     }
   } catch (error) {
-    console.error('Automation worker cycle failed:', error?.code || 'UNEXPECTED');
+    console.error('Automation worker cycle failed:', automationErrorDiagnostics(error));
     if (!stopping) await sleep(pollMs);
   } finally {
     await currentCycle.catch(() => {});
@@ -65,6 +65,6 @@ async function startWorker(options = {}) {
   }
 }
 
-if (require.main === module) startWorker().catch(async (error) => { console.error('Automation worker stopped unexpectedly:', error?.code || 'UNEXPECTED'); await closeConnection(); process.exitCode = 1; });
+if (require.main === module) startWorker().catch(async (error) => { console.error('Automation worker stopped unexpectedly:', automationErrorDiagnostics(error)); await closeConnection(); process.exitCode = 1; });
 
 module.exports = { startWorker };

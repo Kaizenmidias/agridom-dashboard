@@ -7,7 +7,9 @@ const { evaluateCondition } = require('./automation/condition-evaluator');
 
 const DEFAULT_BATCH_SIZE = 25;
 const DEFAULT_POLL_MS = 1000;
-const CADENCE_LATE_TOLERANCE_MS = DEFAULT_POLL_MS * 2;
+// Tolerate normal worker jitter without turning an already reserved slot into
+// a new reservation. Keep the limit bounded for unusually slow workers.
+const CADENCE_LATE_TOLERANCE_MS = Math.max(DEFAULT_POLL_MS * 2, Number(process.env.AUTOMATION_CADENCE_LATE_TOLERANCE_MS) || 30000);
 const DEFAULT_LOCK_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_EVENT_ATTEMPTS = 3;
 const DEFAULT_MAX_JOB_ATTEMPTS = 8;
@@ -44,6 +46,19 @@ const automationErrorDiagnostics = (error, job = {}) => ({
   jobId: job?.id == null ? null : Number(job.id),
   runId: job?.automation_run_id == null ? null : Number(job.automation_run_id),
 });
+const isDeadlockError = (error) => String(error?.code || error?.sqlState || '').toUpperCase() === 'ER_LOCK_DEADLOCK' || String(error?.message || '').toUpperCase().includes('DEADLOCK');
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+async function withDeadlockRetry(operation, attempts = 2) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try { return await operation(); } catch (error) {
+      lastError = error;
+      if (!isDeadlockError(error) || attempt === attempts - 1) throw error;
+      await sleep(25 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
 const PERMANENT_ERROR_CODES = new Set(['INVALID_WAIT', 'WHATSAPP_ACCOUNT_REQUIRED', 'WHATSAPP_ACCOUNT_NOT_CONNECTED', 'WHATSAPP_NOT_CONFIGURED', 'INVALID_WHATSAPP_MESSAGE', 'RECIPIENT_PHONE_INVALID', 'RECIPIENT_PHONE_MISSING', 'MEDIA_TYPE_NOT_SUPPORTED']);
 const isKnownTransientError = (value) => /EVOLUTION_UNAVAILABLE|EVOLUTION_CONNECTION_REFUSED|EAI_AGAIN|HTTP_(408|429|5\d\d)/i.test(String(value || ''));
 const isKnownPermanentError = (value) => PERMANENT_ERROR_CODES.has(String(value || '').replace(/^ENGINE_ERROR:/, '').toUpperCase()) || /HTTP_4(?!08|29)\d|EVOLUTION_AUTH_FAILED|EVOLUTION_TIMEOUT|EVOLUTION_CONNECTION_RESET|EVOLUTION_HTTP_REJECTED|EVOLUTION_REQUEST_FAILED|EVOLUTION_INVALID_RESPONSE|INVALID_.*|_NOT_CONFIGURED|_REQUIRED|RECIPIENT_PHONE_INVALID/i.test(String(value || ''));
@@ -460,21 +475,27 @@ async function processJobBatch(options = {}) {
   let processed = 0;
   const recoveryConnection = await getPool().getConnection();
   try {
-    await recoveryConnection.beginTransaction();
-    await recoverAutomationJobs({ connection: recoveryConnection, limit: RECOVERY_BATCH_LIMIT, apply: true });
-    await recoveryConnection.commit();
+    await withDeadlockRetry(async () => {
+      await recoveryConnection.beginTransaction();
+      try {
+        await recoverAutomationJobs({ connection: recoveryConnection, limit: RECOVERY_BATCH_LIMIT, apply: true });
+        await recoveryConnection.commit();
+      } catch (error) {
+        await recoveryConnection.rollback();
+        throw error;
+      }
+    });
   } catch (error) {
-    await recoveryConnection.rollback();
-    console.error('Automation recovery failed:', safeError(error));
+    console.error('Automation recovery failed:', automationErrorDiagnostics(error));
   } finally { recoveryConnection.release(); }
   for (let index = 0; index < count; index += 1) {
     try {
-      const job = await claimNextJob(options);
+      const job = await withDeadlockRetry(() => claimNextJob(options));
       if (!job) break;
       await completeBootstrapJob(job, options.currentWorkerId);
       processed += 1;
     } catch (error) {
-      console.error('Automation job processing failed:', automationErrorDiagnostics(error, job));
+      console.error('Automation job processing failed:', automationErrorDiagnostics(error));
     }
   }
   return processed;

@@ -133,6 +133,7 @@ export function AutomationsPage() {
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AutomationSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -183,14 +184,17 @@ export function AutomationsPage() {
   };
 
   const removeAutomation = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
     try {
       await automationsAPI.remove(deleteTarget.id);
       setItems((current) => current.filter((entry) => entry.id !== deleteTarget.id));
       setDeleteTarget(null);
       toast.success("AutomaÃ§Ã£o excluÃ­da.");
-    } catch {
+    } catch (error) {
       toast.error("NÃ£o foi possÃ­vel excluir a automaÃ§Ã£o.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -445,7 +449,7 @@ export function AutomationsPage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => void removeAutomation()}>Excluir automação</Button>
+            <Button variant="destructive" onClick={() => void removeAutomation()} disabled={deleting}>{deleting ? "Excluindo..." : "Excluir automação"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
