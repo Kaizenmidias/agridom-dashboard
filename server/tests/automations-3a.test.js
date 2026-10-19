@@ -286,6 +286,22 @@ test('cadence reuses a future persisted slot only when the queue confirms it', a
   assert.equal(updates, 0);
 });
 
+test('cadence rebases the first overdue job instead of using a far future queue horizon', async () => {
+  let stored = new Date('2026-10-19T20:45:00Z');
+  const connection = { execute: async (sql, params = []) => {
+    if (sql.includes('UNIX_TIMESTAMP(next_available_at)')) return [[{ next_available_epoch: Math.floor(stored.getTime() / 1000) }]];
+    if (sql.startsWith('UPDATE automation_whatsapp_cadence')) stored = new Date(params[0]);
+    return [{ affectedRows: 1 }];
+  } };
+  const now = new Date('2026-10-19T12:30:00Z');
+  const slot = await reserveWhatsAppSlot(connection, 15, 1, { cadenceValue: 10, cadenceUnit: 'minutes' }, {
+    now,
+    preferredSlot: new Date('2026-10-19T12:25:00Z'),
+  });
+  assert.equal(slot.toISOString(), now.toISOString());
+  assert.equal(stored.toISOString(), '2026-10-19T12:40:00.000Z');
+});
+
 function cadenceEngineFixture(scheduledAtByJob, nextAvailableAt, { automationId = 9, accountId = 1 } = {}) {
   const state = {
     cadence: new Date(nextAvailableAt),
@@ -315,6 +331,7 @@ function cadenceEngineFixture(scheduledAtByJob, nextAvailableAt, { automationId 
         return [[{ id: job.id, automation_run_id: job.id + 100, automation_id: automationId, automation_version_id: 19, entity_type: 'lead', entity_id: String(job.id), owner_user_id: 1, current_step_key: 'send', correlation_id: `corr-${job.id}`, definition: JSON.stringify(definition), event_uuid: `event-${job.id}`, lineage_depth: 0, run_status: 'queued', payload: '{}' }]];
       }
       if (/SELECT \* FROM automation_run_steps/.test(sql)) return [[{ output: JSON.stringify(state.jobs.get(jobId).output) }]];
+      if (/STR_TO_DATE\(JSON_UNQUOTE\(JSON_EXTRACT\(ars\.output/.test(sql)) return [[{ overdue_count: 2 }]];
       if (/UNIX_TIMESTAMP\(next_available_at\)/.test(sql)) return [[{ next_available_epoch: Math.floor(state.cadence.getTime() / 1000) }]];
       if (/UPDATE automation_whatsapp_cadence SET/.test(sql)) { state.cadence = new Date(params[0]); return [{ affectedRows: 1 }]; }
       if (/UPDATE automation_run_steps SET status = 'queued'/.test(sql)) {

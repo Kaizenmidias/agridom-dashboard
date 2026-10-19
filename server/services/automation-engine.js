@@ -92,8 +92,7 @@ async function reserveWhatsAppSlot(connection, automationId, accountId, config, 
   const preferredIsWithinLateTolerance = preferredSlot
     && preferredSlot <= now
     && now.getTime() - preferredSlot.getTime() <= CADENCE_LATE_TOLERANCE_MS;
-  const preferredNext = preferredIsFuture ? new Date(preferredSlot.getTime() + seconds * 1000) : null;
-  if (preferredIsFuture && stored && stored >= preferredNext) {
+  if (preferredIsFuture && stored && stored >= preferredSlot) {
     console.info('cadence_slot_reused_future', { automation_id: Number(automationId), communication_account_id: Number(accountId), scheduled_at: preferredSlot.toISOString() });
     return preferredSlot;
   }
@@ -103,6 +102,29 @@ async function reserveWhatsAppSlot(connection, automationId, accountId, config, 
   }
   if (preferredSlot && preferredSlot <= now) {
     console.info('cadence_slot_expired', { automation_id: Number(automationId), communication_account_id: Number(accountId), scheduled_at: preferredSlot.toISOString(), now: now.toISOString() });
+  }
+  // A far-future queue horizon can contain slots already assigned to other
+  // overdue jobs. It must not postpone the first overdue job for hours.
+  const horizonTooFarAhead = stored && stored > now && stored.getTime() - now.getTime() > seconds * 2000;
+  if (preferredSlot && preferredSlot <= now && horizonTooFarAhead) {
+    const [overdueRows] = await connection.execute(
+      `SELECT COUNT(*) AS overdue_count
+         FROM automation_jobs aj
+         JOIN automation_runs ar ON ar.id = aj.automation_run_id
+         JOIN automation_run_steps ars ON ars.id = aj.run_step_id
+        WHERE ar.automation_id = ?
+          AND aj.status IN ('pending', 'processing')
+          AND JSON_UNQUOTE(JSON_EXTRACT(ars.output, '$.cadence.scheduled_at')) IS NOT NULL
+          AND STR_TO_DATE(JSON_UNQUOTE(JSON_EXTRACT(ars.output, '$.cadence.scheduled_at')), '%Y-%m-%d %H:%i:%s') <= UTC_TIMESTAMP()`
+      , [automationId]
+    );
+    const overdueCount = Number(Array.isArray(overdueRows) ? overdueRows[0]?.overdue_count : 0);
+    if (overdueCount <= 1) {
+      const next = new Date(now.getTime() + seconds * 1000);
+      await connection.execute('UPDATE automation_whatsapp_cadence SET next_available_at = ?, updated_at = CURRENT_TIMESTAMP WHERE automation_id = ? AND communication_account_id = ?', [next, automationId, accountId]);
+      console.info('cadence_horizon_rebased', { automation_id: Number(automationId), communication_account_id: Number(accountId), overdue_slot: preferredSlot.toISOString(), previous_next_available_at: stored.toISOString(), scheduled_at: now.toISOString(), next_available_at: next.toISOString() });
+      return now;
+    }
   }
   const slot = stored && stored > now ? stored : now;
   const next = new Date(slot.getTime() + seconds * 1000);
