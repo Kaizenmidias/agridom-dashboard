@@ -62,14 +62,23 @@ router.put('/prospects/:id/email-consent', requireCommercialAdmin, async (req, r
 
 router.get('/folders', async (req, res) => {
   try {
-    const result = await getQuery(req)(`SELECT f.id, f.name, f.description, f.icon, COUNT(m.prospect_id) AS total,
-      GROUP_CONCAT(DISTINCT m.prospect_id ORDER BY m.prospect_id) AS prospect_ids,
+    const query = getQuery(req);
+    const result = await query(`SELECT f.id, f.name, f.description, f.icon, COUNT(m.prospect_id) AS total,
       SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone
       FROM lead_folders f LEFT JOIN lead_folder_members m ON m.folder_id = f.id
       LEFT JOIN prospects p ON p.id = m.prospect_id
       WHERE f.owner_user_id = ? AND LOWER(TRIM(f.name)) <> 'sem site'
       GROUP BY f.id ORDER BY f.name`, [req.userId]);
-    res.json({ folders: (result.rows || []).map((row) => ({ ...row, id: Number(row.id), total: Number(row.total || 0), with_phone: Number(row.with_phone || 0), prospect_ids: row.prospect_ids ? String(row.prospect_ids).split(',').map(Number) : [] })) });
+    const members = await query(`SELECT m.folder_id, m.prospect_id
+      FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id
+      WHERE f.owner_user_id = ? AND LOWER(TRIM(f.name)) <> 'sem site'
+      ORDER BY m.folder_id, m.prospect_id`, [req.userId]);
+    const prospectIdsByFolder = (members.rows || []).reduce((acc, row) => {
+      const folderId = String(row.folder_id);
+      acc[folderId] = [...(acc[folderId] || []), Number(row.prospect_id)];
+      return acc;
+    }, {});
+    res.json({ folders: (result.rows || []).map((row) => ({ ...row, id: Number(row.id), total: Number(row.total || 0), with_phone: Number(row.with_phone || 0), prospect_ids: prospectIdsByFolder[String(row.id)] || [] })) });
   } catch (error) { console.error('[Prospection] folders list failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel carregar as pastas.' }); }
 });
 

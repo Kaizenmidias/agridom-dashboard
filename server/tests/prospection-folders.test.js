@@ -48,3 +48,9 @@ test('PROSPECCAO trata Sem Site como filtro derivado, nunca como pasta persisten
   assert.match(page, /!lead\.website/);
   assert.match(page, /isReservedSystemFolderName\(folder\.name\)/);
 });
+
+test('PROSPECCAO nao depende de GROUP_CONCAT para recuperar todos os membros da pasta', () => {
+  const route = read('server', 'routes', 'prospection.js');
+  assert.match(route, /SELECT m\.folder_id, m\.prospect_id/);
+  assert.doesNotMatch(route, /GROUP_CONCAT\(DISTINCT m\.prospect_id/);
+});
