@@ -4,6 +4,7 @@ const { normalizeEmail, parsePage } = require('../services/website-enrichment-pa
 const { createPinnedLookup, validateUrl, fetchHtml } = require('../services/website-enrichment-ssrf');
 const { claimNextEnrichment, crawlWebsite, mergeResults, normalizePageUrl, persistEnrichment, websiteUrl } = require('../services/website-enrichment-service');
 const enrichmentServiceSource = require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/website-enrichment-service.js'), 'utf8');
+const { classifyBrazilianPhone, selectPreferredPhone } = require('../services/brazilian-phone-priority');
 
 const html = `<!doctype html><html><head><title>Empresa</title><meta name="description" content="Descricao"><meta name="viewport" content="width=device-width"><link rel="canonical" href="https://empresa.test/"><script type="application/ld+json">{"@type":"Organization","name":"Empresa Teste","email":"contato@empresa.test","telephone":"+55 11 99999-0000","address":{"streetAddress":"Rua A, 10","addressLocality":"Sao Paulo","addressRegion":"SP"}}</script><script src="https://www.googletagmanager.com/gtag/js"></script></head><body><h1>Empresa</h1><a href="mailto:financeiro@empresa.test">Email</a><a href="tel:+5511999990000">Telefone</a><a href="https://instagram.com/empresa">Instagram</a><a href="https://linkedin.com/company/empresa">LinkedIn</a><img src="a.jpg"><img src="b.jpg" alt="Produto"></body></html>`;
 
@@ -133,7 +134,7 @@ test('analysis_report inválido não é persistido por merge inseguro', () => {
 
 test('whitespace pode ser preenchido, mas valor existente é preservado', () => {
   assert.match(enrichmentServiceSource, /isBlank\(job\.email\)/);
-  assert.match(enrichmentServiceSource, /isBlank\(job\.phone\)/);
+  assert.match(enrichmentServiceSource, /selectPreferredPhone\(job\.phone, fields\.phone\)/);
   assert.match(enrichmentServiceSource, /isBlank\(job\.address\)/);
   assert.match(enrichmentServiceSource, /isBlank\(job\.instagram\)/);
 });
@@ -241,4 +242,26 @@ test('persistencia normaliza email codificado quando o campo do Prospect esta va
   const prospectUpdate = calls.find((call) => call.sql.startsWith('UPDATE prospects'));
   assert.match(prospectUpdate.sql, /email = \?/);
   assert.equal(prospectUpdate.params[0], 'contato@empresa.com');
+});
+
+test('prioriza celular brasileiro enriquecido sobre fixo sem alterar celular original', () => {
+  assert.equal(classifyBrazilianPhone('(71) 98765-4321').isMobile, true);
+  assert.equal(classifyBrazilianPhone('(71) 3456-7890').isMobile, false);
+  assert.equal(classifyBrazilianPhone('71 98765-4321').normalized, '5571987654321');
+  assert.equal(classifyBrazilianPhone('55 71 98765-4321').normalized, '5571987654321');
+  assert.equal(classifyBrazilianPhone('55 71 8765-4321').isMobile, false);
+  assert.equal(classifyBrazilianPhone('(00) 98765-4321'), null);
+  assert.equal(selectPreferredPhone('(71) 3456-7890', '(71) 98765-4321').value, '(71) 98765-4321');
+  assert.equal(selectPreferredPhone('(71) 98765-4321', '(11) 91234-5678').value, '(71) 98765-4321');
+  assert.equal(selectPreferredPhone('(71) 3456-7890', null).value, '(71) 3456-7890');
+  assert.equal(selectPreferredPhone(null, '+55 71 98765-4321').normalized, '5571987654321');
+});
+
+test('persistencia troca fixo por celular enriquecido e atualiza normalized_phone', async () => {
+  const calls = [];
+  const connection = { execute: async (sql, params) => { calls.push({ sql, params }); return [[], {}]; } };
+  await persistEnrichment({ connection, job: { id: 10, prospect_id: 22, email: null, phone: '(71) 3456-7890', normalized_phone: '557134567890', address: null, instagram: null, business_name: 'Empresa', analysis_report: null }, result: { fields: { phone: '+55 71 98765-4321' }, diagnostic: { pagesAnalyzed: 1, opportunities: [], partialError: null } } });
+  const prospectUpdate = calls.find((call) => call.sql.startsWith('UPDATE prospects'));
+  assert.match(prospectUpdate.sql, /phone = \?, normalized_phone = \?/);
+  assert.deepEqual(prospectUpdate.params.slice(0, 2), ['+55 71 98765-4321', '5571987654321']);
 });

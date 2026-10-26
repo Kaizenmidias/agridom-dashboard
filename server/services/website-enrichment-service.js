@@ -1,6 +1,7 @@
 const { getPool } = require('../config/database');
 const { fetchHtml } = require('./website-enrichment-ssrf');
 const { normalizeEmail, parsePage } = require('./website-enrichment-parser');
+const { selectPreferredPhone } = require('./brazilian-phone-priority');
 
 const MAX_PAGES = 5;
 const MAX_ATTEMPTS = 2;
@@ -79,7 +80,7 @@ async function claimNextEnrichment({ connection, workerId = 'website-enricher' }
   await connection.beginTransaction();
   try {
     await connection.execute(`UPDATE lead_website_enrichments SET status = 'failed', last_error = 'Limite de tentativas atingida apos job stale.', updated_at = CURRENT_TIMESTAMP WHERE status = 'processing' AND started_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE) AND attempt_count >= ?`, [MAX_ATTEMPTS]);
-    const [rows] = await connection.execute(`SELECT e.*, p.email, p.phone, p.website, p.address, p.instagram, p.business_name, p.analysis_report FROM lead_website_enrichments e JOIN prospects p ON p.id = e.prospect_id WHERE ((e.status IN ('pending', 'failed') AND e.attempt_count < ? AND e.available_at <= CURRENT_TIMESTAMP) OR (e.status = 'processing' AND e.started_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE) AND e.attempt_count < ?)) ORDER BY e.id LIMIT 1 FOR UPDATE`, [MAX_ATTEMPTS, MAX_ATTEMPTS]);
+    const [rows] = await connection.execute(`SELECT e.*, p.email, p.phone, p.normalized_phone, p.website, p.address, p.instagram, p.business_name, p.analysis_report FROM lead_website_enrichments e JOIN prospects p ON p.id = e.prospect_id WHERE ((e.status IN ('pending', 'failed') AND e.attempt_count < ? AND e.available_at <= CURRENT_TIMESTAMP) OR (e.status = 'processing' AND e.started_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE) AND e.attempt_count < ?)) ORDER BY e.id LIMIT 1 FOR UPDATE`, [MAX_ATTEMPTS, MAX_ATTEMPTS]);
     if (!rows[0]) { await connection.rollback(); return null; }
     const row = rows[0];
     await connection.execute(`UPDATE lead_website_enrichments SET status = 'processing', attempt_count = attempt_count + 1, started_at = CURRENT_TIMESTAMP, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [row.id]);
@@ -100,11 +101,14 @@ async function persistEnrichment({ connection = getPool(), job, result }) {
   } catch { reportIsSafe = false; }
   const fields = result.fields;
   const email = normalizeEmail(fields.email);
+  const selectedPhone = selectPreferredPhone(job.phone, fields.phone);
+  const currentNormalizedPhone = String(job.normalized_phone || '').replace(/\D/g, '') || selectPreferredPhone(job.phone, null)?.normalized || '';
+  const shouldUpdatePhone = Boolean(selectedPhone && selectedPhone.normalized !== currentNormalizedPhone);
   const nextReport = { ...report };
   const canPersistLinkedin = reportIsSafe && isBlank(report.linkedin) && !isBlank(fields.linkedin);
   if (canPersistLinkedin) nextReport.linkedin = fields.linkedin;
-  const updates = [email && isBlank(job.email) ? 'email = ?' : null, fields.phone && isBlank(job.phone) ? 'phone = ?' : null, fields.address && isBlank(job.address) ? 'address = ?' : null, fields.instagram && isBlank(job.instagram) ? 'instagram = ?' : null, fields.businessName && isBlank(job.business_name) ? 'business_name = ?' : null, canPersistLinkedin ? 'analysis_report = ?' : null].filter(Boolean);
-  const params = []; if (email && isBlank(job.email)) params.push(email); if (fields.phone && isBlank(job.phone)) params.push(fields.phone); if (fields.address && isBlank(job.address)) params.push(fields.address); if (fields.instagram && isBlank(job.instagram)) params.push(fields.instagram); if (fields.businessName && isBlank(job.business_name)) params.push(fields.businessName); if (canPersistLinkedin) params.push(JSON.stringify(nextReport));
+  const updates = [email && isBlank(job.email) ? 'email = ?' : null, shouldUpdatePhone ? 'phone = ?, normalized_phone = ?' : null, fields.address && isBlank(job.address) ? 'address = ?' : null, fields.instagram && isBlank(job.instagram) ? 'instagram = ?' : null, fields.businessName && isBlank(job.business_name) ? 'business_name = ?' : null, canPersistLinkedin ? 'analysis_report = ?' : null].filter(Boolean);
+  const params = []; if (email && isBlank(job.email)) params.push(email); if (shouldUpdatePhone) params.push(selectedPhone.value, selectedPhone.normalized); if (fields.address && isBlank(job.address)) params.push(fields.address); if (fields.instagram && isBlank(job.instagram)) params.push(fields.instagram); if (fields.businessName && isBlank(job.business_name)) params.push(fields.businessName); if (canPersistLinkedin) params.push(JSON.stringify(nextReport));
   if (updates.length) { params.push(job.prospect_id); await connection.execute(`UPDATE prospects SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params); }
   const status = result.diagnostic.pagesAnalyzed > 0 ? (result.diagnostic.partialError ? 'partial' : 'completed') : 'failed';
   await connection.execute(`UPDATE lead_website_enrichments SET status = ?, completed_at = CURRENT_TIMESTAMP, diagnostic_payload = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [status, JSON.stringify(result.diagnostic), job.id]);
