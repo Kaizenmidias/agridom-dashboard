@@ -66,7 +66,9 @@ router.get('/folders', async (req, res) => {
       GROUP_CONCAT(DISTINCT m.prospect_id ORDER BY m.prospect_id) AS prospect_ids,
       SUM(p.normalized_phone IS NOT NULL AND p.normalized_phone <> '') AS with_phone
       FROM lead_folders f LEFT JOIN lead_folder_members m ON m.folder_id = f.id
-      LEFT JOIN prospects p ON p.id = m.prospect_id WHERE f.owner_user_id = ? GROUP BY f.id ORDER BY f.name`, [req.userId]);
+      LEFT JOIN prospects p ON p.id = m.prospect_id
+      WHERE f.owner_user_id = ? AND LOWER(TRIM(f.name)) <> 'sem site'
+      GROUP BY f.id ORDER BY f.name`, [req.userId]);
     res.json({ folders: (result.rows || []).map((row) => ({ ...row, id: Number(row.id), total: Number(row.total || 0), with_phone: Number(row.with_phone || 0), prospect_ids: row.prospect_ids ? String(row.prospect_ids).split(',').map(Number) : [] })) });
   } catch (error) { console.error('[Prospection] folders list failed', { code: error?.code || 'UNKNOWN', message: error?.message || 'unknown' }); res.status(500).json({ error: 'Nao foi possivel carregar as pastas.' }); }
 });
@@ -74,6 +76,7 @@ router.get('/folders', async (req, res) => {
 router.post('/folders', async (req, res) => {
   const name = normalizeText(req.body?.name);
   if (!name || name.length > 150) return res.status(400).json({ error: 'Nome da pasta invalido.' });
+  if (isReservedSystemFolderName(name)) return res.status(400).json({ error: 'Sem Site e um filtro do sistema, nao uma pasta.' });
   try {
     const result = await getQuery(req)('INSERT INTO lead_folders (owner_user_id, name, description, icon) VALUES (?, ?, ?, ?)', [req.userId, name, normalizeText(req.body?.description) || null, normalizeText(req.body?.icon) || 'folder']);
     res.status(201).json({ folder: { id: Number(result.insertId), name, description: normalizeText(req.body?.description) || null, icon: normalizeText(req.body?.icon) || 'folder', total: 0, with_phone: 0 } });
@@ -167,6 +170,7 @@ const defaultSettings = {
 };
 
 const normalizeText = (value) => String(value || '').trim();
+const isReservedSystemFolderName = (value) => normalizeText(value).replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === 'sem site';
 const normalizeNullable = (value) => {
   const text = normalizeText(value);
   return text || null;
@@ -293,7 +297,9 @@ router.get('/bootstrap', async (req, res) => {
         folders.folders_json, last_contact.last_contact_at
       FROM prospects p LEFT JOIN users u ON u.id = p.assigned_user_id
       LEFT JOIN (SELECT m.prospect_id, JSON_ARRAYAGG(JSON_OBJECT('id', f.id, 'name', f.name)) AS folders_json
-        FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id WHERE f.owner_user_id = ? GROUP BY m.prospect_id) folders ON folders.prospect_id = p.id
+        FROM lead_folder_members m JOIN lead_folders f ON f.id = m.folder_id
+        WHERE f.owner_user_id = ? AND LOWER(TRIM(f.name)) <> 'sem site'
+        GROUP BY m.prospect_id) folders ON folders.prospect_id = p.id
       LEFT JOIN (SELECT c.lead_id, MAX(COALESCE(cm.sent_at, cm.created_at)) AS last_contact_at
         FROM conversations c JOIN communication_messages cm ON cm.conversation_id = c.id JOIN communication_accounts ca ON ca.id = c.communication_account_id
         WHERE c.lead_id IS NOT NULL AND ca.owner_user_id = ? GROUP BY c.lead_id) last_contact ON last_contact.lead_id = p.id

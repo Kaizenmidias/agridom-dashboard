@@ -37,3 +37,14 @@ test('PROSPECCAO oferece selecao persistente e page sizes na tabela, sem lista n
   assert.match(page, /bulkAction === 'crm'/);
   assert.match(page, /prospectionAPI\.importToFolder\(selectedProspects\.map/);
 });
+
+test('PROSPECCAO trata Sem Site como filtro derivado, nunca como pasta persistente', () => {
+  const route = read('server', 'routes', 'prospection.js');
+  const page = read('src', 'pages', 'commercial', 'LeadsPage.tsx');
+  assert.match(route, /LOWER\(TRIM\(f\.name\)\) <> 'sem site'/);
+  assert.match(route, /isReservedSystemFolderName\(name\)/);
+  assert.match(page, /id: "sem-site"/);
+  assert.match(page, /icon: "filter"/);
+  assert.match(page, /!lead\.website/);
+  assert.match(page, /isReservedSystemFolderName\(folder\.name\)/);
+});

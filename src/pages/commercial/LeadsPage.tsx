@@ -316,8 +316,18 @@ function folderMatchesLead(
   );
 }
 
+function isReservedSystemFolderName(name?: string | null) {
+  return String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("pt-BR") === "sem site";
+}
+
 function buildFolders(leads: Lead[], customFolders: LeadFolder[]) {
   const now = new Date().toISOString();
+  const visibleCustomFolders = customFolders.filter(
+    (folder) => !isReservedSystemFolderName(folder.name),
+  );
   const systemFolders: LeadFolder[] = [
     {
       id: "todos-os-leads",
@@ -350,7 +360,7 @@ function buildFolders(leads: Lead[], customFolders: LeadFolder[]) {
     {
       id: "sem-site",
       name: "Sem Site",
-      icon: "folder",
+      icon: "filter",
       isSystem: true,
       createdAt: now,
     },
@@ -377,15 +387,16 @@ function buildFolders(leads: Lead[], customFolders: LeadFolder[]) {
     },
   ];
 
-  return [...systemFolders, ...customFolders].map((folder) => ({
+  return [...systemFolders, ...visibleCustomFolders].map((folder) => ({
     ...folder,
     leadCount: leads.filter((lead) =>
-      folderMatchesLead(folder.id, lead, customFolders),
+      folderMatchesLead(folder.id, lead, visibleCustomFolders),
     ).length,
   }));
 }
 
 function getFolderIcon(folder: LeadFolder) {
+  if (folder.icon === "filter") return Filter;
   if (folder.icon === "check") return CheckCircle2;
   if (folder.icon === "archive") return Archive;
   if (folder.icon === "send") return Send;
@@ -468,7 +479,7 @@ export default function LeadsPage() {
       .list()
       .then(({ folders }) =>
         setCustomFolders(
-          folders.map((folder) => ({
+          folders.filter((folder) => !isReservedSystemFolderName(folder.name)).map((folder) => ({
             id: String(folder.id),
             name: folder.name,
             description: folder.description || null,
