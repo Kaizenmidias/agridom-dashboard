@@ -106,8 +106,15 @@ router.delete('/folders/:id', async (req, res) => {
       FROM automations a JOIN ${automationVersionsTable} av ON av.id = a.active_version_id
       WHERE a.owner_user_id = ? AND a.status = 'active' AND av.status = 'published'
         AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.type')) = 'lead.added_to_folder'
-        AND CAST(JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.folderId')) AS UNSIGNED) = ?
-      GROUP BY a.id, a.name`, [req.userId, folderId]);
+        AND (
+          CAST(JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.folderId')) AS UNSIGNED) = ?
+          OR JSON_CONTAINS(
+            JSON_EXTRACT(av.definition, '$.trigger.config.folderIds'),
+            JSON_ARRAY(CAST(? AS UNSIGNED)),
+            '$'
+          )
+        )
+      GROUP BY a.id, a.name`, [req.userId, folderId, folderId]);
     if (references.rows?.length) { await connection.rollback(); return res.status(409).json({ error: 'Esta lista esta sendo usada por uma ou mais automacoes. Altere ou desative essas automacoes antes de excluir a lista.', automations: references.rows }); }
     await db('DELETE FROM lead_folder_members WHERE folder_id = ?', [folderId]);
     await db('DELETE FROM lead_folders WHERE id = ? AND owner_user_id = ?', [folderId, req.userId]);

@@ -149,12 +149,15 @@ async function matchAutomationsForEvent(connection, event) {
       AND whe.revoked_at IS NULL
      WHERE a.status = 'active'
        AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.type')) = ?
-       AND (? <> 'lead.added_to_folder' OR JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.folderId')) = JSON_UNQUOTE(JSON_EXTRACT(?, '$.folderId')))
+       AND (? <> 'lead.added_to_folder' OR (
+         JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.folderId')) = JSON_UNQUOTE(JSON_EXTRACT(?, '$.folderId'))
+         OR JSON_CONTAINS(JSON_EXTRACT(av.definition, '$.trigger.config.folderIds'), JSON_ARRAY(CAST(JSON_UNQUOTE(JSON_EXTRACT(?, '$.folderId')) AS UNSIGNED)), '$')
+       ))
        AND COALESCE(?, 0) < ${MAX_LINEAGE_DEPTH}
        AND (COALESCE(?, 0) = 0 OR a.id <> COALESCE(?, 0))
        AND (? <> 'webhook.received' OR (? = 'webhook_endpoint' AND CAST(wha.endpoint_id AS CHAR) = ? AND wha.endpoint_id IS NOT NULL AND whe.id IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(av.definition, '$.trigger.config.webhookEndpointId')) = CAST(wha.endpoint_id AS CHAR)))
      ORDER BY a.id`,
-    [event.event_type, event.event_type, JSON.stringify(event.payload || {}), event.lineage_depth, event.source_automation_id, event.source_automation_id, event.event_type, event.entity_type, event.entity_id]
+    [event.event_type, event.event_type, JSON.stringify(event.payload || {}), JSON.stringify(event.payload || {}), event.lineage_depth, event.source_automation_id, event.source_automation_id, event.event_type, event.entity_type, event.entity_id]
   );
   return rows.map((row) => ({ ...row, automation_id: Number(row.automation_id), automation_version_id: Number(row.automation_version_id), definition: parseJson(row.definition) }));
 }

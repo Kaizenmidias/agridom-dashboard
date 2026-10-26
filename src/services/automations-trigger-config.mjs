@@ -11,7 +11,15 @@ function triggerTypeFromDefinition(definition, fallback) {
 }
 
 function triggerConfigForType(type, config = {}) {
-  if (type === TRIGGER_TYPES.LEAD_ADDED_TO_FOLDER) return config.folderId === undefined ? {} : { folderId: config.folderId };
+  if (type === TRIGGER_TYPES.LEAD_ADDED_TO_FOLDER) {
+    const hasFolderIds = Array.isArray(config.folderIds);
+    const folderIds = hasFolderIds ? config.folderIds : config.folderId === undefined ? undefined : [config.folderId];
+    if (folderIds === undefined) return {};
+    const normalizedFolderIds = folderIds.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
+    return hasFolderIds
+      ? { folderId: normalizedFolderIds[0], folderIds: normalizedFolderIds }
+      : { folderId: normalizedFolderIds[0] };
+  }
   if (type === TRIGGER_TYPES.WEBHOOK_RECEIVED) return config.webhookEndpointId === undefined ? {} : { webhookEndpointId: config.webhookEndpointId };
   return {};
 }

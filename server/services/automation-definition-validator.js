@@ -108,8 +108,13 @@ function validateAutomationDefinition(input, options = {}) {
     if (definition.trigger.type === 'webhook.received' && !isPositiveId(definition.trigger.config?.webhookEndpointId) && options.allowIncompleteWebhookTrigger !== true) {
       errors.push(error('trigger.config.webhookEndpointId', 'MISSING_WEBHOOK_ENDPOINT', 'Selecione um endpoint de webhook valido.'));
     }
-    if (definition.trigger.type === 'lead.added_to_folder' && (!Number.isSafeInteger(Number(definition.trigger.config?.folderId)) || Number(definition.trigger.config.folderId) <= 0)) {
-      errors.push(error('trigger.config.folderId', 'MISSING_FOLDER', 'Selecione a lista do gatilho.'));
+    if (definition.trigger.type === 'lead.added_to_folder') {
+      const folderIds = Array.isArray(definition.trigger.config?.folderIds)
+        ? definition.trigger.config.folderIds
+        : definition.trigger.config?.folderId === undefined ? [] : [definition.trigger.config.folderId];
+      if (!folderIds.length || folderIds.some((folderId) => !isPositiveId(Number(folderId)))) {
+        errors.push(error('trigger.config.folderIds', 'MISSING_FOLDER', 'Selecione ao menos uma lista para o gatilho.'));
+      }
     }
     if (definition.trigger.next !== undefined && definition.trigger.next !== null && typeof definition.trigger.next !== 'string') {
       errors.push(error('trigger.next', 'INVALID_TRIGGER_REFERENCE', 'Referencia do trigger deve ser texto ou null.'));

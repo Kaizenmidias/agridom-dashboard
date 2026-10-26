@@ -418,7 +418,9 @@ function KaizenFlowNode({ data, selected }: NodeProps<FlowNode>) {
   const action = data.type === "action" ? ACTION_CATALOG.find((item) => item.id === String(data.config.actionType)) : null;
   const summary = data.type === "trigger"
     ? String(data.config.triggerType) === "lead.added_to_folder"
-      ? data.config.folderName === "__NOT_FOUND__" ? "Lista não encontrada" : String(data.config.folderName || "Lista não selecionada")
+      ? Array.isArray(data.config.folderNames) && data.config.folderNames.length
+        ? data.config.folderNames.join(", ")
+        : data.config.folderName === "__NOT_FOUND__" ? "Lista não encontrada" : String(data.config.folderName || "Lista não selecionada")
       : "Quando este evento acontecer"
     : data.type === "condition"
       ? `${String(data.config.field || "Campo")} ${String(data.config.operator || "é igual a").replaceAll("_", " ")}${data.config.value ? ` ${String(data.config.value)}` : ""}`
@@ -429,7 +431,7 @@ function KaizenFlowNode({ data, selected }: NodeProps<FlowNode>) {
             ? `${String(data.config.accountName || (data.config.accountId ? `Conta #${data.config.accountId}` : "Conta não selecionada"))} · Cadência: ${String(data.config.cadenceValue || 1)} ${String(data.config.cadenceUnit || "minutes").replace("seconds", "segundos").replace("minutes", "minutos").replace("hours", "horas").replace("days", "dias")}`
             : action?.description || "Configure esta ação"
           : "Fim deste caminho";
-  const incomplete = Boolean(data.compatibilityError) || (data.type === "trigger" && String(data.config.triggerType) === "lead.added_to_folder" && !Number(data.config.folderId)) || (data.type === "action" && ["lead.add_tag", "lead.remove_tag"].includes(String(data.config.actionType)) && !data.config.labelId);
+  const incomplete = Boolean(data.compatibilityError) || (data.type === "trigger" && String(data.config.triggerType) === "lead.added_to_folder" && !(Array.isArray(data.config.folderIds) ? data.config.folderIds.length : Number(data.config.folderId))) || (data.type === "action" && ["lead.add_tag", "lead.remove_tag"].includes(String(data.config.actionType)) && !data.config.labelId);
   return (
     <div className={`group relative w-[264px] rounded-xl border bg-[#181A1F] p-4 text-[#F4F5F7] shadow-xl transition hover:-translate-y-0.5 hover:shadow-2xl ${meta.color} ${selected ? "ring-2 ring-[#B7FF3C] ring-offset-2 ring-offset-[#0E1013]" : ""}`}>
       {data.type !== "trigger" ? <Handle type="target" position={Position.Left} id="input" className="!h-3 !w-3 !border-2 !border-[#0A0A0A] !bg-[#B7FF3C]" /> : null}
@@ -548,7 +550,7 @@ function FreeformAutomationBuilder(props: {
   const organize = () => { if (props.readOnly) return; remember(); setNodes((current) => current.map((node, index) => ({ ...node, position: { x: 80 + (index % 4) * 300, y: 160 + Math.floor(index / 4) * 190 }, data: { ...node.data, x: 80 + (index % 4) * 300, y: 160 + Math.floor(index / 4) * 190 } }))); };
   const currentDefinition = () => definitionFromFlow(nodes, edges, props.triggerType);
   const save = async (notify = true) => { setSaving(true); try { const latest = currentDefinition(); if (props.draft) await automationsAPI.updateVersion(props.automationId, props.draft.id, latest); else await automationsAPI.createVersion(props.automationId, latest); setDirty(false); if (notify) toast.success("Rascunho salvo."); await props.onSaved(); return true; } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível salvar o rascunho."); return false; } finally { setSaving(false); } };
-  const publishCurrent = async () => { if (!props.onPublish) return; const latest = currentDefinition(); if (latest.trigger.type === "lead.added_to_folder" && !Number(latest.trigger.config.folderId)) { toast.error("Selecione a lista do gatilho 'Novo lead na lista'."); return; } setSaving(true); try { let versionId = props.draft?.id; if (versionId) await automationsAPI.updateVersion(props.automationId, versionId, latest); else versionId = (await automationsAPI.createVersion(props.automationId, latest)).id; setDirty(false); await props.onPublish(latest, versionId); } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível publicar o fluxo."); } finally { setSaving(false); } };
+  const publishCurrent = async () => { if (!props.onPublish) return; const latest = currentDefinition(); const folderIds = Array.isArray(latest.trigger.config.folderIds) ? latest.trigger.config.folderIds : latest.trigger.config.folderId ? [latest.trigger.config.folderId] : []; if (latest.trigger.type === "lead.added_to_folder" && !folderIds.length) { toast.error("Selecione a lista do gatilho: escolha ao menos uma lista para 'Novo lead na lista'."); return; } setSaving(true); try { let versionId = props.draft?.id; if (versionId) await automationsAPI.updateVersion(props.automationId, versionId, latest); else versionId = (await automationsAPI.createVersion(props.automationId, latest)).id; setDirty(false); await props.onPublish(latest, versionId); } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível publicar o fluxo."); } finally { setSaving(false); } };
   useEffect(() => { const onKey = (event: KeyboardEvent) => { const target = event.target as HTMLElement; if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.closest("[contenteditable=\"true\"]")) return; if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; } if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; } if ((event.key === "Delete" || event.key === "Backspace") && (selectedId || selectedEdgeId)) { event.preventDefault(); deleteSelected(); } if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void save(); } }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); });
   useEffect(() => { const onBeforeUnload = (event: BeforeUnloadEvent) => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; }; window.addEventListener("beforeunload", onBeforeUnload); return () => window.removeEventListener("beforeunload", onBeforeUnload); }, [dirty]);
   const matches = ACTION_CATALOG.filter((item) => [item.name, item.description, item.category, ...item.aliases].join(" ").toLowerCase().includes(search.toLowerCase()));
@@ -1352,6 +1354,7 @@ function NodeInspector({
   const [leadFolders, setLeadFolders] = useState<LeadFolder[]>([]);
   const [leadFoldersLoading, setLeadFoldersLoading] = useState(false);
   const [leadFoldersError, setLeadFoldersError] = useState(false);
+  const [folderSearch, setFolderSearch] = useState("");
   const inspectorReadOnly = readOnly || Boolean(node.readOnly);
   const updateConfig = (key: string, value: unknown) => { if (!inspectorReadOnly) updateConfigExternal(key, value); };
   const updateNode = (patch: Partial<BuilderNode>) => { if (!inspectorReadOnly) updateNodeExternal(patch); };
@@ -1393,6 +1396,15 @@ function NodeInspector({
     setLeadFoldersError(false);
     void leadFoldersAPI.list().then((result) => { setLeadFolders(result.folders); const folder = result.folders.find((item) => item.id === Number(node.config.folderId)); if (folder && node.config.folderName !== folder.name) updateNode({ config: { ...node.config, folderName: folder.name } }); }).catch(() => { setLeadFolders([]); setLeadFoldersError(true); }).finally(() => setLeadFoldersLoading(false));
   }, [node.type, node.config.triggerType]);
+  useEffect(() => {
+    if (node.type !== "trigger" || String(node.config.triggerType) !== "lead.added_to_folder" || !leadFolders.length) return;
+    const ids = (Array.isArray(node.config.folderIds) ? node.config.folderIds : node.config.folderId ? [node.config.folderId] : []).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
+    const names = ids.map((id) => leadFolders.find((folder) => Number(folder.id) === id)?.name || "Lista não encontrada");
+    if (JSON.stringify(node.config.folderNames || []) !== JSON.stringify(names)) updateNode({ config: { ...node.config, folderIds: ids, folderId: ids[0], folderNames: names } });
+  }, [leadFolders, node.type, node.config.triggerType]);
+  const selectedFolderIds = (Array.isArray(node.config.folderIds) ? node.config.folderIds : node.config.folderId ? [node.config.folderId] : []).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
+  const selectedFolders = selectedFolderIds.map((id) => leadFolders.find((folder) => Number(folder.id) === id) || { id, name: "Lista não encontrada" });
+  const availableFolders = leadFolders.filter((folder) => !selectedFolderIds.includes(Number(folder.id)) && String(folder.name || "").toLocaleLowerCase("pt-BR").includes(folderSearch.trim().toLocaleLowerCase("pt-BR")));
   if (node.type === "trigger")
     return (
       <div className="space-y-3">
@@ -1421,11 +1433,14 @@ function NodeInspector({
         </FieldLabel>
         {isWebhookTrigger ? <WebhookConfiguration endpoint={endpoint} rawToken={rawToken} loading={endpointLoading} busy={endpointBusy} error={endpointError} onCreate={() => void createEndpoint()} onRegenerate={() => void regenerateEndpoint()} onCopy={() => void copyToken()} readOnly={inspectorReadOnly} /> : null}
         {String(node.config.triggerType) === "lead.added_to_folder" ? (
-          <FieldLabel label="Lista">
-            <Select value={String(node.config.folderId || "")} onValueChange={(value) => { const folder = leadFolders.find((item) => item.id === Number(value)); updateNode({ config: { ...node.config, folderId: Number(value), folderName: folder?.name } }); }}>
-              <SelectTrigger><SelectValue placeholder={leadFoldersLoading ? "Carregando listas..." : leadFoldersError ? "Não foi possível carregar as listas." : leadFolders.length ? "Selecione uma lista" : "Nenhuma lista encontrada."} /></SelectTrigger>
-              <SelectContent>{leadFolders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}</SelectContent>
-            </Select>
+          <FieldLabel label="Listas">
+            <div className="space-y-2">
+              <div className="flex min-h-10 flex-wrap items-center gap-1 rounded-md border border-input bg-background px-2 py-1">
+                {selectedFolders.map((folder) => <Badge key={folder.id} variant="secondary" className="gap-1">{folder.name}{!inspectorReadOnly ? <button type="button" className="rounded-full p-0.5 hover:bg-muted" aria-label={`Remover ${folder.name}`} onClick={() => { const ids = selectedFolderIds.filter((id) => id !== Number(folder.id)); updateNode({ config: { ...node.config, folderIds: ids, folderId: ids[0], folderNames: ids.map((id) => leadFolders.find((item) => Number(item.id) === id)?.name || "Lista não encontrada") } }); }}><X className="h-3 w-3" /></button> : null}</Badge>)}
+                <Input value={folderSearch} onChange={(event) => setFolderSearch(event.target.value)} disabled={inspectorReadOnly || leadFoldersLoading} placeholder={leadFoldersLoading ? "Carregando listas..." : leadFoldersError ? "Não foi possível carregar as listas." : "Digite para buscar uma lista..."} className="h-7 min-w-[160px] flex-1 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0" />
+              </div>
+              {!inspectorReadOnly && folderSearch.trim() ? <div className="max-h-36 overflow-auto rounded-md border border-border bg-popover p-1">{availableFolders.length ? availableFolders.map((folder) => <button type="button" key={folder.id} className="flex w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { const ids = [...selectedFolderIds, Number(folder.id)]; updateNode({ config: { ...node.config, folderIds: ids, folderId: ids[0], folderNames: ids.map((id) => leadFolders.find((item) => Number(item.id) === id)?.name || "Lista não encontrada") } }); setFolderSearch(""); }}>{folder.name}</button>) : <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma lista encontrada.</p>}</div> : null}
+            </div>
           </FieldLabel>
         ) : null}
         <p className="text-xs text-muted-foreground">

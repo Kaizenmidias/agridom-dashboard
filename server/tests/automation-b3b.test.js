@@ -55,6 +55,7 @@ test('B.3B round-trip comportamental preserva cada contrato de trigger', () => {
   const roundTrip = (type, config, nextType = type) => triggerConfig.triggerConfigForType(nextType, triggerConfig.triggerConfigForType(type, config));
   assert.deepEqual(roundTrip('lead.created', {}), {});
   assert.deepEqual(roundTrip('lead.added_to_folder', { folderId: 123 }), { folderId: 123 });
+  assert.deepEqual(roundTrip('lead.added_to_folder', { folderIds: [123, 456] }), { folderId: 123, folderIds: [123, 456] });
   assert.deepEqual(roundTrip('webhook.received', { webhookEndpointId: 55 }), { webhookEndpointId: 55 });
   });
 });
