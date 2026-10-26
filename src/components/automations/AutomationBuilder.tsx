@@ -40,6 +40,7 @@ import {
   Square,
   Trash2,
   UserRound,
+  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
