@@ -54,6 +54,8 @@ export interface Lead {
   assignedUserId?: number | null;
   googleMapsUrl?: string | null;
   lastContactAt?: string | null;
+  whatsappContactSucceeded?: boolean;
+  whatsappNumberInvalid?: boolean;
   createdAt: string;
   updatedAt: string;
   activities?: LeadActivity[];

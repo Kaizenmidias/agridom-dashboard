@@ -112,6 +112,8 @@ export function prospectToLead(prospect: Prospect): Lead {
     assignedUserId: prospect.assigned_user_id || null,
     googleMapsUrl: prospect.google_maps_url,
     lastContactAt: prospect.last_contact_at ?? prospect.last_contact_date ?? null,
+    whatsappContactSucceeded: Boolean(prospect.whatsapp_contact_succeeded),
+    whatsappNumberInvalid: Boolean(prospect.whatsapp_number_invalid),
     createdAt: prospect.created_at,
     updatedAt: prospect.updated_at,
     metadata: {

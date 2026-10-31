@@ -616,9 +616,10 @@ export default function LeadsPage() {
 
   const leadMetrics = useMemo(() => ({
     prospected: filteredLeads.length,
-    contacted: filteredLeads.filter((lead) => Boolean(lead.lastContactAt)).length,
+    contacted: filteredLeads.filter((lead) => lead.whatsappContactSucceeded || Boolean(lead.lastContactAt)).length,
     meetings: filteredLeads.filter((lead) => Boolean(lead.metadata?.nextMeetingAt) || lead.status === "reuniao").length,
     closed: filteredLeads.filter((lead) => lead.status === "convertido").length,
+    invalidNumbers: filteredLeads.filter((lead) => lead.whatsappNumberInvalid).length,
   }), [filteredLeads]);
 
   const totalPages = Math.max(
@@ -1055,6 +1056,7 @@ export default function LeadsPage() {
           { label: "Contatos feitos", value: leadMetrics.contacted, icon: MessageCircle, accent: "text-sky-400" },
           { label: "Reuniões agendadas", value: leadMetrics.meetings, icon: CalendarDays, accent: "text-amber-400" },
           { label: "Fechamentos", value: leadMetrics.closed, icon: Trophy, accent: "text-emerald-400" },
+          { label: "Números inválidos", value: leadMetrics.invalidNumbers, icon: X, accent: "text-rose-400" },
         ].map((metric) => {
           const Icon = metric.icon;
           return <div key={metric.label} className="rounded-xl border border-border/80 bg-card px-4 py-4 shadow-sm"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{metric.label}</p><Icon className={cn("h-4 w-4", metric.accent)} /></div><p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{metric.value}</p></div>;

@@ -300,6 +300,8 @@ export interface Prospect {
   } | null;
   last_contact_date?: string | null;
   last_contact_at?: string | null;
+  whatsapp_contact_succeeded?: number | boolean | null;
+  whatsapp_number_invalid?: number | boolean | null;
   origin?: string | null;
   status: ProspectStatus;
   created_at: string;

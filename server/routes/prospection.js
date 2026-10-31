@@ -319,6 +319,12 @@ router.get('/bootstrap', async (req, res) => {
       LEFT JOIN (SELECT c.lead_id, MAX(COALESCE(cm.sent_at, cm.created_at)) AS last_contact_at
         FROM conversations c JOIN communication_messages cm ON cm.conversation_id = c.id JOIN communication_accounts ca ON ca.id = c.communication_account_id
         WHERE c.lead_id IS NOT NULL AND ca.owner_user_id = ? GROUP BY c.lead_id) last_contact ON last_contact.lead_id = p.id
+      LEFT JOIN (SELECT lead_id,
+          MAX(CASE WHEN status = 'sent' OR delivery_status = 'sent' THEN 1 ELSE 0 END) AS whatsapp_contact_succeeded,
+          MAX(CASE WHEN status = 'failed' AND (error_code IN ('RECIPIENT_PHONE_INVALID', 'RECIPIENT_PHONE_MISSING') OR error_message LIKE '%PHONE_INVALID%' OR error_message LIKE '%PHONE_MISSING%') THEN 1 ELSE 0 END) AS whatsapp_number_invalid
+        FROM communication_messages
+        WHERE channel = 'whatsapp' AND direction = 'outbound' AND lead_id IS NOT NULL
+        GROUP BY lead_id) whatsapp_metrics ON whatsapp_metrics.lead_id = p.id
       WHERE p.owner_user_id = ? ORDER BY p.created_at DESC`, [req.userId, req.userId, req.userId]);
     const settings = await query('SELECT * FROM prospecting_settings WHERE owner_user_id = ? LIMIT 1', [req.userId]);
     const history = await query(
