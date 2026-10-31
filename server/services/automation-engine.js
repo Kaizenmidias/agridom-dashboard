@@ -68,6 +68,20 @@ const cadenceSeconds = (config = {}) => {
   if (!Number.isInteger(amount) || amount <= 0) return 0;
   return amount * (unit === 'days' ? 86400 : unit === 'hours' ? 3600 : unit === 'seconds' ? 1 : 60);
 };
+const cadenceRangeSeconds = (config = {}) => {
+  const unit = String(config.cadenceUnit || 'minutes');
+  const multiplier = unit === 'days' ? 86400 : unit === 'hours' ? 3600 : unit === 'seconds' ? 1 : 60;
+  const legacy = Number(config.cadenceAmount ?? config.cadenceValue ?? config.cadence ?? 0);
+  const minimum = Number(config.cadenceMinValue ?? legacy);
+  const maximum = Number(config.cadenceMaxValue ?? minimum);
+  if (!Number.isInteger(minimum) || minimum <= 0 || !Number.isInteger(maximum) || maximum < minimum) return { min: 0, max: 0 };
+  return { min: minimum * multiplier, max: maximum * multiplier };
+};
+const randomCadenceSeconds = (config = {}) => {
+  const range = cadenceRangeSeconds(config);
+  if (!range.min) return 0;
+  return range.min === range.max ? range.min : crypto.randomInt(range.min, range.max + 1);
+};
 const parseCadenceDate = (value) => {
   if (value instanceof Date) return value;
   const text = String(value || '').trim();
@@ -83,6 +97,7 @@ async function reserveWhatsAppSlot(connection, automationId, accountId, config, 
   const now = options.now instanceof Date ? options.now : new Date();
   const preferredSlot = options.preferredSlot instanceof Date && !Number.isNaN(options.preferredSlot.getTime()) ? options.preferredSlot : null;
   const seconds = cadenceSeconds(config);
+  const intervalSeconds = randomCadenceSeconds(config) || seconds;
   if (!seconds) return now;
   // Create the unique queue row before locking it. FOR UPDATE cannot lock a missing row.
   await connection.execute('INSERT IGNORE INTO automation_whatsapp_cadence (automation_id, communication_account_id, next_available_at) VALUES (?, ?, ?)', [automationId, accountId, now]);
@@ -105,7 +120,7 @@ async function reserveWhatsAppSlot(connection, automationId, accountId, config, 
   }
   // A far-future queue horizon can contain slots already assigned to other
   // overdue jobs. It must not postpone the first overdue job for hours.
-  const horizonTooFarAhead = stored && stored > now && stored.getTime() - now.getTime() > seconds * 2000;
+  const horizonTooFarAhead = stored && stored > now && stored.getTime() - now.getTime() > intervalSeconds * 2000;
   if (preferredSlot && preferredSlot <= now && horizonTooFarAhead) {
     const [overdueRows] = await connection.execute(
       `SELECT COUNT(*) AS overdue_count
@@ -120,14 +135,14 @@ async function reserveWhatsAppSlot(connection, automationId, accountId, config, 
     );
     const overdueCount = Number(Array.isArray(overdueRows) ? overdueRows[0]?.overdue_count : 0);
     if (overdueCount <= 1) {
-      const next = new Date(now.getTime() + seconds * 1000);
+      const next = new Date(now.getTime() + intervalSeconds * 1000);
       await connection.execute('UPDATE automation_whatsapp_cadence SET next_available_at = ?, updated_at = CURRENT_TIMESTAMP WHERE automation_id = ? AND communication_account_id = ?', [next, automationId, accountId]);
       console.info('cadence_horizon_rebased', { automation_id: Number(automationId), communication_account_id: Number(accountId), overdue_slot: preferredSlot.toISOString(), previous_next_available_at: stored.toISOString(), scheduled_at: now.toISOString(), next_available_at: next.toISOString() });
       return now;
     }
   }
   const slot = stored && stored > now ? stored : now;
-  const next = new Date(slot.getTime() + seconds * 1000);
+  const next = new Date(slot.getTime() + intervalSeconds * 1000);
   await connection.execute('UPDATE automation_whatsapp_cadence SET next_available_at = ?, updated_at = CURRENT_TIMESTAMP WHERE automation_id = ? AND communication_account_id = ?', [next, automationId, accountId]);
   console.info('cadence_slot_reserved', { automation_id: Number(automationId), communication_account_id: Number(accountId), scheduled_at: slot.toISOString(), next_available_at: next.toISOString() });
   return slot;

@@ -164,13 +164,21 @@ function validateAutomationDefinition(input, options = {}) {
           'activity.create_call': ['title'], 'activity.create_follow_up': ['title'], 'activity.complete': ['activityId'],
           'notification.create': ['title', 'message'],
           'email.send': ['subject'],
-          'whatsapp.send': ['accountId', 'message'],
+          'whatsapp.send': ['accountId'],
         }[step.config.actionType] || [];
         requiredFields.forEach((field) => {
           if (step.config[field] === undefined || step.config[field] === null || step.config[field] === '') errors.push(error(`${path}.config.${field}`, 'MISSING_ACTION_CONFIG', `Configuracao obrigatoria ausente: ${field}.`));
         });
         if (step.config.actionType === 'email.send' && !String(step.config.message || '').trim() && !String(step.config.messageHtml || '').trim()) {
           errors.push(error(`${path}.config.message`, 'MISSING_ACTION_CONFIG', 'Configuracao obrigatoria ausente: message ou messageHtml.'));
+        }
+        if (step.config.actionType === 'whatsapp.send') {
+          const variants = Array.isArray(step.config.messageVariants) ? step.config.messageVariants.filter((item) => String(item || '').trim()) : [];
+          if (!String(step.config.message || '').trim() && !variants.length) errors.push(error(`${path}.config.message`, 'MISSING_ACTION_CONFIG', 'Informe a mensagem principal ou ao menos uma variacao.'));
+          if (variants.length > 20) errors.push(error(`${path}.config.messageVariants`, 'TOO_MANY_MESSAGE_VARIANTS', 'Informe no maximo 20 variacoes.'));
+          const min = Number(step.config.cadenceMinValue ?? step.config.cadenceValue);
+          const max = Number(step.config.cadenceMaxValue ?? min);
+          if (!Number.isInteger(min) || min <= 0 || !Number.isInteger(max) || max < min) errors.push(error(`${path}.config.cadenceMaxValue`, 'INVALID_CADENCE_RANGE', 'O intervalo da cadencia deve ter valores positivos e o maximo nao pode ser menor que o minimo.'));
         }
         if (step.config.actionType === 'lead.update_field' && !['business_name', 'category', 'address', 'city', 'state', 'phone', 'email', 'website'].includes(step.config.field)) errors.push(error(`${path}.config.field`, 'INVALID_LEAD_FIELD', 'Campo de Lead nao permitido.'));
       } else if (step.type === 'wait' && step.config.duration !== undefined && (!Number.isInteger(step.config.duration) || step.config.duration <= 0)) {

@@ -7,6 +7,7 @@ const { validateSmtpConfig, sendSmtp } = require('../email-provider');
 const { sendGmail } = require('../gmail-provider');
 const { sanitizeEmailHtml, htmlToText } = require('../broadcast-email-html');
 const { sendWhatsAppMessage, normalizePhone } = require('../whatsapp-service');
+const crypto = require('node:crypto');
 
 const FIELD_ALLOWLIST = Object.freeze(new Set(['business_name', 'category', 'address', 'city', 'state', 'phone', 'email', 'website', 'status']));
 
@@ -17,6 +18,15 @@ async function ownedLead(connection, leadId, ownerUserId, lock = true) {
 
 async function writeHistory(connection, leadId, ownerUserId, message, metadata) {
   await connection.execute('INSERT INTO prospect_contact_history (prospect_id, owner_user_id, channel, message, metadata) VALUES (?, ?, \'automation\', ?, ?)', [leadId, ownerUserId, message, JSON.stringify(metadata || {})]);
+}
+
+function selectWhatsAppMessage(config, context) {
+  const candidates = [config.message, ...(Array.isArray(config.messageVariants) ? config.messageVariants : [])]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  if (!candidates.length) return '';
+  const digest = crypto.createHash('sha256').update(String(context.idempotencyKey || '')).digest();
+  return candidates[digest.readUInt32BE(0) % candidates.length];
 }
 
 async function emit(connection, type, leadId, payload, context) {
@@ -207,7 +217,7 @@ async function executeAction(connection, actionType, rawConfig, context) {
   if (actionType === 'whatsapp.send') {
     const recipient = normalizePhone(config.recipient || lead.phone);
     if (!recipient) { const error = new Error('RECIPIENT_PHONE_MISSING'); error.code = 'RECIPIENT_PHONE_MISSING'; error.retryable = false; error.publicMessage = 'Telefone do Lead nao informado.'; throw error; }
-    const message = String(config.message || '').trim();
+    const message = selectWhatsAppMessage(config, context);
     if (!message) { const error = new Error('INVALID_WHATSAPP_MESSAGE'); error.code = 'INVALID_WHATSAPP_MESSAGE'; error.retryable = false; error.publicMessage = 'Mensagem WhatsApp obrigatoria.'; throw error; }
     const accountId = Number(config.accountId || 0);
     const [accounts] = await connection.execute("SELECT * FROM communication_accounts WHERE channel = 'whatsapp' AND archived_at IS NULL AND status = 'connected' AND (? = 0 OR id = ?) AND (owner_user_id = ? OR owner_user_id IS NULL) ORDER BY id LIMIT 1", [accountId, accountId, context.ownerUserId]);

@@ -208,7 +208,7 @@ const defaultConfig = (type: BuilderType): Record<string, unknown> =>
 const defaultActionConfig = (actionId?: string): Record<string, unknown> => ({
   ...defaultConfig("action"),
   ...(actionId === "whatsapp.send"
-    ? { cadenceValue: 1, cadenceUnit: "minutes" }
+    ? { cadenceValue: 1, cadenceMinValue: 1, cadenceMaxValue: 1, cadenceUnit: "minutes", messageVariants: [] }
     : {}),
   ...(actionId ? { actionType: actionId } : {}),
 });
@@ -1683,7 +1683,7 @@ function NodeInspector({
         <Dialog open={emailEditorExpanded} onOpenChange={setEmailEditorExpanded}><DialogContent className="max-w-5xl"><DialogHeader><DialogTitle>Editor visual de e-mail</DialogTitle><DialogDescription>O conteúdo é sanitizado antes de ser persistido e enviado pela fila.</DialogDescription></DialogHeader><EmailVisualEditor html={String(node.config.messageHtml || node.config.message || "")} subject={String(node.config.subject || "")} from="Gmail/SMTP configurado" onChange={(value) => updateNode({ config: { ...node.config, messageHtml: value, message: emailHtmlToText(value) } })} onDone={() => setEmailEditorExpanded(false)} /></DialogContent></Dialog>
       </> : null}
       {actionType === "whatsapp.send" ? <><FieldLabel label="Conta WhatsApp"><Select value={String(node.config.accountId || "")} onValueChange={(value) => updateConfig("accountId", Number(value))}><SelectTrigger><SelectValue placeholder={whatsappAccounts.length ? "Selecione a conta" : "Nenhuma conta conectada"} /></SelectTrigger><SelectContent>{whatsappAccounts.map((account) => <SelectItem key={account.id} value={String(account.id)}>{account.name}{account.phoneNumber ? ` - ${account.phoneNumber}` : ""}</SelectItem>)}</SelectContent></Select></FieldLabel><FieldLabel label="Destinatário"><Input value={String(node.config.recipient || "{{lead.phone}}")} onChange={(event) => updateConfig("recipient", event.target.value)} /></FieldLabel></> : null}
-      {actionType === "whatsapp.send" ? <div className="grid grid-cols-2 gap-2"><FieldLabel label="Cadência"><Input type="number" min="1" value={String(node.config.cadenceValue || 1)} onChange={(event) => updateConfig("cadenceValue", Number(event.target.value))} /></FieldLabel><FieldLabel label="Unidade"><Select value={String(node.config.cadenceUnit || "minutes")} onValueChange={(value) => updateConfig("cadenceUnit", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="seconds">Segundos</SelectItem><SelectItem value="minutes">Minutos</SelectItem><SelectItem value="hours">Horas</SelectItem><SelectItem value="days">Dias</SelectItem></SelectContent></Select></FieldLabel></div> : null}
+      {actionType === "whatsapp.send" ? <div className="space-y-2"><div className="grid grid-cols-3 gap-2"><FieldLabel label="Cadência mínima"><Input type="number" min="1" value={String(node.config.cadenceMinValue || node.config.cadenceValue || 1)} onChange={(event) => updateConfig("cadenceMinValue", Number(event.target.value))} /></FieldLabel><FieldLabel label="Cadência máxima"><Input type="number" min="1" value={String(node.config.cadenceMaxValue || node.config.cadenceMinValue || node.config.cadenceValue || 1)} onChange={(event) => updateConfig("cadenceMaxValue", Number(event.target.value))} /></FieldLabel><FieldLabel label="Unidade"><Select value={String(node.config.cadenceUnit || "minutes")} onValueChange={(value) => updateConfig("cadenceUnit", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="seconds">Segundos</SelectItem><SelectItem value="minutes">Minutos</SelectItem><SelectItem value="hours">Horas</SelectItem><SelectItem value="days">Dias</SelectItem></SelectContent></Select></FieldLabel></div><p className="text-[11px] text-muted-foreground">Cada envio será agendado aleatoriamente dentro deste intervalo.</p></div> : null}
       {actionType === "notification.create" ? <><FieldLabel label="Título"><Input value={String(node.config.title || "")} onChange={(event) => updateConfig("title", event.target.value)} /></FieldLabel><FieldLabel label="Mensagem"><Textarea value={String(node.config.message || "")} onChange={(event) => updateConfig("message", event.target.value)} /></FieldLabel></> : null}
       {[
         "whatsapp.send_message",
@@ -1692,11 +1692,12 @@ function NodeInspector({
         "instagram.send_direct",
       ].includes(actionType) ? (
         <FieldLabel label="Mensagem">
-          <Textarea
+              <Textarea
             value={String(node.config.message || "")}
             placeholder="Use o seletor para inserir variáveis"
             onChange={(event) => updateConfig("message", event.target.value)}
           />
+              {actionType === "whatsapp.send" ? <FieldLabel label="Variações da mensagem"><Textarea value={Array.isArray(node.config.messageVariants) ? node.config.messageVariants.join("\n") : ""} placeholder="Uma variação por linha" onChange={(event) => updateConfig("messageVariants", event.target.value.split(/\r?\n/).map((value) => value.trim()).filter(Boolean))} /></FieldLabel> : null}
           <Select
             onValueChange={(value) =>
               updateConfig(
