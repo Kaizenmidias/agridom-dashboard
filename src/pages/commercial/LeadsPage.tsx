@@ -1050,17 +1050,19 @@ export default function LeadsPage() {
         </Alert>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 lg:grid-cols-4 md:px-6">
-        {[
+      <div className="overflow-x-auto px-4 py-4 md:px-6">
+        <div className="grid min-w-[980px] grid-cols-5 gap-3">
+          {[
           { label: "Leads prospectados", value: leadMetrics.prospected, icon: UserRound, accent: "text-lime-400" },
           { label: "Contatos feitos", value: leadMetrics.contacted, icon: MessageCircle, accent: "text-sky-400" },
           { label: "Reuniões agendadas", value: leadMetrics.meetings, icon: CalendarDays, accent: "text-amber-400" },
           { label: "Fechamentos", value: leadMetrics.closed, icon: Trophy, accent: "text-emerald-400" },
           { label: "Números inválidos", value: leadMetrics.invalidNumbers, icon: X, accent: "text-rose-400" },
-        ].map((metric) => {
+          ].map((metric) => {
           const Icon = metric.icon;
           return <div key={metric.label} className="rounded-xl border border-border/80 bg-card px-4 py-4 shadow-sm"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{metric.label}</p><Icon className={cn("h-4 w-4", metric.accent)} /></div><p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{metric.value}</p></div>;
-        })}
+          })}
+        </div>
       </div>
 
       <div className="grid min-h-[calc(100vh-9rem)] lg:grid-cols-[260px_minmax(0,1fr)]">
