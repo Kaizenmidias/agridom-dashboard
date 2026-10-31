@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Archive,
   Building2,
+  CalendarDays,
   CheckCircle2,
   Clipboard,
   Circle,
@@ -14,12 +15,14 @@ import {
   Folder,
   FolderPlus,
   Mail,
+  MessageCircle,
   MoreHorizontal,
   Phone,
   Plus,
   Search,
   Send,
   Trash2,
+  Trophy,
   UserRound,
   X,
 } from "lucide-react";
@@ -611,6 +614,13 @@ export default function LeadsPage() {
     });
   }, [allLeads, customFolders, filters, query]);
 
+  const leadMetrics = useMemo(() => ({
+    prospected: filteredLeads.length,
+    contacted: filteredLeads.filter((lead) => Boolean(lead.lastContactAt)).length,
+    meetings: filteredLeads.filter((lead) => Boolean(lead.metadata?.nextMeetingAt) || lead.status === "reuniao").length,
+    closed: filteredLeads.filter((lead) => lead.status === "convertido").length,
+  }), [filteredLeads]);
+
   const totalPages = Math.max(
     1,
     Math.ceil(filteredLeads.length / itemsPerPage),
@@ -1038,6 +1048,18 @@ export default function LeadsPage() {
           </AlertDescription>
         </Alert>
       ) : null}
+
+      <div className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 lg:grid-cols-4 md:px-6">
+        {[
+          { label: "Leads prospectados", value: leadMetrics.prospected, icon: UserRound, accent: "text-lime-400" },
+          { label: "Contatos feitos", value: leadMetrics.contacted, icon: MessageCircle, accent: "text-sky-400" },
+          { label: "Reuniões agendadas", value: leadMetrics.meetings, icon: CalendarDays, accent: "text-amber-400" },
+          { label: "Fechamentos", value: leadMetrics.closed, icon: Trophy, accent: "text-emerald-400" },
+        ].map((metric) => {
+          const Icon = metric.icon;
+          return <div key={metric.label} className="rounded-xl border border-border/80 bg-card px-4 py-4 shadow-sm"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{metric.label}</p><Icon className={cn("h-4 w-4", metric.accent)} /></div><p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{metric.value}</p></div>;
+        })}
+      </div>
 
       <div className="grid min-h-[calc(100vh-9rem)] lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="border-r border-border/80 bg-card/60">
